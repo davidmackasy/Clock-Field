@@ -1,0 +1,153 @@
+import { useQuery } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Users, Clock, AlertTriangle, CalendarCheck, MessageSquare, Timer } from "lucide-react";
+
+export default function AdminDashboard() {
+  const { data: stats, isLoading } = useQuery<any>({
+    queryKey: ["/api/dashboard/stats"],
+  });
+
+  const statCards = [
+    { label: "Active Now", value: stats?.activeNow ?? 0, icon: Timer, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
+    { label: "Late Today", value: stats?.lateToday ?? 0, icon: AlertTriangle, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/30" },
+    { label: "Missed Shifts", value: stats?.missedToday ?? 0, icon: CalendarCheck, color: "text-red-600 dark:text-red-400", bg: "bg-red-50 dark:bg-red-950/30" },
+    { label: "Total Employees", value: stats?.totalEmployees ?? 0, icon: Users, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-950/30" },
+    { label: "Open Requests", value: stats?.openRequests ?? 0, icon: MessageSquare, color: "text-violet-600 dark:text-violet-400", bg: "bg-violet-50 dark:bg-violet-950/30" },
+    { label: "Hours Today", value: stats?.totalWorkedToday ? `${Math.round(stats.totalWorkedToday / 60)}h ${stats.totalWorkedToday % 60}m` : "0h", icon: Clock, color: "text-cyan-600 dark:text-cyan-400", bg: "bg-cyan-50 dark:bg-cyan-950/30" },
+  ];
+
+  return (
+    <div className="p-4 md:p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold" data-testid="text-dashboard-title">Dashboard</h1>
+        <p className="text-muted-foreground text-sm mt-1">Overview of today's operations</p>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+        {statCards.map((stat, i) => (
+          <Card key={i}>
+            <CardContent className="p-4">
+              {isLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-8 w-12" />
+                </div>
+              ) : (
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{stat.label}</p>
+                    <p className="text-2xl font-bold mt-1" data-testid={`stat-${stat.label.toLowerCase().replace(/\s/g, "-")}`}>{stat.value}</p>
+                  </div>
+                  <div className={`w-9 h-9 rounded-md ${stat.bg} flex items-center justify-center flex-shrink-0`}>
+                    <stat.icon className={`w-4 h-4 ${stat.color}`} />
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Today's Schedule</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TodayShifts />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Recent Activity</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RecentActivity />
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function TodayShifts() {
+  const today = new Date().toISOString().split("T")[0];
+  const { data: shifts, isLoading } = useQuery<any[]>({
+    queryKey: ["/api/shifts/date", today],
+  });
+  const { data: employees } = useQuery<any[]>({ queryKey: ["/api/employees"] });
+
+  if (isLoading) return <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>;
+
+  if (!shifts?.length) {
+    return <p className="text-sm text-muted-foreground py-4 text-center">No shifts scheduled today</p>;
+  }
+
+  const empMap = new Map((employees || []).map(e => [e.id, e]));
+
+  return (
+    <div className="space-y-2 max-h-72 overflow-y-auto">
+      {shifts.slice(0, 8).map((shift: any) => {
+        const emp = empMap.get(shift.employeeId);
+        const statusColors: Record<string, string> = {
+          scheduled: "secondary",
+          in_progress: "default",
+          completed: "secondary",
+          late: "destructive",
+          missed: "destructive",
+        };
+        return (
+          <div key={shift.id} className="flex items-center justify-between gap-2 p-2.5 rounded-md bg-muted/40" data-testid={`shift-item-${shift.id}`}>
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{emp ? `${emp.firstName} ${emp.lastName}` : "Unknown"}</p>
+              <p className="text-xs text-muted-foreground">
+                {new Date(shift.scheduledStartAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} - {new Date(shift.scheduledEndAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </p>
+            </div>
+            <Badge variant={(statusColors[shift.status] as any) || "secondary"} className="text-xs flex-shrink-0">
+              {shift.status.replace("_", " ")}
+            </Badge>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function RecentActivity() {
+  const { data: entries, isLoading } = useQuery<any[]>({ queryKey: ["/api/time-entries"] });
+  const { data: employees } = useQuery<any[]>({ queryKey: ["/api/employees"] });
+
+  if (isLoading) return <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>;
+
+  if (!entries?.length) {
+    return <p className="text-sm text-muted-foreground py-4 text-center">No time entries yet</p>;
+  }
+
+  const empMap = new Map((employees || []).map(e => [e.id, e]));
+  const sorted = [...entries].sort((a, b) => new Date(b.clockInAt).getTime() - new Date(a.clockInAt).getTime()).slice(0, 6);
+
+  return (
+    <div className="space-y-2 max-h-72 overflow-y-auto">
+      {sorted.map((entry: any) => {
+        const emp = empMap.get(entry.employeeId);
+        return (
+          <div key={entry.id} className="flex items-center justify-between gap-2 p-2.5 rounded-md bg-muted/40">
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{emp ? `${emp.firstName} ${emp.lastName}` : "Employee"}</p>
+              <p className="text-xs text-muted-foreground">
+                {entry.status === "active" ? "Clocked in" : "Completed"} - {new Date(entry.clockInAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </p>
+            </div>
+            <Badge variant={entry.status === "active" ? "default" : "secondary"} className="text-xs flex-shrink-0">
+              {entry.status}
+            </Badge>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
