@@ -1,0 +1,1568 @@
+Employee Tracking System PRD + Dev Note
+Product Name
+
+Working name: Employee Tracking System Category: Workforce Operations Web App Product type: Mobile-first responsive web app with native-app feel on phones and full dashboard on desktop
+
+1. Product Vision
+
+Build a workforce operations system for service businesses that helps employers manage employees, schedules, attendance, worked hours, payroll estimation, proof of work, client requests, and service reporting in one place.
+
+This product is not just a time tracker.
+
+It is a business operations platform with 3 connected user roles:
+
+Admin / Employer
+
+Employee
+
+Client
+
+The app must feel simple for field workers on mobile and powerful for managers on desktop.
+
+2. Core Objective
+
+Give employers one system where they can:
+
+create employee schedules
+
+let employees see their assigned work schedule
+
+let employees clock in and clock out against scheduled shifts
+
+track lateness, early clock-ins, missed shifts, and missing clock-outs
+
+calculate daily, weekly, monthly, and pay-period hours
+
+estimate payroll based on employee hourly rates
+
+collect before and after photos and service notes
+
+allow clients to view approved service reports and submit requests
+
+3. Primary Business Use Case
+
+This system is ideal for:
+
+cleaning companies
+
+maintenance companies
+
+field service businesses
+
+janitorial companies
+
+property care teams
+
+contractors with mobile employees
+
+The strongest use case is companies that need:
+
+attendance accountability
+
+proof of work
+
+client visibility
+
+operational reporting
+
+4. Main Problems Being Solved
+
+Current pain points:
+
+employers do not know who is on time or late in real time
+
+employees forget to clock in or clock out
+
+schedules are unclear or scattered in messages
+
+payroll estimation is manual and slow
+
+work proof photos are disorganized
+
+client requests are handled in too many places
+
+clients cannot easily see service completion details
+
+This platform solves all of those inside one connected system.
+
+5. Product Principles
+
+The agent must follow these principles while building:
+
+Mobile first Employees and clients will mostly use phones. The mobile UI must feel like a native app.
+
+Admin clarity Employers need operational visibility fast. The dashboard must surface the important issues first.
+
+Schedule-driven workflow Scheduling is core. Employees should see what they are scheduled to work, and time tracking should connect to that schedule.
+
+Proof of work Photos and notes are first-class features, not add-ons.
+
+Role safety Each role sees only what they need.
+
+Clean structure Do not overbuild HR tools, accounting tools, or chat in MVP.
+
+Stability Do not build features in ways that break attendance logic, schedule logic, or reporting flows.
+
+6. User Roles
+6.1 Admin / Employer
+
+The company owner, manager, or supervisor.
+
+Main needs:
+
+manage employees
+
+create and edit schedules
+
+view who is currently working
+
+review time entries
+
+see late, early, missed, or incomplete attendance
+
+estimate payroll
+
+review reports and photos
+
+manage client accounts and requests
+
+see overall business operations
+
+6.2 Employee
+
+The worker or cleaner.
+
+Main needs:
+
+log in easily
+
+see assigned schedule
+
+know when and where they are working
+
+clock in and out
+
+see live timer while active
+
+upload work photos and notes
+
+view own hours and attendance
+
+6.3 Client
+
+The customer receiving the service.
+
+Main needs:
+
+log in
+
+see completed service reports and photos
+
+submit requests or issues
+
+track request status
+
+7. Permissions
+7.1 Admin Permissions
+
+Can:
+
+create employees
+
+edit employees
+
+archive or disable employees
+
+create clients
+
+create locations
+
+create and manage shifts
+
+view all attendance records
+
+view all job reports
+
+view all client requests
+
+configure pay rates
+
+configure payroll settings
+
+approve or edit time corrections
+
+view all dashboards and exports
+
+Cannot:
+
+be restricted from own company data
+
+7.2 Employee Permissions
+
+Can:
+
+log in
+
+view own assigned schedule
+
+view today’s shift
+
+view weekly schedule
+
+view upcoming shifts
+
+clock in and out
+
+start and end breaks
+
+see own live timer
+
+upload report photos
+
+submit notes
+
+view own attendance history
+
+view own worked hours
+
+request correction on own time entry
+
+Cannot:
+
+view other employees
+
+view company payroll summary
+
+view admin-only data
+
+edit schedule unless future feature allows availability input
+
+7.3 Client Permissions
+
+Can:
+
+log in
+
+view own locations
+
+view approved reports
+
+view approved photos
+
+submit service requests
+
+submit complaints or issues
+
+track request progress
+
+Cannot:
+
+see employee pay
+
+see internal admin notes
+
+see other clients’ data
+
+change time records
+
+8. MVP Scope
+
+The first strong version must include:
+
+authentication
+
+role-based dashboards
+
+employee schedule view
+
+admin schedule creation and editing
+
+clock in and clock out
+
+live work timer
+
+break tracking
+
+attendance status flags
+
+daily, weekly, monthly, and pay-period hours
+
+payroll estimator
+
+before and after photo reports
+
+client portal
+
+client request submission
+
+admin review dashboard
+
+Do not build in MVP:
+
+taxes and full payroll filing
+
+advanced accounting
+
+route planning
+
+built-in live chat
+
+HR onboarding workflows
+
+AI forecasting or predictive staffing
+
+9. Core Modules
+9.1 Authentication and Account Structure
+Goal
+
+Support secure access for all 3 user roles.
+
+Requirements
+
+email and password login
+
+secure session handling
+
+password reset
+
+role-based redirect after login
+
+company-based data isolation
+
+employee belongs to one company
+
+client belongs to one company
+
+admin manages one company in MVP
+
+Role redirects
+
+admin -> admin dashboard
+
+employee -> employee home
+
+client -> client portal
+
+9.2 Scheduling Module
+
+Scheduling is a core feature and must be tightly connected to time tracking.
+
+Goal
+
+Allow admin to create schedules for employees and allow employees to clearly see when they are expected to work.
+
+Scheduling requirements
+
+Admin must be able to:
+
+create one-time shifts
+
+create recurring shifts
+
+edit shifts
+
+cancel shifts
+
+reassign shifts
+
+assign location and client
+
+add shift notes
+
+add report requirements
+
+define start and end times
+
+define grace period for lateness
+
+Employees must be able to:
+
+see today’s shift
+
+see weekly schedule
+
+see upcoming shifts
+
+open shift details
+
+see client and location info
+
+see start time and end time
+
+see total scheduled hours
+
+clock in from the scheduled shift card when allowed
+
+Employee schedule screens
+
+Employee should have:
+
+Today tab
+
+Week tab
+
+Upcoming tab
+
+Shift detail screen
+
+Each shift card should show:
+
+day and date
+
+scheduled start time
+
+scheduled end time
+
+total scheduled hours
+
+client
+
+location
+
+notes if any
+
+shift status
+
+quick action button
+
+Admin schedule screens
+
+Admin should have:
+
+daily schedule board
+
+weekly schedule board
+
+employee schedule list
+
+location-based schedule list
+
+create shift modal or page
+
+edit shift action
+
+repeat schedule builder
+
+Shift fields
+
+id
+
+company_id
+
+employee_id
+
+client_id optional
+
+location_id optional
+
+shift_date
+
+scheduled_start_at
+
+scheduled_end_at
+
+expected_hours
+
+grace_period_minutes
+
+repeat_rule optional
+
+required_report boolean
+
+required_before_photo boolean
+
+required_after_photo boolean
+
+shift_notes
+
+created_by
+
+status
+
+cancellation_reason optional
+
+Shift statuses
+
+scheduled
+
+in_progress
+
+completed
+
+late
+
+early_departure
+
+missed
+
+no_show
+
+partially_completed
+
+cancelled
+
+Scheduling logic
+
+shift exists before time entry
+
+employee can only clock into one active shift/session at a time
+
+if there is a current scheduled shift, the system should suggest or auto-attach the clock-in to that shift
+
+if multiple shifts exist same day, employee should select the correct shift
+
+if unscheduled clock-in is allowed by company settings, mark it as unscheduled work
+
+scheduled hours and actual hours must remain separate values
+
+Important scheduling rule
+
+Employee schedule visibility must be treated as a primary feature. Employees should never have to guess when they work.
+
+9.3 Time Tracking Module
+
+This is the most important system.
+
+Goal
+
+Track actual worked time from clock-in to clock-out and compare it against the schedule.
+
+Employee flow
+
+Employee logs in
+
+Sees current or upcoming scheduled shift
+
+Taps Clock In
+
+Timer starts immediately
+
+Employee can optionally start and end breaks
+
+Employee taps Clock Out
+
+System calculates total worked time
+
+System links time entry to shift when applicable
+
+Core requirements
+
+one active session only per employee
+
+create time entry on clock-in
+
+update running state while active
+
+save clock-out timestamp
+
+calculate total duration
+
+subtract breaks when applicable
+
+determine shift compliance status
+
+Time entry fields
+
+id
+
+company_id
+
+employee_id
+
+shift_id optional
+
+client_id optional
+
+location_id optional
+
+clock_in_at
+
+clock_out_at optional until completed
+
+break_total_minutes
+
+worked_minutes
+
+status
+
+flags
+
+notes optional
+
+correction_requested boolean
+
+approval_status
+
+Time entry statuses
+
+active
+
+completed
+
+missed_clock_out
+
+pending_review
+
+corrected
+
+approved
+
+Auto flags
+
+late_clock_in
+
+early_clock_in
+
+left_early
+
+missed_clock_out
+
+overtime
+
+no_show
+
+unscheduled_clock_in
+
+incomplete_report
+
+Logic comparison
+
+Compare:
+
+scheduled_start_at vs clock_in_at
+
+scheduled_end_at vs clock_out_at
+
+expected_hours vs worked_minutes
+
+From that determine:
+
+on time
+
+late
+
+early departure
+
+overtime
+
+partial shift
+
+missed shift
+
+9.4 Live Timer Module
+Goal
+
+Show the employee exactly how long they have been working since clock-in.
+
+Requirements
+
+timer starts immediately after clock-in
+
+timer remains visible on employee home
+
+timer updates in real time on UI
+
+timer pauses or accounts for breaks depending on settings
+
+timer stops at clock-out
+
+Employee home timer card should show
+
+current status: clocked in or not
+
+start time
+
+elapsed time
+
+active shift location
+
+break state if on break
+
+9.5 Attendance Monitoring Module
+Goal
+
+Give admin visibility into who is present, missing, late, or incomplete.
+
+Admin dashboard cards
+
+currently clocked in
+
+late today
+
+missed shifts today
+
+missing clock-outs
+
+incomplete reports
+
+total worked hours today
+
+total worked hours this week
+
+payroll estimate this pay period
+
+Attendance views
+
+today attendance table
+
+weekly attendance table
+
+employee attendance detail page
+
+shift vs actual comparison page
+
+Filters
+
+employee
+
+date range
+
+client
+
+location
+
+status
+
+flag type
+
+Attendance table columns
+
+employee name
+
+shift date
+
+scheduled start
+
+actual clock-in
+
+actual clock-out
+
+total worked hours
+
+status
+
+flags
+
+report status
+
+9.6 Payroll Estimator Module
+Goal
+
+Estimate employee pay based on configured hourly rates and approved or completed hours.
+
+Important note
+
+This is estimation only in MVP. It is not a full payroll system.
+
+Requirements
+
+set hourly rate per employee
+
+optional overtime rule
+
+support weekly and biweekly pay periods
+
+calculate regular hours
+
+calculate overtime hours
+
+calculate estimated gross pay
+
+show pay period summary
+
+admin-only access
+
+Pay configuration fields
+
+employee_id
+
+regular_hourly_rate
+
+overtime_enabled
+
+overtime_rate optional
+
+overtime_threshold_weekly optional
+
+pay_period_type weekly or biweekly
+
+pay_period_start_date
+
+Payroll screens
+
+current pay period overview
+
+payroll by employee
+
+payroll detail page
+
+export summary
+
+Payroll calculations
+
+total approved/completed minutes within pay period
+
+convert to hours
+
+split regular vs overtime if enabled
+
+multiply by rate
+
+sum estimated gross pay
+
+Views needed
+
+Admin should see:
+
+estimated gross pay by employee
+
+total business payroll estimate for pay period
+
+hours breakdown per employee
+
+worked hours by week and month
+
+9.7 Work Reports and Photo Proof Module
+Goal
+
+Collect proof of work tied to scheduled service visits.
+
+Employee report flow
+
+employee opens current or completed shift
+
+taps submit report
+
+uploads required photos
+
+adds notes
+
+submits report
+
+Report types
+
+standard shift report
+
+before and after report
+
+issue report
+
+follow-up report
+
+Report fields
+
+id
+
+company_id
+
+employee_id
+
+shift_id optional
+
+client_id
+
+location_id
+
+report_date
+
+report_type
+
+notes
+
+internal_notes optional
+
+status
+
+submitted_at
+
+approved_at optional
+
+Photo fields
+
+id
+
+report_id
+
+photo_type before/after/issue/other
+
+file_url
+
+uploaded_at
+
+uploaded_by
+
+Report statuses
+
+draft
+
+submitted
+
+needs_revision
+
+approved
+
+client_visible
+
+Rules
+
+selected shifts may require reports
+
+selected shifts may require before and/or after photos
+
+admin can reject incomplete reports
+
+client only sees approved content
+
+Storage organization
+
+Store photo files using a predictable structure: company/client/location/date/employee/report
+
+9.8 Client Portal Module
+Goal
+
+Give clients visibility into completed work and a way to submit service requests.
+
+Client dashboard modules
+
+recent service visits
+
+approved reports
+
+approved photos
+
+open requests
+
+new request button
+
+Client can do
+
+view completed approved reports
+
+view before and after photos
+
+read service notes
+
+submit new request
+
+submit issue report
+
+track request status
+
+Client request types
+
+service request
+
+complaint
+
+issue report
+
+follow-up request
+
+special task request
+
+9.9 Client Requests Module
+Goal
+
+Organize all client communication into structured requests instead of scattered messages.
+
+Request fields
+
+id
+
+company_id
+
+client_id
+
+location_id optional
+
+request_type
+
+title
+
+description
+
+priority
+
+status
+
+attachment optional
+
+created_at
+
+assigned_to optional
+
+resolved_at optional
+
+Request statuses
+
+new
+
+open
+
+in_review
+
+scheduled
+
+resolved
+
+closed
+
+Admin capabilities
+
+view all requests
+
+filter by status
+
+assign requests
+
+update status
+
+link request to shift or visit in future
+
+9.10 Notifications and Alerts Module
+Goal
+
+Surface operational issues immediately.
+
+Alerts to support
+
+employee late
+
+employee missed shift
+
+employee forgot clock-out
+
+required photos missing
+
+client request submitted
+
+report needs revision
+
+correction request submitted
+
+Notification targets
+
+admin dashboard notification center
+
+employee in-app notice for relevant actions
+
+client status updates for request progress
+
+10. Key Pages and Screens
+10.1 Employee App Pages
+
+Login
+
+Home
+
+My Schedule
+
+Shift Details
+
+My Hours
+
+Clock History
+
+Active Shift / Timer View
+
+Submit Report
+
+Report Upload Photos
+
+Profile
+
+Employee Home must show
+
+welcome header
+
+today’s scheduled shift
+
+next upcoming shift
+
+large clock in / clock out button
+
+live timer if active
+
+current location/client
+
+quick link to upload report
+
+my hours summary
+
+10.2 Admin Pages
+
+Login
+
+Dashboard
+
+Employees
+
+Employee Detail
+
+Schedule Board
+
+Create/Edit Shift
+
+Attendance
+
+Time Entry Detail
+
+Payroll Estimator
+
+Reports
+
+Report Detail
+
+Clients
+
+Client Detail
+
+Client Requests
+
+Locations
+
+Settings
+
+Admin dashboard must show
+
+active employees now
+
+late employees today
+
+missed shifts today
+
+missing reports
+
+payroll estimate this pay period
+
+latest client requests
+
+recent completed reports
+
+10.3 Client Pages
+
+Login
+
+Dashboard
+
+Service History
+
+Report Detail
+
+Photos
+
+Requests
+
+New Request
+
+Profile / Locations
+
+11. Data Model
+
+Main entities:
+
+companies
+
+users
+
+employees
+
+clients
+
+locations
+
+shifts
+
+time_entries
+
+breaks
+
+pay_rates
+
+pay_periods
+
+job_reports
+
+report_photos
+
+client_requests
+
+notifications
+
+audit_logs
+
+Recommended relationships
+
+one company has many users
+
+one company has many employees
+
+one company has many clients
+
+one client can have many locations
+
+one employee has many shifts
+
+one shift may have one matched time entry in MVP
+
+one shift may have one job report in MVP
+
+one job report has many photos
+
+one employee has one pay rate config
+
+one client has many requests
+
+12. Core Business Logic
+12.1 Clock-In Rules
+
+employee must be authenticated
+
+employee must not already have an active time entry
+
+if there is a scheduled shift within allowed time window, attach clock-in to that shift
+
+if multiple valid shifts exist, prompt employee to select one
+
+if no valid shift exists, allow or block unscheduled clock-in based on company setting
+
+start live timer immediately
+
+12.2 Clock-Out Rules
+
+employee must have active time entry
+
+save clock-out timestamp
+
+calculate worked duration
+
+subtract breaks
+
+compare against schedule
+
+mark flags if late, early, overtime, or incomplete
+
+if report is required, optionally prevent final completion until report is submitted
+
+12.3 Shift Compliance Rules
+
+late if clock-in exceeds shift start + grace period
+
+early clock-in if clock-in occurs before allowed window
+
+no-show if shift passes with no clock-in
+
+early departure if clock-out happens before scheduled end threshold
+
+overtime if worked time exceeds expected threshold
+
+12.4 Report Rules
+
+if required report is enabled for shift, report must be submitted before shift is considered fully complete
+
+if required photos are missing, report status becomes incomplete or needs revision
+
+admin approves client-visible reports
+
+12.5 Payroll Rules
+
+payroll uses approved or completed entries based on company settings
+
+payroll is filtered by pay period
+
+calculate regular pay first
+
+calculate overtime if enabled
+
+show gross estimate only in MVP
+
+13. Settings
+
+Admin settings should include:
+
+company name
+
+timezone
+
+default pay period type
+
+default grace period minutes
+
+allow unscheduled clock-ins yes/no
+
+require reports for all shifts yes/no
+
+require before photos yes/no
+
+require after photos yes/no
+
+allow employee time correction requests yes/no
+
+overtime enabled yes/no
+
+14. Filtering and Reporting Requirements
+
+Admin must be able to filter data by:
+
+employee
+
+client
+
+location
+
+date range
+
+shift status
+
+report status
+
+request status
+
+Reports to support:
+
+hours by employee
+
+hours by week
+
+hours by month
+
+hours by pay period
+
+late arrivals
+
+missed shifts
+
+missing reports
+
+payroll estimate summary
+
+client request summary
+
+15. UI and UX Requirements
+Mobile-first requirements
+
+bottom navigation on employee and client app
+
+large tap targets
+
+sticky main action button for clock in/out
+
+card-based layout
+
+native-like spacing and rounded containers
+
+fast loading key screens
+
+Desktop admin requirements
+
+clean dashboard layout
+
+tables with filters
+
+side navigation
+
+strong overview cards
+
+clear status badges
+
+UX priorities
+
+employees must clock in in one tap
+
+employees must see schedule immediately
+
+admin must see urgent issues immediately
+
+clients must view reports without confusion
+
+16. Suggested Navigation
+Employee bottom nav
+
+Home
+
+Schedule
+
+Hours
+
+Reports
+
+Profile
+
+Client bottom nav
+
+Home
+
+History
+
+Requests
+
+Profile
+
+Admin side nav
+
+Dashboard
+
+Employees
+
+Schedule
+
+Attendance
+
+Payroll
+
+Reports
+
+Clients
+
+Requests
+
+Settings
+
+17. MVP Build Phases
+Phase 1
+
+auth
+
+role system
+
+employee profiles
+
+client profiles
+
+admin dashboard shell
+
+employee home shell
+
+client portal shell
+
+Phase 2
+
+schedule creation
+
+employee schedule view
+
+clock in and clock out
+
+live timer
+
+attendance records
+
+Phase 3
+
+breaks
+
+flags for late, missed, early, no-show
+
+weekly/monthly/pay-period hour totals
+
+payroll estimator
+
+Phase 4
+
+reports and photo uploads
+
+report approval workflow
+
+client report visibility
+
+client request module
+
+Phase 5
+
+notifications
+
+exports
+
+audit logs
+
+better analytics
+
+18. Non-Functional Requirements
+
+mobile responsive
+
+secure role-based data access
+
+reliable timestamp handling
+
+proper timezone support
+
+fast dashboard queries
+
+organized media storage
+
+clean audit trail for edits and approvals
+
+19. Critical Do Not Break Rules
+
+do not allow duplicate active clock-ins
+
+do not mix company data between accounts
+
+do not let clients see internal admin notes
+
+do not let employees see other employees’ data
+
+do not calculate payroll from invalid or broken entries
+
+do not break schedule-to-time-entry linking
+
+do not build photos in a disorganized storage structure
+
+20. Final Build Instruction for the Agent
+
+Build a mobile-first workforce operations web app with 3 roles: admin, employee, and client. Admins can manage employees, clients, locations, schedules, attendance, payroll estimates, reports, and requests. Employees can log in, view their assigned work schedule, clock in and out against scheduled shifts, run a live timer, submit reports with photos and notes, and view their own hours and attendance. Clients can log in, view approved service reports and photos, and submit service requests or issues. The system must connect schedules to time tracking, compare scheduled time to actual time, flag late or missed shifts, calculate worked hours across day, week, month, and pay period, and estimate payroll using employee hourly rates. The app must feel native on mobile and clean and professional on desktop.
+
+21. Recommended MVP One-Line Positioning
+
+A mobile-first employee scheduling, time tracking, payroll estimation, and proof-of-work platform for service businesses.
+
+Yes. I added that and made scheduling a core part of the PRD, not a side feature.
+
+The spec now includes:
+
+employee schedule visibility
+
+admin-created schedules
+
+today, week, and upcoming shifts for employees
+
+shift cards with time, client, and location
+
+clock-in tied to scheduled shifts
+
+scheduled vs actual time comparison
+
+late, no-show, early departure, and overtime logic
+
+I also structured the full PRD/dev note around:
+
+product vision
+
+user roles
+
+permissions
+
+modules
+
+pages
+
+data model
+
+business logic
+
+settings
+
+reports
+
+build phases
+
+do-not-break rules
+
+I put it into a canvas document so you can keep building on it.
+
+If you want next, I can turn this into a much more technical version with:
+database tables,
+API routes,
+frontend pages,
+and exact backend logic for your AI agent.
