@@ -21,7 +21,7 @@ A workforce operations platform for service businesses with 3 user roles: Admin,
 - **Dual Passport strategies**: `local` (email+password) and `employee-local` (employeeId+pin)
 
 ## User Roles
-- **Admin**: Full dashboard with sidebar nav. Manages employees, schedules, attendance, payroll estimation, clients, requests, and company settings.
+- **Admin**: Full dashboard. Desktop: sidebar nav. Mobile: native-app style bottom tab nav (Dashboard, Employees, Schedule, Attendance, More) + fixed top header with profile/sign-out. Manages employees, schedules, attendance, payroll estimation, clients, requests, and company settings.
 - **Employee**: Mobile-first bottom nav. Home with clock in/out + live timer, schedule view (Today/Week/Upcoming), hours tracking, profile (with change password).
 - **Client**: Mobile-first bottom nav. Service request submission + tracking, profile.
 

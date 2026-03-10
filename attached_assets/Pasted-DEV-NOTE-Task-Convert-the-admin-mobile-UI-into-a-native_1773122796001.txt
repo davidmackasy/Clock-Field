@@ -1,0 +1,529 @@
+DEV NOTE
+
+Task
+Convert the admin mobile UI into a native-app style navigation experience without affecting desktop layout or breaking any current functionality.
+
+Main instruction
+Do not redesign the desktop web app.
+Do not change desktop sidebar behavior.
+Do not touch auth, page logic, API logic, data loading, schedule logic, payroll logic, attendance logic, or anything else already working.
+This task is mobile navigation UI only.
+
+Main goal
+On mobile screens only, remove the current left sidebar experience and replace it with a native mobile app layout:
+
+bottom tab navigation for main sections
+
+top header with profile/admin access
+
+smooth native-like spacing and tap targets
+
+desktop remains exactly as it is now
+
+Important
+This is only for mobile UI.
+Desktop and tablet landscape can keep the current sidebar if that is already working well.
+
+What the mobile app should feel like
+The mobile admin version should feel like a real native app, not like a squeezed desktop sidebar.
+That means:
+
+no persistent left sidebar on small screens
+
+bottom navigation with icons and labels
+
+fixed top bar
+
+scrollable page content
+
+safe spacing so content does not hide behind top or bottom bars
+
+Required mobile navigation structure
+
+Top header on mobile
+Use a compact fixed top header.
+
+Left side:
+
+profile/admin avatar button
+
+tap opens account sheet or menu
+
+profile info
+
+sign out action
+
+optional company/admin label
+
+Center:
+
+current page title
+Examples:
+Dashboard
+Employees
+Schedule
+Attendance
+Payroll
+Clients
+Requests
+Settings
+
+Right side optional:
+
+page-specific action if needed
+Examples:
+Add Employee
+Create Shift
+Add Client
+This is optional and can stay inside the page if easier
+
+Bottom navigation on mobile
+Replace sidebar with fixed bottom navigation.
+
+Required tabs:
+
+Dashboard
+
+Employees
+
+Schedule
+
+Attendance
+
+Payroll
+
+Clients
+
+Requests
+
+Settings
+
+You mentioned profile should be top left.
+Do that.
+So do not place Profile in the bottom nav.
+
+Bottom nav behavior
+
+fixed at bottom
+
+visible only on mobile
+
+icons + short labels
+
+active state clearly highlighted
+
+native-style spacing and rounded tap targets
+
+should not cover content
+
+page content must have bottom padding so last section is not hidden behind the nav
+
+Desktop behavior
+Desktop must remain unchanged:
+
+keep current sidebar
+
+keep current desktop layout
+
+do not replace sidebar on desktop
+
+Breakpoint behavior
+Recommended:
+
+mobile: bottom nav only, no sidebar
+
+desktop: sidebar only, no bottom nav
+
+Safe breakpoint idea
+Use mobile-only bottom nav below your existing md/lg breakpoint.
+Keep current sidebar for md+ or lg+ depending on current layout system.
+
+Pages included in mobile nav
+All admin pages in sidebar should map to bottom nav routes:
+
+/admin/dashboard
+
+/admin/employees
+
+/admin/schedule
+
+/admin/attendance
+
+/admin/payroll
+
+/admin/clients
+
+/admin/requests
+
+/admin/settings
+
+If some routes differ, keep current route structure.
+Do not rename routes unless necessary.
+
+Mobile layout requirements
+
+Remove sidebar from mobile
+On mobile widths:
+
+hide the left sidebar completely
+
+do not leave empty left spacing
+
+content should become full width
+
+Fixed top app bar
+Create a mobile top app bar with:
+
+avatar/profile button left
+
+page title center or left-aligned
+
+optional quick action right if needed
+
+Fixed bottom tab bar
+Create a bottom tab bar similar to a native app.
+
+Each tab should have:
+
+icon
+
+label
+
+active state
+
+tap target at least comfortable for thumb use
+
+Content padding
+Main content area on mobile must include:
+
+top padding for the fixed header
+
+bottom padding for the fixed tab bar
+
+Without this, content will be hidden.
+
+Native feel
+Use:
+
+rounded top header and bottom nav styling if it fits current design
+
+smooth spacing
+
+large touch targets
+
+clean active state
+
+no crowded tiny text
+
+Do not overdesign.
+Keep it clean and practical.
+
+Suggested bottom nav grouping
+Because there are many admin items, you need to decide whether to show all or use a More pattern.
+
+Best option for cleaner native UX
+Primary bottom tabs:
+
+Dashboard
+
+Employees
+
+Schedule
+
+Attendance
+
+More
+
+Inside More sheet/menu:
+
+Payroll
+
+Clients
+
+Requests
+
+Settings
+
+This is more realistic for mobile.
+Too many bottom tabs will feel crowded.
+
+Recommended final mobile nav
+Bottom tabs:
+
+Dashboard
+
+Employees
+
+Schedule
+
+Attendance
+
+More
+
+More opens:
+
+Payroll
+
+Clients
+
+Requests
+
+Settings
+
+Top left:
+
+Profile/Admin button
+
+Sign out in profile sheet
+
+This is the strongest mobile-native structure.
+
+If you still want every item visible at the bottom
+It will get crowded.
+Not recommended.
+But if forced, agent can use a horizontally scrollable bottom nav.
+Still, the better UX is a More tab.
+
+Profile/admin top-left behavior
+When tapping top-left avatar/profile icon, open a sheet/dropdown with:
+
+Admin name
+
+email
+
+company/admin label
+
+sign out button
+
+Optional:
+
+profile settings shortcut
+
+back to desktop view later if needed
+
+Do not move sign out into settings only.
+Keep it easy to find.
+
+Page behavior on mobile
+Each page should still work exactly the same.
+Only navigation shell changes.
+
+Examples
+
+Dashboard
+
+keep stat cards
+
+keep schedule list
+
+keep recent activity
+
+just render inside mobile app shell
+
+Employees
+
+full width cards
+
+keep search
+
+keep add/edit actions
+
+page content should not overflow awkwardly
+
+Schedule
+
+keep schedule content
+
+mobile header can show Create Shift button if needed
+
+calendar and recurring schedule work should remain untouched
+
+Attendance
+
+keep current table/list behavior if working
+
+on mobile, convert wide tables to cards or horizontal scroll only if already partially supported
+
+do not break data
+
+Payroll
+
+keep payroll logic
+
+on mobile, allow horizontal scroll for wide tables if needed
+
+do not break filters or popups
+
+Clients
+
+keep client cards and popups
+
+add location/client actions remain intact
+
+Requests
+
+keep current request structure
+
+Settings
+
+keep as is
+
+Technical implementation guidance
+
+A. Create a shared admin mobile shell
+Build a reusable AdminMobileShell or equivalent that wraps all admin pages on mobile only.
+
+This shell should handle:
+
+top app bar
+
+bottom nav
+
+content padding
+
+route-aware active state
+
+B. Keep desktop shell separate
+Do not modify existing desktop sidebar structure beyond responsive show/hide behavior.
+
+C. Route-aware active tab
+Bottom nav must highlight based on current route.
+
+D. More menu
+If using More tab, make it a bottom sheet or modal menu.
+Items inside More should navigate to:
+
+Payroll
+
+Clients
+
+Requests
+
+Settings
+
+E. Responsive visibility
+Use responsive classes/logic so:
+
+mobile bottom nav shows only on small screens
+
+desktop sidebar shows only on larger screens
+
+F. Keep current pages mounted normally
+Do not rebuild pages inside iframe-like wrappers.
+Just swap the layout shell/navigation chrome.
+
+Design requirements for native feel
+
+bottom nav height comfortable for thumb use
+
+consistent icon style
+
+active label and icon clearly visible
+
+safe bottom spacing for phones
+
+smooth scrolling
+
+no desktop sidebar peeking on mobile
+
+no content hidden under bottom nav
+
+What not to do
+
+do not stack sidebar and bottom nav together on mobile
+
+do not shrink desktop sidebar into a tiny mobile sidebar
+
+do not redesign every page
+
+do not touch page business logic
+
+do not alter existing API calls
+
+do not break popups, drawers, or tables
+
+do not affect desktop navigation
+
+Acceptance criteria
+
+Mobile only
+
+sidebar is hidden
+
+top header exists
+
+bottom nav exists
+
+navigation feels like a native app
+
+admin can navigate between pages easily with thumb
+
+profile button is top left
+
+sign out is accessible from top-left profile menu
+
+content is not hidden under top or bottom bars
+
+Desktop
+
+existing sidebar remains
+
+layout stays the same
+
+nothing changes visually unless required for responsive hiding
+
+Regression
+
+Dashboard still loads
+
+Employees still loads
+
+Schedule still loads
+
+Attendance still loads
+
+Payroll still loads
+
+Clients still loads
+
+Requests still loads
+
+Settings still loads
+
+sign out still works
+
+no data logic is broken
+
+Direct instruction for agent
+Update only the admin mobile UI shell so it feels like a native app. Hide the current sidebar on mobile screens and replace it with a fixed top header and a fixed bottom navigation. Put the admin/profile access in the top-left header, including sign out. For the bottom navigation, use a mobile-native structure with primary tabs and a More menu if needed so the UI does not become crowded. Keep the desktop web app unchanged, keep all existing routes and business logic intact, and do not modify unrelated working functionality.
+
+Recommended final mobile nav structure
+Top left:
+
+Profile/Admin button
+
+Sign out in menu
+
+Bottom tabs:
+
+Dashboard
+
+Employees
+
+Schedule
+
+Attendance
+
+More
+
+More menu:
+
+Payroll
+
+Clients
+
+Requests
+
+Settings
+
+This is the cleanest mobile-native solution.

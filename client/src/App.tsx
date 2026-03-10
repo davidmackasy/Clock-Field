@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { AdminSidebar } from "@/components/admin-sidebar";
+import { AdminMobileNav } from "@/components/admin-mobile-nav";
 import { MobileNav, employeeNavItems, clientNavItems } from "@/components/mobile-nav";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -51,10 +52,12 @@ function AdminLayout() {
       <div className="flex h-screen w-full">
         <AdminSidebar />
         <div className="flex flex-col flex-1 min-w-0">
-          <header className="flex items-center p-2 border-b lg:hidden">
+          {/* Sidebar trigger visible only on md screens where sidebar may collapse */}
+          <header className="hidden md:flex lg:hidden items-center p-2 border-b">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
           </header>
-          <main className="flex-1 overflow-y-auto">
+          {/* pt-14 pb-16 on mobile for top header + bottom nav; reset on md+ */}
+          <main className="flex-1 overflow-y-auto pt-14 pb-16 md:pt-0 md:pb-0">
             <Switch>
               <Route path="/admin" component={AdminDashboard} />
               <Route path="/admin/employees" component={AdminEmployees} />
@@ -69,6 +72,8 @@ function AdminLayout() {
           </main>
         </div>
       </div>
+      {/* Mobile-only navigation shell (hidden on md+) */}
+      <AdminMobileNav />
     </SidebarProvider>
   );
 }
