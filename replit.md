@@ -44,18 +44,34 @@ A workforce operations platform for service businesses with 3 user roles: Admin,
 - Employee login access management (enable, disable, reset PIN) from admin panel
 - Email-free employee accounts supported (Employee ID + PIN login)
 - Forced password change on first employee login
-- Client management with auto-created client user accounts
-- Location management linked to clients
-- Shift scheduling with date navigation and status tracking
+- **Recurring shift scheduling** - Create one-time, recurring (daily/weekly/biweekly), or extra shifts with day-of-week selection and 90-day auto-generation
+- **Schedule calendar views** - Day, Week, and Month calendar views with shift indicators
+- **Recurring schedule management** - List, pause, resume, end, or delete recurring schedules
+- **Employee detail panels** - Clickable employee cards open a detail sheet with Overview, Schedule, and Attendance tabs; includes inline editing
+- **Client detail modals** - Clickable client cards open a detail modal with Overview, Locations, and Requests tabs; includes inline editing
+- **Advanced attendance tracking** - Filters (search, date range, status, employee), variance columns ("+2 min late"), clickable employee names open attendance portfolio with stats + monthly calendar
 - Clock in/out with live timer and shift compliance flags
-- Attendance tracking with flags (late, early departure, overtime, unscheduled, etc.)
 - Payroll estimation based on hourly rates with overtime calculation
 - Client request management (service requests, complaints, issues)
 - Company settings configuration (grace period, overtime, report requirements)
 - Ownership/tenant authorization on all mutating endpoints
 
 ## Database Schema (shared/schema.ts)
-- companies, users (all roles), clients (linked to users via userId), locations, shifts, time_entries, client_requests
+- companies, users (all roles), clients (linked to users via userId), locations
+- **recurring_schedules** - Recurring shift rules (days, frequency, start/end dates, continuous toggle)
+- shifts (with shiftType, shiftLabel, recurringScheduleId), time_entries, client_requests
+
+## API Routes (server/routes.ts)
+- Auth: POST /api/auth/login, /api/auth/employee-login, /api/auth/change-password, /api/auth/logout, GET /api/auth/me
+- Employees: GET/POST /api/employees, PATCH /api/employees/:id, POST /api/employees/:id/enable-access|reset-pin|disable-access
+- Company: GET/PATCH /api/company
+- Dashboard: GET /api/dashboard/stats
+- Clients: GET/POST/PATCH /api/clients/:id
+- Locations: GET/POST /api/locations
+- Recurring Schedules: GET/POST /api/recurring-schedules, PATCH/DELETE /api/recurring-schedules/:id
+- Shifts: GET/POST /api/shifts, GET /api/shifts/date/:date, PATCH/DELETE /api/shifts/:id
+- Time Entries: GET /api/time-entries, GET /api/time-entries/active, POST /api/time-entries/clock-in|clock-out
+- Client Requests: GET/POST /api/client-requests, PATCH /api/client-requests/:id
 
 ## Project Structure
 ```
