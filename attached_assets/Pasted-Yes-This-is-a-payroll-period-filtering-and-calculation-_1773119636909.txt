@@ -1,0 +1,412 @@
+Yes. This is a payroll period filtering and calculation sync issue.
+
+The main payroll table and the payroll popup are not using the same date range or the same grouping logic.
+That is why the top table shows hours and pay, but the popup shows zero.
+
+The fix is not to redesign payroll.
+The fix is to force both views to use the exact same source of truth.
+
+DEV NOTE
+Fix payroll popup so employee payroll history matches the payroll table exactly
+
+Main instruction
+Do not redesign the payroll page.
+Do not touch attendance, schedule, employee auth, client flows, or anything else that is already working.
+Only fix payroll detail consistency so the main payroll table and the employee payroll popup always match correctly.
+
+Problem
+On the main Payroll page, the employee row shows real values:
+
+hours
+
+gross pay
+
+net pay
+
+But when admin clicks the employee name and opens the payroll history popup, the popup shows zeros or different numbers.
+
+Example from current issue:
+Main payroll row shows:
+
+Gross: $2.27
+
+Net: $2.16
+
+Hours: 0.1h
+
+Popup shows:
+
+Gross: $0.00
+
+Net: $0.00
+
+Hours: 0.0h
+
+This means the popup is not using the same payroll period boundaries or the same calculation logic as the main payroll table.
+
+Goal
+Make payroll fully consistent.
+
+If the main payroll table is showing the current pay period, then clicking the employee name must open a popup where:
+
+Current period summary matches the row exactly
+
+Current pay period entry in history matches the row exactly
+
+Admin can switch to other periods like previous week, previous biweekly period, this month, last month
+
+All calculations stay aligned
+
+Root cause to fix
+Most likely one or more of these are happening:
+
+Different date windows
+The main payroll table is probably using one date range, while the popup is using a different one.
+
+Different payroll anchor logic
+The popup may be using a biweekly range like Feb 25 to Mar 10, while the main page is using current tracked entries only or another start date.
+
+Different source queries
+The main table may aggregate directly from attendance/time entries, while the popup may be querying a separate helper with different filters.
+
+Boundary mismatch
+The popup may exclude the time entry because of timezone or inclusive/exclusive end date logic.
+
+Missing filter selector
+There is no clear period selector in the popup, so the admin does not know what period they are viewing.
+
+Required fix
+The payroll popup must use the exact same payroll calculation helper as the main payroll table.
+
+That means:
+
+Single source of truth
+Create one shared payroll calculation utility for:
+
+gross pay
+
+net pay
+
+tax
+
+hours
+
+overtime hours
+
+pay period grouping
+
+Then both:
+
+Payroll page
+
+Payroll popup
+must call that same utility
+
+Do not duplicate payroll logic in two places.
+
+Implementation requirements
+
+Add explicit payroll period filters
+
+A. Main payroll page
+Add a clear period selector at the top of Payroll page.
+
+Options:
+
+This week
+
+Last week
+
+This 2 weeks
+
+Last 2 weeks
+
+This month
+
+Last month
+
+Custom range later optional
+
+Default:
+Use This 2 weeks if payroll is biweekly by default
+
+B. Payroll popup
+Add the same period selector inside the popup.
+
+At minimum:
+
+Current pay period
+
+Previous pay period
+
+This month
+
+Last month
+
+Optional but recommended:
+
+Custom date range later
+
+Important
+When the popup opens from a clicked employee row, it should default to the exact same selected period as the main payroll page.
+
+Example:
+If main payroll page is on This 2 weeks,
+then popup opens on This 2 weeks for that employee.
+
+That way the numbers must match.
+
+Make popup summary match clicked row exactly
+
+When admin clicks employee name, pass:
+
+employee id
+
+active payroll filter
+
+current date range boundaries
+
+Then popup should calculate that employee's summary using the exact same date range.
+
+Required rule
+Popup current summary must equal the row values shown on the main table for the same employee and same selected period.
+
+That includes:
+
+hours
+
+OT hours
+
+gross pay
+
+tax
+
+net pay
+
+Fix pay period grouping logic
+
+Right now the popup history appears to be using a hard-coded or misaligned period like:
+Feb 25, 2026 - Mar 10, 2026
+
+But the main row values are clearly using a different or current active period.
+
+Need one central utility like:
+
+getPayrollPeriodRange(filter, payrollCycleStartDate, currentDate)
+
+Supported filters:
+
+this_week
+
+last_week
+
+current_biweekly
+
+previous_biweekly
+
+this_month
+
+last_month
+
+And one shared calculator like:
+
+calculateEmployeePayroll(employeeId, startDate, endDate)
+
+This function should:
+
+fetch matching time entries in range
+
+sum worked minutes
+
+split regular and OT if needed
+
+multiply by hourly rate
+
+compute tax 5%
+
+compute net pay
+
+Then use this helper everywhere.
+
+Fix inclusive date handling
+
+The popup may be dropping entries because of bad boundary logic.
+
+Agent must verify:
+
+start date is inclusive
+
+end date is inclusive through end-of-day
+or use proper timestamp range
+
+Example safe logic:
+start >= periodStart at 00:00:00
+end < nextDay after periodEnd at 00:00:00
+
+Or equivalent consistent approach.
+
+Also verify timezone.
+If app is local business payroll, use the company timezone consistently.
+
+Payroll history table behavior
+
+Inside popup, history table should not be random.
+It should show valid past periods with real computed values.
+
+Recommended behavior:
+If current popup filter is biweekly, history shows:
+
+current biweekly period
+
+previous biweekly period
+
+previous biweekly period before that
+and so on
+
+If popup filter is monthly, history shows month blocks.
+
+Each row should include:
+
+Period label
+
+Hours
+
+OT Hours
+
+Gross Pay
+
+Tax
+
+Net Pay
+
+And the current period row should match the main table row exactly if the same filter is active.
+
+Do not fabricate empty current period rows
+
+If popup is loading a period with zero data while the main row shows non-zero data, that means it is using the wrong range.
+Do not paper over this.
+Fix the range logic.
+
+UI requirements
+
+Keep current UI style.
+Do not redesign.
+
+Add only:
+
+payroll period selector on main page
+
+payroll period selector in popup
+
+maybe a small label showing active period like:
+Period: Feb 25, 2026 - Mar 10, 2026
+
+This gives clarity to admin.
+
+Suggested behavior for the main page totals
+
+The cards at top:
+
+Total Gross
+
+Total Net
+
+Total Hours
+
+Employees
+
+must also respond to the selected payroll filter.
+
+Example:
+If admin selects This month,
+totals recalculate for this month.
+
+This keeps the whole payroll page internally consistent.
+
+Acceptance criteria
+
+A. Matching values
+If main payroll row for David Zulu shows:
+
+Hours 0.1h
+
+Gross $2.27
+
+Net $2.16
+
+Then clicking David Zulu must open popup with same current summary for the same selected period.
+
+B. Period clarity
+Admin can tell exactly what period they are looking at on both:
+
+payroll page
+
+popup
+
+C. History works
+Popup history shows real past periods with real values, not empty made-up ranges.
+
+D. Filters work
+Changing filter to:
+
+this week
+
+last week
+
+this 2 weeks
+
+last 2 weeks
+
+this month
+
+last month
+updates both the main table and popup consistently.
+
+E. No regressions
+Do not break:
+
+employee rates
+
+main payroll table layout
+
+attendance
+
+schedule
+
+any other working module
+
+Direct instruction for agent
+
+Fix the payroll inconsistency by making the main payroll table and employee payroll popup use the exact same shared payroll calculation logic and the exact same date range filters. Add a visible payroll period selector on the main Payroll page and inside the employee payroll popup. When the admin clicks an employee name, the popup must open using the same active filter and date boundaries as the main table so the current summary values match exactly. Ensure biweekly, weekly, and monthly filters are supported, and ensure date boundaries and timezone handling are consistent so valid time entries are not excluded. Do not redesign the page or touch unrelated modules.
+
+Recommended filter labels
+
+Use these exact labels:
+
+This Week
+
+Last Week
+
+This 2 Weeks
+
+Last 2 Weeks
+
+This Month
+
+Last Month
+
+Default:
+This 2 Weeks
+
+Most likely exact bug
+
+Most likely the main table is using live current totals, but the popup is using a precomputed biweekly range that does not include the same entry.
+So the first thing the agent should fix is:
+
+shared date range source
+
+shared payroll calculation helper
+
+popup inherits current page filter automatically
+
+That is the real issue.
