@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { EmployeeAttendanceModal } from "@/components/employee-attendance-modal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +40,7 @@ type AccessCredentials = {
 
 type Shift = {
   id: string;
+  employeeId: string;
   shiftDate: string;
   scheduledStartAt: string;
   scheduledEndAt: string;
@@ -48,6 +50,7 @@ type Shift = {
 
 type TimeEntry = {
   id: string;
+  employeeId: string;
   clockInAt: string;
   clockOutAt?: string;
   workedMinutes?: number;
@@ -57,6 +60,7 @@ type TimeEntry = {
 
 type RecurringSchedule = {
   id: string;
+  employeeId: string;
   repeatFrequency: string;
   repeatDays: string[];
   scheduledStartTime: string;
@@ -80,6 +84,7 @@ export default function AdminEmployees() {
   const [credDialog, setCredDialog] = useState<AccessCredentials | null>(null);
   const [formData, setFormData] = useState({ firstName: "", lastName: "", email: "", phone: "", hourlyRate: "", position: "" });
   const [editData, setEditData] = useState<Partial<Employee>>({});
+  const [attendanceModalEmployee, setAttendanceModalEmployee] = useState<Employee | null>(null);
 
   const { data: employees, isLoading } = useQuery<Employee[]>({ queryKey: ["/api/employees"] });
 
@@ -97,20 +102,13 @@ export default function AdminEmployees() {
     }
   }, [selectedEmployee]);
 
-  const { data: shifts } = useQuery<Shift[]>({
-    queryKey: ["/api/shifts", { employeeId: selectedEmployee?.id }],
-    enabled: !!selectedEmployee
-  });
+  const { data: allShifts } = useQuery<Shift[]>({ queryKey: ["/api/shifts"] });
+  const { data: allRecurringSchedules } = useQuery<RecurringSchedule[]>({ queryKey: ["/api/recurring-schedules"] });
+  const { data: allTimeEntries } = useQuery<TimeEntry[]>({ queryKey: ["/api/time-entries"] });
 
-  const { data: recurringSchedules } = useQuery<RecurringSchedule[]>({
-    queryKey: ["/api/recurring-schedules", { employeeId: selectedEmployee?.id }],
-    enabled: !!selectedEmployee
-  });
-
-  const { data: timeEntries } = useQuery<TimeEntry[]>({
-    queryKey: ["/api/time-entries", { employeeId: selectedEmployee?.id }],
-    enabled: !!selectedEmployee
-  });
+  const shifts = allShifts?.filter(s => s.employeeId === selectedEmployee?.id);
+  const recurringSchedules = allRecurringSchedules?.filter(s => s.employeeId === selectedEmployee?.id);
+  const timeEntries = allTimeEntries?.filter(e => e.employeeId === selectedEmployee?.id);
 
   const updateMutation = useMutation({
     mutationFn: async (data: Partial<Employee>) => {
@@ -598,6 +596,16 @@ export default function AdminEmployees() {
                         </div>
                       </div>
 
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        data-testid="button-view-full-attendance"
+                        onClick={() => setAttendanceModalEmployee(selectedEmployee)}
+                      >
+                        View Full Attendance
+                      </Button>
+
                       <div className="space-y-3">
                         <h3 className="text-sm font-semibold">Recent Activity</h3>
                         {!timeEntries?.length ? (
@@ -706,6 +714,15 @@ export default function AdminEmployees() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {attendanceModalEmployee && (
+        <EmployeeAttendanceModal
+          employee={attendanceModalEmployee}
+          entries={allTimeEntries || []}
+          shifts={allShifts || []}
+          onClose={() => setAttendanceModalEmployee(null)}
+        />
+      )}
     </div>
   );
 }

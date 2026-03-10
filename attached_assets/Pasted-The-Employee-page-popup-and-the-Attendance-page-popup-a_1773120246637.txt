@@ -1,0 +1,362 @@
+The Employee page popup and the Attendance page popup are not using the same attendance source or the same calculation logic.
+That is why one view shows:
+
+1 completed shift
+
+left early
+
+100% rate
+
+while the employee drawer shows:
+
+0 shifts
+
+0 late
+
+0% rate
+
+no attendance history
+
+So the fix is not a redesign.
+The fix is to make both places read from one shared attendance summary source.
+
+DEV NOTE
+Fix employee popup attendance so it matches the Attendance page exactly
+
+Main instruction
+Do not redesign the employee page.
+Do not touch auth, schedule creation, payroll, client flows, or other working modules.
+Only fix the attendance mismatch between:
+
+Employee page popup
+
+Attendance page employee detail modal
+
+Goal
+When admin clicks an employee from the Employees page and opens the employee popup, the Attendance tab must show the same real attendance summary and recent history that appears when that same employee is opened from the Attendance page.
+
+Problem observed
+Current mismatch:
+Employee popup → Attendance tab shows:
+
+0 shifts
+
+0 late
+
+0% rate
+
+no attendance history
+
+Attendance page employee modal shows:
+
+1 total shift
+
+1 completed
+
+1 left early
+
+100% rate
+
+attendance calendar
+
+attendance history row
+
+This means the employee popup is either:
+
+using a different endpoint
+
+using incomplete employee data only
+
+not loading attendance records at all
+
+filtering wrong by date or employee id
+
+or using a separate broken summary calculation
+
+Required outcome
+The employee popup Attendance tab must match the Attendance page employee modal for the same employee and date range.
+
+Root cause to fix
+Most likely one or more of these:
+
+Different data source
+The Employees popup may be using lightweight employee profile data only, not real attendance data.
+
+Different employee identifier
+One place may use employee.id while the other uses user.id or employee_code.
+If ids are mismatched, the query returns zero.
+
+Different date range
+Attendance page may default to current month or all-time, while employee popup may default to today only or empty period.
+
+Different calculation logic
+The Attendance page modal may have the correct summary logic while the employee popup uses placeholder stats.
+
+Required fix
+Create one shared attendance detail source and use it in both places.
+
+Implementation plan
+
+Single source of truth for employee attendance detail
+
+Create one shared attendance summary helper or endpoint for employee attendance detail.
+
+Recommended endpoint:
+GET /api/employees/:employeeId/attendance-summary
+
+Response should include:
+
+employee basic info
+
+summary stats
+
+attendance history
+
+attendance calendar data
+
+recent activity
+
+Suggested response shape:
+{
+employee: {
+id,
+name,
+employeeId,
+status,
+role
+},
+summary: {
+totalShifts,
+completed,
+lateArrivals,
+leftEarly,
+noShows,
+attendanceRate
+},
+history: [
+{
+date,
+scheduledStart,
+scheduledEnd,
+actualClockIn,
+actualClockOut,
+variance,
+status,
+flags,
+clientName,
+locationName
+}
+],
+calendar: [
+{
+date,
+status
+}
+]
+}
+
+Important
+Both of these must call the same source:
+
+Attendance page employee modal
+
+Employees page popup Attendance tab
+
+Do not let them calculate separately.
+
+Reuse the same summary logic everywhere
+
+Use one shared calculation helper for attendance stats.
+
+Summary cards should be derived the same way in both places:
+
+Total Shifts
+
+Completed
+
+Late Arrivals
+
+Left Early
+
+No Shows
+
+Attendance Rate
+
+Recommended rules
+totalShifts = count of scheduled shifts or matched attendance entries within active range
+completed = completed time entries
+lateArrivals = entries flagged late
+leftEarly = entries flagged left_early
+noShows = scheduled shifts with no matching clock-in
+attendanceRate = completed shifts / total scheduled shifts * 100
+
+If your current Attendance page logic is already correct, reuse that exact logic for the employee popup.
+Do not rewrite a second version.
+
+Use the same date range default
+
+This is important.
+
+The employee popup and attendance modal must default to the same range.
+Best default:
+This month
+or
+current active attendance filter if one exists
+
+Simplest safe rule:
+If opened from Attendance page, inherit current Attendance filters
+If opened from Employees page, default to This month
+
+But for the mismatch fix, the main important thing is:
+both views must clearly show what date range they are using
+
+Add a small label or selector in both places:
+Attendance Period:
+
+This Week
+
+This Month
+
+Last Month
+
+All Time
+
+At minimum, show the current period label.
+
+If you want the smallest patch:
+default both to This Month and show the label.
+
+Fix employee identifier mapping
+
+Agent must verify that both views use the same employee identifier.
+
+Very likely bug:
+Attendance modal uses employee.id
+Employees popup uses employee.employeeId string like EMP-1003
+or user account id
+or wrong relation
+
+Fix rule:
+All attendance lookups must filter using the real database employee primary id, not display code only.
+
+Display code like EMP-1003 is for UI only.
+Do not use it as the only attendance relation unless that is how database was truly designed.
+
+Reuse attendance history UI data
+
+The Employees popup Attendance tab should show:
+
+summary cards
+
+recent activity or attendance history
+
+optional mini calendar if already available
+
+At minimum, it must not show zeros if real history exists.
+
+Recommended behavior:
+Reuse the same history rows already shown in Attendance modal.
+
+If needed, the Employees popup can show:
+Recent Activity
+latest 5 attendance entries
+
+And a button:
+View Full Attendance
+that opens the full attendance modal
+
+But the stats must already match.
+
+Calendar consistency
+
+If you already built attendance calendar in the Attendance page employee modal, reuse that same calendar data source in the employee popup Attendance tab.
+
+If the employee popup is meant to stay smaller, then:
+
+either embed the same mini calendar
+
+or show summary cards + recent history + button to expand full attendance view
+
+But do not show empty state when real data exists.
+
+UI scope boundaries
+
+Allowed
+
+employee popup Attendance tab data wiring
+
+shared attendance endpoint/helper
+
+date-range label or selector if needed
+
+employee id mapping fix
+
+Do not change
+
+employee overview tab layout
+
+schedule tab unless needed for shared employee data load
+
+attendance page layout unless needed to switch to shared endpoint
+
+payroll
+
+schedules
+
+clients
+
+auth
+
+Acceptance criteria
+
+A. Match
+If Attendance page employee modal shows:
+
+Total Shifts: 1
+
+Completed: 1
+
+Left Early: 1
+
+Rate: 100%
+
+Then the Employees page popup Attendance tab for that same employee must show matching values for the same period.
+
+B. No empty state when data exists
+If attendance records exist, Employees popup must not show:
+No attendance history
+
+C. Same employee
+Opening David Zulu from Employees and Attendance must reference the same employee record and same attendance data.
+
+D. No regressions
+Do not break:
+
+employee list
+
+attendance page
+
+schedule page
+
+payroll
+
+clock in/out
+
+employee login access buttons
+
+Direct instruction for agent
+
+Fix the attendance mismatch between the Employees page popup and the Attendance page employee modal. Both views must use the same employee attendance source, the same employee id mapping, the same date range defaults, and the same summary calculation logic. Reuse the existing attendance summary and history logic from the Attendance page if that version is already correct. The Employees popup Attendance tab must not show zero values when real attendance exists for that employee. Keep this as a focused data consistency fix only, without redesigning the app or touching unrelated modules.
+
+Most likely exact bug
+
+Most likely the Employees popup Attendance tab is loading from a lighter employee-profile query or using the wrong employee identifier, while the Attendance modal is using the real attendance query.
+So the first thing the agent should do is:
+
+inspect both queries
+
+compare identifiers used
+
+move both to one shared attendance summary endpoint/helper
+
+That is the real fix.
