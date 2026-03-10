@@ -1,0 +1,658 @@
+DEV NOTE
+Improve Schedule, Attendance, Client Details, and Employee Details without breaking existing working flows
+
+Main instruction
+Do not rebuild the app.
+Do not change auth flow, payroll logic, clock-in flow, client creation, location creation, or anything already working unless directly required for these improvements.
+This task is a focused enhancement patch to make the system feel like a real employee operations platform.
+
+Main goal
+Improve 4 areas only:
+
+Schedule creation and schedule viewing
+
+Attendance review and employee attendance history
+
+Client detail view and edit access
+
+Employee detail view and edit access
+
+Everything must remain compatible with the current structure.
+
+Schedule improvements
+
+Problem right now
+The current schedule flow only creates one shift at a time.
+That is too limited.
+A company needs to schedule employees in recurring patterns like:
+Monday to Friday every week
+2 days per week every month
+Continuous recurring schedule until changed
+Plus extra one-off shifts on specific days
+
+Also the current schedule page only shows a simple next or previous day view.
+That is not enough.
+The admin needs a proper monthly calendar view so they can visually see where shifts exist.
+
+Required outcome
+Make Schedule work as a true recurring scheduling system.
+
+A. Shift creation must support 3 schedule types
+
+One-time shift
+For one specific date only
+
+Recurring shift
+Examples:
+Every Monday to Friday
+Every Monday and Wednesday
+Every Tuesday, Thursday, Saturday
+Every week continuously
+Every month continuously until manually stopped
+
+Extra shift
+A one-off extra shift added outside the normal recurring schedule
+Example:
+Employee normally works Monday to Friday
+Admin adds extra shift on Sunday March 22
+
+B. Create Shift modal must be upgraded
+
+Current Create Shift modal is too basic.
+Keep the same visual style but expand the logic.
+
+Add these fields:
+
+Schedule type
+Options:
+One-time
+Recurring
+Extra shift
+
+Employee
+Keep existing
+
+Date
+Use as start date for one-time or recurrence start date
+
+End date
+For recurring only
+Optional if schedule is continuous forever
+
+Continuous recurring toggle
+If enabled, do not require end date
+
+Repeat frequency
+Weekly
+Every 2 weeks
+Monthly later if needed
+For now weekly is enough for cleaning operations
+
+Repeat days
+Checkboxes:
+Mon
+Tue
+Wed
+Thu
+Fri
+Sat
+Sun
+
+Start time
+Keep existing
+
+End time
+Keep existing
+
+Client
+Keep existing
+
+Location
+Keep existing
+
+Notes
+Keep existing
+
+Shift label optional
+Examples:
+Regular clean
+Deep clean
+Extra shift
+Weekend shift
+
+C. Recurring schedule logic
+
+If admin selects recurring:
+The system should auto-create future shifts based on recurrence rules
+
+Example:
+Employee David Zulu
+Start date March 10
+Repeat weekly
+Days Mon Tue Wed Thu Fri
+Continuous enabled
+Start time 1:00 PM
+End time 5:00 PM
+
+System should generate shifts for all matching weekdays going forward, not just one row.
+
+Important
+Do not physically create infinite records forever.
+That would be bad.
+
+Best safe approach
+Use a recurring_schedule table plus generated shift instances.
+
+Recommended logic:
+Store recurring rule
+Generate shifts for a safe future window, such as:
+next 60 days
+or next 90 days
+
+Then automatically extend future shifts when needed.
+
+This avoids huge database growth while still giving the user a continuous schedule experience.
+
+D. Extra shift logic
+
+Admin should be able to add an extra shift on top of recurring schedule.
+This should not modify the recurring template.
+This must remain a separate shift instance.
+
+Example:
+Recurring schedule is Monday to Friday
+Admin adds Sunday extra shift
+That Sunday shift is separate and editable/removable independently
+
+E. Schedule calendar view
+
+Current schedule page needs a proper premium calendar experience.
+
+Required views:
+Day view
+Week view
+Month calendar view
+
+Month view requirements:
+Show full month grid
+Show days with shifts
+Show employee initials or count on each date
+Click a date to view shifts for that day
+Click employee/shift to open shift detail or edit popup
+
+Visual expectations:
+Clean modern scheduling UI
+Easy navigation between months
+Today button
+Mini status labels if useful
+Do not overcomplicate with huge crowded cards
+
+F. Schedule page improvements
+
+Add top controls:
+Calendar toggle:
+Day
+Week
+Month
+
+Filters:
+Employee
+Client
+Location
+
+Search:
+Employee name
+Client
+Location
+
+Recurring schedules section
+Add a section or tab where admin can view:
+Active recurring schedules
+Paused recurring schedules
+Ended recurring schedules
+
+Actions per recurring schedule:
+Edit
+Pause
+Resume
+End
+Delete future occurrences only
+
+G. Schedule accuracy rules
+
+The schedule must be the source of truth for attendance comparison.
+
+Examples:
+If shift starts at 1:00 PM and employee clocks in at 1:01 PM, they are late
+If shift ends at 1:09 PM and employee clocks out at 1:08 PM, they left early
+If shift ends at 1:09 PM and employee clocks out at 1:10 PM, they stayed late
+
+Late and early logic must use exact scheduled times.
+Do not round loosely unless a grace period setting exists.
+If grace period exists, apply it consistently.
+
+Attendance improvements
+
+Problem right now
+Attendance page only shows a basic table.
+That is not enough for long-term workforce management.
+
+If a company has many employees and wants to review months or years of attendance, they need:
+search
+filter
+employee detail
+history
+summary stats
+trend visibility
+
+Required outcome
+Make Attendance useful as a real review tool.
+
+A. Add attendance filters and search
+
+Add top controls on attendance page:
+
+Search input
+Search by:
+Employee name
+Employee ID
+Client
+Location
+
+Date filters
+Today
+This week
+This month
+Custom range
+
+Status filters
+Completed
+Late
+Left early
+Stayed late
+No show
+Missed clock out
+Early clock in
+
+Employee filter dropdown
+Client filter dropdown
+Location filter dropdown
+
+These filters must work together.
+
+B. Make employee name clickable
+
+On attendance table, clicking employee name should open a detailed attendance portfolio modal or side panel.
+
+This employee attendance detail view must show:
+
+Employee name
+Employee ID
+Role
+Current status if active
+Assigned recurring schedule summary
+Attendance stats summary
+
+Stats cards:
+Total shifts scheduled
+Total shifts completed
+Late arrivals count
+Left early count
+Stayed late count
+No shows count
+Missed clock-outs count
+Attendance rate percentage
+
+Below that show:
+Attendance history table
+
+Columns:
+Date
+Scheduled start
+Actual clock-in
+Scheduled end
+Actual clock-out
+Worked hours
+Status
+Flags
+Client
+Location
+
+C. Add attendance calendar for each employee
+
+Inside employee attendance detail, include a small monthly attendance calendar.
+Each day should visually indicate:
+Present and on time
+Late
+Left early
+Absent/no-show
+Extra shift worked
+
+This will make it much easier to review cleaner behavior over time.
+
+D. Attendance search by day and range
+
+Admin must be able to search:
+Specific day
+Specific week
+Specific month
+Custom date range
+
+Example:
+Show David Zulu attendance from March 1 to March 31
+Show all late arrivals this month
+Show all left-early events this week
+
+E. Keep attendance statuses accurate
+
+You specifically want exact logic.
+Implement exact comparisons against scheduled shift times.
+
+Recommended flag logic:
+late if actual_clock_in > scheduled_start
+early_clock_in if actual_clock_in < scheduled_start
+left_early if actual_clock_out < scheduled_end
+stayed_late if actual_clock_out > scheduled_end
+on_time only if actual_clock_in equals scheduled_start and actual_clock_out matches expected boundaries according to your logic
+
+If you want a future grace period setting, it must be configurable in settings.
+But for now, if your requirement is exact minute-level comparison, use exact comparison.
+
+F. Attendance table improvements
+
+Current table should stay but be upgraded.
+
+Add columns:
+Scheduled time
+Actual time
+Variance
+Client
+Location
+
+Example variance values:
++1 min late
+-1 min early leave
++12 min overtime
+
+This will make the table much more useful.
+
+Client page improvements
+
+Problem right now
+The client page only shows a simple card.
+There is no deeper detail view.
+Admin needs to click client and see full details.
+
+Required outcome
+When clicking on a client name or card, open a client details popup or side modal.
+
+A. Client detail popup must include
+
+Basic info:
+Company name
+Contact name
+Email
+Phone
+Status
+Created date
+
+Related info:
+Assigned locations
+Number of shifts linked to this client
+Recent reports
+Recent attendance activity related to this client
+Open requests
+Resolved requests
+
+Actions:
+Edit client
+View client requests
+View locations
+Archive client later if needed
+
+B. Client edit support
+
+Inside the popup, allow admin to update:
+Company name
+Contact name
+Email
+Phone
+Status
+
+Do not overbuild.
+Just basic update support.
+
+C. Client detail tabs or sections
+
+Use simple tab sections:
+Overview
+Locations
+Requests
+Activity
+
+Overview
+Main info
+
+Locations
+Locations linked to client
+
+Requests
+Current and past client requests
+
+Activity
+Recent shifts/reports tied to client
+
+Employee page improvements
+
+Problem right now
+Employee page needs clickable employee details and edit access.
+
+Required outcome
+When clicking employee name/card, open employee details popup or side panel.
+
+A. Employee detail popup must include
+
+Basic info:
+Full name
+Employee ID
+Phone
+Email
+Role/position
+Status
+Hourly rate if admin can see it
+Created date
+
+Work info:
+Assigned locations
+Assigned recurring schedule summary
+Current week hours
+Current month hours
+Recent attendance summary
+
+Actions:
+Edit employee
+Enable or disable login access
+Reset temporary PIN later if supported
+View full attendance profile
+View schedules
+
+B. Employee edit support
+
+Inside popup, allow admin to update:
+Name
+Phone
+Email
+Position
+Hourly rate
+Status
+Assigned client if applicable
+Assigned location if applicable
+
+Do not break current employee data structure.
+This should be a small controlled edit form.
+
+C. Employee details should connect to schedule and attendance
+
+From employee popup, admin should be able to jump to:
+Full attendance detail
+Schedule detail
+Edit recurring schedule
+
+This makes the system feel connected.
+
+Database and data model changes
+
+Do not break existing tables.
+Add only what is needed.
+
+Recommended additions
+
+A. recurring_schedules table
+Fields:
+id
+company_id
+employee_id
+client_id nullable
+location_id nullable
+title nullable
+notes nullable
+start_date
+end_date nullable
+is_continuous boolean
+repeat_frequency
+days_of_week array or json
+start_time
+end_time
+status active paused ended
+created_at
+updated_at
+
+B. shifts table additions if needed
+Add:
+recurring_schedule_id nullable
+shift_type one_time recurring_generated extra
+is_extra_shift boolean default false
+
+C. attendance summary is derived
+Do not store too much duplicate summary data if avoidable.
+Most attendance stats can be computed.
+If performance becomes an issue later, add cached summary tables later.
+
+UI behavior rules
+
+Keep current design language
+Do not redesign the app from scratch
+Do not change sidebar
+Do not change the existing clean admin styling
+Only enhance the workflows
+
+Modals and detail views should:
+Open quickly
+Be scrollable if long
+Preserve existing page
+Avoid hard navigation where possible
+
+Exact implementation plan
+
+Phase 1
+Schedule foundation
+Add recurring schedule support
+Add repeat weekday selection
+Add continuous recurring toggle
+Add extra shift type
+Store recurring schedule rules
+Generate future shifts safely
+
+Phase 2
+Schedule viewing
+Add month calendar view
+Add week view
+Add filters and search
+Add recurring schedules list
+
+Phase 3
+Attendance enhancement
+Add search and filters
+Make employee names clickable
+Build employee attendance detail modal
+Add summary stats
+Add employee attendance calendar
+
+Phase 4
+Client and employee detail views
+Make client cards clickable
+Build client details modal
+Build employee details modal
+Add edit support inside both
+
+Important do not break rules
+
+Do not break current shift creation for one-time shifts
+Do not break current attendance recording
+Do not break employee clock-in and clock-out
+Do not break client creation
+Do not break location creation
+Do not break payroll totals
+Do not break auth or role permissions
+Do not break existing data already saved
+
+New recurring scheduling must support old single shifts, not replace them in a destructive way.
+
+Smart defaults
+
+Recurring schedule defaults:
+Repeat frequency = weekly
+Continuous = true
+Selected day auto-based on chosen start date if admin has not selected repeat days
+Shift type default = one-time
+
+Attendance defaults:
+Sort by newest date first
+Default filter = current week
+Search should debounce lightly
+
+Acceptance criteria
+
+Schedule
+Admin can create one-time shift
+Admin can create recurring shift for multiple weekdays
+Admin can create continuous schedule
+Admin can add extra shift without changing recurring pattern
+Month calendar shows scheduled shifts visually
+Employee can see recurring shifts on their schedule
+
+Attendance
+Admin can search attendance by employee and date range
+Admin can filter late, early leave, stayed late, no-show
+Clicking employee opens detailed attendance history
+Attendance detail shows stats and history clearly
+Late and early logic is accurate against exact scheduled time
+
+Client
+Clicking client opens details popup
+Admin can update client info
+Admin can view related locations and requests
+
+Employee
+Clicking employee opens details popup
+Admin can update employee info
+Admin can jump from employee popup to attendance and schedule context
+
+Direct build instruction for agent
+
+Improve the existing admin system without redesigning or breaking current working flows. Upgrade Schedule to support one-time, recurring, and extra shifts. Add recurring day selection, continuous schedules, future shift generation, and day/week/month calendar views. Improve Attendance by adding search, filters, and a clickable employee attendance portfolio showing detailed history and attendance stats. Make client cards clickable so admins can view and edit deeper client information. Make employee records clickable so admins can open a details popup and update employee information. Maintain compatibility with the current clock-in/out flow, current shift data, payroll, and existing UI.
+
+One more important recommendation
+
+For recurring schedules, do not generate forever.
+Generate next 60 to 90 days only.
+Then refresh generation when needed.
+That keeps the system fast and clean.
+
+Exact extra improvement you should include
+
+Because you said this is a company management tool, add this in schedule:
+Recurring schedule status:
+Active
+Paused
+Ended

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +11,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Mail, Phone, DollarSign, KeyRound, UserCheck, UserX, RefreshCw, Copy, Users } from "lucide-react";
+import { Plus, Search, Mail, Phone, DollarSign, KeyRound, UserCheck, UserX, RefreshCw, Copy, Users, Calendar, Clock, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { format } from "date-fns";
 
 type Employee = {
   id: string;
@@ -32,6 +37,33 @@ type AccessCredentials = {
   tempPin: string;
 };
 
+type Shift = {
+  id: string;
+  shiftDate: string;
+  scheduledStartAt: string;
+  scheduledEndAt: string;
+  status: string;
+  shiftLabel?: string;
+};
+
+type TimeEntry = {
+  id: string;
+  clockInAt: string;
+  clockOutAt?: string;
+  workedMinutes?: number;
+  status: string;
+  flags?: string[];
+};
+
+type RecurringSchedule = {
+  id: string;
+  repeatFrequency: string;
+  repeatDays: string[];
+  scheduledStartTime: string;
+  scheduledEndTime: string;
+  status: string;
+};
+
 function statusBadge(emp: Employee) {
   if (!emp.loginEnabled) return <Badge variant="outline" className="text-xs">Profile Only</Badge>;
   if (emp.accountStatus === "pending_activation") return <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">Pending Activation</Badge>;
@@ -44,10 +76,56 @@ export default function AdminEmployees() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [credDialog, setCredDialog] = useState<AccessCredentials | null>(null);
   const [formData, setFormData] = useState({ firstName: "", lastName: "", email: "", phone: "", hourlyRate: "", position: "" });
+  const [editData, setEditData] = useState<Partial<Employee>>({});
 
   const { data: employees, isLoading } = useQuery<Employee[]>({ queryKey: ["/api/employees"] });
+
+  useEffect(() => {
+    if (selectedEmployee) {
+      setEditData({
+        firstName: selectedEmployee.firstName,
+        lastName: selectedEmployee.lastName,
+        email: selectedEmployee.email || "",
+        phone: selectedEmployee.phone || "",
+        position: selectedEmployee.position || "",
+        hourlyRate: selectedEmployee.hourlyRate || "",
+        isActive: selectedEmployee.isActive
+      });
+    }
+  }, [selectedEmployee]);
+
+  const { data: shifts } = useQuery<Shift[]>({
+    queryKey: ["/api/shifts", { employeeId: selectedEmployee?.id }],
+    enabled: !!selectedEmployee
+  });
+
+  const { data: recurringSchedules } = useQuery<RecurringSchedule[]>({
+    queryKey: ["/api/recurring-schedules", { employeeId: selectedEmployee?.id }],
+    enabled: !!selectedEmployee
+  });
+
+  const { data: timeEntries } = useQuery<TimeEntry[]>({
+    queryKey: ["/api/time-entries", { employeeId: selectedEmployee?.id }],
+    enabled: !!selectedEmployee
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: Partial<Employee>) => {
+      const res = await apiRequest("PATCH", `/api/employees/${selectedEmployee?.id}`, data);
+      return res.json();
+    },
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      setSelectedEmployee(updated);
+      toast({ title: "Employee updated" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -198,7 +276,12 @@ export default function AdminEmployees() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {filtered.map((emp: Employee) => (
-            <Card key={emp.id} data-testid={`card-employee-${emp.id}`}>
+            <Card
+              key={emp.id}
+              data-testid={`card-employee-${emp.id}`}
+              className="cursor-pointer hover-elevate transition-shadow"
+              onClick={() => setSelectedEmployee(emp)}
+            >
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-start gap-3">
                   <Avatar className="w-10 h-10 flex-shrink-0">
@@ -238,7 +321,7 @@ export default function AdminEmployees() {
 
                 <Separator />
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
                   {!emp.loginEnabled ? (
                     <Button
                       size="sm"
@@ -296,7 +379,273 @@ export default function AdminEmployees() {
             </Card>
           ))}
         </div>
-      )}
+      )
+}
+
+      <Sheet open={!!selectedEmployee} onOpenChange={(v) => !v && setSelectedEmployee(null)}>
+        <SheetContent className="sm:max-w-xl w-full p-0">
+          {selectedEmployee && (
+            <div className="flex flex-col h-full">
+              <SheetHeader className="p-6 border-b">
+                <div className="flex items-center gap-4">
+                  <Avatar className="w-12 h-12">
+                    <AvatarFallback className="bg-primary/10 text-lg">
+                      {selectedEmployee.firstName[0]}{selectedEmployee.lastName[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <SheetTitle className="text-xl">
+                      {selectedEmployee.firstName} {selectedEmployee.lastName}
+                    </SheetTitle>
+                    <div className="flex items-center gap-2 mt-1">
+                      {selectedEmployee.employeeId && (
+                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
+                          {selectedEmployee.employeeId}
+                        </code>
+                      )}
+                      {statusBadge(selectedEmployee)}
+                    </div>
+                  </div>
+                </div>
+              </SheetHeader>
+
+              <Tabs defaultValue="overview" className="flex-1 flex flex-col">
+                <div className="px-6 border-b">
+                  <TabsList className="w-full justify-start h-12 bg-transparent gap-6 p-0">
+                    <TabsTrigger
+                      value="overview"
+                      className="h-12 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-0"
+                    >
+                      Overview
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="schedule"
+                      className="h-12 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-0"
+                    >
+                      Schedule
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="attendance"
+                      className="h-12 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-0"
+                    >
+                      Attendance
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
+
+                <ScrollArea className="flex-1">
+                  <div className="p-6">
+                    <TabsContent value="overview" className="mt-0 space-y-6">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>First Name</Label>
+                          <Input
+                            value={editData.firstName}
+                            onChange={(e) => setEditData((p) => ({ ...p, firstName: e.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Last Name</Label>
+                          <Input
+                            value={editData.lastName}
+                            onChange={(e) => setEditData((p) => ({ ...p, lastName: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Email</Label>
+                        <Input
+                          type="email"
+                          value={editData.email}
+                          onChange={(e) => setEditData((p) => ({ ...p, email: e.target.value }))}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Phone</Label>
+                        <Input
+                          value={editData.phone}
+                          onChange={(e) => setEditData((p) => ({ ...p, phone: e.target.value }))}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Position</Label>
+                        <Input
+                          value={editData.position}
+                          onChange={(e) => setEditData((p) => ({ ...p, position: e.target.value }))}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Hourly Rate ($)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={editData.hourlyRate}
+                          onChange={(e) => setEditData((p) => ({ ...p, hourlyRate: e.target.value }))}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+                        <div className="space-y-0.5">
+                          <Label>Active Status</Label>
+                          <p className="text-xs text-muted-foreground">Is this employee currently active?</p>
+                        </div>
+                        <Switch
+                          checked={editData.isActive}
+                          onCheckedChange={(checked) => setEditData((p) => ({ ...p, isActive: checked }))}
+                        />
+                      </div>
+
+                      <Button
+                        className="w-full"
+                        onClick={() => updateMutation.mutate(editData)}
+                        disabled={updateMutation.isPending}
+                      >
+                        {updateMutation.isPending ? "Saving..." : "Save Changes"}
+                      </Button>
+                    </TabsContent>
+
+                    <TabsContent value="schedule" className="mt-0 space-y-6">
+                      <div className="space-y-4">
+                        <h3 className="text-sm font-semibold flex items-center gap-2">
+                          <Calendar className="w-4 h-4" />
+                          Recurring Schedules
+                        </h3>
+                        {!recurringSchedules?.length ? (
+                          <p className="text-xs text-muted-foreground py-4 text-center border rounded-md border-dashed">
+                            No active recurring schedules
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {recurringSchedules.map((s) => (
+                              <Card key={s.id} className="bg-muted/30">
+                                <CardContent className="p-3">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <p className="text-sm font-medium capitalize">{s.repeatFrequency}</p>
+                                      <p className="text-xs text-muted-foreground mt-0.5">
+                                        {s.repeatDays.join(", ").toUpperCase()}
+                                      </p>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="text-xs font-mono">{s.scheduledStartTime} - {s.scheduledEndTime}</p>
+                                      <Badge variant="outline" className="text-[10px] h-4 mt-1">
+                                        {s.status}
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-4">
+                        <h3 className="text-sm font-semibold flex items-center gap-2">
+                          <Clock className="w-4 h-4" />
+                          Upcoming Shifts
+                        </h3>
+                        {!shifts?.length ? (
+                          <p className="text-xs text-muted-foreground py-4 text-center border rounded-md border-dashed">
+                            No upcoming shifts found
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {shifts
+                              .filter(s => s.status === "scheduled")
+                              .slice(0, 10)
+                              .map((s) => (
+                                <div key={s.id} className="flex items-center justify-between p-3 border rounded-lg bg-card">
+                                  <div>
+                                    <p className="text-sm font-medium">{format(new Date(s.shiftDate), "EEE, MMM d")}</p>
+                                    {s.shiftLabel && <p className="text-xs text-muted-foreground">{s.shiftLabel}</p>}
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-xs font-mono">
+                                      {format(new Date(s.scheduledStartAt), "h:mm a")} - {format(new Date(s.scheduledEndAt), "h:mm a")}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="attendance" className="mt-0 space-y-6">
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="p-3 border rounded-lg bg-muted/30 text-center">
+                          <p className="text-2xl font-bold">{timeEntries?.filter(e => e.status === "completed").length || 0}</p>
+                          <p className="text-[10px] text-muted-foreground uppercase">Shifts</p>
+                        </div>
+                        <div className="p-3 border rounded-lg bg-muted/30 text-center">
+                          <p className="text-2xl font-bold text-amber-600">
+                            {timeEntries?.filter(e => e.flags?.includes("late_clock_in")).length || 0}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground uppercase">Late</p>
+                        </div>
+                        <div className="p-3 border rounded-lg bg-muted/30 text-center">
+                          <p className="text-2xl font-bold text-primary">
+                            {timeEntries?.length 
+                              ? Math.round((timeEntries.filter(e => !e.flags?.includes("late_clock_in")).length / timeEntries.length) * 100) 
+                              : 0}%
+                          </p>
+                          <p className="text-[10px] text-muted-foreground uppercase">Rate</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <h3 className="text-sm font-semibold">Recent Activity</h3>
+                        {!timeEntries?.length ? (
+                          <p className="text-xs text-muted-foreground py-4 text-center border rounded-md border-dashed">
+                            No attendance history
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {timeEntries.slice(0, 10).map((entry) => (
+                              <div key={entry.id} className="flex items-center justify-between p-3 border rounded-lg bg-card">
+                                <div className="flex items-center gap-3">
+                                  {entry.flags?.includes("late_clock_in") ? (
+                                    <AlertCircle className="w-4 h-4 text-amber-500" />
+                                  ) : entry.status === "completed" ? (
+                                    <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                  ) : (
+                                    <Clock className="w-4 h-4 text-primary animate-pulse" />
+                                  )}
+                                  <div>
+                                    <p className="text-sm font-medium">{format(new Date(entry.clockInAt), "MMM d, yyyy")}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {format(new Date(entry.clockInAt), "h:mm a")} - {entry.clockOutAt ? format(new Date(entry.clockOutAt), "h:mm a") : "Active"}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-sm font-medium">
+                                    {entry.workedMinutes ? `${Math.floor(entry.workedMinutes / 60)}h ${entry.workedMinutes % 60}m` : "--"}
+                                  </p>
+                                  {entry.flags?.map(f => (
+                                    <Badge key={f} variant="outline" className="text-[9px] h-3.5 px-1 ml-1 bg-amber-50 text-amber-700 border-amber-200">
+                                      {f.replace(/_/g, " ")}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </TabsContent>
+                  </div>
+                </ScrollArea>
+              </Tabs>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
 
       <Dialog open={!!credDialog} onOpenChange={(v) => { if (!v) setCredDialog(null); }}>
         <DialogContent>

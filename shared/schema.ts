@@ -31,7 +31,6 @@ export const users = pgTable("users", {
   isActive: boolean("is_active").notNull().default(true),
   hourlyRate: decimal("hourly_rate", { precision: 10, scale: 2 }),
   overtimeRate: decimal("overtime_rate", { precision: 10, scale: 2 }),
-  // Employee access fields
   employeeId: text("employee_id").unique(),
   loginEnabled: boolean("login_enabled").notNull().default(false),
   accountStatus: text("account_status").notNull().default("profile_only"),
@@ -60,6 +59,27 @@ export const locations = pgTable("locations", {
   notes: text("notes"),
 });
 
+export const recurringSchedules = pgTable("recurring_schedules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  employeeId: varchar("employee_id").notNull(),
+  clientId: varchar("client_id"),
+  locationId: varchar("location_id"),
+  startDate: text("start_date").notNull(),
+  endDate: text("end_date"),
+  isContinuous: boolean("is_continuous").notNull().default(true),
+  repeatFrequency: text("repeat_frequency").notNull().default("weekly"),
+  repeatDays: text("repeat_days").array().notNull(),
+  scheduledStartTime: text("scheduled_start_time").notNull(),
+  scheduledEndTime: text("scheduled_end_time").notNull(),
+  shiftLabel: text("shift_label"),
+  shiftNotes: text("shift_notes"),
+  status: text("status").notNull().default("active"),
+  createdBy: varchar("created_by"),
+  createdAt: text("created_at").notNull(),
+  generatedUpTo: text("generated_up_to"),
+});
+
 export const shifts = pgTable("shifts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   companyId: varchar("company_id").notNull(),
@@ -73,6 +93,9 @@ export const shifts = pgTable("shifts", {
   gracePeriodMinutes: integer("grace_period_minutes").notNull().default(15),
   requireReport: boolean("require_report").notNull().default(false),
   shiftNotes: text("shift_notes"),
+  shiftLabel: text("shift_label"),
+  shiftType: text("shift_type").notNull().default("one-time"),
+  recurringScheduleId: varchar("recurring_schedule_id"),
   status: text("status").notNull().default("scheduled"),
   createdBy: varchar("created_by"),
 });
@@ -111,6 +134,7 @@ export const insertCompanySchema = createInsertSchema(companies).omit({ id: true
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
 export const insertClientSchema = createInsertSchema(clients).omit({ id: true });
 export const insertLocationSchema = createInsertSchema(locations).omit({ id: true });
+export const insertRecurringScheduleSchema = createInsertSchema(recurringSchedules).omit({ id: true });
 export const insertShiftSchema = createInsertSchema(shifts).omit({ id: true });
 export const insertTimeEntrySchema = createInsertSchema(timeEntries).omit({ id: true });
 export const insertClientRequestSchema = createInsertSchema(clientRequests).omit({ id: true });
@@ -123,6 +147,8 @@ export type Client = typeof clients.$inferSelect;
 export type InsertClient = z.infer<typeof insertClientSchema>;
 export type Location = typeof locations.$inferSelect;
 export type InsertLocation = z.infer<typeof insertLocationSchema>;
+export type RecurringSchedule = typeof recurringSchedules.$inferSelect;
+export type InsertRecurringSchedule = z.infer<typeof insertRecurringScheduleSchema>;
 export type Shift = typeof shifts.$inferSelect;
 export type InsertShift = z.infer<typeof insertShiftSchema>;
 export type TimeEntry = typeof timeEntries.$inferSelect;

@@ -8,19 +8,25 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Building2, Mail, Phone, MapPin } from "lucide-react";
+import { Plus, Search, Building2, Mail, Phone, MapPin, ClipboardList } from "lucide-react";
 
 export default function AdminClients() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [locOpen, setLocOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<any>(null);
   const [form, setForm] = useState({ name: "", contactName: "", contactEmail: "", contactPhone: "" });
   const [locForm, setLocForm] = useState({ name: "", address: "", clientId: "", notes: "" });
+  const [editForm, setEditForm] = useState({ name: "", contactName: "", contactEmail: "", contactPhone: "", isActive: true });
 
   const { data: clientsList, isLoading } = useQuery<any[]>({ queryKey: ["/api/clients"] });
   const { data: locationsList } = useQuery<any[]>({ queryKey: ["/api/locations"] });
+  const { data: requestsList } = useQuery<any[]>({ queryKey: ["/api/client-requests"] });
 
   const createClientMut = useMutation({
     mutationFn: async (data: any) => { const res = await apiRequest("POST", "/api/clients", data); return res.json(); },
@@ -33,6 +39,31 @@ export default function AdminClients() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/locations"] }); toast({ title: "Location created" }); setLocOpen(false); setLocForm({ name: "", address: "", clientId: "", notes: "" }); },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
+
+  const updateClientMut = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/clients/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      toast({ title: "Client updated" });
+      setDetailOpen(false);
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const handleClientClick = (client: any) => {
+    setSelectedClient(client);
+    setEditForm({
+      name: client.name,
+      contactName: client.contactName || "",
+      contactEmail: client.contactEmail || "",
+      contactPhone: client.contactPhone || "",
+      isActive: client.isActive,
+    });
+    setDetailOpen(true);
+  };
 
   const filtered = (clientsList || []).filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
   const locsByClient = new Map<string, any[]>();
@@ -101,11 +132,16 @@ export default function AdminClients() {
           {filtered.map((client: any) => {
             const locs = locsByClient.get(client.id) || [];
             return (
-              <Card key={client.id} data-testid={`card-client-${client.id}`}>
+              <Card
+                key={client.id}
+                data-testid={`card-client-${client.id}`}
+                className="cursor-pointer hover-elevate active-elevate-2 overflow-visible"
+                onClick={() => handleClientClick(client)}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
-                      <p className="font-medium">{client.name}</p>
+                      <p className="font-medium text-foreground">{client.name}</p>
                       {client.contactName && <p className="text-sm text-muted-foreground">{client.contactName}</p>}
                     </div>
                     <Badge variant={client.isActive ? "default" : "secondary"} className="text-xs">{client.isActive ? "Active" : "Inactive"}</Badge>
@@ -121,6 +157,137 @@ export default function AdminClients() {
           })}
         </div>
       )}
+
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{selectedClient?.name}</DialogTitle>
+          </DialogHeader>
+          <Tabs defaultValue="overview">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="locations">Locations</TabsTrigger>
+              <TabsTrigger value="requests">Requests</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="overview" className="space-y-4 py-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Company Name</Label>
+                  <Input
+                    value={editForm.name}
+                    onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Contact Name</Label>
+                  <Input
+                    value={editForm.contactName}
+                    onChange={e => setEditForm(prev => ({ ...prev, contactName: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Contact Email</Label>
+                  <Input
+                    value={editForm.contactEmail}
+                    onChange={e => setEditForm(prev => ({ ...prev, contactEmail: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Contact Phone</Label>
+                  <Input
+                    value={editForm.contactPhone}
+                    onChange={e => setEditForm(prev => ({ ...prev, contactPhone: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-2 border-t pt-4">
+                <div className="space-y-0.5">
+                  <Label>Active Status</Label>
+                  <p className="text-sm text-muted-foreground">Enable or disable this client profile</p>
+                </div>
+                <Switch
+                  checked={editForm.isActive}
+                  onCheckedChange={checked => setEditForm(prev => ({ ...prev, isActive: checked }))}
+                />
+              </div>
+              <Button
+                className="w-full"
+                onClick={() => updateClientMut.mutate({ id: selectedClient.id, data: editForm })}
+                disabled={updateClientMut.isPending}
+                data-testid="button-save-client-detail"
+              >
+                {updateClientMut.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </TabsContent>
+
+            <TabsContent value="locations" className="space-y-4 py-4">
+              {(() => {
+                const locs = locationsList?.filter(l => l.clientId === selectedClient?.id) || [];
+                if (locs.length === 0) {
+                  return (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <MapPin className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                      <p>No locations added for this client</p>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="space-y-2">
+                    {locs.map((loc: any) => (
+                      <Card key={loc.id}>
+                        <CardContent className="p-3">
+                          <p className="font-medium text-sm">{loc.name}</p>
+                          {loc.address && <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1"><MapPin className="w-3 h-3" />{loc.address}</p>}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                );
+              })()}
+            </TabsContent>
+
+            <TabsContent value="requests" className="space-y-4 py-4">
+              {(() => {
+                const requests = requestsList?.filter(r => r.clientId === selectedClient?.id) || [];
+                if (requests.length === 0) {
+                  return (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <ClipboardList className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                      <p>No requests found for this client</p>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="space-y-2">
+                    {requests.map((req: any) => (
+                      <Card key={req.id}>
+                        <CardContent className="p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="font-medium text-sm">{req.title}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{req.description}</p>
+                            </div>
+                            <Badge variant="outline" className="text-[10px] capitalize px-1 h-4">{req.status}</Badge>
+                          </div>
+                          <div className="flex items-center justify-between mt-2">
+                            <p className="text-[10px] text-muted-foreground">
+                              {new Date(req.createdAt).toLocaleDateString()}
+                            </p>
+                            <Badge variant="secondary" className="text-[10px] capitalize px-1 h-4">
+                              {req.priority}
+                            </Badge>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                );
+              })()}
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

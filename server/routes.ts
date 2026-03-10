@@ -360,12 +360,18 @@ export async function registerRoutes(
   });
 
   // ── Shifts ────────────────────────────────────────────────────────────────
-  // Admin: all shifts for company; Employee: own shifts
+  // Admin: all shifts for company (supports ?employeeId filter); Employee: own shifts
   app.get("/api/shifts", requireAuth, async (req, res) => {
     try {
       const user = req.user as any;
+      const { employeeId } = req.query;
+
       if (user.role === "admin") {
-        res.json(await storage.getShiftsByCompany(user.companyId));
+        if (employeeId && typeof employeeId === "string") {
+          res.json(await storage.getShiftsByEmployee(employeeId));
+        } else {
+          res.json(await storage.getShiftsByCompany(user.companyId));
+        }
       } else if (user.role === "employee") {
         res.json(await storage.getShiftsByEmployee(user.id));
       } else {
@@ -430,8 +436,14 @@ export async function registerRoutes(
   app.get("/api/time-entries", requireAuth, async (req, res) => {
     try {
       const user = req.user as any;
+      const { employeeId } = req.query;
+
       if (user.role === "admin") {
-        res.json(await storage.getTimeEntriesByCompany(user.companyId));
+        if (employeeId && typeof employeeId === "string") {
+          res.json(await storage.getTimeEntriesByEmployee(employeeId));
+        } else {
+          res.json(await storage.getTimeEntriesByCompany(user.companyId));
+        }
       } else if (user.role === "employee") {
         res.json(await storage.getTimeEntriesByEmployee(user.id));
       } else {
@@ -552,6 +564,128 @@ export async function registerRoutes(
       if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       const updated = await storage.updateClientRequest(req.params.id, req.body);
       res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ── Recurring Schedules ──────────────────────────────────────────────────
+  const DAY_MAP: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+
+  function generateShiftsFromSchedule(schedule: any, companyId: string, daysAhead = 90): any[] {
+    const results: any[] = [];
+    const repeatDays: number[] = (schedule.repeatDays || []).map((d: string) => DAY_MAP[d.toLowerCase()]).filter((n: number) => n !== undefined);
+    const start = new Date(schedule.startDate + "T12:00:00");
+    const end = schedule.isContinuous ? null : (schedule.endDate ? new Date(schedule.endDate + "T23:59:59") : null);
+    const windowEnd = new Date();
+    windowEnd.setDate(windowEnd.getDate() + daysAhead);
+    const effectiveEnd = end && end < windowEnd ? end : windowEnd;
+    const cursor = new Date(Math.max(start.getTime(), Date.now() - 86400000));
+    cursor.setHours(12, 0, 0, 0);
+    const biweeklyStart = new Date(schedule.startDate + "T12:00:00");
+    while (cursor <= effectiveEnd) {
+      const dayOfWeek = cursor.getDay();
+      if (repeatDays.includes(dayOfWeek)) {
+        if (schedule.repeatFrequency === "biweekly") {
+          const weeksDiff = Math.floor((cursor.getTime() - biweeklyStart.getTime()) / (7 * 86400000));
+          if (weeksDiff % 2 !== 0) { cursor.setDate(cursor.getDate() + 1); continue; }
+        }
+        const dateStr = cursor.toISOString().split("T")[0];
+        const startAt = `${dateStr}T${schedule.scheduledStartTime}:00`;
+        const endAt = `${dateStr}T${schedule.scheduledEndTime}:00`;
+        const hours = (new Date(endAt).getTime() - new Date(startAt).getTime()) / 3600000;
+        results.push({
+          companyId,
+          employeeId: schedule.employeeId,
+          clientId: schedule.clientId || null,
+          locationId: schedule.locationId || null,
+          shiftDate: dateStr,
+          scheduledStartAt: startAt,
+          scheduledEndAt: endAt,
+          expectedHours: hours > 0 ? hours.toFixed(2) : null,
+          gracePeriodMinutes: 15,
+          shiftNotes: schedule.shiftNotes || null,
+          shiftLabel: schedule.shiftLabel || null,
+          shiftType: "recurring",
+          recurringScheduleId: schedule.id,
+          status: "scheduled",
+          createdBy: schedule.createdBy,
+        });
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return results;
+  }
+
+  app.get("/api/recurring-schedules", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { employeeId } = req.query;
+
+      if (employeeId && typeof employeeId === "string") {
+        res.json(await storage.getRecurringSchedulesByEmployee(employeeId));
+      } else {
+        res.json(await storage.getRecurringSchedulesByCompany(user.companyId));
+      }
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/recurring-schedules", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { employeeId, clientId, locationId, startDate, endDate, isContinuous, repeatFrequency, repeatDays, scheduledStartTime, scheduledEndTime, shiftLabel, shiftNotes } = req.body;
+      if (!employeeId || !startDate || !scheduledStartTime || !scheduledEndTime || !repeatDays?.length) {
+        return res.status(400).json({ message: "Employee, start date, times, and repeat days are required" });
+      }
+      const schedule = await storage.createRecurringSchedule({
+        companyId: user.companyId,
+        employeeId,
+        clientId: clientId || null,
+        locationId: locationId || null,
+        startDate,
+        endDate: endDate || null,
+        isContinuous: isContinuous !== false,
+        repeatFrequency: repeatFrequency || "weekly",
+        repeatDays,
+        scheduledStartTime,
+        scheduledEndTime,
+        shiftLabel: shiftLabel || null,
+        shiftNotes: shiftNotes || null,
+        status: "active",
+        createdBy: user.id,
+        createdAt: new Date().toISOString(),
+        generatedUpTo: null,
+      });
+      const shiftsToCreate = generateShiftsFromSchedule(schedule, user.companyId, 90);
+      for (const s of shiftsToCreate) {
+        await storage.createShift(s);
+      }
+      const windowEnd = new Date();
+      windowEnd.setDate(windowEnd.getDate() + 90);
+      await storage.updateRecurringSchedule(schedule.id, { generatedUpTo: windowEnd.toISOString().split("T")[0] });
+      res.status(201).json({ schedule, shiftsCreated: shiftsToCreate.length });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/recurring-schedules/:id", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const target = await storage.getRecurringSchedule(req.params.id);
+      if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const updated = await storage.updateRecurringSchedule(req.params.id, req.body);
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/recurring-schedules/:id", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const target = await storage.getRecurringSchedule(req.params.id);
+      if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const today = new Date().toISOString().split("T")[0];
+      const futureShifts = (await storage.getShiftsByRecurringSchedule(req.params.id))
+        .filter(s => s.shiftDate >= today && s.status === "scheduled");
+      for (const s of futureShifts) await storage.deleteShift(s.id);
+      await storage.deleteRecurringSchedule(req.params.id);
+      res.json({ message: "Deleted", futureShiftsRemoved: futureShifts.length });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

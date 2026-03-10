@@ -1,11 +1,12 @@
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import {
-  companies, users, clients, locations, shifts, timeEntries, clientRequests,
+  companies, users, clients, locations, recurringSchedules, shifts, timeEntries, clientRequests,
   type Company, type InsertCompany,
   type User, type InsertUser,
   type Client, type InsertClient,
   type Location, type InsertLocation,
+  type RecurringSchedule, type InsertRecurringSchedule,
   type Shift, type InsertShift,
   type TimeEntry, type InsertTimeEntry,
   type ClientRequest, type InsertClientRequest,
@@ -33,6 +34,14 @@ export interface IStorage {
   createLocation(data: InsertLocation): Promise<Location>;
   getLocation(id: string): Promise<Location | undefined>;
   getLocationsByCompany(companyId: string): Promise<Location[]>;
+
+  createRecurringSchedule(data: InsertRecurringSchedule): Promise<RecurringSchedule>;
+  getRecurringSchedule(id: string): Promise<RecurringSchedule | undefined>;
+  getRecurringSchedulesByCompany(companyId: string): Promise<RecurringSchedule[]>;
+  getRecurringSchedulesByEmployee(employeeId: string): Promise<RecurringSchedule[]>;
+  updateRecurringSchedule(id: string, data: Partial<InsertRecurringSchedule>): Promise<RecurringSchedule | undefined>;
+  deleteRecurringSchedule(id: string): Promise<void>;
+  getShiftsByRecurringSchedule(recurringScheduleId: string): Promise<Shift[]>;
 
   createShift(data: InsertShift): Promise<Shift>;
   getShift(id: string): Promise<Shift | undefined>;
@@ -148,6 +157,37 @@ export class DatabaseStorage implements IStorage {
 
   async getLocationsByCompany(companyId: string): Promise<Location[]> {
     return db.select().from(locations).where(eq(locations.companyId, companyId));
+  }
+
+  async createRecurringSchedule(data: InsertRecurringSchedule): Promise<RecurringSchedule> {
+    const [schedule] = await db.insert(recurringSchedules).values(data).returning();
+    return schedule;
+  }
+
+  async getRecurringSchedule(id: string): Promise<RecurringSchedule | undefined> {
+    const [schedule] = await db.select().from(recurringSchedules).where(eq(recurringSchedules.id, id));
+    return schedule;
+  }
+
+  async getRecurringSchedulesByCompany(companyId: string): Promise<RecurringSchedule[]> {
+    return db.select().from(recurringSchedules).where(eq(recurringSchedules.companyId, companyId));
+  }
+
+  async getRecurringSchedulesByEmployee(employeeId: string): Promise<RecurringSchedule[]> {
+    return db.select().from(recurringSchedules).where(eq(recurringSchedules.employeeId, employeeId));
+  }
+
+  async updateRecurringSchedule(id: string, data: Partial<InsertRecurringSchedule>): Promise<RecurringSchedule | undefined> {
+    const [schedule] = await db.update(recurringSchedules).set(data).where(eq(recurringSchedules.id, id)).returning();
+    return schedule;
+  }
+
+  async deleteRecurringSchedule(id: string): Promise<void> {
+    await db.delete(recurringSchedules).where(eq(recurringSchedules.id, id));
+  }
+
+  async getShiftsByRecurringSchedule(recurringScheduleId: string): Promise<Shift[]> {
+    return db.select().from(shifts).where(eq(shifts.recurringScheduleId, recurringScheduleId));
   }
 
   async createShift(data: InsertShift): Promise<Shift> {
