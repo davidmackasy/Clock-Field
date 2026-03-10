@@ -1,0 +1,105 @@
+Main goal
+Let the cleaner filter a date range and see the total hours they actually worked based on clock-in and clock-out.
+
+Do not overcomplicate it with payroll.
+Do not calculate from schedule only.
+Use real worked time only.
+
+Best version to build now
+
+Cleaner My Hours page should have:
+
+Top filter bar
+
+This Week
+
+Last 2 Weeks
+
+This Month
+
+Custom Range
+
+If Custom Range is selected
+
+Start Date
+
+End Date
+
+Example
+
+From: Feb 25
+
+To: Mar 10
+
+What should happen
+When the cleaner selects a range:
+
+show total worked hours for that range
+
+show all shifts worked in that range
+
+each row should show date, clock-in, clock-out, total hours
+
+keep the current flags if they already exist
+
+Main summary card
+Show:
+
+Total Hours Worked
+
+Optional second card
+
+Total Shifts Worked
+
+Optional third card
+
+Selected Date Range
+
+Important logic
+Use only real time-entry data:
+
+clock_in_at
+
+clock_out_at
+
+worked_minutes
+
+Do not estimate from schedule.
+If the cleaner was scheduled but did not work, do not count that time.
+
+Correct example
+If cleaner selects Feb 25 to Mar 10:
+
+system sums all completed time entries between those dates
+
+returns one total like 23h 40m
+
+shows only entries inside that range
+
+Safe default
+Default filter should be:
+
+Last 2 Weeks
+
+That is the most useful for cleaners.
+
+Calendar
+If adding a full calendar is too much right now, skip it for now.
+The date range filter is enough for version 1.
+
+What to tell your agent
+
+Fix only the cleaner My Hours page. Add date filtering so the cleaner can choose This Week, Last 2 Weeks, This Month, or a Custom Range with start and end dates. When a range is selected, calculate total worked hours using actual clock-in and clock-out records only, and show the filtered history for that range. Do not use scheduled hours as the source of truth. Do not touch payroll, admin attendance, schedule creation, or any other working part of the system.
+
+Best acceptance check
+If cleaner worked:
+
+Mar 9 = 7 minutes
+
+Mar 10 = 6 minutes
+
+Then selecting Mar 9 to Mar 10 should show:
+
+Total Hours Worked = 0h 13m
+
+That is the exact behavior you want.

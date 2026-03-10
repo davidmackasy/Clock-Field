@@ -1,42 +1,80 @@
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Clock, Calendar } from "lucide-react";
+import { format, startOfWeek, startOfMonth, subDays, parseISO, isWithinInterval, startOfDay, endOfDay } from "date-fns";
+
+type FilterPreset = "this_week" | "last_2_weeks" | "this_month" | "custom";
+
+function getPresetRange(preset: FilterPreset): { from: Date; to: Date } {
+  const now = new Date();
+  if (preset === "this_week") {
+    return { from: startOfWeek(now, { weekStartsOn: 1 }), to: now };
+  }
+  if (preset === "last_2_weeks") {
+    return { from: subDays(now, 13), to: now };
+  }
+  if (preset === "this_month") {
+    return { from: startOfMonth(now), to: now };
+  }
+  return { from: subDays(now, 13), to: now };
+}
+
+const flagColors: Record<string, string> = {
+  late_clock_in: "destructive",
+  early_clock_in: "secondary",
+  left_early: "destructive",
+  overtime: "default",
+  unscheduled_clock_in: "secondary",
+};
+
+const formatDuration = (min: number) => `${Math.floor(min / 60)}h ${min % 60}m`;
 
 export default function EmployeeHours() {
   const { data: entries, isLoading } = useQuery<any[]>({ queryKey: ["/api/time-entries"] });
 
-  const sorted = [...(entries || [])].sort((a, b) => new Date(b.clockInAt).getTime() - new Date(a.clockInAt).getTime());
+  const [preset, setPreset] = useState<FilterPreset>("last_2_weeks");
+  const [customFrom, setCustomFrom] = useState<string>(() => format(subDays(new Date(), 13), "yyyy-MM-dd"));
+  const [customTo, setCustomTo] = useState<string>(() => format(new Date(), "yyyy-MM-dd"));
 
-  const today = new Date().toISOString().split("T")[0];
-  const todayEntries = sorted.filter(e => e.clockInAt.startsWith(today));
-  const todayMinutes = todayEntries.reduce((sum, e) => sum + (e.workedMinutes || 0), 0);
+  const { rangeFrom, rangeTo } = useMemo(() => {
+    if (preset === "custom") {
+      return {
+        rangeFrom: customFrom ? startOfDay(parseISO(customFrom)) : subDays(new Date(), 13),
+        rangeTo: customTo ? endOfDay(parseISO(customTo)) : new Date(),
+      };
+    }
+    const r = getPresetRange(preset);
+    return { rangeFrom: startOfDay(r.from), rangeTo: endOfDay(r.to) };
+  }, [preset, customFrom, customTo]);
 
-  const getWeekStart = () => {
-    const now = new Date();
-    const day = now.getDay();
-    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(now.setDate(diff)).toISOString().split("T")[0];
-  };
+  const sorted = useMemo(() =>
+    [...(entries || [])].sort((a, b) => new Date(b.clockInAt).getTime() - new Date(a.clockInAt).getTime()),
+    [entries]
+  );
 
-  const weekStart = getWeekStart();
-  const weekEntries = sorted.filter(e => e.clockInAt >= weekStart);
-  const weekMinutes = weekEntries.reduce((sum, e) => sum + (e.workedMinutes || 0), 0);
+  const filtered = useMemo(() =>
+    sorted.filter(e => {
+      const d = new Date(e.clockInAt);
+      return isWithinInterval(d, { start: rangeFrom, end: rangeTo });
+    }),
+    [sorted, rangeFrom, rangeTo]
+  );
 
-  const monthStart = new Date().toISOString().slice(0, 7);
-  const monthEntries = sorted.filter(e => e.clockInAt.startsWith(monthStart));
-  const monthMinutes = monthEntries.reduce((sum, e) => sum + (e.workedMinutes || 0), 0);
+  const totalMinutes = filtered.reduce((sum, e) => sum + (e.workedMinutes || 0), 0);
+  const totalShifts = filtered.filter(e => e.status === "completed").length;
 
-  const formatDuration = (min: number) => `${Math.floor(min / 60)}h ${min % 60}m`;
-
-  const flagColors: Record<string, string> = {
-    late_clock_in: "destructive",
-    early_clock_in: "secondary",
-    left_early: "destructive",
-    overtime: "default",
-    unscheduled_clock_in: "secondary",
-  };
+  const presets: { key: FilterPreset; label: string }[] = [
+    { key: "this_week", label: "This Week" },
+    { key: "last_2_weeks", label: "Last 2 Weeks" },
+    { key: "this_month", label: "This Month" },
+    { key: "custom", label: "Custom" },
+  ];
 
   return (
     <div className="p-4 pb-24 space-y-5">
@@ -45,41 +83,78 @@ export default function EmployeeHours() {
         <p className="text-sm text-muted-foreground">Track your worked time</p>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="flex gap-2 flex-wrap" data-testid="filter-preset-bar">
+        {presets.map(p => (
+          <Button
+            key={p.key}
+            size="sm"
+            variant={preset === p.key ? "default" : "outline"}
+            onClick={() => setPreset(p.key)}
+            data-testid={`filter-${p.key}`}
+          >
+            {p.label}
+          </Button>
+        ))}
+      </div>
+
+      {preset === "custom" && (
+        <div className="flex gap-3 flex-wrap items-end" data-testid="custom-range-inputs">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">From</Label>
+            <Input
+              type="date"
+              value={customFrom}
+              onChange={e => setCustomFrom(e.target.value)}
+              className="h-8 text-sm w-38"
+              data-testid="input-custom-from"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">To</Label>
+            <Input
+              type="date"
+              value={customTo}
+              onChange={e => setCustomTo(e.target.value)}
+              className="h-8 text-sm w-38"
+              data-testid="input-custom-to"
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
         <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-xs text-muted-foreground uppercase">Today</p>
-            <p className="text-lg font-bold mt-0.5" data-testid="stat-today-hours">{formatDuration(todayMinutes)}</p>
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Hours Worked</p>
+            <p className="text-2xl font-bold mt-1" data-testid="stat-total-hours">{formatDuration(totalMinutes)}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-xs text-muted-foreground uppercase">This Week</p>
-            <p className="text-lg font-bold mt-0.5" data-testid="stat-week-hours">{formatDuration(weekMinutes)}</p>
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Shifts</p>
+            <p className="text-2xl font-bold mt-1" data-testid="stat-total-shifts">{totalShifts}</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-xs text-muted-foreground uppercase">This Month</p>
-            <p className="text-lg font-bold mt-0.5" data-testid="stat-month-hours">{formatDuration(monthMinutes)}</p>
-          </CardContent>
-        </Card>
+      </div>
+
+      <div className="text-xs text-muted-foreground text-center" data-testid="text-range-label">
+        {format(rangeFrom, "MMM d, yyyy")} – {format(rangeTo, "MMM d, yyyy")}
       </div>
 
       <div>
         <h2 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">History</h2>
         {isLoading ? (
           <div className="space-y-2">{[1,2,3,4].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
-        ) : sorted.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Clock className="w-12 h-12 text-muted-foreground/20 mb-3" />
-              <p className="text-muted-foreground text-sm">No time entries yet</p>
+              <p className="text-muted-foreground text-sm">No entries in this range</p>
             </CardContent>
           </Card>
         ) : (
           <div className="space-y-2">
-            {sorted.map((entry: any) => {
+            {filtered.map((entry: any) => {
               const clockIn = new Date(entry.clockInAt);
               return (
                 <Card key={entry.id} data-testid={`entry-card-${entry.id}`}>
@@ -87,16 +162,26 @@ export default function EmployeeHours() {
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <div className="flex items-center gap-1.5">
                         <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-                        <p className="text-sm font-medium">{clockIn.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</p>
+                        <p className="text-sm font-medium">
+                          {clockIn.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                        </p>
                       </div>
-                      <Badge variant={entry.status === "active" ? "default" : "secondary"} className="text-xs">
-                        {entry.status === "active" ? "In Progress" : entry.workedMinutes ? formatDuration(entry.workedMinutes) : "-"}
+                      <Badge variant="secondary" className="text-xs font-mono" data-testid={`stat-duration-${entry.id}`}>
+                        {entry.status === "active"
+                          ? "In Progress"
+                          : entry.workedMinutes
+                          ? formatDuration(entry.workedMinutes)
+                          : "-"}
                       </Badge>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span>{clockIn.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                       <span>-</span>
-                      <span>{entry.clockOutAt ? new Date(entry.clockOutAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Active"}</span>
+                      <span>
+                        {entry.clockOutAt
+                          ? new Date(entry.clockOutAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                          : "Active"}
+                      </span>
                     </div>
                     {(entry.flags || []).length > 0 && (
                       <div className="flex gap-1 mt-1.5 flex-wrap">
