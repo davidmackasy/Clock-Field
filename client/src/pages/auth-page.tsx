@@ -7,15 +7,17 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, Users, Shield, ChevronRight } from "lucide-react";
+import { Clock, Users, Shield, IdCard } from "lucide-react";
 
 export default function AuthPage() {
-  const { login, register, user } = useAuth();
+  const { login, employeeLogin, register, user } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [empId, setEmpId] = useState("");
+  const [empPin, setEmpPin] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regFirstName, setRegFirstName] = useState("");
@@ -36,6 +38,19 @@ export default function AuthPage() {
     try {
       await login(loginEmail, loginPassword);
       toast({ title: "Welcome back!" });
+    } catch (err: any) {
+      toast({ title: "Login failed", description: err.message, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEmployeeLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      await employeeLogin(empId.trim().toUpperCase(), empPin.trim());
+      toast({ title: "Welcome!" });
     } catch (err: any) {
       toast({ title: "Login failed", description: err.message, variant: "destructive" });
     } finally {
@@ -72,17 +87,65 @@ export default function AuthPage() {
             </p>
           </div>
 
-          <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="login" data-testid="tab-login">Sign In</TabsTrigger>
-              <TabsTrigger value="register" data-testid="tab-register">Create Account</TabsTrigger>
+          <Tabs defaultValue="employee" className="w-full">
+            <TabsList className="grid w-full grid-cols-3 mb-6">
+              <TabsTrigger value="employee" data-testid="tab-employee-login">Employee</TabsTrigger>
+              <TabsTrigger value="login" data-testid="tab-login">Admin / Client</TabsTrigger>
+              <TabsTrigger value="register" data-testid="tab-register">Register</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="employee">
+              <Card>
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <IdCard className="w-4 h-4" />
+                    Employee Login
+                  </CardTitle>
+                  <CardDescription>Use your Employee ID and PIN to sign in</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleEmployeeLogin} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="emp-id">Employee ID</Label>
+                      <Input
+                        id="emp-id"
+                        data-testid="input-employee-id"
+                        placeholder="EMP-1001"
+                        value={empId}
+                        onChange={e => setEmpId(e.target.value)}
+                        required
+                        autoComplete="username"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="emp-pin">PIN / Password</Label>
+                      <Input
+                        id="emp-pin"
+                        data-testid="input-employee-pin"
+                        type="password"
+                        placeholder="Enter your PIN"
+                        value={empPin}
+                        onChange={e => setEmpPin(e.target.value)}
+                        required
+                        autoComplete="current-password"
+                      />
+                    </div>
+                    <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-employee-login">
+                      {isLoading ? "Signing in..." : "Sign In"}
+                    </Button>
+                    <p className="text-xs text-center text-muted-foreground">
+                      Your Employee ID and temporary PIN are provided by your manager.
+                    </p>
+                  </form>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
             <TabsContent value="login">
               <Card>
                 <CardHeader className="pb-4">
                   <CardTitle className="text-lg">Sign in to your account</CardTitle>
-                  <CardDescription>Enter your credentials to access your dashboard</CardDescription>
+                  <CardDescription>Admin and client accounts use email and password</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handleLogin} className="space-y-4">

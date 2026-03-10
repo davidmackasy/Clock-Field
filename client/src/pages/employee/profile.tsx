@@ -1,16 +1,57 @@
+import { useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { LogOut, Mail, Phone, DollarSign } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { LogOut, Mail, Phone, DollarSign, KeyRound, IdCard } from "lucide-react";
 
 export default function EmployeeProfile() {
   const { user, logout } = useAuth();
+  const { toast } = useToast();
+  const [showChangePw, setShowChangePw] = useState(false);
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   if (!user) return null;
 
   const initials = `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}`;
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPw !== confirmPw) {
+      toast({ title: "Passwords do not match", variant: "destructive" });
+      return;
+    }
+    if (newPw.length < 4) {
+      toast({ title: "Password must be at least 4 characters", variant: "destructive" });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await apiRequest("POST", "/api/auth/change-password", { currentPassword: currentPw, newPassword: newPw });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message);
+      }
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      toast({ title: "Password updated" });
+      setShowChangePw(false);
+      setCurrentPw("");
+      setNewPw("");
+      setConfirmPw("");
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="p-4 pb-24 space-y-5">
@@ -30,11 +71,19 @@ export default function EmployeeProfile() {
             </div>
           </div>
 
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm">
-              <Mail className="w-4 h-4 text-muted-foreground" />
-              <span data-testid="text-user-email">{user.email}</span>
-            </div>
+          <div className="space-y-2">
+            {(user as any).employeeId && (
+              <div className="flex items-center gap-2 text-sm">
+                <IdCard className="w-4 h-4 text-muted-foreground" />
+                <span className="font-mono text-muted-foreground" data-testid="text-user-employee-id">{(user as any).employeeId}</span>
+              </div>
+            )}
+            {user.email && (
+              <div className="flex items-center gap-2 text-sm">
+                <Mail className="w-4 h-4 text-muted-foreground" />
+                <span data-testid="text-user-email">{user.email}</span>
+              </div>
+            )}
             {user.phone && (
               <div className="flex items-center gap-2 text-sm">
                 <Phone className="w-4 h-4 text-muted-foreground" />
@@ -48,6 +97,73 @@ export default function EmployeeProfile() {
               </div>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2 pt-4 px-5">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <KeyRound className="w-4 h-4" />
+            Password
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-5 pb-4">
+          {!showChangePw ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowChangePw(true)}
+              data-testid="button-change-password"
+            >
+              Change Password
+            </Button>
+          ) : (
+            <form onSubmit={handleChangePassword} className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Current Password</Label>
+                <Input
+                  data-testid="input-current-password"
+                  type="password"
+                  value={currentPw}
+                  onChange={e => setCurrentPw(e.target.value)}
+                  required
+                  placeholder="Enter current password"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">New Password</Label>
+                <Input
+                  data-testid="input-new-password-profile"
+                  type="password"
+                  value={newPw}
+                  onChange={e => setNewPw(e.target.value)}
+                  required
+                  minLength={4}
+                  placeholder="At least 4 characters"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Confirm New Password</Label>
+                <Input
+                  data-testid="input-confirm-password-profile"
+                  type="password"
+                  value={confirmPw}
+                  onChange={e => setConfirmPw(e.target.value)}
+                  required
+                  minLength={4}
+                  placeholder="Repeat new password"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" size="sm" disabled={isLoading} data-testid="button-save-password">
+                  {isLoading ? "Saving..." : "Save"}
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => { setShowChangePw(false); setCurrentPw(""); setNewPw(""); setConfirmPw(""); }}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          )}
         </CardContent>
       </Card>
 

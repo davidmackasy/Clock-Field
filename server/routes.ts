@@ -89,7 +89,7 @@ export async function registerRoutes(
         tempPin: null,
         accountStatus: "active",
       });
-      if (!updated) return res.status(404).json({ message: "User not
+      if (!updated) return res.status(404).json({ message: "User not found" });
       const { password: _, tempPin: __, ...safeUser } = updated;
       res.json(safeUser);
     } catch (err: any) {
@@ -169,8 +169,17 @@ export async function registerRoutes(
 
       let empId = target.employeeId;
       if (!empId) {
-        const counter = await storage.incrementEmployeeIdCounter(user.companyId);
-        empId = `EMP-${counter}`;
+        // Retry up to 10 times in case of uniqueness conflicts across companies
+        for (let attempt = 0; attempt < 10; attempt++) {
+          const counter = await storage.incrementEmployeeIdCounter(user.companyId);
+          const candidateId = `EMP-${counter}`;
+          const existing = await storage.getUserByEmployeeId(candidateId);
+          if (!existing) {
+            empId = candidateId;
+            break;
+          }
+        }
+        if (!empId) return res.status(500).json({ message: "Could not generate unique Employee ID, please try again" });
       }
 
       const pin = generateTempPin();
@@ -221,4 +230,23 @@ export async function registerRoutes(
   });
 
   // Disable employee login access
-  app.
+  app.post("/api/employees/:id/disable-access", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const target = await storage.getUser(req.params.id);
+      if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+
+      const updated = await storage.updateUser(req.params.id, {
+        loginEnabled: false,
+        accountStatus: "disabled",
+      });
+      if (!updated) return res.status(404).json({ message: "Not found" });
+      const { password: _, tempPin: __, ...safe } = updated;
+      res.json(safe);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  return httpServer;
+}

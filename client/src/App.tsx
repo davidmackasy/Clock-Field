@@ -23,6 +23,7 @@ import EmployeeHome from "@/pages/employee/home";
 import EmployeeSchedule from "@/pages/employee/schedule";
 import EmployeeHours from "@/pages/employee/hours";
 import EmployeeProfile from "@/pages/employee/profile";
+import SetPasswordPage from "@/pages/employee/set-password";
 import ClientDashboard from "@/pages/client/dashboard";
 import ClientRequestsPage from "@/pages/client/requests";
 import ClientProfile from "@/pages/client/profile";
@@ -114,6 +115,11 @@ function AppRouter() {
   if (!user) {
     if (location !== "/") return <Redirect to="/" />;
     return <AuthPage />;
+  }
+
+  // Employee must set a new password before accessing the app
+  if (user.role === "employee" && (user as any).mustChangePassword) {
+    return <SetPasswordPage />;
   }
 
   if (location === "/") {

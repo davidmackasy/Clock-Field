@@ -11,17 +11,39 @@ A workforce operations platform for service businesses with 3 user roles: Admin,
 
 ## Demo Credentials
 - **Admin**: admin@sparkle.com / admin123
-- **Employee**: maria@sparkle.com / employee123 (also james@sparkle.com, lisa@sparkle.com)
 - **Client**: tom@riverside.com / client123
+- **Employees**: Use Employee ID + PIN via the Employee tab on login page (admin enables access per employee)
+
+## Authentication Model
+- **Admin/Client login**: Email + Password via "Admin / Client" tab
+- **Employee login**: Employee ID (e.g. EMP-1001) + PIN via "Employee" tab (default tab)
+- **Employee activation flow**: Admin enables access → generates Employee ID + temp PIN → employee logs in → forced password change → active account
+- **Dual Passport strategies**: `local` (email+password) and `employee-local` (employeeId+pin)
 
 ## User Roles
 - **Admin**: Full dashboard with sidebar nav. Manages employees, schedules, attendance, payroll estimation, clients, requests, and company settings.
-- **Employee**: Mobile-first bottom nav. Home with clock in/out + live timer, schedule view (Today/Week/Upcoming), hours tracking, profile.
+- **Employee**: Mobile-first bottom nav. Home with clock in/out + live timer, schedule view (Today/Week/Upcoming), hours tracking, profile (with change password).
 - **Client**: Mobile-first bottom nav. Service request submission + tracking, profile.
+
+## Employee Account Statuses
+- `profile_only` - Record created but no login access
+- `pending_activation` - Access enabled, awaiting first login and password change
+- `active` - Fully activated, can log in
+- `disabled` - Login access blocked
+
+## Employee Onboarding Flow
+1. Admin creates employee profile (email is optional)
+2. Admin clicks "Enable Login Access" → system generates Employee ID + 6-digit temp PIN
+3. Admin shares credentials with employee
+4. Employee logs in via Employee tab → forced to set a new password
+5. Employee reaches their dashboard
 
 ## Key Features
 - Role-based authentication with secure session management
 - Employee CRUD management with hourly rate tracking
+- Employee login access management (enable, disable, reset PIN) from admin panel
+- Email-free employee accounts supported (Employee ID + PIN login)
+- Forced password change on first employee login
 - Client management with auto-created client user accounts
 - Location management linked to clients
 - Shift scheduling with date navigation and status tracking

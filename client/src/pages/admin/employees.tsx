@@ -9,27 +9,107 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Mail, Phone, DollarSign } from "lucide-react";
+import { Plus, Search, Mail, Phone, DollarSign, KeyRound, UserCheck, UserX, RefreshCw, Copy, Users } from "lucide-react";
+
+type Employee = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phone?: string;
+  hourlyRate?: string;
+  isActive: boolean;
+  loginEnabled?: boolean;
+  accountStatus?: string;
+  employeeId?: string;
+  position?: string;
+};
+
+type AccessCredentials = {
+  employeeId: string;
+  tempPin: string;
+};
+
+function statusBadge(emp: Employee) {
+  if (!emp.loginEnabled) return <Badge variant="outline" className="text-xs">Profile Only</Badge>;
+  if (emp.accountStatus === "pending_activation") return <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">Pending Activation</Badge>;
+  if (emp.accountStatus === "active") return <Badge variant="default" className="text-xs">Active</Badge>;
+  if (emp.accountStatus === "disabled") return <Badge variant="destructive" className="text-xs">Disabled</Badge>;
+  return <Badge variant="outline" className="text-xs">{emp.accountStatus || "Unknown"}</Badge>;
+}
 
 export default function AdminEmployees() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
-  const [formData, setFormData] = useState({ firstName: "", lastName: "", email: "", phone: "", password: "password123", hourlyRate: "" });
+  const [credDialog, setCredDialog] = useState<AccessCredentials | null>(null);
+  const [formData, setFormData] = useState({ firstName: "", lastName: "", email: "", phone: "", hourlyRate: "", position: "" });
 
-  const { data: employees, isLoading } = useQuery<any[]>({ queryKey: ["/api/employees"] });
+  const { data: employees, isLoading } = useQuery<Employee[]>({ queryKey: ["/api/employees"] });
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await apiRequest("POST", "/api/employees", data);
+      const cleaned = {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email || undefined,
+        phone: data.phone || undefined,
+        hourlyRate: data.hourlyRate || undefined,
+        position: data.position || undefined,
+      };
+      const res = await apiRequest("POST", "/api/employees", cleaned);
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
-      toast({ title: "Employee created" });
+      toast({ title: "Employee profile created" });
       setOpen(false);
-      setFormData({ firstName: "", lastName: "", email: "", phone: "", password: "password123", hourlyRate: "" });
+      setFormData({ firstName: "", lastName: "", email: "", phone: "", hourlyRate: "", position: "" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const enableAccessMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/employees/${id}/enable-access`);
+      return res.json();
+    },
+    onSuccess: (data: AccessCredentials) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      setCredDialog(data);
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const resetPinMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/employees/${id}/reset-pin`);
+      return res.json();
+    },
+    onSuccess: (data: { tempPin: string }, id: string) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      const emp = employees?.find(e => e.id === id);
+      setCredDialog({ employeeId: emp?.employeeId || "", tempPin: data.tempPin });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const disableAccessMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/employees/${id}/disable-access`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      toast({ title: "Login access disabled" });
     },
     onError: (err: any) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -37,8 +117,14 @@ export default function AdminEmployees() {
   });
 
   const filtered = (employees || []).filter(e =>
-    `${e.firstName} ${e.lastName} ${e.email}`.toLowerCase().includes(search.toLowerCase())
+    `${e.firstName} ${e.lastName} ${e.email || ""} ${e.employeeId || ""}`.toLowerCase().includes(search.toLowerCase())
   );
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast({ title: `${label} copied` });
+    });
+  };
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -67,19 +153,26 @@ export default function AdminEmployees() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Email</Label>
-                <Input data-testid="input-emp-email" type="email" value={formData.email} onChange={e => setFormData(p => ({ ...p, email: e.target.value }))} required />
+                <Label>Email <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input data-testid="input-emp-email" type="email" value={formData.email} onChange={e => setFormData(p => ({ ...p, email: e.target.value }))} placeholder="worker@example.com" />
               </div>
               <div className="space-y-2">
-                <Label>Phone</Label>
-                <Input data-testid="input-emp-phone" value={formData.phone} onChange={e => setFormData(p => ({ ...p, phone: e.target.value }))} />
+                <Label>Phone <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input data-testid="input-emp-phone" value={formData.phone} onChange={e => setFormData(p => ({ ...p, phone: e.target.value }))} placeholder="+1 555-000-0000" />
               </div>
               <div className="space-y-2">
-                <Label>Hourly Rate ($)</Label>
-                <Input data-testid="input-emp-rate" type="number" step="0.01" value={formData.hourlyRate} onChange={e => setFormData(p => ({ ...p, hourlyRate: e.target.value }))} />
+                <Label>Position <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input data-testid="input-emp-position" value={formData.position} onChange={e => setFormData(p => ({ ...p, position: e.target.value }))} placeholder="Cleaner, Supervisor..." />
               </div>
+              <div className="space-y-2">
+                <Label>Hourly Rate ($) <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input data-testid="input-emp-rate" type="number" step="0.01" value={formData.hourlyRate} onChange={e => setFormData(p => ({ ...p, hourlyRate: e.target.value }))} placeholder="0.00" />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                After creating the profile, you can enable login access from the employee card.
+              </p>
               <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-save-employee">
-                {createMutation.isPending ? "Creating..." : "Create Employee"}
+                {createMutation.isPending ? "Creating..." : "Create Employee Profile"}
               </Button>
             </form>
           </DialogContent>
@@ -93,7 +186,7 @@ export default function AdminEmployees() {
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1,2,3].map(i => <Skeleton key={i} className="h-32" />)}
+          {[1,2,3].map(i => <Skeleton key={i} className="h-40" />)}
         </div>
       ) : filtered.length === 0 ? (
         <Card>
@@ -104,22 +197,30 @@ export default function AdminEmployees() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filtered.map((emp: any) => (
+          {filtered.map((emp: Employee) => (
             <Card key={emp.id} data-testid={`card-employee-${emp.id}`}>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <Avatar className="w-10 h-10">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <Avatar className="w-10 h-10 flex-shrink-0">
                     <AvatarFallback className="bg-primary/10 text-sm">{emp.firstName[0]}{emp.lastName[0]}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-sm truncate">{emp.firstName} {emp.lastName}</p>
-                      <Badge variant={emp.isActive ? "default" : "secondary"} className="text-xs">{emp.isActive ? "Active" : "Inactive"}</Badge>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-medium text-sm">{emp.firstName} {emp.lastName}</p>
+                      {statusBadge(emp)}
                     </div>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <Mail className="w-3 h-3 text-muted-foreground" />
-                      <p className="text-xs text-muted-foreground truncate">{emp.email}</p>
-                    </div>
+                    {emp.employeeId && (
+                      <p className="text-xs text-muted-foreground font-mono mt-0.5">{emp.employeeId}</p>
+                    )}
+                    {emp.position && (
+                      <p className="text-xs text-muted-foreground mt-0.5">{emp.position}</p>
+                    )}
+                    {emp.email && (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Mail className="w-3 h-3 text-muted-foreground" />
+                        <p className="text-xs text-muted-foreground truncate">{emp.email}</p>
+                      </div>
+                    )}
                     {emp.phone && (
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <Phone className="w-3 h-3 text-muted-foreground" />
@@ -134,15 +235,128 @@ export default function AdminEmployees() {
                     )}
                   </div>
                 </div>
+
+                <Separator />
+
+                <div className="flex flex-wrap gap-2">
+                  {!emp.loginEnabled ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7 gap-1"
+                      data-testid={`button-enable-access-${emp.id}`}
+                      disabled={enableAccessMutation.isPending}
+                      onClick={() => enableAccessMutation.mutate(emp.id)}
+                    >
+                      <UserCheck className="w-3 h-3" />
+                      Enable Login Access
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs h-7 gap-1"
+                        data-testid={`button-reset-pin-${emp.id}`}
+                        disabled={resetPinMutation.isPending}
+                        onClick={() => resetPinMutation.mutate(emp.id)}
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Reset PIN
+                      </Button>
+                      {emp.accountStatus !== "disabled" ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs h-7 gap-1 text-destructive hover:text-destructive"
+                          data-testid={`button-disable-access-${emp.id}`}
+                          disabled={disableAccessMutation.isPending}
+                          onClick={() => disableAccessMutation.mutate(emp.id)}
+                        >
+                          <UserX className="w-3 h-3" />
+                          Disable Access
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs h-7 gap-1"
+                          data-testid={`button-enable-access-re-${emp.id}`}
+                          disabled={enableAccessMutation.isPending}
+                          onClick={() => enableAccessMutation.mutate(emp.id)}
+                        >
+                          <UserCheck className="w-3 h-3" />
+                          Re-enable Access
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      <Dialog open={!!credDialog} onOpenChange={(v) => { if (!v) setCredDialog(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="w-4 h-4" />
+              Login Access Enabled
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Give these credentials to the employee. They will be asked to set a new password on first login.
+            </p>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">Employee ID</Label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-muted rounded px-3 py-2 text-sm font-mono" data-testid="text-cred-employee-id">
+                    {credDialog?.employeeId}
+                  </code>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-9 w-9"
+                    onClick={() => copyToClipboard(credDialog?.employeeId || "", "Employee ID")}
+                    data-testid="button-copy-employee-id"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">Temporary PIN</Label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-muted rounded px-3 py-2 text-sm font-mono tracking-widest" data-testid="text-cred-temp-pin">
+                    {credDialog?.tempPin}
+                  </code>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-9 w-9"
+                    onClick={() => copyToClipboard(credDialog?.tempPin || "", "Temporary PIN")}
+                    data-testid="button-copy-temp-pin"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-md bg-muted/50 border p-3">
+              <p className="text-xs text-muted-foreground">
+                The employee logs in at the <strong>Employee</strong> tab on the login page using their Employee ID and this temporary PIN.
+              </p>
+            </div>
+            <Button className="w-full" onClick={() => setCredDialog(null)} data-testid="button-close-credentials">
+              Done
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-}
-
-function Users(props: any) {
-  return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
 }
