@@ -44,7 +44,7 @@ export function AdminMobileNav() {
   const [moreOpen, setMoreOpen] = useState(false);
 
   const initials = user ? `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}`.toUpperCase() : "A";
-  const pageTitle = pageTitles[location] ?? "WorkTrack";
+  const pageTitle = pageTitles[location] ?? "ClockField";
 
   const isMoreActive = moreItems.some(
     (item) => location === item.href || location.startsWith(item.href + "/")

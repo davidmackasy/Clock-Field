@@ -1,4 +1,4 @@
-# WorkTrack - Employee Tracking System
+# ClockField - Employee Tracking System
 
 ## Overview
 A workforce operations platform for service businesses with 3 user roles: Admin, Employee, and Client. Built with React/Express/PostgreSQL.

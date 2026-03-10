@@ -45,7 +45,7 @@ export function AdminSidebar() {
             <Clock className="w-4 h-4 text-primary-foreground" />
           </div>
           <div>
-            <span className="font-semibold text-sm">WorkTrack</span>
+            <span className="font-semibold text-sm">ClockField</span>
             <p className="text-xs text-muted-foreground">Admin Panel</p>
           </div>
         </div>
