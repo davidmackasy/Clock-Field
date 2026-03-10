@@ -359,6 +359,22 @@ export async function registerRoutes(
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  app.patch("/api/locations/:id", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const target = await storage.getLocation(req.params.id);
+      if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const { name, address, clientId, notes } = req.body;
+      const updated = await storage.updateLocation(req.params.id, {
+        ...(name !== undefined && { name: name.trim() }),
+        ...(address !== undefined && { address: address?.trim() || null }),
+        ...(clientId !== undefined && { clientId: clientId || null }),
+        ...(notes !== undefined && { notes: notes?.trim() || null }),
+      });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   // ── Shifts ────────────────────────────────────────────────────────────────
   // Admin: all shifts for company (supports ?employeeId filter); Employee: own shifts
   app.get("/api/shifts", requireAuth, async (req, res) => {
@@ -686,6 +702,92 @@ export async function registerRoutes(
       for (const s of futureShifts) await storage.deleteShift(s.id);
       await storage.deleteRecurringSchedule(req.params.id);
       res.json({ message: "Deleted", futureShiftsRemoved: futureShifts.length });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ── Payroll History ──────────────────────────────────────────────────────
+  app.get("/api/payroll/employees/:employeeId/history", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const employee = await storage.getUser(req.params.employeeId);
+      if (!employee || employee.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+
+      const company = await storage.getCompany(user.companyId);
+      const allEntries = await storage.getTimeEntriesByEmployee(req.params.employeeId);
+      const completed = allEntries.filter(e => e.status === "completed" && e.clockInTime);
+
+      const rate = parseFloat(employee.hourlyRate as string || "0");
+      const overtimeRate = parseFloat(employee.overtimeRate as string || "0") || rate * 1.5;
+      const overtimeEnabled = company?.overtimeEnabled ?? false;
+
+      const anchorDateStr = company?.payrollCycleStartDate || "2025-01-01";
+      const anchor = new Date(anchorDateStr + "T00:00:00");
+
+      function getPeriodIndex(dateStr: string): number {
+        const d = new Date(dateStr + "T00:00:00");
+        const diffDays = Math.floor((d.getTime() - anchor.getTime()) / (1000 * 60 * 60 * 24));
+        return Math.floor(diffDays / 14);
+      }
+
+      function getPeriodDates(index: number): { start: string; end: string } {
+        const startMs = anchor.getTime() + index * 14 * 24 * 60 * 60 * 1000;
+        const endMs = startMs + 13 * 24 * 60 * 60 * 1000;
+        const fmt = (ms: number) => new Date(ms).toISOString().split("T")[0];
+        return { start: fmt(startMs), end: fmt(endMs) };
+      }
+
+      const periodMap = new Map<number, any[]>();
+      for (const entry of completed) {
+        const dateStr = entry.clockInTime!.toString().substring(0, 10);
+        const idx = getPeriodIndex(dateStr);
+        if (!periodMap.has(idx)) periodMap.set(idx, []);
+        periodMap.get(idx)!.push(entry);
+      }
+
+      const todayIdx = getPeriodIndex(new Date().toISOString().split("T")[0]);
+      const allIdxs = [...new Set([...periodMap.keys(), todayIdx])].sort((a, b) => b - a);
+
+      const periods = allIdxs.map(idx => {
+        const { start, end } = getPeriodDates(idx);
+        const entries = periodMap.get(idx) || [];
+        const totalMinutes = entries.reduce((s: number, e: any) => s + (e.workedMinutes || 0), 0);
+        const hours = totalMinutes / 60;
+        const regularHours = Math.min(hours, overtimeEnabled ? (company?.overtimeThresholdWeekly || 40) * 2 : hours);
+        const overtimeHours = overtimeEnabled ? Math.max(0, hours - regularHours) : 0;
+        const regularPay = regularHours * rate;
+        const otPay = overtimeHours * overtimeRate;
+        const grossPay = regularPay + otPay;
+        const tax = grossPay * 0.05;
+        const netPay = grossPay - tax;
+        return {
+          index: idx,
+          periodStart: start,
+          periodEnd: end,
+          isCurrent: idx === todayIdx,
+          hours: +hours.toFixed(2),
+          regularHours: +regularHours.toFixed(2),
+          overtimeHours: +overtimeHours.toFixed(2),
+          regularPay: +regularPay.toFixed(2),
+          overtimePay: +otPay.toFixed(2),
+          grossPay: +grossPay.toFixed(2),
+          taxAmount: +tax.toFixed(2),
+          netPay: +netPay.toFixed(2),
+          entriesCount: entries.length,
+        };
+      });
+
+      const currentPeriod = periods.find(p => p.isCurrent) || periods[0];
+      res.json({
+        employee: {
+          id: employee.id,
+          firstName: employee.firstName,
+          lastName: employee.lastName,
+          hourlyRate: rate,
+          overtimeRate,
+        },
+        currentPeriod,
+        periods,
+      });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

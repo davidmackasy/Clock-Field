@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
@@ -66,12 +67,9 @@ export default function AdminClients() {
   };
 
   const filtered = (clientsList || []).filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
-  const locsByClient = new Map<string, any[]>();
-  (locationsList || []).forEach(l => {
-    const list = locsByClient.get(l.clientId) || [];
-    list.push(l);
-    locsByClient.set(l.clientId, list);
-  });
+
+  const getClientLocs = (clientId: string) =>
+    (locationsList || []).filter(l => (l.clientId || l.client_id) === clientId);
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -87,10 +85,33 @@ export default function AdminClients() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Add Location</DialogTitle></DialogHeader>
-              <form onSubmit={e => { e.preventDefault(); createLocMut.mutate(locForm); }} className="space-y-4">
-                <div className="space-y-2"><Label>Name</Label><Input data-testid="input-loc-name" value={locForm.name} onChange={e => setLocForm(p => ({ ...p, name: e.target.value }))} required /></div>
-                <div className="space-y-2"><Label>Address</Label><Input data-testid="input-loc-address" value={locForm.address} onChange={e => setLocForm(p => ({ ...p, address: e.target.value }))} /></div>
-                <div className="space-y-2"><Label>Notes</Label><Input value={locForm.notes} onChange={e => setLocForm(p => ({ ...p, notes: e.target.value }))} /></div>
+              <form onSubmit={e => { e.preventDefault(); createLocMut.mutate({ ...locForm, clientId: locForm.clientId || null }); }} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Name</Label>
+                  <Input data-testid="input-loc-name" value={locForm.name} onChange={e => setLocForm(p => ({ ...p, name: e.target.value }))} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Address</Label>
+                  <Input data-testid="input-loc-address" value={locForm.address} onChange={e => setLocForm(p => ({ ...p, address: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Link to Client <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                  <Select value={locForm.clientId} onValueChange={val => setLocForm(p => ({ ...p, clientId: val === "none" ? "" : val }))}>
+                    <SelectTrigger data-testid="select-loc-client">
+                      <SelectValue placeholder="Select client..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No client</SelectItem>
+                      {(clientsList || []).map(c => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Notes</Label>
+                  <Input value={locForm.notes} onChange={e => setLocForm(p => ({ ...p, notes: e.target.value }))} />
+                </div>
                 <Button type="submit" className="w-full" disabled={createLocMut.isPending} data-testid="button-save-location">{createLocMut.isPending ? "Creating..." : "Create Location"}</Button>
               </form>
             </DialogContent>
@@ -130,7 +151,7 @@ export default function AdminClients() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {filtered.map((client: any) => {
-            const locs = locsByClient.get(client.id) || [];
+            const locs = getClientLocs(client.id);
             return (
               <Card
                 key={client.id}
@@ -223,12 +244,13 @@ export default function AdminClients() {
 
             <TabsContent value="locations" className="space-y-4 py-4">
               {(() => {
-                const locs = locationsList?.filter(l => l.clientId === selectedClient?.id) || [];
+                const locs = selectedClient ? getClientLocs(selectedClient.id) : [];
                 if (locs.length === 0) {
                   return (
                     <div className="text-center py-8 text-muted-foreground">
                       <MapPin className="w-12 h-12 mx-auto mb-2 opacity-20" />
                       <p>No locations added for this client</p>
+                      <p className="text-xs mt-1">Use the "Add Location" button and link it to this client</p>
                     </div>
                   );
                 }
@@ -236,9 +258,16 @@ export default function AdminClients() {
                   <div className="space-y-2">
                     {locs.map((loc: any) => (
                       <Card key={loc.id}>
-                        <CardContent className="p-3">
+                        <CardContent className="p-4">
                           <p className="font-medium text-sm">{loc.name}</p>
-                          {loc.address && <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1"><MapPin className="w-3 h-3" />{loc.address}</p>}
+                          {loc.address && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                              <MapPin className="w-3 h-3 flex-shrink-0" />{loc.address}
+                            </p>
+                          )}
+                          {loc.notes && (
+                            <p className="text-xs text-muted-foreground mt-1 italic">{loc.notes}</p>
+                          )}
                         </CardContent>
                       </Card>
                     ))}

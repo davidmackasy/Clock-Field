@@ -123,6 +123,16 @@ export default function AdminSettings() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label>Payroll Cycle Start Date</Label>
+              <p className="text-xs text-muted-foreground">The anchor date for biweekly pay period calculations (YYYY-MM-DD)</p>
+              <Input
+                data-testid="input-payroll-cycle-start"
+                type="date"
+                value={form.payrollCycleStartDate || ""}
+                onChange={e => setForm((p: any) => ({ ...p, payrollCycleStartDate: e.target.value || null }))}
+              />
+            </div>
           </CardContent>
         </Card>
 

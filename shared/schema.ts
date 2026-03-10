@@ -15,6 +15,7 @@ export const companies = pgTable("companies", {
   overtimeEnabled: boolean("overtime_enabled").notNull().default(false),
   overtimeThresholdWeekly: integer("overtime_threshold_weekly").default(40),
   defaultPayPeriodType: text("default_pay_period_type").notNull().default("biweekly"),
+  payrollCycleStartDate: text("payroll_cycle_start_date"),
   employeeIdCounter: integer("employee_id_counter").notNull().default(1000),
 });
 

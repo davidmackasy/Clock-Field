@@ -1,0 +1,388 @@
+DEV NOTE
+Fix client popup location display and add employee payroll history popup with biweekly reset logic
+
+Main instruction
+Do not redesign the payroll page.
+Do not change working payroll calculations unless required for net pay and biweekly history.
+Do not touch auth, attendance, scheduling core logic, employee login, client creation, or anything unrelated.
+This is a focused enhancement patch only.
+
+Goals
+
+Fix client popup so linked client locations actually appear under the Locations tab
+
+Let admin click an employee name in Payroll and open a popup with biweekly pay history
+
+Add net pay to payroll using a simple fixed 5 percent tax deduction
+
+Keep the current payroll overview page clean and uncluttered
+
+Fix client popup location display
+
+Problem
+A client has a linked location in the system.
+That location appears elsewhere, like schedule creation.
+But when admin clicks the client card and opens:
+Client popup → Locations
+it says no locations added.
+
+This means the UI is not loading or matching the saved linked locations correctly.
+
+Required outcome
+If a location belongs to a client, it must show inside:
+Client popup → Locations tab
+
+What to check
+A. Location creation linkage
+Confirm the location record is actually saved with the client linkage:
+client_id
+
+Possible mismatch:
+frontend sends clientId
+backend expects client_id
+
+Normalize this safely in the backend.
+
+B. Client popup locations query
+When opening client detail popup, the Locations tab must query locations by:
+company_id = current company
+client_id = selected client id
+
+Do not filter by:
+client name text
+contact name
+address text
+notes
+email
+
+Use only the real relational id.
+
+C. Returned data shape
+Normalize snake_case and camelCase once before rendering.
+Handle both:
+client_id
+clientId
+
+D. UI rendering
+Inside the Locations tab, display each linked location as a clean card or row with:
+Location name
+Full address
+Notes if present
+Created date optional
+
+Example:
+Olympic Building
+1783 Dugald Rd, Winnipeg, MB R2J 0H3
+Notes: Main client site
+
+Do not leave the tab blank if valid linked records exist.
+
+Safe implementation rule
+Only fix linked location fetching and rendering.
+Do not change how the Overview tab works.
+Do not redesign client modals.
+
+Acceptance criteria
+
+create or load a client with linked location
+
+open client popup
+
+click Locations
+
+linked location appears correctly
+
+schedule and location dropdowns still work
+
+no other client flow breaks
+
+Payroll improvement with employee popup history
+
+Problem
+The main payroll table is fine.
+But admin needs to click employee name and see detailed pay history by two-week periods.
+Right now there is no clean way to review:
+last pay period
+previous pay period
+older pay periods
+how much that cleaner made every two weeks
+
+Also current payroll is missing net pay.
+
+Required outcome
+Keep the payroll page clean.
+When admin clicks employee name in Payroll, open a payroll history popup.
+
+Payroll page small changes
+
+Current payroll table can remain mostly the same.
+Add only one new visible column:
+Net Pay
+
+New columns should be:
+Employee
+Rate
+Hours
+OT Hours
+Regular Pay
+OT Pay
+Gross Pay
+Net Pay
+
+Tax logic for MVP
+Use a simple fixed tax rule:
+net_pay = gross_pay - 5 percent of gross_pay
+
+Formula:
+net_pay = gross_pay * 0.95
+
+Do not overbuild real payroll taxes.
+This is just an internal estimator.
+
+Update top cards if useful
+Optional:
+keep top cards same
+or add a small net pay total card later
+Not required if it makes page too crowded
+
+Employee payroll popup
+
+When admin clicks an employee name on Payroll page, open a modal or side panel.
+
+Popup title example
+David Zulu Payroll History
+
+Popup sections
+
+A. Summary cards at top
+Current biweekly gross pay
+Current biweekly net pay
+Current biweekly total hours
+Hourly rate
+
+B. Biweekly pay history table
+Columns:
+Pay Period
+Hours
+OT Hours
+Gross Pay
+Tax
+Net Pay
+Status optional
+
+Example rows:
+Mar 1 - Mar 14, 2026
+Mar 15 - Mar 28, 2026
+Mar 29 - Apr 11, 2026
+
+C. Optional mini details
+Click a pay period row to expand or open sub-view showing:
+Regular hours
+OT hours
+Gross
+Tax
+Net
+Attendance entries included in this pay period
+
+This is optional.
+Do not overcomplicate if not needed yet.
+
+Biweekly reset logic
+
+This is the key part.
+
+Required behavior
+Payroll history must be grouped into 14-day pay periods.
+Once a pay period ends, the next one starts fresh.
+
+Important rule
+Pay periods should not just be random calendar chunks.
+They must be based on the company or employee pay period start logic.
+
+Safe MVP rule
+Use company-level payroll cycle start date from settings.
+Then generate continuous 14-day pay periods from that anchor date.
+
+Example
+If company pay cycle starts on March 1:
+Period 1 = Mar 1 to Mar 14
+Period 2 = Mar 15 to Mar 28
+Period 3 = Mar 29 to Apr 11
+
+All attendance/time entries must be grouped into the correct biweekly period.
+
+If settings do not yet have this
+Add one simple setting:
+Payroll cycle start date
+
+Do not make this complicated.
+One company-wide pay cycle start date is enough for now.
+
+Payroll history calculations
+
+For each employee and each pay period:
+sum regular worked hours
+sum overtime hours
+calculate regular pay
+calculate OT pay
+calculate gross pay
+calculate tax = gross * 0.05
+calculate net pay = gross - tax
+
+Recommended formulas
+regular_pay = regular_hours * hourly_rate
+ot_pay = ot_hours * overtime_rate if enabled, else 0
+gross_pay = regular_pay + ot_pay
+tax_amount = gross_pay * 0.05
+net_pay = gross_pay - tax_amount
+
+Rounding
+Round monetary values to 2 decimals only at display/output layer.
+
+Data source and storage
+
+Do not create a totally separate payroll truth table unless needed.
+This can be derived from attendance/time entries plus employee rate plus pay cycle setting.
+
+Use:
+time_entries
+employees/pay_rates
+company payroll settings
+
+Optional later
+If you want finalized payroll snapshots, add a payroll_period_snapshots table later.
+Not needed for this patch unless performance or audit history requires it.
+
+Recommended backend additions
+
+A. Payroll period utility
+Create a helper that:
+
+takes a payroll cycle start date
+
+generates biweekly windows
+
+returns the correct pay period for any time entry date
+
+B. Payroll history endpoint
+Add a safe endpoint for employee payroll history, something like:
+GET /api/payroll/employees/:employeeId/history
+
+Response should return:
+employee summary
+current period summary
+list of biweekly periods
+calculated gross tax net per period
+
+C. Current payroll list endpoint
+Update existing payroll endpoint to include:
+netPay
+taxAmount optional
+
+Do not break current response shape.
+Only extend it safely.
+
+Frontend behavior
+
+Payroll page
+
+employee names should become clickable
+
+clicking opens payroll history modal
+
+modal loads biweekly payroll history for that employee
+
+if no history exists, show empty state:
+“No payroll history yet”
+
+Client popup
+
+Locations tab should load linked locations and show them properly
+
+keep Overview and Requests as they are
+
+Search and sort in payroll history popup
+
+Add light usability:
+Sort newest pay period first
+Optional date filter later
+Not required now
+
+Exact scope boundaries
+
+Allowed changes
+
+client popup locations query/render
+
+location linkage normalization if needed
+
+payroll table add net pay
+
+employee payroll detail popup
+
+biweekly grouping logic
+
+one payroll cycle start date setting if needed
+
+Do not change
+
+main client overview layout
+
+schedule layout
+
+attendance layout
+
+employee auth
+
+clock in/out logic
+
+current payroll overview card layout unless minimal
+
+client creation form unless required to preserve linkage
+
+location creation UI except where needed for client_id linkage
+
+Acceptance criteria
+
+Client locations
+
+a client with linked locations shows them in client popup Locations tab
+
+location name and full address appear
+
+no regression in clients, locations, or schedules
+
+Payroll
+
+payroll table shows net pay
+
+net pay uses 5 percent tax deduction
+
+clicking employee name opens payroll history popup
+
+popup shows employee biweekly pay history
+
+pay periods reset every 14 days from configured payroll cycle start date
+
+older periods remain visible as history
+
+no regression in current payroll totals except addition of net pay
+
+Direct instruction for agent
+
+Fix the client details modal so the Locations tab shows all locations actually linked to that client by real client id. Normalize clientId and client_id if needed and do not change unrelated client functionality. Then enhance Payroll by adding a Net Pay column using a fixed 5 percent tax deduction from gross pay, and make employee names clickable so admin can open a payroll history popup. That popup must show biweekly pay history grouped by continuous 14-day pay periods based on a company payroll cycle start date. Keep the current payroll page clean and do not redesign the app or affect unrelated modules.
+
+Strong recommendation
+
+For the payroll popup, use a modal first, not a full new page.
+That keeps the interface simple and matches your current UI style.
+
+One small UX detail that matters
+
+In the payroll popup, label each period clearly like:
+Pay Period: Mar 1 - Mar 14
+Gross Pay: $420.00
+Tax 5%: $21.00
+Net Pay: $399.00
+
+That will make it much easier for admin to understand quickly.

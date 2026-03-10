@@ -34,6 +34,7 @@ export interface IStorage {
   createLocation(data: InsertLocation): Promise<Location>;
   getLocation(id: string): Promise<Location | undefined>;
   getLocationsByCompany(companyId: string): Promise<Location[]>;
+  updateLocation(id: string, data: Partial<InsertLocation>): Promise<Location | undefined>;
 
   createRecurringSchedule(data: InsertRecurringSchedule): Promise<RecurringSchedule>;
   getRecurringSchedule(id: string): Promise<RecurringSchedule | undefined>;
@@ -157,6 +158,11 @@ export class DatabaseStorage implements IStorage {
 
   async getLocationsByCompany(companyId: string): Promise<Location[]> {
     return db.select().from(locations).where(eq(locations.companyId, companyId));
+  }
+
+  async updateLocation(id: string, data: Partial<InsertLocation>): Promise<Location | undefined> {
+    const [location] = await db.update(locations).set(data).where(eq(locations.id, id)).returning();
+    return location;
   }
 
   async createRecurringSchedule(data: InsertRecurringSchedule): Promise<RecurringSchedule> {
