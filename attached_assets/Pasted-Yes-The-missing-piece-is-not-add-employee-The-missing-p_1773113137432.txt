@@ -1,0 +1,274 @@
+Yes. The missing piece is not “add employee.”
+The missing piece is “employee access onboarding.”
+
+Right now your app has employee records, but not employee user accounts. That is why it feels broken.
+
+Best way to fix it without changing too much
+
+Do not add “employee” to the public sign-up page as a totally open account type.
+That can get messy fast because random people could create employee accounts without being attached to a company.
+
+Instead, keep it like this:
+
+Company/Admin
+Creates the company account publicly
+
+Employee
+Gets invited or activated by the company
+
+That is how a lot of workforce apps work. Current products commonly let managers add workers first, then invite them by SMS, link, QR code, phone, or email, instead of making employee sign-up fully open. Connecteam, for example, supports adding users and sending invite links by SMS or QR, and says admins can add users with a full name and cell phone number.
+
+What your app should do now
+
+You need to split these two things clearly:
+
+Employee profile
+This is the worker record inside the company
+
+Employee login account
+This is the credential the worker uses to sign in
+
+Those are not the same thing.
+
+Recommended simple structure
+
+Option A, best for your case right now
+Admin creates employee profile
+Admin assigns a phone number or username
+System generates an invite code or temporary PIN
+Employee uses that to activate account
+Employee sets their own password
+Then they can log in and clock in/out
+
+This is the cleanest fix because you said many employees may not have email. That matches how some workforce tools support alternate onboarding methods like SMS invite links, QR code access, or even phone-based access for workers without typical desktop-style accounts.
+
+Best login options for employees
+
+For your app, I would rank them like this:
+
+Phone number + temporary code
+Best for cleaners, field workers, contractors
+Easy and realistic
+Admin adds employee with name and phone number
+Employee receives code or is given code manually
+Employee activates account
+Very practical for mobile-first teams
+
+Username/employee ID + PIN/password
+Best if you do not want to depend on SMS yet
+Admin creates employee record
+System auto-generates employee ID like EMP-1042
+Admin gives employee temporary PIN
+Employee logs in and changes PIN/password
+
+Email invite
+Good later
+Not best for your case because you already said email is not available for everyone
+
+What I would not do
+
+Do not make the main create-account page say:
+Company or Employee
+
+That sounds simple, but it creates too many problems:
+employee not linked to company
+fake employee accounts
+confusing onboarding
+more support issues
+broken role logic
+
+Much better flow:
+
+Public sign-up page
+Only company/admin can create account
+
+Inside admin dashboard
+Add employee
+Then activate employee access
+
+That is more professional and much closer to how team management systems behave. Homebase and similar products center team-member creation inside the manager flow, then invite the employee into that existing team setup.
+
+What the admin flow should look like
+
+Admin opens Employees
+Clicks Add Employee
+
+Form fields:
+Full name
+Phone number optional but recommended
+Email optional
+Hourly rate
+Role or position
+Assigned locations
+Default schedule optional
+Employee status
+
+Then add this new section:
+Login Access
+
+Fields:
+Allow app login toggle
+Login method:
+Phone
+Employee ID
+Email
+Temporary password or PIN
+Send invite later or activate now
+
+After saving, system should:
+Create employee profile
+Create linked user account if login enabled
+Generate activation token or temp PIN
+Mark status as:
+Pending activation
+or
+Active
+
+Employee statuses should be:
+Profile only
+Invited
+Pending activation
+Active
+Disabled
+
+That would solve the confusion.
+
+Best employee activation flow
+
+If using no-email setup:
+Admin adds employee
+System generates:
+Employee ID
+Temporary PIN
+Activation code
+
+Employee goes to Employee Login
+Enters employee ID + temporary PIN
+First login screen asks:
+confirm phone number optional
+create password
+maybe upload profile image later
+done
+
+Then the employee lands on:
+Today’s shift
+Clock in button
+Weekly schedule
+
+This is simple and makes sense.
+
+The app changes you should make
+
+Keep company sign-up as is
+Do not break current company onboarding
+
+Add employee access creation inside admin only
+When admin adds employee, allow “create login access”
+
+Add employee login page
+Separate from company sign-up
+Employee does not create company
+Employee only activates account or signs in
+
+Add activation state
+Employee cannot log in until profile has access enabled
+
+Add login identifier
+Support one of:
+phone number
+employee ID
+email
+
+Because your users may not have email, employee ID or phone is important.
+
+Best MVP recommendation
+
+For version 1.1, do this:
+
+Admin can add employee with:
+name
+phone
+hourly rate
+
+System auto-creates:
+employee profile
+employee ID
+temporary 4 to 6 digit PIN
+
+Admin sees:
+“Give this login to employee”
+
+Employee logs in using:
+employee ID or phone number
+temporary PIN
+
+On first login:
+force new password creation
+
+This is the easiest path and requires the least redesign.
+
+Why this is the best fix
+
+Because it keeps your current structure:
+company creates account
+admin manages employees
+
+And only adds the missing layer:
+employee access
+
+It also matches the reality of mobile workforce software, where employers often add workers first and then invite or activate them through a controlled process rather than open self-registration.
+
+What your AI agent should correct
+
+Tell the agent this:
+
+The current system supports employee records but does not support employee authentication. This must be fixed without changing the existing company onboarding flow. Public sign-up should remain for company/admin accounts only. Employee access must be created from inside the admin dashboard when adding or editing an employee. Each employee needs two linked objects: an employee profile and a user login account. Admin must be able to enable login access for an employee, choose a login identifier such as phone number, employee ID, or email, and generate a temporary PIN or password. Employees must then use a separate employee login flow to activate or access their account and reach their schedule, clock-in/out, and attendance pages.
+
+Best screens to add
+
+Admin
+Employees list
+Add employee
+Edit employee
+Employee access panel
+
+Employee
+Employee login
+Activate account
+Reset password
+Home
+
+Small but important rules
+
+One employee record = one login account max
+Disabled employee cannot log in
+Deleted employee should usually be archived, not hard deleted
+Employee must belong to one company
+Employee should never create a free-floating account without company link
+
+Cleanest wording in UI
+
+Instead of:
+Create employee account
+
+Use:
+Enable login access
+
+Instead of:
+Employee sign up
+
+Use:
+Employee activation
+
+That wording feels more professional and less confusing.
+
+Best final recommendation
+
+Do not rebuild the auth system.
+Just extend it with:
+employee user role
+employee activation flow
+employee login method without email
+linked employee profile + user credential
+
+That is the real fix.
