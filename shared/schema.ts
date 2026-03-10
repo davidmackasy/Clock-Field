@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, boolean, timestamp, decimal, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, timestamp, decimal } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -15,12 +15,13 @@ export const companies = pgTable("companies", {
   overtimeEnabled: boolean("overtime_enabled").notNull().default(false),
   overtimeThresholdWeekly: integer("overtime_threshold_weekly").default(40),
   defaultPayPeriodType: text("default_pay_period_type").notNull().default("biweekly"),
+  employeeIdCounter: integer("employee_id_counter").notNull().default(1000),
 });
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   companyId: varchar("company_id").notNull(),
-  email: text("email").notNull().unique(),
+  email: text("email").unique(),
   password: text("password").notNull(),
   role: text("role").notNull().default("employee"),
   firstName: text("first_name").notNull(),
@@ -30,6 +31,13 @@ export const users = pgTable("users", {
   isActive: boolean("is_active").notNull().default(true),
   hourlyRate: decimal("hourly_rate", { precision: 10, scale: 2 }),
   overtimeRate: decimal("overtime_rate", { precision: 10, scale: 2 }),
+  // Employee access fields
+  employeeId: text("employee_id").unique(),
+  loginEnabled: boolean("login_enabled").notNull().default(false),
+  accountStatus: text("account_status").notNull().default("profile_only"),
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
+  tempPin: text("temp_pin"),
+  position: text("position"),
 });
 
 export const clients = pgTable("clients", {
@@ -134,3 +142,10 @@ export const registerSchema = z.object({
   lastName: z.string().min(1),
   companyName: z.string().min(1),
 });
+
+export const ACCOUNT_STATUS = {
+  PROFILE_ONLY: "profile_only",
+  PENDING_ACTIVATION: "pending_activation",
+  ACTIVE: "active",
+  DISABLED: "disabled",
+} as const;

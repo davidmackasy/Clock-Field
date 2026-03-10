@@ -47,15 +47,40 @@ export function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
+  // Standard email + password strategy
   passport.use(
+    "local",
     new LocalStrategy(
       { usernameField: "email" },
       async (email, password, done) => {
         try {
           const user = await storage.getUserByEmail(email);
           if (!user) return done(null, false, { message: "Invalid credentials" });
+          if (!user.isActive) return done(null, false, { message: "Account is disabled" });
           const isValid = await comparePasswords(password, user.password);
           if (!isValid) return done(null, false, { message: "Invalid credentials" });
+          return done(null, user);
+        } catch (err) {
+          return done(err);
+        }
+      }
+    )
+  );
+
+  // Employee ID + PIN/password strategy
+  passport.use(
+    "employee-local",
+    new LocalStrategy(
+      { usernameField: "employeeId", passwordField: "pin" },
+      async (employeeId, pin, done) => {
+        try {
+          const user = await storage.getUserByEmployeeId(employeeId.toUpperCase());
+          if (!user) return done(null, false, { message: "Invalid Employee ID or PIN" });
+          if (!user.loginEnabled) return done(null, false, { message: "Login access not enabled for this account" });
+          if (user.accountStatus === "disabled") return done(null, false, { message: "Account is disabled" });
+          if (!user.isActive) return done(null, false, { message: "Account is disabled" });
+          const isValid = await comparePasswords(pin, user.password);
+          if (!isValid) return done(null, false, { message: "Invalid Employee ID or PIN" });
           return done(null, user);
         } catch (err) {
           return done(err);

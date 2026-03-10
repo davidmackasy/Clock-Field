@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, and, desc, gte, lte } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import {
   companies, users, clients, locations, shifts, timeEntries, clientRequests,
   type Company, type InsertCompany,
@@ -14,10 +14,13 @@ import {
 export interface IStorage {
   createCompany(data: InsertCompany): Promise<Company>;
   getCompany(id: string): Promise<Company | undefined>;
+  updateCompany(id: string, data: Partial<InsertCompany>): Promise<Company | undefined>;
+  incrementEmployeeIdCounter(companyId: string): Promise<number>;
 
   createUser(data: InsertUser): Promise<User>;
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByEmployeeId(employeeId: string): Promise<User | undefined>;
   getEmployeesByCompany(companyId: string): Promise<User[]>;
   updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined>;
 
@@ -64,6 +67,20 @@ export class DatabaseStorage implements IStorage {
     return company;
   }
 
+  async updateCompany(id: string, data: Partial<InsertCompany>): Promise<Company | undefined> {
+    const [company] = await db.update(companies).set(data).where(eq(companies.id, id)).returning();
+    return company;
+  }
+
+  async incrementEmployeeIdCounter(companyId: string): Promise<number> {
+    const [updated] = await db
+      .update(companies)
+      .set({ employeeIdCounter: sql`${companies.employeeIdCounter} + 1` })
+      .where(eq(companies.id, companyId))
+      .returning({ counter: companies.employeeIdCounter });
+    return updated.counter;
+  }
+
   async createUser(data: InsertUser): Promise<User> {
     const [user] = await db.insert(users).values(data).returning();
     return user;
@@ -76,6 +93,11 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByEmail(email: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async getUserByEmployeeId(employeeId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.employeeId, employeeId));
     return user;
   }
 
