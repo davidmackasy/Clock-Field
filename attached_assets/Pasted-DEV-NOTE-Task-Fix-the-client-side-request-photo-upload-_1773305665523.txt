@@ -1,0 +1,185 @@
+DEV NOTE
+
+Task
+Fix the client-side request photo upload error only.
+
+Critical instruction
+Do not touch anything else that is already working.
+Do not refactor unrelated request logic.
+Do not modify:
+
+admin request flow if it is working
+
+cleaner request flow if it is working
+
+auth
+
+login
+
+attendance
+
+payroll
+
+schedule
+
+dashboard
+
+work log
+
+employee features
+
+client features unrelated to photo upload
+
+This is a targeted client-side upload fix only.
+
+Problem
+On the client side, when uploading a picture inside New Request, the UI shows:
+Failed to fetch
+
+This started after the recent upload-related changes.
+Before those changes, image upload was working.
+
+Main goal
+Restore client-side request photo upload so clients can attach images again without affecting anything else.
+
+What to fix
+Focus only on the new client request upload flow.
+
+Most likely failure points to inspect first
+
+Frontend field name mismatch
+If backend upload route expects:
+photos
+
+then frontend must send:
+formData.append("photos", file)
+
+If frontend is sending:
+photo
+file
+files
+images
+
+then the upload route will fail.
+
+Upload endpoint registration
+Confirm:
+POST /api/upload
+is mounted correctly and reachable.
+
+Make sure it is not blocked by:
+
+wrong route order
+
+catch-all route
+
+auth redirect
+
+middleware crash
+
+Multer error handling
+If file type, size, or count fails, do not allow request to crash or return a broken response.
+
+Return clean JSON errors instead.
+
+Examples:
+
+Only JPG and PNG images are allowed.
+
+Max file size is 10MB.
+
+You can upload up to 3 photos.
+
+Do not let the frontend receive an empty network failure if multer rejects the upload.
+
+Upload folder existence
+If files are being saved into /uploads, confirm:
+
+the folder exists
+
+the app can write to it
+
+no permissions/path issue is breaking the upload
+
+Client-side upload-on-select logic
+Because this issue began after the new upload-on-select change, inspect that component first.
+
+Likely safe rollback rule
+If the new upload-on-select flow is causing the failure, fix only that flow.
+Do not rewrite the whole request system.
+
+If necessary, revert only the client upload step to the last known working pattern while keeping the new request system intact.
+
+Session/auth handling
+If /api/upload requires auth, confirm the client request includes credentials/session properly.
+
+Make sure upload requests are not failing because the client session is missing.
+
+Error UI
+If upload fails, show a clean message.
+Do not show:
+Failed to fetch
+
+Show:
+Unable to upload photo. Please try again.
+
+But first, fix the actual upload problem.
+
+Safe implementation rule
+Do not touch any working backend or other role flows unless they are directly required for the client photo upload bug.
+
+If admin and cleaner are working, leave them alone.
+Only repair the client request image upload path.
+
+What to test after fix
+
+Client side
+
+open New Request
+
+attach 1 JPG
+
+attach 1 PNG
+
+attach up to 3 images
+
+remove image
+
+submit request
+
+verify images save
+
+Validation
+
+wrong file type shows clean error
+
+too-large file shows clean error
+
+too many files shows clean error
+
+Regression
+
+admin side still works
+
+cleaner side still works
+
+request creation still works
+
+existing image display still works
+
+Direct instruction for agent
+Fix only the client-side request image upload bug introduced by the recent upload changes. The current client request form shows “Failed to fetch” when attaching a photo. Inspect the new upload-on-select flow first, confirm the frontend uses the exact backend multipart field name expected by the upload route, confirm the /api/upload route is mounted and reachable, confirm the uploads directory exists and is writable, and add proper JSON error handling for multer validation failures. Do not modify unrelated working systems and do not refactor other request flows unless absolutely required for this specific bug.
+
+Best priority order
+
+Check frontend field name
+
+Check server logs for /api/upload
+
+Confirm upload route works manually
+
+Confirm uploads folder exists
+
+Add clean multer error handling
+
+Retest only client flow

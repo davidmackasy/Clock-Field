@@ -1,0 +1,47 @@
+Summary of all changes in this task:
+
+### Schema & Database
+- Added imageUrls text[].array() column to client_requests table (shared/schema.ts)
+- Ran ALTER TABLE migration via executeSql to add image_urls column to DB
+
+### Server — File Upload Endpoint
+- Installed multer + @types/multer
+- Added multer configuration (3 files max, 10MB limit, JPG/PNG only filter)
+- Added POST /api/upload endpoint in server/routes.ts: accepts multipart form
+data (field "photos"), validates type/size via multer, stores files in /uploads/,
+returns { urls: string[] } with /uploads/ paths
+- Added static serving of /uploads directory in server/index.ts
+
+### Server — IDOR Security Fix
+- Fixed IDOR vulnerability on GET /api/attachments/:id/image
+- Now verifies attachment → requestMessage → clientRequest chain
+- Checks companyId match for all roles; clientId match for client role;
+employeeId match for employee role
+
+### Server — Request Creation
+- POST /api/client-requests now accepts imageUrls[] (URL strings from /api/upload)
+- Validates imageUrls: max 3, must start with /uploads/
+- Saves imageUrls to client_requests.image_urls column
+- Legacy base64 photos validation retained for backward compatibility
+
+### Client — Photo Upload (Create Form)
+- New UploadOnSelect component in client/requests.tsx: upload-on-select behavior,
+calls /api/upload with FormData on file selection, stores returned URLs in state
+- Enforces JPG/PNG only and 10MB max client-side before upload
+- Shows thumbnails of uploaded photos with remove buttons
+- Create form submits imageUrls array in payload
+
+### Client — Photo Display (Both Views)
+- imageUrls displayed as photo grid in request detail dialog (client + admin)
+- Clicking thumbnails opens UrlLightbox (full-screen modal, prev/next nav)
+- Request list cards show photo count indicator
+
+### Photo Viewer
+- AttachmentLightbox added to both client/requests.tsx and admin/requests.tsx
+for thread message attachments (replaced window.open on admin side)
+- UrlLightbox for imageUrls (static URLs served from /uploads/)
+
+### PhotoUploader Component
+- Restricted accept attribute to image/jpeg,image/jpg,image/png
+- Added explicit ALLOWED_TYPES check with clear error message
+- Limits updated to maxPhotos=3, maxSizeMB=10 throughout request pages

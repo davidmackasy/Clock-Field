@@ -159,13 +159,15 @@ function UploadOnSelect({ urls, onChange }: { urls: string[]; onChange: (urls: s
         credentials: "include",
       });
       if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.message || "Upload failed");
+        const text = await res.text();
+        let msg = "Unable to upload photo. Please try again.";
+        try { msg = JSON.parse(text).message || msg; } catch {}
+        throw new Error(msg);
       }
       const data = await res.json();
       onChange([...urls, ...(data.urls || [])]);
     } catch (err: any) {
-      setError(err.message || "Upload failed");
+      setError(err.message || "Unable to upload photo. Please try again.");
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
