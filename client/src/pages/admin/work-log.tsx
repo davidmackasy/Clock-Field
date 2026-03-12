@@ -8,89 +8,212 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { MapPin, User, Calendar, ChevronRight, CheckCircle, Image, Search, Eye } from "lucide-react";
+import { MapPin, User, Calendar, ChevronRight, CheckCircle, Search, Eye, X, ChevronLeft, ChevronRight as ChevronRightIcon } from "lucide-react";
 
 function fmt(iso: string) {
   return new Date(iso).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+interface LightboxPhoto { id: string; caption?: string }
+interface LightboxState { photos: LightboxPhoto[]; idx: number; groupLabel: string; section: string; subArea: string }
+
+function Lightbox({ state, onClose }: { state: LightboxState; onClose: () => void }) {
+  const [idx, setIdx] = useState(state.idx);
+  const photo = state.photos[idx];
+  const total = state.photos.length;
+
+  const prev = () => setIdx(i => Math.max(0, i - 1));
+  const next = () => setIdx(i => Math.min(total - 1, i + 1));
+
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowLeft") prev();
+    if (e.key === "ArrowRight") next();
+    if (e.key === "Escape") onClose();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] bg-black/95 flex flex-col items-center justify-center"
+      onClick={onClose}
+      onKeyDown={handleKey}
+      tabIndex={0}
+      data-testid="lightbox-overlay"
+    >
+      {/* Close */}
+      <button
+        className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors p-2 rounded-full hover:bg-white/10"
+        onClick={onClose}
+        data-testid="button-lightbox-close"
+      >
+        <X className="w-6 h-6" />
+      </button>
+
+      {/* Label */}
+      <div className="absolute top-4 left-4 text-left">
+        <p className="text-white/60 text-xs font-medium uppercase tracking-wide">{state.groupLabel}</p>
+        <p className="text-white/80 text-sm font-semibold">{state.section} · {state.subArea}</p>
+      </div>
+
+      {/* Image */}
+      <div className="flex items-center gap-3 w-full max-w-4xl px-16" onClick={e => e.stopPropagation()}>
+        <button
+          className="p-2 text-white/60 hover:text-white disabled:opacity-20 transition-colors rounded-full hover:bg-white/10 shrink-0"
+          onClick={prev}
+          disabled={idx === 0}
+          data-testid="button-lightbox-prev"
+        >
+          <ChevronLeft className="w-7 h-7" />
+        </button>
+
+        <div className="flex-1 flex items-center justify-center">
+          <img
+            src={`/api/work-submission-photos/${photo.id}/image`}
+            alt={photo.caption || ""}
+            className="max-h-[75vh] max-w-full object-contain rounded-lg shadow-2xl"
+          />
+        </div>
+
+        <button
+          className="p-2 text-white/60 hover:text-white disabled:opacity-20 transition-colors rounded-full hover:bg-white/10 shrink-0"
+          onClick={next}
+          disabled={idx === total - 1}
+          data-testid="button-lightbox-next"
+        >
+          <ChevronRightIcon className="w-7 h-7" />
+        </button>
+      </div>
+
+      {/* Counter + caption */}
+      <div className="absolute bottom-5 text-center space-y-1">
+        {total > 1 && (
+          <p className="text-white/50 text-xs">{idx + 1} / {total}</p>
+        )}
+        {photo.caption && <p className="text-white/70 text-sm">{photo.caption}</p>}
+      </div>
+    </div>
+  );
+}
+
+function PhotoGrid({
+  photos,
+  label,
+  section,
+  subArea,
+  onPreview,
+}: {
+  photos: any[];
+  label: string;
+  section: string;
+  subArea: string;
+  onPreview: (idx: number) => void;
+}) {
+  return (
+    <div>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">{label}</p>
+      {photos.length === 0 ? (
+        <p className="text-xs text-muted-foreground/50 italic">No {label.toLowerCase()}</p>
+      ) : (
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1.5">
+          {photos.map((p: any, i: number) => (
+            <button
+              key={p.id}
+              className="relative group focus:outline-none focus:ring-2 focus:ring-primary rounded-md"
+              onClick={() => onPreview(i)}
+              data-testid={`photo-thumb-${p.id}`}
+            >
+              <img
+                src={`/api/work-submission-photos/${p.id}/image`}
+                alt={p.caption || ""}
+                className="w-full aspect-square object-cover rounded-md bg-muted border border-border"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 rounded-md transition-colors flex items-center justify-center">
+                <Eye className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SubmissionDetail({ subId }: { subId: string }) {
+  const [lightbox, setLightbox] = useState<LightboxState | null>(null);
+
   const { data, isLoading } = useQuery<any>({
     queryKey: ["/api/work-submissions", subId],
     enabled: !!subId,
     staleTime: 30 * 1000,
   });
 
+  const openLightbox = (photos: any[], idx: number, groupLabel: string, section: string, subArea: string) => {
+    setLightbox({ photos, idx, groupLabel, section, subArea });
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-4 pt-2 flex-1 overflow-y-auto">
-        {[1,2,3].map(i => <Skeleton key={i} className="h-32 w-full" />)}
+        {[1, 2, 3].map(i => <Skeleton key={i} className="h-32 w-full" />)}
       </div>
     );
   }
   if (!data) return <p className="text-sm text-muted-foreground py-6 text-center">Could not load submission.</p>;
 
   return (
-    <div className="flex-1 overflow-y-auto space-y-4 py-2 min-h-0">
-      {!data.items?.length ? (
-        <p className="text-sm text-muted-foreground text-center py-6">No work items in this submission.</p>
-      ) : (
-        data.items.map((item: any, idx: number) => (
-          <div key={item.id} className="border border-border rounded-xl p-4 space-y-3">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">{item.section}</span>
+    <>
+      {lightbox && <Lightbox state={lightbox} onClose={() => setLightbox(null)} />}
+
+      <div className="flex-1 overflow-y-auto space-y-3 py-2 min-h-0">
+        {!data.items?.length ? (
+          <p className="text-sm text-muted-foreground text-center py-6">No work items in this submission.</p>
+        ) : (
+          data.items.map((item: any, idx: number) => {
+            const beforePhotos = (item.photos || []).filter((p: any) => p.photoType === "before");
+            const afterPhotos = (item.photos || []).filter((p: any) => p.photoType === "after");
+
+            return (
+              <div key={item.id} className="border border-border rounded-xl p-3.5 space-y-3 bg-card">
+                {/* Item header */}
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                      {item.section}
+                    </span>
+                    <p className="text-sm font-semibold">{item.subArea}</p>
+                  </div>
+                  <span className="text-xs text-muted-foreground shrink-0 mt-0.5">Item {idx + 1}</span>
                 </div>
-                <p className="text-sm font-medium mt-1">{item.subArea}</p>
-              </div>
-              <span className="text-xs text-muted-foreground shrink-0">Item {idx + 1}</span>
-            </div>
 
-            {item.notes && (
-              <div className="bg-muted rounded-lg p-2.5">
-                <p className="text-xs text-muted-foreground italic">{item.notes}</p>
-              </div>
-            )}
+                {item.notes && (
+                  <div className="bg-muted rounded-lg px-3 py-2">
+                    <p className="text-xs text-muted-foreground italic">{item.notes}</p>
+                  </div>
+                )}
 
-            {item.photos?.length > 0 ? (
-              <div className="space-y-3">
-                {["before", "after"].map(type => {
-                  const typed = item.photos.filter((p: any) => p.photoType === type);
-                  if (!typed.length) return null;
-                  return (
-                    <div key={type}>
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 capitalize">{type} Photos</p>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        {typed.map((p: any) => (
-                          <div
-                            key={p.id}
-                            className="relative group cursor-pointer"
-                            onClick={() => window.open(`/api/work-submission-photos/${p.id}/image`)}
-                          >
-                            <img
-                              src={`/api/work-submission-photos/${p.id}/image`}
-                              alt=""
-                              className="w-full h-24 object-cover rounded-lg bg-muted border border-border"
-                              loading="lazy"
-                            />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-lg transition-colors flex items-center justify-center">
-                              <Eye className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
+                {/* Photo grids */}
+                <div className="space-y-3">
+                  <PhotoGrid
+                    photos={beforePhotos}
+                    label="Before Photos"
+                    section={item.section}
+                    subArea={item.subArea}
+                    onPreview={i => openLightbox(beforePhotos, i, "Before Photos", item.section, item.subArea)}
+                  />
+                  <PhotoGrid
+                    photos={afterPhotos}
+                    label="After Photos"
+                    section={item.section}
+                    subArea={item.subArea}
+                    onPreview={i => openLightbox(afterPhotos, i, "After Photos", item.section, item.subArea)}
+                  />
+                </div>
               </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">No photos attached</p>
-            )}
-          </div>
-        ))
-      )}
-    </div>
+            );
+          })
+        )}
+      </div>
+    </>
   );
 }
 
@@ -179,7 +302,7 @@ export default function AdminWorkLog() {
       {/* Submissions list */}
       {isLoading ? (
         <div className="space-y-3">
-          {[1,2,3,4].map(i => <Skeleton key={i} className="h-20 w-full" />)}
+          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-20 w-full" />)}
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground">
@@ -252,7 +375,7 @@ export default function AdminWorkLog() {
               <SubmissionDetail subId={detailSub.id} />
 
               {detailSub.status === "submitted" && (
-                <div className="pt-2 border-t">
+                <div className="pt-2 border-t shrink-0">
                   <Button
                     className="w-full"
                     onClick={() => markReviewedMut.mutate(detailSub.id)}

@@ -1,0 +1,359 @@
+Yes. Best fix is to change the admin Work Submission image layout from stacked blocks to a compact grouped gallery.
+
+That will make it look much more professional on desktop and mobile.
+
+Use this dev note for your agent:
+
+DEV NOTE
+
+Task
+Improve the admin Work Submission image layout so submitted before and after photos display in a compact grid/gallery format instead of leaving large empty white spaces.
+
+Critical rule
+Do not break or affect anything else that is already working.
+
+Do not modify:
+
+cleaner submission flow
+
+photo upload logic
+
+work submission saving
+
+admin review status logic
+
+request system
+
+clock in/out
+
+attendance
+
+payroll
+
+schedules
+
+login/auth
+
+any existing backend data structure unless absolutely needed for display metadata
+
+This task is only about improving the display and preview UX of submitted work photos in the admin Work Log detail modal/page.
+
+Main goal
+Make before/after photos display in a tighter, cleaner, professional layout.
+
+Current issue
+The current admin detail view stacks images vertically and leaves large blank spaces.
+This looks unfinished on:
+
+desktop
+
+mobile
+
+larger work submissions with multiple items
+
+Required outcome
+Each work item should show its photos in a clean grid format, with before and after grouped visually and without large unused white space.
+
+Best layout approach
+
+For each work item:
+
+show item header
+
+show section and sub-area
+
+show optional note
+
+then show photos in compact grouped grids
+
+Recommended structure per work item
+
+Work Item Header
+
+Section badge
+
+Sub-area title
+
+Item number
+
+Optional note
+
+Photos block
+
+Before Photos
+
+grid
+
+After Photos
+
+grid
+
+This means:
+
+Washrooms
+Washroom 1
+
+Before Photos
+[img] [img] [img]
+[img]
+
+After Photos
+[img] [img] [img]
+[img]
+
+Then next work item:
+Offices
+Office 2
+
+Before Photos
+[img] [img]
+
+After Photos
+[img] [img] [img]
+
+This is much cleaner.
+
+Grid requirements
+
+Desktop
+Use a responsive image grid.
+Recommended:
+
+2 to 4 columns depending on available modal width
+
+equal card sizes
+
+consistent aspect ratio
+
+small gap between images
+
+Mobile
+Use:
+
+2 columns
+
+clean spacing
+
+tap to preview full image
+
+Important
+Do not let one single image create a giant tall empty section.
+
+Image cells should have fixed thumbnail sizing.
+
+Recommended image thumbnail behavior
+
+fixed rounded thumbnail cards
+
+object-fit cover
+
+consistent aspect ratio
+
+click to preview full image
+
+Preview behavior
+When admin clicks an image:
+
+open image preview modal/lightbox
+
+allow next/previous if possible
+
+show label:
+Before Photo or After Photo
+
+show section name and sub-area if helpful
+
+This will solve both:
+
+compact layout
+
+ability to inspect image properly
+
+Optional better UX
+Add a small toggle or tab per work item:
+
+All
+
+Before
+
+After
+
+But this is optional.
+Safer first version is:
+show both grouped grids.
+
+Alternative compact layout option
+If you want even tighter layout, use paired before/after cards.
+
+Example:
+For each pair:
+[Before] [After]
+
+If counts do not match exactly, still fill available slots without breaking layout.
+
+But safest first version is:
+two separate mini-grids:
+
+Before grid
+
+After grid
+
+Why this is better
+
+easy to understand
+
+easy to implement
+
+avoids weird pairing assumptions
+
+works even when there are more before photos than after photos
+
+Important visual rule
+Do not stretch the entire item container height based on image count.
+Let image grids grow naturally inside the card.
+
+White space fix
+To remove large empty spaces:
+
+stop using overly tall fixed image containers
+
+stop stacking images with oversized wrappers
+
+use thumbnail grids
+
+let each work item card size itself to content
+
+Suggested UI details
+For each work item card:
+
+compact padding
+
+section badge
+
+sub-area title
+
+note block if exists
+
+“Before Photos” label
+
+thumbnail grid
+
+“After Photos” label
+
+thumbnail grid
+
+If one group has no photos
+Show a small muted label:
+No before photos
+or
+No after photos
+
+Do not leave a big empty blank area.
+
+Image preview/lightbox requirements
+Add image preview on click.
+
+Preview should support:
+
+full-size view
+
+close button
+
+previous/next if same group has multiple images
+
+optional caption if available
+
+If lightbox is too much right now:
+at minimum open larger modal preview.
+
+Responsive behavior
+Desktop
+
+image grid should use available width
+
+avoid oversized blank columns
+
+keep content aligned cleanly
+
+Mobile
+
+two-column thumbnails
+
+tap to preview
+
+no horizontal overflow
+
+no giant tall image stacks unless previewed
+
+Scope boundaries
+Allowed changes:
+
+admin work submission detail layout
+
+image gallery/grid rendering
+
+image preview modal/lightbox
+
+spacing cleanup in work item cards
+
+Do not change:
+
+upload counts
+
+item data structure
+
+submission logic
+
+status logic
+
+work capture logic
+
+cleaner-side UI unless the same preview component is reused safely
+
+Acceptance criteria
+
+Desktop
+
+before and after photos are shown in compact grids
+
+large white spaces are removed
+
+multiple work items look organized
+
+clicking image previews it larger
+
+Mobile
+
+images show in clean 2-column grids
+
+no oversized blank sections
+
+image preview works cleanly
+
+General
+
+before and after remain clearly separated
+
+notes still display properly
+
+no regression to work submission data
+
+no regression to admin review flow
+
+no regression anywhere else
+
+Direct instruction for agent
+Improve only the admin Work Submission detail image layout. Replace the current stacked photo display with a compact responsive grid layout that groups Before Photos and After Photos separately for each work item. Use fixed thumbnail sizing, clean spacing, and click-to-preview image behavior so the view looks professional on desktop and mobile. Remove large blank white spaces caused by the current layout, but do not change any upload logic, submission logic, or unrelated working functionality.
+
+Best final recommendation
+Use:
+
+separate Before and After grids
+
+3 to 4 columns on desktop
+
+2 columns on mobile
+
+click-to-preview lightbox
+
+That is the cleanest and safest fix.
