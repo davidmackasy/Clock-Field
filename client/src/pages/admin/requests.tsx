@@ -482,7 +482,7 @@ export default function AdminRequests() {
                 className="resize-none text-sm"
                 data-testid="input-admin-reply"
               />
-              <PhotoUploader photos={replyPhotos} onChange={setReplyPhotos} maxPhotos={10} maxSizeMB={10} label="Attach Photos" />
+              <PhotoUploader photos={replyPhotos} onChange={setReplyPhotos} maxPhotos={3} maxSizeMB={10} label="Attach Photos" />
               <div className="flex items-center justify-end gap-2">
                 <Button
                   onClick={sendReply}

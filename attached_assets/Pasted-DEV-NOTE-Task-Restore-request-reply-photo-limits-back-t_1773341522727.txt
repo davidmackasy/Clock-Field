@@ -1,0 +1,143 @@
+DEV NOTE
+
+Task
+Restore request reply photo limits back to maximum 3 images only, across client, employee, and admin request replies.
+
+Critical instruction
+Do not touch anything else.
+Do not refactor anything else.
+Do not improve anything else.
+Do not change any other limits.
+Do not modify the public link feature.
+Do not modify request thread logic.
+Do not modify upload logic except restoring the max photo count back to 3 where it was changed incorrectly.
+
+This is a rollback fix only.
+
+Main goal
+Bring the request reply image limit back to:
+maximum 3 photos per reply
+
+This must apply to:
+
+client replies
+
+cleaner/employee replies
+
+admin replies
+
+What happened
+The agent incorrectly changed the reply limits while working on a different feature.
+That was not requested.
+That change must be reverted.
+
+Required final rule
+For every request reply flow:
+
+max 3 images
+
+not 5
+
+not 10
+
+This applies only to reply uploads.
+
+Important
+Do not change anything else that is currently working.
+
+Scope
+Only restore the reply photo limit settings and matching validation messages.
+
+Check and fix in all layers
+
+Frontend limits
+Restore all reply photo upload components back to max 3.
+
+Anywhere the agent changed:
+
+maxPhotos
+
+reply uploader limit
+
+UI label text
+
+counter text like (6/10)
+
+validation copy
+
+set them back to 3.
+
+Examples of what should show:
+
+Attach Photos (0/3)
+
+Maximum 3 photos allowed per message
+
+Backend validation
+Restore backend request message attachment validation to max 3 photos per reply.
+
+If backend currently allows more than 3, revert it back.
+
+Final backend rule:
+maximum 3 photos per reply message
+
+Error messages
+Keep error text aligned to the real limit.
+
+Use:
+Maximum 3 photos allowed per message
+
+Do not show mismatched UI where frontend allows 10 but backend blocks at 3.
+
+Do not touch request creation if not required
+Only fix reply limits.
+If the initial request creation flow was not meant to change, do not change it now unless it was also incorrectly modified.
+
+This rollback is specifically for reply photo count.
+
+Apply to these areas only
+
+client request reply composer
+
+admin request reply composer
+
+cleaner request reply composer if present
+
+Do not modify:
+
+work log public link
+
+request detail modal structure
+
+request history
+
+upload endpoint behavior other than enforcing the correct max count
+
+any unrelated page
+
+Acceptance criteria
+
+client reply uploader shows max 3
+
+admin reply uploader shows max 3
+
+cleaner reply uploader shows max 3
+
+backend enforces max 3
+
+UI counters and labels match max 3
+
+no other functionality is changed
+
+public link feature remains untouched
+
+request conversations still work
+
+Direct instruction for agent
+Revert only the incorrect request reply photo-limit changes. Restore the maximum reply attachment count to 3 images for client, cleaner, and admin reply flows, and make sure frontend limits, backend validation, counters, and error messages all consistently reflect 3. Do not touch any other feature, do not modify the public link work, and do not change anything else that was not explicitly requested.
+
+Strong reminder
+From now on, only change the exact feature requested.
+Do not expand scope.
+Do not “improve” nearby features.
+Do not modify limits, validations, or flows unless explicitly asked.

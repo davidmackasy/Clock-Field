@@ -411,7 +411,7 @@ export default function ClientRequests() {
                   className="resize-none text-sm"
                   data-testid="input-client-reply"
                 />
-                <PhotoUploader photos={replyPhotos} onChange={setReplyPhotos} maxPhotos={10} maxSizeMB={10} label="Attach Photos" />
+                <PhotoUploader photos={replyPhotos} onChange={setReplyPhotos} maxPhotos={3} maxSizeMB={10} label="Attach Photos" />
                 <Button
                   className="w-full"
                   size="sm"
