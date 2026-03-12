@@ -53,15 +53,17 @@ A workforce operations platform for service businesses with 3 user roles: Admin,
 - **Client detail modals** - Clickable client cards open a detail modal with Overview, Locations, and Requests tabs; includes inline editing
 - **Advanced attendance tracking** - Filters (search, date range, status, employee), variance columns ("+2 min late"), clickable employee names open attendance portfolio with stats + monthly calendar
 - Clock in/out with live timer and shift compliance flags
-- Payroll estimation based on hourly rates with overtime calculation
+- **Payroll Deductions estimator** - Admin-configurable Canadian payroll deductions (federal/provincial tax, CPP, EI, custom deductions). Toggle per-company, configurable modes (off/manual%), per-period breakdown in payroll table and history modal
+- Payroll estimation based on hourly rates with overtime calculation (per-period history modal, 6 period filter options)
 - Client request management (service requests, complaints, issues)
-- Company settings configuration (grace period, overtime, report requirements)
+- Company settings configuration (grace period, overtime, report requirements, payroll deductions)
 - Ownership/tenant authorization on all mutating endpoints
 
 ## Database Schema (shared/schema.ts)
-- companies, users (all roles), clients (linked to users via userId), locations
+- companies (with deductionsEnabled, provinceCode, federalTaxMode/Percent, provincialTaxMode/Percent, cppMode/Percent, eiMode/Percent), users (all roles), clients (linked to users via userId), locations
 - **recurring_schedules** - Recurring shift rules (days, frequency, start/end dates, continuous toggle)
 - shifts (with shiftType, shiftLabel, recurringScheduleId), time_entries, client_requests
+- **payroll_deductions** - Custom per-company deductions (label, type: percent|fixed, value, isActive)
 
 ## API Routes (server/routes.ts)
 - Auth: POST /api/auth/login, /api/auth/employee-login, /api/auth/change-password, /api/auth/logout, GET /api/auth/me
@@ -75,6 +77,7 @@ A workforce operations platform for service businesses with 3 user roles: Admin,
 - Shifts: GET/POST /api/shifts, GET /api/shifts/date/:date, PATCH/DELETE /api/shifts/:id
 - Time Entries: GET /api/time-entries, GET /api/time-entries/active, POST /api/time-entries/clock-in|clock-out
 - Client Requests: GET/POST /api/client-requests, PATCH /api/client-requests/:id
+- Payroll Deductions: GET/POST /api/payroll-deductions, PATCH/DELETE /api/payroll-deductions/:id
 
 ## Project Structure
 ```

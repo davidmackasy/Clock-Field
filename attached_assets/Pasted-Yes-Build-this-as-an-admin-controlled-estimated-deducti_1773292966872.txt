@@ -1,0 +1,556 @@
+Yes. Build this as an admin-controlled estimated deductions layer on top of the payroll estimator, not as official payroll filing.
+
+For Canada, the main employee deductions to support are:
+
+federal income tax
+
+provincial income tax
+
+CPP
+
+EI
+
+CRA’s payroll tools and formulas are the right source for this. CRA publishes the official payroll formulas, the online Payroll Deductions Online Calculator, and province-specific tables, including Manitoba.
+
+Use this dev note:
+
+DEV NOTE
+
+Task
+Upgrade the existing Payroll Estimator so admin can configure estimated Canadian payroll deductions in Settings and have those deductions automatically applied in the Payroll page for each pay period.
+
+Critical rule
+Do not break or modify anything already working.
+Do not touch:
+
+auth
+
+admin login
+
+employee login
+
+client login
+
+clock in / clock out
+
+attendance creation
+
+schedule creation
+
+existing employee access flow
+
+existing client/admin access flow
+
+This is an additive payroll-estimator improvement only.
+
+Main goal
+Keep payroll as an estimate, but make it more realistic and more useful for admin.
+
+Admin should be able to configure payroll deduction settings in Settings.
+Those settings should then flow into Payroll Estimator automatically.
+
+The Payroll Estimator should show:
+
+gross pay
+
+deduction breakdown
+
+total deductions
+
+net pay estimate
+
+It must work by pay period, especially biweekly.
+
+Product rule
+
+This is not full payroll software.
+This is estimated payroll.
+
+Use clear labels everywhere:
+
+Estimated payroll
+
+Estimated deductions
+
+Net pay estimate
+
+Do not present this as CRA filing or exact remittance software.
+
+Canadian deduction types to support
+
+Build support for these employee-side deductions:
+
+Federal income tax
+
+Provincial income tax
+
+CPP
+
+EI
+
+Custom deductions
+
+CRA’s payroll materials cover federal tax, provincial or territorial tax, CPP, and EI, and PDOC supports common pay periods such as weekly and biweekly.
+
+Settings page changes
+
+In Settings → Payroll, add a new section:
+
+Payroll Deductions
+
+Fields to add:
+
+Province
+
+Enable estimated deductions toggle
+
+Federal tax mode
+
+Provincial tax mode
+
+CPP mode
+
+EI mode
+
+Payroll cycle start date
+
+Pay period frequency
+
+Add custom deduction button
+
+Recommended settings structure
+
+Province
+
+Dropdown
+
+Default to company province
+
+Manitoba can be default if that is the main target market
+
+Federal tax mode
+Options:
+
+CRA estimate
+
+Manual percent
+
+Off
+
+Provincial tax mode
+Options:
+
+CRA estimate
+
+Manual percent
+
+Off
+
+CPP mode
+Options:
+
+CRA estimate
+
+Manual percent
+
+Off
+
+EI mode
+Options:
+
+CRA estimate
+
+Manual percent
+
+Off
+
+Custom deductions
+Admin can add rows:
+
+label
+
+type: fixed amount or percent
+
+scope: employee deduction or employer cost
+
+active toggle
+
+Examples:
+
+Union dues
+
+Benefits
+
+Pension top-up
+
+Other deduction
+
+Pay period frequency
+Options:
+
+Weekly
+
+Biweekly
+
+Monthly
+
+Default:
+
+Biweekly
+
+Payroll cycle start date
+
+Required for biweekly logic
+
+This is the anchor date for pay-period grouping
+
+Recommended mode strategy
+
+Build two estimation modes:
+
+Mode A: Simple estimate
+This is easiest and safest for current live app.
+
+Admin enters:
+
+federal tax percent
+
+provincial tax percent
+
+CPP percent
+
+EI percent
+
+custom deductions
+
+System applies these percentages to gross pay.
+
+Mode B: CRA estimate
+Use CRA-style calculation inputs and formulas.
+CRA publishes the official formulas and tables for 2026, and PDOC is the official calculator reference.
+
+Recommended rollout
+Build Simple estimate first.
+Then add CRA estimate mode after structure is stable.
+
+Payroll calculation flow
+
+Source of truth
+Use only:
+
+actual completed time entries
+
+worked hours from clock-in/clock-out
+
+employee hourly rate
+
+overtime rules if enabled
+
+payroll settings
+
+payroll cycle start date
+
+Do not calculate payroll from schedule alone.
+
+Per pay period, calculate:
+
+regular hours
+
+overtime hours
+
+regular pay
+
+overtime pay
+
+gross pay
+
+federal deduction
+
+provincial deduction
+
+CPP
+
+EI
+
+custom deductions
+
+total deductions
+
+net pay
+
+Base formulas
+
+regular_pay = regular_hours × hourly_rate
+ot_pay = overtime_hours × overtime_rate
+gross_pay = regular_pay + ot_pay
+
+Then:
+federal_tax = based on selected mode
+provincial_tax = based on selected mode
+cpp = based on selected mode
+ei = based on selected mode
+custom_deductions = sum of active custom deduction rules
+
+total_deductions = federal_tax + provincial_tax + cpp + ei + custom_deductions
+net_pay = gross_pay - total_deductions
+
+Round only at display layer to 2 decimals.
+
+Pay period generation
+
+The payroll page already works by period.
+Extend it properly.
+
+Use:
+
+payroll cycle start date
+
+pay period frequency
+
+If biweekly and cycle start date is March 13, then periods should be:
+
+Mar 13 to Mar 26
+
+Mar 27 to Apr 9
+
+Apr 10 to Apr 23
+
+Payroll estimator must always compute against the active selected pay period only.
+
+PDOC and CRA materials explicitly support common payroll frequencies like weekly and biweekly, so this structure is aligned with the official payroll model.
+
+Payroll page changes
+
+Keep current layout.
+Do not redesign.
+
+Extend the table columns to include:
+
+Federal Tax
+
+Provincial Tax
+
+CPP
+
+EI
+
+Other Deductions
+
+Total Deductions
+
+Net Pay
+
+So table becomes:
+
+Employee
+
+Rate
+
+Hours
+
+OT Hours
+
+Regular Pay
+
+OT Pay
+
+Gross Pay
+
+Federal Tax
+
+Provincial Tax
+
+CPP
+
+EI
+
+Other Deductions
+
+Total Deductions
+
+Net Pay
+
+Top cards
+Keep current cards and improve them:
+
+Total Gross
+
+Total Net
+
+Total Hours
+
+Employees
+
+Optional later:
+
+Total Deductions
+
+Employee payroll popup changes
+
+When admin clicks employee name, popup should show pay-period detail and history.
+
+Add:
+Current pay period summary
+
+Gross pay
+
+Federal tax
+
+Provincial tax
+
+CPP
+
+EI
+
+Other deductions
+
+Total deductions
+
+Net pay
+
+Hours
+
+History table
+Each row:
+
+Pay Period
+
+Hours
+
+Gross
+
+Federal Tax
+
+Provincial Tax
+
+CPP
+
+EI
+
+Other Deductions
+
+Total Deductions
+
+Net Pay
+
+Province support
+
+Province matters because tax tables differ by province.
+CRA publishes province-specific payroll deduction tables, including Manitoba.
+
+For MVP:
+
+province selector is company-wide in settings
+
+apply that province to payroll estimates for all employees in that company
+
+Important limits and messaging
+
+Add a note on payroll page and settings:
+This payroll is an estimate only and may differ from official payroll calculations, remittances, and deductions.
+
+This matters because CRA notes that calculator results depend on the accuracy of the information entered.
+
+Suggested database additions
+
+company_settings or payroll_settings
+Add fields such as:
+
+province_code
+
+deductions_enabled
+
+federal_tax_mode
+
+federal_tax_percent
+
+provincial_tax_mode
+
+provincial_tax_percent
+
+cpp_mode
+
+cpp_percent
+
+ei_mode
+
+ei_percent
+
+pay_period_type
+
+payroll_cycle_start_date
+
+custom_payroll_deductions
+
+id
+
+company_id
+
+label
+
+type
+
+value
+
+applies_to
+
+is_active
+
+Strict do-not-break rules
+
+Do not change:
+
+existing attendance entries
+
+existing time tracking logic
+
+existing employee rates
+
+existing authentication
+
+existing payroll filter behavior except extending it
+
+any existing schedule logic
+
+Only add deduction settings and deduction display.
+
+Acceptance criteria
+
+admin can configure payroll deductions in Settings
+
+payroll settings persist correctly
+
+selected pay period still drives payroll estimator
+
+payroll page shows gross, deductions, and net estimate
+
+clicking employee name shows deduction breakdown for that pay period
+
+previous pay periods retain estimate history view
+
+no regression to auth, attendance, schedules, or current payroll filtering
+
+Recommended build order
+
+Add payroll deduction settings model
+
+Add settings UI
+
+Add shared payroll deduction calculator
+
+Extend payroll page totals and row breakdown
+
+Extend employee payroll popup
+
+Add labels and estimate disclaimers
+
+Regression test
+
+My recommendation
+Ship this in two steps:
+
+first, admin-controlled manual percentages and custom deductions
+
+second, optional CRA estimate mode
+
+That is the safest path for a live app.

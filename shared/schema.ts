@@ -17,6 +17,17 @@ export const companies = pgTable("companies", {
   defaultPayPeriodType: text("default_pay_period_type").notNull().default("biweekly"),
   payrollCycleStartDate: text("payroll_cycle_start_date"),
   employeeIdCounter: integer("employee_id_counter").notNull().default(1000),
+  // Payroll deductions
+  deductionsEnabled: boolean("deductions_enabled").notNull().default(false),
+  provinceCode: text("province_code").notNull().default("MB"),
+  federalTaxMode: text("federal_tax_mode").notNull().default("off"),
+  federalTaxPercent: decimal("federal_tax_percent", { precision: 5, scale: 2 }).default("0"),
+  provincialTaxMode: text("provincial_tax_mode").notNull().default("off"),
+  provincialTaxPercent: decimal("provincial_tax_percent", { precision: 5, scale: 2 }).default("0"),
+  cppMode: text("cpp_mode").notNull().default("off"),
+  cppPercent: decimal("cpp_percent", { precision: 5, scale: 2 }).default("0"),
+  eiMode: text("ei_mode").notNull().default("off"),
+  eiPercent: decimal("ei_percent", { precision: 5, scale: 2 }).default("0"),
 });
 
 export const users = pgTable("users", {
@@ -118,6 +129,15 @@ export const timeEntries = pgTable("time_entries", {
   notes: text("notes"),
 });
 
+export const payrollDeductions = pgTable("payroll_deductions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  label: text("label").notNull(),
+  type: text("type").notNull().default("percent"),
+  value: decimal("value", { precision: 8, scale: 2 }).notNull().default("0"),
+  isActive: boolean("is_active").notNull().default(true),
+});
+
 export const clientRequests = pgTable("client_requests", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   companyId: varchar("company_id").notNull(),
@@ -134,6 +154,7 @@ export const clientRequests = pgTable("client_requests", {
 
 export const insertCompanySchema = createInsertSchema(companies).omit({ id: true });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
+export const insertPayrollDeductionSchema = createInsertSchema(payrollDeductions).omit({ id: true });
 export const insertClientSchema = createInsertSchema(clients).omit({ id: true });
 export const insertLocationSchema = createInsertSchema(locations).omit({ id: true });
 export const insertRecurringScheduleSchema = createInsertSchema(recurringSchedules).omit({ id: true });
@@ -157,6 +178,8 @@ export type TimeEntry = typeof timeEntries.$inferSelect;
 export type InsertTimeEntry = z.infer<typeof insertTimeEntrySchema>;
 export type ClientRequest = typeof clientRequests.$inferSelect;
 export type InsertClientRequest = z.infer<typeof insertClientRequestSchema>;
+export type PayrollDeduction = typeof payrollDeductions.$inferSelect;
+export type InsertPayrollDeduction = z.infer<typeof insertPayrollDeductionSchema>;
 
 export const loginSchema = z.object({
   email: z.string().email(),

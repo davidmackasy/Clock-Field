@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import {
-  companies, users, clients, locations, recurringSchedules, shifts, timeEntries, clientRequests,
+  companies, users, clients, locations, recurringSchedules, shifts, timeEntries, clientRequests, payrollDeductions,
   type Company, type InsertCompany,
   type User, type InsertUser,
   type Client, type InsertClient,
@@ -10,6 +10,7 @@ import {
   type Shift, type InsertShift,
   type TimeEntry, type InsertTimeEntry,
   type ClientRequest, type InsertClientRequest,
+  type PayrollDeduction, type InsertPayrollDeduction,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -65,6 +66,11 @@ export interface IStorage {
   getClientRequestsByCompany(companyId: string): Promise<ClientRequest[]>;
   getClientRequestsByClient(clientId: string): Promise<ClientRequest[]>;
   updateClientRequest(id: string, data: Partial<InsertClientRequest>): Promise<ClientRequest | undefined>;
+
+  getPayrollDeductionsByCompany(companyId: string): Promise<PayrollDeduction[]>;
+  createPayrollDeduction(data: InsertPayrollDeduction): Promise<PayrollDeduction>;
+  updatePayrollDeduction(id: string, data: Partial<InsertPayrollDeduction>): Promise<PayrollDeduction | undefined>;
+  deletePayrollDeduction(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -287,6 +293,24 @@ export class DatabaseStorage implements IStorage {
   async updateClientRequest(id: string, data: Partial<InsertClientRequest>): Promise<ClientRequest | undefined> {
     const [request] = await db.update(clientRequests).set(data).where(eq(clientRequests.id, id)).returning();
     return request;
+  }
+
+  async getPayrollDeductionsByCompany(companyId: string): Promise<PayrollDeduction[]> {
+    return db.select().from(payrollDeductions).where(eq(payrollDeductions.companyId, companyId));
+  }
+
+  async createPayrollDeduction(data: InsertPayrollDeduction): Promise<PayrollDeduction> {
+    const [deduction] = await db.insert(payrollDeductions).values(data).returning();
+    return deduction;
+  }
+
+  async updatePayrollDeduction(id: string, data: Partial<InsertPayrollDeduction>): Promise<PayrollDeduction | undefined> {
+    const [deduction] = await db.update(payrollDeductions).set(data).where(eq(payrollDeductions.id, id)).returning();
+    return deduction;
+  }
+
+  async deletePayrollDeduction(id: string): Promise<void> {
+    await db.delete(payrollDeductions).where(eq(payrollDeductions.id, id));
   }
 }
 

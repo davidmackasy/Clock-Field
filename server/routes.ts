@@ -1011,6 +1011,45 @@ export async function registerRoutes(
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  // ── Payroll Deductions ────────────────────────────────────────────────────
+  app.get("/api/payroll-deductions", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      res.json(await storage.getPayrollDeductionsByCompany(user.companyId));
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/payroll-deductions", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { label, type, value } = req.body;
+      if (!label?.trim()) return res.status(400).json({ message: "Label is required" });
+      const deduction = await storage.createPayrollDeduction({
+        companyId: user.companyId,
+        label: label.trim(),
+        type: type || "percent",
+        value: value?.toString() || "0",
+        isActive: true,
+      });
+      res.status(201).json(deduction);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/payroll-deductions/:id", requireRole("admin"), async (req, res) => {
+    try {
+      const updated = await storage.updatePayrollDeduction(req.params.id, req.body);
+      if (!updated) return res.status(404).json({ message: "Deduction not found" });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/payroll-deductions/:id", requireRole("admin"), async (req, res) => {
+    try {
+      await storage.deletePayrollDeduction(req.params.id);
+      res.status(204).end();
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   return httpServer;
 }
 

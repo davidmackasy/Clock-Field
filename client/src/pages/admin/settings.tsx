@@ -7,13 +7,34 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
+import { Plus, Trash2 } from "lucide-react";
+
+const PROVINCES = [
+  { code: "AB", name: "Alberta" },
+  { code: "BC", name: "British Columbia" },
+  { code: "MB", name: "Manitoba" },
+  { code: "NB", name: "New Brunswick" },
+  { code: "NL", name: "Newfoundland and Labrador" },
+  { code: "NS", name: "Nova Scotia" },
+  { code: "NT", name: "Northwest Territories" },
+  { code: "NU", name: "Nunavut" },
+  { code: "ON", name: "Ontario" },
+  { code: "PE", name: "Prince Edward Island" },
+  { code: "QC", name: "Quebec" },
+  { code: "SK", name: "Saskatchewan" },
+  { code: "YT", name: "Yukon" },
+];
 
 export default function AdminSettings() {
   const { toast } = useToast();
   const { data: company, isLoading } = useQuery<any>({ queryKey: ["/api/company"] });
+  const { data: customDeductions, isLoading: deductionsLoading } = useQuery<any[]>({ queryKey: ["/api/payroll-deductions"] });
   const [form, setForm] = useState<any>(null);
+  const [newDeduction, setNewDeduction] = useState({ label: "", type: "percent", value: "" });
+  const [addingDeduction, setAddingDeduction] = useState(false);
 
   useEffect(() => {
     if (company && !form) setForm(company);
@@ -27,6 +48,40 @@ export default function AdminSettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/company"] });
       toast({ title: "Settings saved" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const addDeductionMut = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/payroll-deductions", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/payroll-deductions"] });
+      setNewDeduction({ label: "", type: "percent", value: "" });
+      setAddingDeduction(false);
+      toast({ title: "Deduction added" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const updateDeductionMut = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/payroll-deductions/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/payroll-deductions"] }),
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const deleteDeductionMut = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/payroll-deductions/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/payroll-deductions"] });
+      toast({ title: "Deduction removed" });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
@@ -133,6 +188,185 @@ export default function AdminSettings() {
                 onChange={e => setForm((p: any) => ({ ...p, payrollCycleStartDate: e.target.value || null }))}
               />
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Payroll Deductions */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Payroll Deductions</CardTitle>
+            <CardDescription className="text-xs">
+              Configure estimated Canadian payroll deductions. These are estimates only and do not replace official CRA payroll filing or remittances.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Enable Estimated Deductions</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">Apply deduction estimates to the payroll estimator</p>
+              </div>
+              <Switch
+                data-testid="switch-deductions-enabled"
+                checked={form.deductionsEnabled || false}
+                onCheckedChange={v => setForm((p: any) => ({ ...p, deductionsEnabled: v }))}
+              />
+            </div>
+
+            {form.deductionsEnabled && (
+              <>
+                <div className="space-y-2">
+                  <Label>Province</Label>
+                  <Select value={form.provinceCode || "MB"} onValueChange={v => setForm((p: any) => ({ ...p, provinceCode: v }))}>
+                    <SelectTrigger data-testid="select-province"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {PROVINCES.map(p => (
+                        <SelectItem key={p.code} value={p.code}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">Deduction Rates</Label>
+
+                  {[
+                    { key: "federalTax", label: "Federal Tax", modeKey: "federalTaxMode", percentKey: "federalTaxPercent" },
+                    { key: "provincialTax", label: "Provincial Tax", modeKey: "provincialTaxMode", percentKey: "provincialTaxPercent" },
+                    { key: "cpp", label: "CPP", modeKey: "cppMode", percentKey: "cppPercent" },
+                    { key: "ei", label: "EI", modeKey: "eiMode", percentKey: "eiPercent" },
+                  ].map(({ key, label, modeKey, percentKey }) => (
+                    <div key={key} className="flex items-center gap-3">
+                      <div className="w-32 flex-shrink-0">
+                        <p className="text-sm font-medium">{label}</p>
+                      </div>
+                      <Select
+                        value={form[modeKey] || "off"}
+                        onValueChange={v => setForm((p: any) => ({ ...p, [modeKey]: v }))}
+                      >
+                        <SelectTrigger className="w-36" data-testid={`select-${key}-mode`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="off">Off</SelectItem>
+                          <SelectItem value="percent">Manual %</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {(form[modeKey] || "off") === "percent" && (
+                        <div className="flex items-center gap-1.5">
+                          <Input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            className="w-24"
+                            value={form[percentKey] ?? ""}
+                            data-testid={`input-${key}-percent`}
+                            onChange={e => setForm((p: any) => ({ ...p, [percentKey]: e.target.value }))}
+                          />
+                          <span className="text-sm text-muted-foreground">%</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">Custom Deductions</Label>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs gap-1"
+                      onClick={() => setAddingDeduction(true)}
+                      data-testid="button-add-deduction"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Add
+                    </Button>
+                  </div>
+
+                  {addingDeduction && (
+                    <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border">
+                      <Input
+                        placeholder="Label (e.g. Union Dues)"
+                        className="flex-1 h-8 text-sm"
+                        value={newDeduction.label}
+                        onChange={e => setNewDeduction(p => ({ ...p, label: e.target.value }))}
+                        data-testid="input-new-deduction-label"
+                      />
+                      <Select value={newDeduction.type} onValueChange={v => setNewDeduction(p => ({ ...p, type: v }))}>
+                        <SelectTrigger className="w-28 h-8 text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="percent">Percent</SelectItem>
+                          <SelectItem value="fixed">Fixed $</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0"
+                        className="w-20 h-8 text-sm"
+                        value={newDeduction.value}
+                        onChange={e => setNewDeduction(p => ({ ...p, value: e.target.value }))}
+                        data-testid="input-new-deduction-value"
+                      />
+                      <Button
+                        size="sm"
+                        className="h-8 text-xs"
+                        disabled={addDeductionMut.isPending || !newDeduction.label}
+                        onClick={() => addDeductionMut.mutate(newDeduction)}
+                        data-testid="button-save-deduction"
+                      >
+                        Save
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 text-xs"
+                        onClick={() => setAddingDeduction(false)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
+
+                  {deductionsLoading ? (
+                    <Skeleton className="h-10 w-full" />
+                  ) : (customDeductions || []).length === 0 && !addingDeduction ? (
+                    <p className="text-xs text-muted-foreground">No custom deductions. Add union dues, benefits, or other deductions.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {(customDeductions || []).map((d: any) => (
+                        <div key={d.id} className="flex items-center gap-3 py-2 px-3 rounded-lg border bg-background" data-testid={`row-deduction-${d.id}`}>
+                          <Switch
+                            checked={d.isActive}
+                            onCheckedChange={v => updateDeductionMut.mutate({ id: d.id, data: { isActive: v } })}
+                            data-testid={`switch-deduction-${d.id}`}
+                          />
+                          <span className="flex-1 text-sm font-medium">{d.label}</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {d.type === "percent" ? `${parseFloat(d.value).toFixed(2)}%` : `$${parseFloat(d.value).toFixed(2)}`}
+                          </Badge>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 text-destructive hover:text-destructive"
+                            onClick={() => deleteDeductionMut.mutate(d.id)}
+                            data-testid={`button-delete-deduction-${d.id}`}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
