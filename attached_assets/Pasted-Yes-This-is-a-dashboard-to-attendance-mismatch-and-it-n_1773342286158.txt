@@ -1,0 +1,366 @@
+Yes. This is a dashboard-to-attendance mismatch, and it needs to be fixed at the source, not patched visually.
+
+Most likely issue
+The Dashboard card is counting “late today” from one logic, while the Attendance page filter is using a different logic or different date window.
+
+That is why:
+
+Dashboard says 1 late today
+
+Attendance filtered to Today + Late Clock-in shows 0
+
+So the fix is:
+make both use the exact same source of truth.
+
+Use this dev note for your agent.
+
+DEV NOTE
+
+Task
+Fix Dashboard stat accuracy for Late Today and Missed Shifts so the numbers always match the Attendance page results for the same filters.
+
+Critical rule
+Do not break or affect anything else that is already working.
+
+Do not modify:
+
+auth
+
+login
+
+payroll
+
+request system
+
+work log
+
+employee creation
+
+client creation
+
+admin creation
+
+clock-in/out flow
+
+schedule creation flow
+
+attendance recording flow unless the count logic depends on a broken filter mismatch
+
+dashboard layout except where needed for accurate stat logic
+
+This task is only about fixing dashboard stat accuracy and matching click-through filters.
+
+Problem
+The dashboard shows a value like:
+Late Today = 1
+
+But when clicking that card, the Attendance page opens with:
+
+Today
+
+Late Clock-in
+
+and shows:
+No attendance records matching filters
+
+This causes trust issues because the displayed count does not match the filtered records.
+
+Main goal
+Make dashboard counts and destination page filters match exactly.
+
+If the Dashboard shows:
+
+Late Today = 0, then Attendance filtered to Today + Late must show 0
+
+Late Today = 1, then Attendance filtered to Today + Late must show that same 1 employee
+
+Missed Shifts = 0, then Attendance filtered to missed shifts must show 0
+
+Missed Shifts = N, then Attendance filtered to missed shifts must show the same N
+
+One source of truth rule
+The Dashboard and the Attendance page must use the same exact counting/filter logic for:
+
+late today
+
+active now
+
+missed shifts
+
+hours today
+
+Do not let Dashboard calculate from one query and Attendance filter from another incompatible query.
+
+Root causes to inspect first
+
+Date boundary mismatch
+Dashboard may be counting from a broader range than “today”.
+Example:
+
+today in local time vs UTC
+
+last 24 hours vs calendar day
+
+current date string mismatch
+
+Late flag mismatch
+Dashboard may be counting all entries with a late flag ever, while Attendance filter is only showing actual late clock-ins from today.
+
+Cached or stale counts
+Dashboard may be showing a stale metric from previous day or previous fetch.
+
+Missed shift timing logic
+Missed shift should not count immediately at shift start.
+It should only count after a reasonable threshold has passed.
+
+Different status key names
+Dashboard card may use one key like late_today_count, but Attendance filter expects a different flag like late_clock_in.
+
+Required fix approach
+
+Create one shared attendance metrics helper
+Build one shared attendance metrics source used by both:
+
+Dashboard summary cards
+
+Attendance page filtered counts/results
+
+At minimum, centralize logic for:
+
+active now
+
+late today
+
+missed shifts
+
+hours today
+
+Do not duplicate formulas in multiple places.
+
+Define exact Late Today logic
+Late Today must mean:
+
+An employee is counted as late today only if:
+
+the attendance entry belongs to today in company/local timezone
+
+the employee has a scheduled shift today
+
+actual clock-in happened after scheduled start plus grace period
+
+the entry is actually tied to today, not yesterday
+
+If there is no late entry today, card must show 0.
+
+Important
+Do not carry yesterday’s late count into today.
+
+Recommended rule
+Late Today count must be recalculated fresh from today’s date window every time dashboard data loads.
+
+Define exact Missed Shift logic
+Missed shift must not be counted too early.
+
+Recommended rule
+An employee should count as a missed shift only if:
+
+they had a scheduled shift today
+
+they did not clock in
+
+current time is at least X minutes after scheduled start
+or better,
+
+after grace period + missed threshold
+
+Since you mentioned 30 minutes, use:
+
+missed_shift_threshold_minutes = 30
+
+Recommended logic
+A shift counts as missed only when:
+current time > scheduled_start + 30 minutes
+AND no clock-in exists for that shift
+
+Do not mark missed immediately at scheduled start.
+
+If company already has grace period logic, missed shift can be:
+scheduled_start + grace period + 30 minutes
+But safest if you want clarity:
+use a dedicated missed-shift threshold.
+
+Align click-through filters exactly
+When user clicks Dashboard card:
+Late Today
+it must route to Attendance with the exact filter state used by the card calculation.
+
+Example
+If dashboard late count uses:
+
+range = today
+
+flag = late_clock_in
+
+timezone = company timezone
+
+then the Attendance page must initialize with those same exact conditions.
+
+Do not just visually set “Today” and “Late Clock-in” if underlying query logic differs.
+Make sure the same parameters are passed through and interpreted the same way.
+
+Fix timezone consistency
+Very important.
+
+Both Dashboard and Attendance page must use the same timezone basis.
+Use company timezone from settings if available.
+
+Do not let one use:
+
+browser local time
+and the other use:
+
+server UTC
+
+That commonly causes “today” mismatches.
+
+Recompute counts from live data
+Dashboard stats should be derived from current attendance/schedule data, not from stale hardcoded or cached values unless cache is properly invalidated.
+
+Late Today and Missed Shifts especially must feel live.
+
+If an employee was late yesterday but not today, today’s card must show 0.
+
+Attendance filter matching
+Attendance page filter for “Late Clock-in” should show exactly the entries counted in Late Today.
+
+If needed, create one internal filter mapping:
+dashboard metric late_today
+maps to
+attendance filters:
+
+dateRange: today
+
+lateness: late_clock_in
+
+timezone: company timezone
+
+Same for missed shifts.
+
+Suggested exact definitions
+
+Late Today
+Count entries where:
+
+entry date is today
+
+actual clock-in exists
+
+scheduled start exists
+
+actual_clock_in > scheduled_start + grace_period
+
+Missed Shifts
+Count scheduled shifts where:
+
+shift date is today
+
+no clock-in exists
+
+now > scheduled_start + 30 minutes
+
+shift not cancelled
+
+Active Now
+Count employees with:
+
+clocked in
+
+no clock-out yet
+
+Hours Today
+Sum worked minutes for entries dated today
+plus optionally in-progress elapsed time if that is already supported
+If not supported, use completed + active elapsed consistently
+
+Scope boundaries
+Allowed changes:
+
+shared attendance metrics helper
+
+dashboard card count logic
+
+attendance page filter mapping
+
+timezone/date-range handling for these metrics
+
+missed shift threshold logic if needed for accurate counts
+
+Do not change:
+
+raw attendance record structure
+
+unrelated page UI
+
+payroll
+
+requests
+
+work log
+
+auth
+
+schedule creation UI
+
+Acceptance criteria
+
+Late Today
+
+if dashboard shows 1, clicking Late Today shows exactly 1 matching late attendance record
+
+if dashboard shows 0, clicking Late Today shows 0
+
+Missed Shifts
+
+missed shifts only count after defined threshold, not immediately
+
+clicking Missed Shifts shows the same records represented by dashboard count
+
+Date accuracy
+
+yesterday’s late or missed records do not appear in today’s dashboard counts
+
+counts reset correctly per day in company timezone
+
+Trust
+
+dashboard numbers and attendance filtered results always match for those cards
+
+No regressions
+
+other dashboard cards keep working
+
+attendance page filters keep working
+
+no unrelated system breaks
+
+Direct instruction for agent
+Fix only the attendance metric accuracy for Dashboard and its click-through behavior. Make Late Today and Missed Shifts use the same source-of-truth logic as the Attendance page filters, with consistent company-timezone date boundaries and matching filter mapping. Ensure Late Today only counts actual late clock-ins from today, not stale or previous-day records. Ensure Missed Shifts only counts scheduled shifts after a defined threshold has passed, such as 30 minutes after scheduled start with no clock-in. Do not modify unrelated working systems.
+
+Best implementation order
+
+Inspect current dashboard query for late_today and missed_shifts
+
+Inspect attendance page filter query for Today + Late Clock-in and Today + Missed
+
+Compare date window, timezone, and filter conditions
+
+Move both to one shared helper
+
+Add missed-shift threshold
+
+Retest dashboard click-through
+
+Most likely exact bug
+Most likely the dashboard card is counting a stale or broader late flag, while Attendance is filtering true “today” results more strictly.
+
+That is why the number shows on the card but not in the filtered list.

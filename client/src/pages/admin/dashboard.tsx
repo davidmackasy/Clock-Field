@@ -83,7 +83,7 @@ export default function AdminDashboard() {
       color: "text-red-600 dark:text-red-400",
       bg: "bg-red-50 dark:bg-red-950/40",
       border: "border-red-100 dark:border-red-900/50 hover:border-red-200 dark:hover:border-red-800",
-      href: "/admin/attendance?dateRange=today&status=no_show",
+      href: "/admin/schedule",
     },
     {
       label: "Total Employees",

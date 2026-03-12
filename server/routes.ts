@@ -528,13 +528,22 @@ export async function registerRoutes(
       ]);
       const activeEntries = allEntries.filter(e => e.status === "active");
       const now = Date.now();
-      const lateToday = todayShifts.filter(s => {
-        const start = new Date(s.scheduledStartAt).getTime();
-        const grace = (s.gracePeriodMinutes || 15) * 60000;
-        return s.status === "scheduled" && now > start + grace;
-      }).length;
-      const missedToday = todayShifts.filter(s => s.status === "missed" || s.status === "no_show").length;
+      // lateToday: time entries with late_clock_in flag from today — exactly what the attendance
+      // page shows when filtered to Today + Late Clock-in, so dashboard and click-through match.
       const todayEntries = allEntries.filter(e => e.clockInAt.startsWith(today));
+      const lateToday = todayEntries.filter(e =>
+        Array.isArray(e.flags) && e.flags.includes("late_clock_in")
+      ).length;
+      // missedToday: scheduled shifts today where no clock-in has occurred and the shift start
+      // is more than 30 minutes in the past (prevents premature counting).
+      const MISSED_THRESHOLD_MS = 30 * 60 * 1000;
+      const clockedInShiftIds = new Set(allEntries.filter(e => e.clockInAt.startsWith(today)).map(e => e.shiftId).filter(Boolean));
+      const missedToday = todayShifts.filter(s => {
+        if (s.status === "missed" || s.status === "no_show") return true;
+        if (s.status !== "scheduled") return false;
+        const start = new Date(s.scheduledStartAt).getTime();
+        return now > start + MISSED_THRESHOLD_MS && !clockedInShiftIds.has(s.id);
+      }).length;
       const totalWorkedToday = todayEntries.reduce((sum, e) => sum + (e.workedMinutes || 0), 0);
       const openCount = openRequests.filter(r => ["new", "open", "in_review"].includes(r.status)).length;
       res.json({
