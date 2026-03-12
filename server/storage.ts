@@ -1,8 +1,9 @@
 import { db } from "./db";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import {
   companies, users, clients, locations, recurringSchedules, shifts, timeEntries, clientRequests, payrollDeductions,
   requestMessages, requestAttachments,
+  workSubmissions, workSubmissionItems, workSubmissionPhotos,
   type Company, type InsertCompany,
   type User, type InsertUser,
   type Client, type InsertClient,
@@ -14,6 +15,9 @@ import {
   type PayrollDeduction, type InsertPayrollDeduction,
   type RequestMessage, type InsertRequestMessage,
   type RequestAttachment, type InsertRequestAttachment,
+  type WorkSubmission, type InsertWorkSubmission,
+  type WorkSubmissionItem, type InsertWorkSubmissionItem,
+  type WorkSubmissionPhoto, type InsertWorkSubmissionPhoto,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -82,6 +86,26 @@ export interface IStorage {
   createPayrollDeduction(data: InsertPayrollDeduction): Promise<PayrollDeduction>;
   updatePayrollDeduction(id: string, data: Partial<InsertPayrollDeduction>): Promise<PayrollDeduction | undefined>;
   deletePayrollDeduction(id: string): Promise<void>;
+
+  // Work Submissions
+  createWorkSubmission(data: InsertWorkSubmission): Promise<WorkSubmission>;
+  getWorkSubmission(id: string): Promise<WorkSubmission | undefined>;
+  getWorkSubmissionsByEmployee(employeeId: string): Promise<WorkSubmission[]>;
+  getWorkSubmissionsByCompany(companyId: string): Promise<WorkSubmission[]>;
+  updateWorkSubmission(id: string, data: Partial<InsertWorkSubmission>): Promise<WorkSubmission | undefined>;
+  deleteWorkSubmission(id: string): Promise<void>;
+
+  createWorkSubmissionItem(data: InsertWorkSubmissionItem): Promise<WorkSubmissionItem>;
+  getWorkSubmissionItem(id: string): Promise<WorkSubmissionItem | undefined>;
+  getWorkSubmissionItems(submissionId: string): Promise<WorkSubmissionItem[]>;
+  updateWorkSubmissionItem(id: string, data: Partial<InsertWorkSubmissionItem>): Promise<WorkSubmissionItem | undefined>;
+  deleteWorkSubmissionItem(id: string): Promise<void>;
+
+  createWorkSubmissionPhoto(data: InsertWorkSubmissionPhoto): Promise<WorkSubmissionPhoto>;
+  getWorkSubmissionPhoto(id: string): Promise<WorkSubmissionPhoto | undefined>;
+  getWorkSubmissionPhotosByItem(submissionItemId: string): Promise<WorkSubmissionPhoto[]>;
+  getWorkSubmissionPhotosByItemIds(itemIds: string[]): Promise<WorkSubmissionPhoto[]>;
+  deleteWorkSubmissionPhoto(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -357,6 +381,67 @@ export class DatabaseStorage implements IStorage {
 
   async deletePayrollDeduction(id: string): Promise<void> {
     await db.delete(payrollDeductions).where(eq(payrollDeductions.id, id));
+  }
+
+  // ── Work Submissions ────────────────────────────────────────────────────────
+  async createWorkSubmission(data: InsertWorkSubmission): Promise<WorkSubmission> {
+    const [row] = await db.insert(workSubmissions).values(data).returning();
+    return row;
+  }
+  async getWorkSubmission(id: string): Promise<WorkSubmission | undefined> {
+    const [row] = await db.select().from(workSubmissions).where(eq(workSubmissions.id, id));
+    return row;
+  }
+  async getWorkSubmissionsByEmployee(employeeId: string): Promise<WorkSubmission[]> {
+    return db.select().from(workSubmissions).where(eq(workSubmissions.employeeId, employeeId)).orderBy(desc(workSubmissions.createdAt));
+  }
+  async getWorkSubmissionsByCompany(companyId: string): Promise<WorkSubmission[]> {
+    return db.select().from(workSubmissions).where(eq(workSubmissions.companyId, companyId)).orderBy(desc(workSubmissions.createdAt));
+  }
+  async updateWorkSubmission(id: string, data: Partial<InsertWorkSubmission>): Promise<WorkSubmission | undefined> {
+    const [row] = await db.update(workSubmissions).set(data).where(eq(workSubmissions.id, id)).returning();
+    return row;
+  }
+  async deleteWorkSubmission(id: string): Promise<void> {
+    await db.delete(workSubmissions).where(eq(workSubmissions.id, id));
+  }
+
+  async createWorkSubmissionItem(data: InsertWorkSubmissionItem): Promise<WorkSubmissionItem> {
+    const [row] = await db.insert(workSubmissionItems).values(data).returning();
+    return row;
+  }
+  async getWorkSubmissionItem(id: string): Promise<WorkSubmissionItem | undefined> {
+    const [row] = await db.select().from(workSubmissionItems).where(eq(workSubmissionItems.id, id));
+    return row;
+  }
+  async getWorkSubmissionItems(submissionId: string): Promise<WorkSubmissionItem[]> {
+    return db.select().from(workSubmissionItems).where(eq(workSubmissionItems.submissionId, submissionId)).orderBy(workSubmissionItems.sortOrder);
+  }
+  async updateWorkSubmissionItem(id: string, data: Partial<InsertWorkSubmissionItem>): Promise<WorkSubmissionItem | undefined> {
+    const [row] = await db.update(workSubmissionItems).set(data).where(eq(workSubmissionItems.id, id)).returning();
+    return row;
+  }
+  async deleteWorkSubmissionItem(id: string): Promise<void> {
+    await db.delete(workSubmissionItems).where(eq(workSubmissionItems.id, id));
+  }
+
+  async createWorkSubmissionPhoto(data: InsertWorkSubmissionPhoto): Promise<WorkSubmissionPhoto> {
+    const [row] = await db.insert(workSubmissionPhotos).values(data).returning();
+    return row;
+  }
+  async getWorkSubmissionPhoto(id: string): Promise<WorkSubmissionPhoto | undefined> {
+    const [row] = await db.select().from(workSubmissionPhotos).where(eq(workSubmissionPhotos.id, id));
+    return row;
+  }
+  async getWorkSubmissionPhotosByItem(submissionItemId: string): Promise<WorkSubmissionPhoto[]> {
+    return db.select().from(workSubmissionPhotos).where(eq(workSubmissionPhotos.submissionItemId, submissionItemId));
+  }
+  async getWorkSubmissionPhotosByItemIds(itemIds: string[]): Promise<WorkSubmissionPhoto[]> {
+    if (!itemIds.length) return [];
+    return db.select().from(workSubmissionPhotos).where(inArray(workSubmissionPhotos.submissionItemId, itemIds));
+  }
+  async deleteWorkSubmissionPhoto(id: string): Promise<void> {
+    await db.delete(workSubmissionPhotos).where(eq(workSubmissionPhotos.id, id));
   }
 }
 

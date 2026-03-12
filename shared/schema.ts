@@ -184,6 +184,52 @@ export const requestAttachments = pgTable("request_attachments", {
 export const insertRequestMessageSchema = createInsertSchema(requestMessages).omit({ id: true });
 export const insertRequestAttachmentSchema = createInsertSchema(requestAttachments).omit({ id: true });
 
+// ── Work Submissions ─────────────────────────────────────────────────────────
+export const workSubmissions = pgTable("work_submissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  employeeId: varchar("employee_id").notNull(),
+  shiftId: varchar("shift_id"),
+  clientId: varchar("client_id"),
+  locationId: varchar("location_id"),
+  locationName: text("location_name"),
+  workDate: text("work_date").notNull(),
+  status: text("status").notNull().default("draft"),
+  createdAt: text("created_at").notNull(),
+  submittedAt: text("submitted_at"),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const workSubmissionItems = pgTable("work_submission_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  submissionId: varchar("submission_id").notNull(),
+  section: text("section").notNull(),
+  subArea: text("sub_area").notNull(),
+  notes: text("notes"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
+export const workSubmissionPhotos = pgTable("work_submission_photos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  submissionItemId: varchar("submission_item_id").notNull(),
+  photoType: text("photo_type").notNull(),
+  fileUrl: text("file_url").notNull(),
+  caption: text("caption"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertWorkSubmissionSchema = createInsertSchema(workSubmissions).omit({ id: true });
+export const insertWorkSubmissionItemSchema = createInsertSchema(workSubmissionItems).omit({ id: true });
+export const insertWorkSubmissionPhotoSchema = createInsertSchema(workSubmissionPhotos).omit({ id: true });
+
+export type WorkSubmission = typeof workSubmissions.$inferSelect;
+export type InsertWorkSubmission = z.infer<typeof insertWorkSubmissionSchema>;
+export type WorkSubmissionItem = typeof workSubmissionItems.$inferSelect;
+export type InsertWorkSubmissionItem = z.infer<typeof insertWorkSubmissionItemSchema>;
+export type WorkSubmissionPhoto = typeof workSubmissionPhotos.$inferSelect;
+export type InsertWorkSubmissionPhoto = z.infer<typeof insertWorkSubmissionPhotoSchema>;
+
 export const insertCompanySchema = createInsertSchema(companies).omit({ id: true });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
 export const insertPayrollDeductionSchema = createInsertSchema(payrollDeductions).omit({ id: true });

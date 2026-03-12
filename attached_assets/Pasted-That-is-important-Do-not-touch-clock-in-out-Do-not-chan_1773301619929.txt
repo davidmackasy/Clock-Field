@@ -1,0 +1,917 @@
+That is important.
+
+Do not touch clock-in/out.
+Do not change attendance.
+Do not change schedules.
+Do not change payroll.
+Just add a new work submission flow for cleaners and a matching review area for admins.
+
+Use this dev note for your agent.
+
+DEV NOTE
+
+Task
+Add a new cleaner Task Capture workflow with a center plus button in the cleaner mobile app, allowing cleaners to document work done by location, section, and photo evidence, then submit that work to a new admin review area.
+
+Critical rule
+Do not break or affect anything else that is already working.
+
+Do not modify:
+
+clock in
+
+clock out
+
+attendance logic
+
+schedule creation
+
+payroll
+
+employee login
+
+admin login
+
+client login
+
+request system
+
+existing cleaner home flow
+
+existing cleaner hours flow
+
+existing reports unless only linked safely
+
+existing admin pages unless adding one new page/section
+
+This feature must be additive only.
+
+Main goal
+Create a cleaner-side task capture system that helps document what work was done during a shift using photos and categorized sections.
+
+This is not a pre-assigned task checklist.
+This is a work documentation flow.
+
+Cleaner flow summary
+
+cleaner clocks in normally
+
+cleaner taps center plus button in bottom navigation
+
+cleaner starts a work session or task submission
+
+cleaner selects scheduled location
+
+cleaner selects work area/category
+
+cleaner adds sub-item or area detail
+
+cleaner uploads before and after photos
+
+cleaner adds notes if needed
+
+cleaner can continue adding more work items
+
+cleaner submits the full task batch when finished
+
+Admin flow summary
+
+admin opens a new page like Tasks or Work Log
+
+admin sees submitted work grouped by employee, date, and location
+
+admin opens a submission
+
+admin sees all categorized work items and photos
+
+admin can review what was done that day
+
+Product rule
+This feature is for documenting completed work, not assigning work in advance.
+
+Do not build task assignment logic first.
+Build task capture first.
+
+==================================
+
+CLEANER MOBILE NAV UPDATE
+==================================
+
+Goal
+Add a center plus button in the cleaner mobile bottom navigation.
+
+Current cleaner nav likely has:
+
+Home
+
+Schedule
+
+Hours
+
+Reports or Requests
+
+Profile
+
+New mobile nav structure
+
+Home
+
+Schedule
+
+Plus button in center
+
+Hours
+
+Reports or Requests
+
+Profile
+
+If there are too many bottom items, use the current structure and place the plus button as the main centered floating action button.
+
+Recommended behavior
+The plus button should be the most prominent action.
+
+Design
+
+circular button
+
+centered in bottom nav
+
+slightly raised
+
+native-app feel
+
+blue or app-accent style
+
+plus icon only or plus with subtle label like Work
+
+Tap action
+When cleaner taps plus button:
+Open a modal sheet or dedicated page:
+Start Task / Work Capture
+
+Recommended label
+
+Start Work
+or
+
+Add Work
+or
+
+New Task
+
+Best label
+Start Work
+
+==================================
+2. START WORK FLOW
+
+Goal
+Once cleaner taps the plus button, they begin documenting work for the current shift.
+
+Important rule
+Do not start clock-in from here.
+Clock-in remains separate.
+
+Start Work should only be available after cleaner has clocked in, or at minimum strongly tied to an active shift.
+
+Recommended behavior
+If cleaner is not clocked in:
+show message:
+Please clock in before starting work documentation.
+
+If cleaner is clocked in:
+allow Start Work flow.
+
+==================================
+3. LOCATION SELECTION
+
+Goal
+Cleaner should document work against the correct scheduled location.
+
+Behavior
+When cleaner starts work:
+show location selection first.
+
+Location options should come from:
+
+current scheduled shift location
+
+assigned location(s) for current shift
+
+only if unscheduled clock-in exists and company allows it, allow manual location selection from allowed locations
+
+Best default
+If cleaner has one active scheduled location:
+auto-select it
+
+If cleaner has multiple possible locations:
+show selection list
+
+Fields on first step
+
+Date auto-filled
+
+Cleaner name auto-filled
+
+Current active shift auto-linked if available
+
+Location selector
+
+Client name shown if linked
+
+Do not force manual date or time entry.
+Use system timestamps.
+
+==================================
+4. WORK ENTRY STRUCTURE
+
+Goal
+Cleaner documents work item by item.
+
+This should be structured.
+
+Recommended hierarchy
+Submission
+
+one overall work submission for the shift/date/location
+
+Inside submission:
+Work Items
+
+each work item belongs to a section/category
+
+Recommended section categories
+
+Washrooms
+
+Offices
+
+Floors
+
+Kitchen
+
+Stairs
+
+Common Area
+
+Reception
+
+Garbage
+
+Supplies
+
+Other
+
+These should be configurable later, but hardcoded defaults are okay for v1.
+
+Then cleaner chooses a sub-area or label.
+
+Examples
+Section: Office
+Sub-area:
+
+Office Table 1
+
+Office Table 2
+
+Desk Area
+
+Board Room
+
+Office 3
+
+Section: Washrooms
+Sub-area:
+
+Washroom 1
+
+Washroom 2
+
+Sink Area
+
+Toilet Area
+
+Mirror Area
+
+Section: Kitchen
+Sub-area:
+
+Counter
+
+Sink
+
+Fridge Exterior
+
+Floor
+
+Garbage Area
+
+Important
+Do not overcomplicate the first version with too many forced templates.
+
+Best v1 behavior
+Each work item has:
+
+section
+
+sub-area label
+
+optional notes
+
+before photos
+
+after photos
+
+==================================
+5. PHOTO REQUIREMENTS
+
+Goal
+Cleaner should visually document what was done.
+
+Per work item, support:
+
+before photos
+
+after photos
+
+Recommended limits
+Per work item:
+
+up to 4 before photos
+
+up to 4 after photos
+
+That matches your idea and keeps it manageable.
+
+Cleaner flow example
+
+Select section: Office
+
+Enter sub-area: Office Table 1
+
+Upload before photos
+
+Upload after photos
+
+Add optional note
+
+Save work item
+
+Add another work item
+
+Important
+Do not force exactly 4.
+Allow:
+
+1 to 4 before photos
+
+1 to 4 after photos
+or optional company setting later
+
+Safer first version
+Allow up to 4 before and up to 4 after, not mandatory exact count.
+
+==================================
+6. CONTINUOUS ADDING FLOW
+
+Goal
+Cleaner can keep adding multiple work items before final submission.
+
+Behavior
+After saving one work item, cleaner should be able to:
+
+Add another area
+
+Edit previous area
+
+Remove an unfinished area before final submission
+
+Review all work items in current submission
+
+This is important because a shift may include:
+
+washroom
+
+kitchen
+
+office
+
+stairs
+
+common area
+
+Each should be documented separately.
+
+Recommended UI
+Work Submission page should show:
+
+submission header
+
+selected location
+
+date
+
+current saved work items list
+
+Add Work Item button
+
+Submit Final Work button
+
+==================================
+7. FINAL SUBMISSION
+
+Goal
+Cleaner finishes documenting the shift work and submits the batch.
+
+Behavior
+When cleaner taps Submit Final Work:
+
+submission becomes locked or marked submitted
+
+sent to admin review area
+
+timestamps saved
+
+all work items remain grouped together
+
+Submission header should store
+
+employee id
+
+shift id if linked
+
+company id
+
+client id if linked
+
+location id
+
+work date
+
+created_at
+
+submitted_at
+
+status
+
+Statuses
+
+draft
+
+submitted
+
+reviewed
+
+approved optional later
+
+Best v1 statuses
+
+draft
+
+submitted
+
+==================================
+8. ADMIN REVIEW AREA
+
+Goal
+Admin needs a new workspace to review work submissions.
+
+Recommended new page name
+
+Tasks
+or
+
+Work Log
+or
+
+Daily Work
+
+Best choice
+Work Log
+
+Reason
+This is more accurate than Tasks because cleaners are documenting what they did, not necessarily completing preassigned tasks.
+
+Admin page path
+/admin/work-log
+or
+/admin/tasks
+
+Best page title
+Work Log
+
+What admin sees
+List of submissions grouped by:
+
+date
+
+employee
+
+location
+
+client
+
+Recommended list columns/cards
+
+Employee name
+
+Date
+
+Location
+
+Client
+
+Number of work items
+
+Submission time
+
+Status
+
+Clicking a submission opens detail view.
+
+==================================
+9. ADMIN SUBMISSION DETAIL VIEW
+
+Goal
+Admin can inspect exactly what cleaner submitted.
+
+Submission detail should show:
+Header
+
+Employee
+
+Date
+
+Shift if linked
+
+Client
+
+Location
+
+Submitted at
+
+Then grouped work items:
+Work Item 1
+
+Section: Washrooms
+
+Sub-area: Washroom 1
+
+Notes
+
+Before photos
+
+After photos
+
+Work Item 2
+
+Section: Office
+
+Sub-area: Office Table 1
+
+Notes
+
+Before photos
+
+After photos
+
+Work Item 3
+
+Section: Kitchen
+
+Sub-area: Counter Area
+
+Notes
+
+Before photos
+
+After photos
+
+Important
+Group clearly and make it easy to scan.
+
+==================================
+10. OPTIONAL ADMIN ACTIONS
+
+For v1, admin only needs to review.
+Do not overbuild approvals unless easy.
+
+Optional later:
+
+mark reviewed
+
+request resubmission
+
+comment back
+
+link to client report
+
+But first version can be read-only review after submission.
+
+If you want one small action:
+Add:
+
+Reviewed toggle or button
+
+==================================
+11. DATA MODEL RECOMMENDATION
+
+Recommended tables
+
+A. work_submissions
+
+id
+
+company_id
+
+employee_id
+
+shift_id nullable
+
+client_id nullable
+
+location_id
+
+work_date
+
+status
+
+created_at
+
+submitted_at
+
+updated_at
+
+B. work_submission_items
+
+id
+
+submission_id
+
+section
+
+sub_area
+
+notes nullable
+
+sort_order
+
+created_at
+
+C. work_submission_photos
+
+id
+
+submission_item_id
+
+photo_type before/after
+
+file_url
+
+caption nullable
+
+created_at
+
+This keeps the structure clean.
+
+==================================
+12. AUTO-LINKING RULES
+
+Goal
+Reduce manual work.
+
+When cleaner starts a work submission:
+
+auto-link current shift if one exists
+
+auto-link current location if one active location exists
+
+auto-link client if location belongs to a client
+
+If no exact auto-link is possible:
+allow manual selection from permitted options
+
+Do not auto-link wrong location.
+If uncertainty exists, ask cleaner to choose.
+
+==================================
+13. CLEANER SUBMISSION HISTORY
+
+Goal
+Cleaner should be able to see previous work submissions.
+
+Add a section in cleaner side:
+
+Work History
+or reuse Reports if that fits
+
+Recommended
+Cleaner can see:
+
+today’s submitted work
+
+past submissions by date
+
+status
+
+This helps them confirm their work was submitted.
+
+==================================
+14. RELATION TO REPORTS
+
+Important
+Do not replace current report system if one already exists.
+This should be a separate module unless you intentionally want to merge later.
+
+Safer rule
+Treat this as:
+Work Capture / Work Log
+
+Not the same as:
+Incident requests
+Not the same as:
+Clock-in/out
+Not the same as:
+Attendance
+
+==================================
+15. MOBILE UX FLOW
+
+Cleaner mobile flow
+
+Step 1
+Clock in normally
+
+Step 2
+Tap center plus button
+
+Step 3
+Start Work screen
+
+location
+
+date
+
+shift context
+
+Step 4
+Add work item
+
+section
+
+sub-area
+
+before photos
+
+after photos
+
+notes
+
+Step 5
+Repeat for more areas
+
+Step 6
+Review work items
+
+Step 7
+Submit Final Work
+
+This must feel simple and native.
+
+==================================
+16. UI RECOMMENDATIONS
+
+Cleaner side
+
+floating plus button centered in bottom nav
+
+modal sheet or full page for Start Work
+
+card list of saved work items before final submission
+
+image previews
+
+clear Add Another Area button
+
+clear Submit Final Work button
+
+Admin side
+
+list/table of submissions
+
+clean grouped detail view
+
+easy photo gallery per section
+
+==================================
+17. STRICT DO NOT BREAK RULES
+
+Do not touch:
+
+clock-in logic
+
+clock-out logic
+
+attendance summaries
+
+payroll
+
+request system
+
+schedule creation
+
+login systems
+
+existing reports unless linking carefully
+
+dashboard cards
+
+This feature is separate.
+
+==================================
+18. ACCEPTANCE CRITERIA
+
+Cleaner side
+
+plus button appears in center of bottom nav
+
+tapping it opens Start Work flow
+
+if not clocked in, cleaner is prompted to clock in first
+
+cleaner can select or confirm location
+
+cleaner can add multiple work items
+
+each work item supports before/after photos
+
+cleaner can submit final work batch
+
+cleaner can see submitted history
+
+Admin side
+
+new Work Log page exists
+
+admin can see submissions by employee/date/location
+
+admin can open one submission
+
+admin can see grouped work items and photos
+
+nothing else breaks
+
+System
+
+work items are linked to employee and location
+
+data is saved permanently
+
+photos remain attached
+
+submission remains reviewable later
+
+==================================
+19. DIRECT BUILD INSTRUCTION FOR AGENT
+
+Add a new cleaner-side Work Capture workflow using a centered plus button in the mobile bottom navigation. This feature must remain separate from clock-in/out and attendance. After the cleaner clocks in, they can tap the plus button to start a work submission, confirm or select their scheduled location, then add multiple categorized work items such as washrooms, offices, floors, kitchen, stairs, and other areas. Each work item should support a section, a sub-area label, optional notes, before photos, and after photos. The cleaner can continue adding multiple work items and then submit the entire batch as one work submission. On the admin side, add a new Work Log page where submissions are listed by employee, date, and location, and where admin can open a submission to see all categorized work items and their photo evidence. Keep this fully additive and do not modify any working clock-in, attendance, payroll, schedule, request, or auth functionality.
+
+==================================
+20. SAFEST MVP VERSION
+
+Build this first:
+
+center plus button
+
+start work flow
+
+location selection
+
+section + sub-area
+
+before/after photo upload
+
+multiple work items
+
+final submit
+
+admin Work Log list
+
+admin detail view
+
+Later enhancements can be:
+
+admin comments
+
+reviewed status
+
+client sharing
+
+configurable section templates
+
+required photo counts
+
+templates per location
+
+That is the safest production path.

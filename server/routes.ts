@@ -1230,6 +1230,179 @@ export async function registerRoutes(
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  // ── Employee locations (for work submission location selection) ───────────
+  app.get("/api/employee/locations", requireRole("employee"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const today = new Date().toISOString().split("T")[0];
+      const myShifts = await storage.getShiftsByEmployee(user.id);
+      const todayShifts = myShifts.filter((s: any) => s.shiftDate === today && s.locationId);
+      const locationIds = [...new Set(todayShifts.map((s: any) => s.locationId).filter(Boolean))];
+      const allLocations = await storage.getLocationsByCompany(user.companyId);
+      const todayLocs = allLocations.filter((l: any) => locationIds.includes(l.id));
+      // If no scheduled locations today, return all company locations so they can select
+      res.json(todayLocs.length > 0 ? todayLocs : allLocations);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ── Work Submissions ──────────────────────────────────────────────────────
+  app.get("/api/work-submissions", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (user.role === "admin") {
+        const subs = await storage.getWorkSubmissionsByCompany(user.companyId);
+        res.json(subs);
+      } else {
+        const subs = await storage.getWorkSubmissionsByEmployee(user.id);
+        res.json(subs);
+      }
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/work-submissions", requireRole("employee"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const now = new Date().toISOString();
+      const today = now.split("T")[0];
+      // Auto-link active shift if present
+      const activeEntry = await storage.getActiveTimeEntry(user.id);
+      const shiftId = activeEntry?.shiftId || null;
+      const sub = await storage.createWorkSubmission({
+        companyId: user.companyId,
+        employeeId: user.id,
+        shiftId,
+        clientId: req.body.clientId || null,
+        locationId: req.body.locationId || null,
+        locationName: req.body.locationName || null,
+        workDate: today,
+        status: "draft",
+        createdAt: now,
+        updatedAt: now,
+        submittedAt: null,
+      });
+      res.status(201).json(sub);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/work-submissions/:id", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getWorkSubmission(req.params.id);
+      if (!sub) return res.status(404).json({ message: "Not found" });
+      if (user.role === "employee" && sub.employeeId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      if (user.role === "admin" && sub.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
+      const items = await storage.getWorkSubmissionItems(sub.id);
+      const itemIds = items.map(i => i.id);
+      const photos = await storage.getWorkSubmissionPhotosByItemIds(itemIds);
+      const photosByItem: Record<string, any[]> = {};
+      for (const p of photos) {
+        if (!photosByItem[p.submissionItemId]) photosByItem[p.submissionItemId] = [];
+        photosByItem[p.submissionItemId].push({ id: p.id, photoType: p.photoType, caption: p.caption, createdAt: p.createdAt });
+      }
+      res.json({ ...sub, items: items.map(i => ({ ...i, photos: photosByItem[i.id] || [] })) });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/work-submissions/:id", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getWorkSubmission(req.params.id);
+      if (!sub) return res.status(404).json({ message: "Not found" });
+      if (user.role === "employee" && sub.employeeId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      if (user.role === "admin" && sub.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
+      const now = new Date().toISOString();
+      const updates: any = { ...req.body, updatedAt: now };
+      if (req.body.status === "submitted" && !sub.submittedAt) updates.submittedAt = now;
+      const updated = await storage.updateWorkSubmission(req.params.id, updates);
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/work-submissions/:id", requireRole("employee"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getWorkSubmission(req.params.id);
+      if (!sub) return res.status(404).json({ message: "Not found" });
+      if (sub.employeeId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      if (sub.status !== "draft") return res.status(400).json({ message: "Cannot delete submitted work" });
+      await storage.deleteWorkSubmission(req.params.id);
+      res.status(204).end();
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Work submission items
+  app.post("/api/work-submissions/:id/items", requireRole("employee"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getWorkSubmission(req.params.id);
+      if (!sub) return res.status(404).json({ message: "Not found" });
+      if (sub.employeeId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      if (sub.status !== "draft") return res.status(400).json({ message: "Submission already submitted" });
+      const existing = await storage.getWorkSubmissionItems(sub.id);
+      const now = new Date().toISOString();
+      const item = await storage.createWorkSubmissionItem({
+        submissionId: sub.id,
+        section: req.body.section,
+        subArea: req.body.subArea,
+        notes: req.body.notes || null,
+        sortOrder: existing.length,
+        createdAt: now,
+      });
+      // Save photos if provided
+      const beforePhotos: string[] = req.body.beforePhotos || [];
+      const afterPhotos: string[] = req.body.afterPhotos || [];
+      for (const fileUrl of beforePhotos) {
+        await storage.createWorkSubmissionPhoto({ submissionItemId: item.id, photoType: "before", fileUrl, caption: null, createdAt: now });
+      }
+      for (const fileUrl of afterPhotos) {
+        await storage.createWorkSubmissionPhoto({ submissionItemId: item.id, photoType: "after", fileUrl, caption: null, createdAt: now });
+      }
+      await storage.updateWorkSubmission(sub.id, { updatedAt: now });
+      const photos = await storage.getWorkSubmissionPhotosByItem(item.id);
+      res.status(201).json({ ...item, photos: photos.map(p => ({ id: p.id, photoType: p.photoType, caption: p.caption, createdAt: p.createdAt })) });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/work-submissions/:id/items/:itemId", requireRole("employee"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getWorkSubmission(req.params.id);
+      if (!sub || sub.employeeId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      if (sub.status !== "draft") return res.status(400).json({ message: "Submission already submitted" });
+      const updated = await storage.updateWorkSubmissionItem(req.params.itemId, {
+        section: req.body.section,
+        subArea: req.body.subArea,
+        notes: req.body.notes,
+      });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/work-submissions/:id/items/:itemId", requireRole("employee"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getWorkSubmission(req.params.id);
+      if (!sub || sub.employeeId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      if (sub.status !== "draft") return res.status(400).json({ message: "Submission already submitted" });
+      await storage.deleteWorkSubmissionItem(req.params.itemId);
+      res.status(204).end();
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Work submission photo image endpoint
+  app.get("/api/work-submission-photos/:photoId/image", requireAuth, async (req, res) => {
+    try {
+      const photo = await storage.getWorkSubmissionPhoto(req.params.photoId);
+      if (!photo) return res.status(404).json({ message: "Not found" });
+      const match = photo.fileUrl.match(/^data:([^;]+);base64,(.+)$/s);
+      if (!match) return res.status(400).json({ message: "Invalid image data" });
+      const buffer = Buffer.from(match[2], "base64");
+      res.set("Content-Type", match[1]);
+      res.set("Cache-Control", "private, max-age=86400");
+      res.send(buffer);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   return httpServer;
 }
 
