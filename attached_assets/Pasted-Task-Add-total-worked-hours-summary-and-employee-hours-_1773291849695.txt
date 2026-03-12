@@ -1,0 +1,348 @@
+Task
+Add total worked hours summary and employee-hours filtering to the Admin Attendance page without breaking any existing working logic.
+
+Main instruction
+Do not touch anything else that is already working.
+Do not modify:
+
+auth
+
+employee login
+
+client login
+
+admin login
+
+schedule creation
+
+payroll logic
+
+request system
+
+current attendance record creation
+
+current filters that already work
+
+This task is only to improve the Attendance page so admins can clearly see how many hours an employee worked in a selected period.
+
+Main goal
+On the Attendance page, allow admin to:
+
+filter by employee
+
+filter by date period
+
+instantly see total hours worked in that selected period
+
+use real clock-in and clock-out data only
+
+know how many hours one employee worked over a week, two weeks, month, or custom range
+
+What is already working
+The Attendance page already has:
+
+search
+
+date filter
+
+status filter
+
+employee filter
+
+attendance table
+
+Do not break any of that.
+
+What is missing
+Right now the page shows attendance rows, but it does not clearly show:
+
+total worked hours for the selected period
+
+total worked hours per selected employee
+
+total shifts in that period
+
+a quick summary that helps admin understand hours at a glance
+
+Required feature
+Add attendance summary cards or a small summary section above the attendance table.
+
+This summary must react to current filters.
+
+Required behavior
+If admin selects:
+
+Employee: Fortune Eiwo
+
+Range: This Week
+
+Then the page should calculate from real completed time entries and show something like:
+
+Total Hours Worked: 6h 37m
+
+Total Shifts: 3
+
+Average Hours/Shift: 2h 12m
+
+If admin selects:
+
+Employee: Hassan Arbab
+
+Range: Last 2 Weeks
+
+Then summary updates to only that employee and that date range.
+
+If admin selects:
+
+All Employees
+
+This Month
+
+Then summary shows combined totals for all filtered employees in that date range.
+
+Source of truth
+Use only actual time entry data:
+
+clock_in_at
+
+clock_out_at
+
+worked_minutes or worked duration already calculated by the system
+
+Do not estimate from schedules.
+Do not use payroll as the source.
+Do not invent hours.
+Only use actual attendance/time entries.
+
+Recommended UI addition
+
+Option A, best option
+Add 3 small summary cards above the table and below the filters.
+
+Cards:
+
+Total Hours Worked
+
+Total Shifts
+
+Average Hours/Shift
+
+Optional 4th card:
+
+Employees in Filter
+
+Best layout
+Place them under the filter bar and above the attendance table.
+
+Example
+Total Hours Worked
+14h 22m
+
+Total Shifts
+8
+
+Average Hours/Shift
+1h 48m
+
+Employees
+3
+
+This makes attendance much more useful without cluttering the page.
+
+Filter behavior
+These summary cards must respond to the same existing filters:
+
+search
+
+date range
+
+status
+
+employee
+
+Important
+Summary must always reflect what is currently filtered on screen.
+
+Examples
+
+Case 1
+Date filter = This Week
+Employee = All Employees
+Status = Completed
+
+Then summary should total only completed entries from this week.
+
+Case 2
+Date filter = Custom
+Employee = Fortune Eiwo
+Status = All Statuses
+
+Then summary should total all matching attendance entries for Fortune Eiwo inside that custom range.
+
+Best rule for hours total
+For hours, count only entries that have real worked duration.
+
+Recommended logic:
+
+include completed entries
+
+include entries with valid clock_in_at and clock_out_at
+
+ignore broken/incomplete entries with no clock-out unless your current system already calculates partial hours safely
+
+Simplest safe rule
+Only count completed time entries in the hours summary.
+
+That keeps the numbers trustworthy.
+
+Required calculation logic
+
+Total Hours Worked
+Sum worked_minutes across all filtered valid entries
+Display as:
+Xh Ym
+
+Total Shifts
+Count number of filtered valid entries
+
+Average Hours/Shift
+total_worked_minutes / total_shifts
+Display as:
+Xh Ym
+If total_shifts = 0, show 0h 0m
+
+Optional 4. Employees
+Count unique employees in filtered results
+
+Custom date range support
+Your current attendance filter already mentions:
+
+today
+
+this week
+
+this month
+
+custom
+
+all time
+
+Keep that logic.
+Do not replace it.
+
+Just make sure summary uses the same date range logic as the attendance table.
+
+Important consistency rule
+The attendance table and the summary cards must use the exact same filtered dataset.
+
+Do not create separate filter logic for the summary.
+Do not let the table show one set of rows and the summary calculate from another range.
+
+Employee-specific hours visibility
+If one employee is selected, the page should clearly help admin answer:
+“How many hours did this employee work during this selected period?”
+
+This is the main requirement.
+
+Optional nice addition
+When one employee is selected, add a small label in the summary section:
+Showing totals for: Fortune Eiwo
+
+This is optional but helpful.
+
+Backend requirement
+If the Attendance page currently fetches filtered attendance entries from the backend, extend that existing query or response safely.
+
+Best safe options:
+
+Option 1
+Frontend computes summary from the already-loaded filtered attendance rows
+This is simplest if row count is not huge.
+
+Option 2
+Backend returns:
+
+filtered rows
+
+summary totals
+This is better for large datasets.
+
+Safest recommendation
+If current attendance page already loads manageable filtered data, calculate summary in frontend from the same filtered rows.
+That reduces backend risk and avoids touching working APIs too much.
+
+But if filters are server-side and paginated, then backend should return summary from the same query conditions.
+
+Important
+Whatever approach is used, the summary must come from the same filtered source as the table.
+
+Exact implementation rules
+
+do not modify attendance record creation
+
+do not modify flag generation
+
+do not modify schedule matching logic
+
+do not change current row columns unless needed
+
+only add summary support tied to current filters
+
+Optional advanced addition
+If easy, allow a quick “Last 2 Weeks” preset in the date filter.
+That would be useful for your payroll-style attendance review.
+
+But only add it if it does not disturb current filter behavior.
+
+Acceptance criteria
+
+Existing attendance filters still work
+
+Attendance table still works exactly as before
+
+New summary section appears above the table
+
+Summary reacts to:
+
+selected employee
+
+selected date range
+
+selected status
+
+search if search affects filtered rows
+
+Admin can tell how many hours an employee worked during:
+
+yesterday
+
+this week
+
+this month
+
+custom range
+
+Hours are calculated from real clock-in/clock-out entries only
+
+No regression anywhere else
+
+Direct instruction for agent
+Improve only the Admin Attendance page by adding a summary section above the table that shows total worked hours, total shifts, and average hours per shift based on the current attendance filters. The summary must use the same filtered dataset as the attendance table, especially the selected employee and date range. Use real completed time-entry data from clock-in and clock-out as the source of truth. Do not touch payroll, schedule creation, auth, or any other working system.
+
+Best small UX copy
+Summary title:
+Attendance Summary
+
+Subtext:
+Totals for the current filters
+
+Recommended display example
+Attendance Summary
+
+Total Hours Worked: 12h 43m
+
+Total Shifts: 6
+
+Average Hours/Shift: 2h 07m
+
+That is the cleanest way to add exactly what you need without breaking the rest.

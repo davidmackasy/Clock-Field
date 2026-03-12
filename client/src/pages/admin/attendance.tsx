@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
-import { ClipboardList, Search, CalendarIcon, Filter, X, User } from "lucide-react";
+import { ClipboardList, Search, CalendarIcon, Filter, X, User, Clock, BarChart2, Users2, TrendingUp } from "lucide-react";
 import { format, subDays, startOfWeek, startOfMonth, isWithinInterval, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { EmployeeAttendanceModal } from "@/components/employee-attendance-modal";
@@ -41,6 +41,12 @@ export default function AdminAttendance() {
 
   const empMap = useMemo(() => new Map((employees || []).map(e => [e.id, e])), [employees]);
   const shiftMap = useMemo(() => new Map((shifts || []).map(s => [s.id, s])), [shifts]);
+
+  function formatMinutes(mins: number) {
+    const h = Math.floor(mins / 60);
+    const m = Math.round(mins % 60);
+    return `${h}h ${m}m`;
+  }
 
   const filtered = useMemo(() => {
     if (!entries) return [];
@@ -78,6 +84,9 @@ export default function AdminAttendance() {
         } else if (dateRange === "this_week") {
           const weekStart = startOfWeek(now);
           if (clockIn < weekStart) return false;
+        } else if (dateRange === "last_2_weeks") {
+          const twoWeeksAgo = subDays(now, 14);
+          if (clockIn < twoWeeksAgo) return false;
         } else if (dateRange === "this_month") {
           const monthStart = startOfMonth(now);
           if (clockIn < monthStart) return false;
@@ -90,6 +99,25 @@ export default function AdminAttendance() {
       })
       .sort((a, b) => new Date(b.clockInAt).getTime() - new Date(a.clockInAt).getTime());
   }, [entries, empMap, search, employeeFilter, statusFilter, dateRange, customRange]);
+
+  const summary = useMemo(() => {
+    const withHours = filtered.filter(e => e.clockInAt && e.clockOutAt);
+    const totalMinutes = withHours.reduce((sum, e) => {
+      if (e.workedMinutes != null) return sum + e.workedMinutes;
+      const diff = (new Date(e.clockOutAt).getTime() - new Date(e.clockInAt).getTime()) / 60000;
+      return sum + Math.max(0, diff);
+    }, 0);
+    const totalShifts = withHours.length;
+    const avgMinutes = totalShifts > 0 ? totalMinutes / totalShifts : 0;
+    const uniqueEmployees = new Set(filtered.map((e: any) => e.employeeId)).size;
+    return { totalMinutes, totalShifts, avgMinutes, uniqueEmployees };
+  }, [filtered]);
+
+  const selectedEmployeeName = useMemo(() => {
+    if (employeeFilter === "all") return null;
+    const emp = employees?.find(e => e.id === employeeFilter);
+    return emp ? `${emp.firstName} ${emp.lastName}` : null;
+  }, [employeeFilter, employees]);
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -119,6 +147,7 @@ export default function AdminAttendance() {
           <SelectContent>
             <SelectItem value="today">Today</SelectItem>
             <SelectItem value="this_week">This Week</SelectItem>
+            <SelectItem value="last_2_weeks">Last 2 Weeks</SelectItem>
             <SelectItem value="this_month">This Month</SelectItem>
             <SelectItem value="custom">Custom Range</SelectItem>
             <SelectItem value="all">All Time</SelectItem>
@@ -187,6 +216,63 @@ export default function AdminAttendance() {
           </SelectContent>
         </Select>
       </div>
+
+      {/* Attendance Summary */}
+      {!isLoading && (
+        <div className="space-y-2">
+          {selectedEmployeeName && (
+            <p className="text-xs text-muted-foreground" data-testid="text-summary-label">
+              Showing totals for: <span className="font-medium text-foreground">{selectedEmployeeName}</span>
+            </p>
+          )}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Card>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Clock className="w-4 h-4 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground truncate">Total Hours Worked</p>
+                  <p className="text-lg font-bold leading-tight" data-testid="text-summary-hours">{formatMinutes(summary.totalMinutes)}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                  <BarChart2 className="w-4 h-4 text-blue-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground truncate">Total Shifts</p>
+                  <p className="text-lg font-bold leading-tight" data-testid="text-summary-shifts">{summary.totalShifts}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0">
+                  <TrendingUp className="w-4 h-4 text-green-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground truncate">Avg Hours / Shift</p>
+                  <p className="text-lg font-bold leading-tight" data-testid="text-summary-avg">{formatMinutes(summary.avgMinutes)}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-orange-500/10 flex items-center justify-center flex-shrink-0">
+                  <Users2 className="w-4 h-4 text-orange-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground truncate">Employees</p>
+                  <p className="text-lg font-bold leading-tight" data-testid="text-summary-employees">{summary.uniqueEmployees}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="space-y-3">{[1,2,3,4].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
