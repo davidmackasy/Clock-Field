@@ -1,5 +1,5 @@
 import { useLocation, Link } from "wouter";
-import { Home, Calendar, Clock, FileText, User, MessageSquare, Plus } from "lucide-react";
+import { Home, Calendar, FileText, User, MessageSquare, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -113,7 +113,6 @@ export function MobileNav({ items, centerAction }: MobileNavProps) {
 export const employeeNavItems: NavItem[] = [
   { label: "Home", href: "/employee", icon: Home },
   { label: "Schedule", href: "/employee/schedule", icon: Calendar },
-  { label: "Hours", href: "/employee/hours", icon: Clock },
   { label: "Reports", href: "/employee/requests", icon: MessageSquare },
   { label: "Profile", href: "/employee/profile", icon: User },
 ];

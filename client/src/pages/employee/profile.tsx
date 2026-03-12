@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, Mail, Phone, DollarSign, KeyRound, IdCard } from "lucide-react";
+import { LogOut, Mail, Phone, DollarSign, KeyRound, IdCard, Clock, ChevronRight } from "lucide-react";
 
 export default function EmployeeProfile() {
   const { user, logout } = useAuth();
@@ -99,6 +100,25 @@ export default function EmployeeProfile() {
           </div>
         </CardContent>
       </Card>
+
+      <Link href="/employee/hours">
+        <Card className="cursor-pointer hover:shadow-sm transition-shadow active:scale-[0.99]" data-testid="link-my-hours">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Clock className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">My Hours</p>
+                  <p className="text-xs text-muted-foreground">View your work history</p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            </div>
+          </CardContent>
+        </Card>
+      </Link>
 
       <Card>
         <CardHeader className="pb-2 pt-4 px-5">

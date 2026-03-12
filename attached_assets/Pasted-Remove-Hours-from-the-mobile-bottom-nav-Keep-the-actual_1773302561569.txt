@@ -1,0 +1,243 @@
+Remove Hours from the mobile bottom nav.
+Keep the actual Hours page unchanged.
+Add access to Hours from the Profile page, and optionally also from Schedule as a secondary shortcut.
+
+That is the cleanest mobile layout.
+
+Why this is better
+
+the bottom nav is getting crowded
+
+Work plus button is more important than Hours
+
+Hours is useful, but not a primary action every minute
+
+Profile is a natural place for “My Hours”
+
+Best mobile bottom nav
+
+Home
+
+Schedule
+
+center plus button for Work
+
+Reports
+
+Profile
+
+Then inside Profile add:
+
+My Hours
+
+Change Password
+
+Sign Out
+
+Optional
+Inside Schedule page add a small shortcut card or button:
+
+View My Hours
+
+That gives the cleaner two ways to reach Hours without cluttering the bottom nav.
+
+Use this dev note for your agent:
+
+DEV NOTE
+
+Task
+Clean up the cleaner mobile bottom navigation by removing the Hours tab from the bottom nav and moving access to the Hours page into a better location, without changing the Hours page itself.
+
+Critical rule
+Do not break or affect anything else that is already working.
+
+Do not modify:
+
+Hours page logic
+
+clock in / clock out
+
+attendance
+
+payroll
+
+schedule logic
+
+reports logic
+
+profile logic except adding navigation link
+
+bottom nav routes other than replacing the Hours tab entry
+
+work plus button behavior
+
+auth or sign out behavior
+
+This is a mobile navigation cleanup only.
+
+Main goal
+Simplify the cleaner mobile bottom nav so it feels cleaner and more native.
+
+Current issue
+The bottom nav is crowded:
+
+Home
+
+Schedule
+
+Work
+
+Hours
+
+Reports
+
+Profile
+
+Hours makes the nav feel too busy.
+
+Required change
+Remove Hours from the mobile bottom navigation only.
+
+New mobile bottom nav
+
+Home
+
+Schedule
+
+center plus button for Work
+
+Reports
+
+Profile
+
+Do not remove the Hours page itself.
+Only remove its bottom-nav button.
+
+Where Hours should go
+
+Primary placement
+Add a clear “My Hours” entry inside the Profile page.
+
+Recommended placement in Profile
+Under the profile card, add a section like:
+
+My Hours
+
+Change Password
+
+Sign Out
+
+Best behavior
+Tapping “My Hours” opens the existing Hours page.
+Do not rebuild the page.
+Do not duplicate logic.
+Just link to the current Hours route/page.
+
+Optional secondary placement
+Add a small shortcut inside Schedule page:
+
+View My Hours
+
+This is optional.
+If added, it should just deep-link to the same Hours page.
+
+Important rule
+There must still be an easy way for cleaners to reach Hours, but it should not occupy a main bottom-nav slot.
+
+UI cleanup requirement
+Make the bottom nav look visually balanced after removing Hours.
+
+Recommended final mobile nav spacing
+
+Home
+
+Schedule
+
+Work
+
+Reports
+
+Profile
+
+The center plus button should remain the main action and the spacing should feel even.
+
+Profile page change
+Add a tappable card or row:
+
+My Hours
+
+Suggested design
+A simple card/button row matching:
+
+Change Password
+
+Sign Out
+style
+
+Example profile action list
+
+My Hours
+
+Change Password
+
+Sign Out
+
+If desired, make these into clean stacked action cards.
+
+Do not change profile data display.
+Only improve access organization.
+
+Navigation behavior
+When cleaner taps My Hours from Profile:
+
+open the existing Hours page
+
+keep page logic exactly the same
+
+No changes to hours calculations.
+No changes to filters.
+No changes to history.
+
+Optional better structure
+If you want a neater profile layout:
+Section 1
+Account
+
+Change Password
+
+Section 2
+Work
+
+My Hours
+
+Section 3
+Session
+
+Sign Out
+
+That would look cleaner.
+
+Acceptance criteria
+
+Hours tab is removed from mobile bottom nav
+
+mobile nav now shows Home, Schedule, Work, Reports, Profile
+
+cleaner can still access Hours from Profile
+
+Hours page itself is unchanged
+
+optional Schedule shortcut can open Hours too
+
+no regression to work button
+
+no regression to profile
+
+no regression to any other working page
+
+Direct instruction for agent
+Clean up only the cleaner mobile navigation. Remove the Hours tab from the mobile bottom nav and keep the existing Hours page unchanged. Add a clear “My Hours” action inside the Profile page that routes to the existing Hours page. Optionally add a secondary “View My Hours” shortcut in Schedule, but the main placement should be inside Profile. Rebalance the bottom nav spacing so it feels cleaner and more native. Do not change any Hours page logic or any unrelated working functionality.
+
+Best final recommendation
+Put Hours inside Profile.
+That is the cleanest solution.

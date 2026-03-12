@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, Clock, MapPin } from "lucide-react";
+import { Calendar, Clock, MapPin, ChevronRight } from "lucide-react";
 
 export default function EmployeeSchedule() {
   const { data: shifts, isLoading } = useQuery<any[]>({ queryKey: ["/api/shifts"] });
@@ -119,6 +120,20 @@ export default function EmployeeSchedule() {
           ) : upcomingShifts.map(renderShiftCard)}
         </TabsContent>
       </Tabs>
+
+      <Link href="/employee/hours">
+        <Card className="cursor-pointer hover:shadow-sm transition-shadow active:scale-[0.99]" data-testid="link-schedule-hours">
+          <CardContent className="p-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
+                <Clock className="w-4 h-4" />
+                <span>View My Hours</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            </div>
+          </CardContent>
+        </Card>
+      </Link>
     </div>
   );
 }
