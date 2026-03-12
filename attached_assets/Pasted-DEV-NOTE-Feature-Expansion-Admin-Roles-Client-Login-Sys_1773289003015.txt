@@ -1,0 +1,437 @@
+DEV NOTE
+
+Feature Expansion: Admin Roles + Client Login System
+Priority: High
+Risk Level: Must be implemented without affecting any existing working systems.
+
+Critical rule
+Do NOT modify or refactor any existing working systems unless absolutely necessary.
+
+The following systems are currently working and must remain untouched:
+
+Admin signup and login
+
+Employee creation flow
+
+Employee login flow
+
+Employee password change flow
+
+Attendance
+
+Schedule
+
+Payroll
+
+Requests
+
+Authentication logic
+
+Existing API endpoints
+
+Only ADD new functionality.
+Do not rewrite existing logic.
+
+SECTION 1
+Add “Additional Admin” Management
+
+Goal
+Allow the main admin to add additional admins who can help manage the company account.
+
+These additional admins should have the same permissions as the primary admin.
+
+This feature must follow the same login setup style already used for employees.
+
+Requirements
+
+Create a new section:
+
+Admin Panel → Admin Management
+
+Menu location
+Admin sidebar or mobile nav should include:
+
+Admins
+
+Inside Admins page show:
+
+Admin List Table
+
+Columns:
+
+Name
+
+Email
+
+Role
+
+Status
+
+Date Added
+
+Actions
+
+Actions:
+
+Edit
+
+Reset Password
+
+Deactivate
+
+Add Admin button
+
+Admin Creation Flow
+
+Only an existing admin can create another admin.
+
+Fields required:
+
+Full Name
+
+Email
+
+Temporary PIN (same method used for employee creation)
+
+Phone (optional)
+
+Behavior
+
+When admin creates a new admin:
+
+System generates login credentials
+
+New admin receives email invite (if email service exists)
+OR
+
+Admin can copy login details manually
+
+First Login Experience
+
+When new admin logs in the first time:
+
+Step 1
+Login using:
+Email + Temporary PIN
+
+Step 2
+Force password change
+
+Step 3
+Admin creates their own password
+
+After that, they access the dashboard normally.
+
+Permissions
+
+All admins have identical access for now.
+
+Do not implement complex permission systems yet.
+
+Future roles can include:
+
+Owner
+
+Manager
+
+Supervisor
+
+But for now:
+
+All admins = Full Access.
+
+Database
+
+Add new field to users table if necessary:
+
+role
+
+Values:
+admin
+employee
+client
+
+OR
+
+If role already exists, extend it.
+
+Example user object
+
+id
+name
+email
+password
+role
+company_id
+created_at
+
+SECTION 2
+Client Login Accounts
+
+Goal
+Allow admins to create login accounts for their clients.
+
+Clients will be able to:
+
+View their jobs
+
+Send requests
+
+Upload photos
+
+Report issues
+
+This is a very important feature.
+
+Admin Flow
+
+Admin → Clients Page
+
+Currently clients likely exist only as records.
+
+Add new option:
+
+Create Client Login
+
+Client creation fields
+
+Client Name
+
+Email
+
+Phone
+
+Address
+
+Temporary PIN
+
+Checkbox option:
+
+Enable Client Login
+
+If enabled:
+Create authentication record for the client.
+
+First Login Flow
+
+Client logs in with:
+
+Email
+Temporary PIN
+
+System forces password creation.
+
+Same flow as employee login.
+
+Client Dashboard
+
+Clients should NOT see admin or employee tools.
+
+Client dashboard should be minimal.
+
+Client Dashboard Features
+
+View upcoming cleanings
+
+Submit requests
+
+Upload photos
+
+View service history
+
+Client Requests Feature
+
+Clients should be able to submit issues.
+
+Example request form:
+
+Title
+Description
+Upload photos
+Location (optional)
+
+Examples:
+
+“Kitchen floor not cleaned”
+
+Client uploads picture.
+
+Requests go to:
+
+Admin → Requests Page
+
+Mark request types:
+
+Client Request
+Employee Request
+
+SECTION 3
+Client Photo Upload
+
+Clients should be able to upload photos with requests.
+
+Images help admins verify problems.
+
+Requirements
+
+Allow uploads:
+jpg
+jpeg
+png
+
+Max size
+10MB
+
+Store images safely in existing storage system.
+
+Display inside request detail page.
+
+SECTION 4
+Security Rules
+
+Client accounts must only access their own data.
+
+Client cannot view:
+
+Employees
+
+Payroll
+
+Admin tools
+
+Other clients
+
+Employee accounts must remain unchanged.
+
+Admin accounts retain full access.
+
+SECTION 5
+UI Changes
+
+Admin Navigation
+
+Add new menu item:
+
+Admins
+
+Admin → Manage other admins.
+
+Clients Page
+
+Add:
+
+Create Client Login toggle.
+
+Client Dashboard
+
+Simple interface
+
+Sections:
+
+Upcoming Jobs
+Requests
+New Request Button
+
+SECTION 6
+Important System Safety Rules
+
+Do NOT change:
+
+Employee login system
+
+Employee password change logic
+
+Authentication architecture
+
+Existing role permissions unless adding new ones
+
+Existing APIs
+
+Instead:
+
+Extend the system carefully.
+
+SECTION 7
+Testing Checklist
+
+Admin Creation
+
+Admin can create another admin
+
+New admin receives login credentials
+
+New admin forced to change password
+
+Client Creation
+
+Admin can create client login
+
+Client receives credentials
+
+Client forced to change password
+
+Client Dashboard
+
+Client cannot access admin pages
+
+Client can submit request
+
+Client can upload photos
+
+Security
+
+Employees unaffected
+
+Existing users stay logged in
+
+Existing attendance works
+
+Existing schedules work
+
+SECTION 8
+Database Structure Suggestion
+
+users
+
+id
+name
+email
+password
+role
+company_id
+created_at
+
+roles
+
+admin
+employee
+client
+
+requests
+
+id
+user_id
+company_id
+type
+description
+image_url
+status
+created_at
+
+Final instruction to developer
+
+This is an additive update only.
+
+Do NOT refactor working authentication systems.
+
+Extend the current architecture so:
+
+admins can add admins
+
+admins can add clients with login access
+
+clients can submit requests with photos
+
+The system is already live with active users, so stability is critical.
+
+No breaking changes allowed.
