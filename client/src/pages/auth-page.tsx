@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, Users, Shield, IdCard } from "lucide-react";
+import { Clock, Users, Shield, IdCard, AlertCircle } from "lucide-react";
 
 export default function AuthPage() {
   const { login, employeeLogin, register, user } = useAuth();
@@ -24,6 +24,8 @@ export default function AuthPage() {
   const [regLastName, setRegLastName] = useState("");
   const [regCompany, setRegCompany] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [loginError, setLoginError] = useState("");
+  const [empLoginError, setEmpLoginError] = useState("");
 
   if (user) {
     if (user.role === "admin") setLocation("/admin");
@@ -45,12 +47,13 @@ export default function AuthPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoginError("");
     setIsLoading(true);
     try {
       await login(loginEmail, loginPassword);
       toast({ title: "Welcome back!" });
     } catch (err: any) {
-      toast({ title: "Unable to sign in", description: loginErrorMessage(err), variant: "destructive" });
+      setLoginError(loginErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -58,12 +61,13 @@ export default function AuthPage() {
 
   const handleEmployeeLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setEmpLoginError("");
     setIsLoading(true);
     try {
       await employeeLogin(empId.trim().toUpperCase(), empPin.trim());
       toast({ title: "Welcome!" });
     } catch (err: any) {
-      toast({ title: "Unable to sign in", description: loginErrorMessage(err), variant: "destructive" });
+      setEmpLoginError(loginErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -141,6 +145,12 @@ export default function AuthPage() {
                         autoComplete="current-password"
                       />
                     </div>
+                    {empLoginError && (
+                      <div className="flex items-start gap-2.5 rounded-md border border-blue-100 bg-blue-50/60 px-3 py-2.5" data-testid="error-employee-login">
+                        <AlertCircle className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                        <p className="text-sm text-foreground/80">{empLoginError}</p>
+                      </div>
+                    )}
                     <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-employee-login">
                       {isLoading ? "Signing in..." : "Sign In"}
                     </Button>
@@ -168,6 +178,12 @@ export default function AuthPage() {
                       <Label htmlFor="login-password">Password</Label>
                       <Input id="login-password" data-testid="input-login-password" type="password" placeholder="Enter your password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required />
                     </div>
+                    {loginError && (
+                      <div className="flex items-start gap-2.5 rounded-md border border-blue-100 bg-blue-50/60 px-3 py-2.5" data-testid="error-admin-login">
+                        <AlertCircle className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                        <p className="text-sm text-foreground/80">{loginError}</p>
+                      </div>
+                    )}
                     <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-login">
                       {isLoading ? "Signing in..." : "Sign In"}
                     </Button>

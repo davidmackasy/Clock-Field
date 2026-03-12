@@ -1,0 +1,184 @@
+DEV NOTE
+
+Task
+Update the login error popup color so it matches the app UI and looks professional.
+
+Main instruction
+Do not touch anything else.
+Do not modify:
+
+auth logic
+
+login logic
+
+error message text
+
+redirects
+
+role logic
+
+employee login
+
+admin login
+
+client login
+
+registration
+
+any working backend behavior
+
+Only change the visual styling of the error popup.
+
+Goal
+Keep the current clean error text, but remove the harsh red background.
+The popup should feel like part of the ClockField UI.
+
+Current problem
+The wording is good now, but the red background still feels too aggressive and does not match the app’s design system.
+
+Required change
+Keep the same message:
+Unable to sign in
+Incorrect email or password. Please try again.
+
+But restyle the popup to use a softer app-matching appearance.
+
+Recommended style
+Use:
+
+white or very light neutral background
+
+subtle border
+
+soft shadow
+
+dark text
+
+optional small accent line or icon in the app’s blue color
+
+rounded corners matching the rest of the UI
+
+Best visual direction
+Make it look like a premium SaaS notification, not a dangerous system alert.
+
+Recommended color approach
+Background:
+
+white
+or
+
+very light gray / very light blue-tinted neutral
+
+Border:
+
+light gray border
+or
+
+subtle blue border
+
+Title:
+
+dark neutral text
+
+Body:
+
+muted gray text
+
+Optional icon:
+
+blue info or alert icon
+
+Do not use:
+
+solid bright red background
+
+large danger-style alert block
+
+destructive error styling
+
+Suggested visual behavior
+Option A
+Toast with:
+
+white background
+
+light border
+
+small blue left accent
+
+dark title
+
+gray description
+
+Option B
+Inline error card inside the login form:
+
+pale neutral background
+
+subtle border
+
+small icon
+
+message text only
+
+Best option
+Use a toast/card styled like the app cards.
+
+Example style direction
+
+background: white
+
+border: 1px solid light gray
+
+shadow: soft
+
+title: #111827 style dark text
+
+body: muted text
+
+accent: app blue
+
+Important rule
+This is still an error state, but it should feel calm and polished.
+
+Do not make it look like:
+
+server crash
+
+critical failure
+
+dangerous destructive warning
+
+Acceptance criteria
+
+wrong login still shows the same clean text
+
+popup no longer uses harsh red background
+
+popup matches ClockField UI styling
+
+popup looks professional and premium
+
+no regression to login behavior
+
+no regression to any working auth flow
+
+Direct instruction for agent
+Keep the current login error wording exactly as it is, but restyle the error popup to match the app UI. Remove the solid red background and replace it with a clean, professional notification style using a white or very light neutral background, subtle border, soft shadow, dark text, and a light blue app-accent if needed. Do not change any auth behavior, only the visual styling of the error message.
+
+Best final style recommendation
+A white toast with:
+
+subtle gray border
+
+soft shadow
+
+rounded corners
+
+blue accent icon or left border
+
+dark heading
+
+muted description text
+
+That will look much more professional.
