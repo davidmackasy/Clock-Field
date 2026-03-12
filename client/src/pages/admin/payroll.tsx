@@ -6,11 +6,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { DollarSign, Clock, Users, TrendingDown, ChevronRight, Calendar } from "lucide-react";
 
 // ── Period helpers ────────────────────────────────────────────────────────────
 
 type PeriodFilter = "this_week" | "last_week" | "this_2_weeks" | "last_2_weeks" | "this_month" | "last_month";
+type AllPeriodFilter = PeriodFilter | "custom";
 
 function toDateStr(d: Date): string {
   return d.toISOString().split("T")[0];
@@ -359,7 +362,10 @@ function PayrollHistoryModal({
 // ── Main Payroll Page ─────────────────────────────────────────────────────────
 
 export default function AdminPayroll() {
-  const [filter, setFilter] = useState<PeriodFilter>("this_2_weeks");
+  const [filter, setFilter] = useState<AllPeriodFilter>("this_2_weeks");
+  const [empFilter, setEmpFilter] = useState<string>("all");
+  const [customStart, setCustomStart] = useState<string>(toDateStr(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
+  const [customEnd, setCustomEnd] = useState<string>(toDateStr(new Date()));
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
 
   const { data: employees, isLoading: empLoading } = useQuery<any[]>({ queryKey: ["/api/employees"] });
@@ -391,9 +397,16 @@ export default function AdminPayroll() {
     })),
   }), [company, customDeductions]);
 
-  const dateRange = useMemo(() => getDateRange(filter, cycleAnchor), [filter, cycleAnchor]);
+  const dateRange = useMemo(() => {
+    if (filter === "custom") {
+      const start = customStart || toDateStr(new Date());
+      const end = customEnd || toDateStr(new Date());
+      return { start, end, label: "Custom" };
+    }
+    return getDateRange(filter as PeriodFilter, cycleAnchor);
+  }, [filter, cycleAnchor, customStart, customEnd]);
 
-  const payrollData = useMemo(() => {
+  const allPayrollData = useMemo(() => {
     return (employees || []).map(emp => {
       const rate = parseFloat(emp.hourlyRate || "0");
       const overtimeRate = parseFloat(emp.overtimeRate || "0") || rate * 1.5;
@@ -402,6 +415,11 @@ export default function AdminPayroll() {
     });
   }, [employees, entries, dateRange, deductionConfig, overtimeThreshold]);
 
+  const payrollData = useMemo(() => {
+    if (empFilter === "all") return allPayrollData;
+    return allPayrollData.filter(p => p.id === empFilter);
+  }, [allPayrollData, empFilter]);
+
   const totalGross = payrollData.reduce((s, p) => s + p.grossPay, 0);
   const totalNet = payrollData.reduce((s, p) => s + p.netPay, 0);
   const totalHours = payrollData.reduce((s, p) => s + p.hours, 0);
@@ -409,30 +427,71 @@ export default function AdminPayroll() {
 
   const showDeductions = deductionConfig.enabled;
 
+  const safePeriodForModal: PeriodFilter = filter === "custom" ? "this_2_weeks" : (filter as PeriodFilter);
+
   return (
     <div className="p-4 md:p-6 space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold" data-testid="text-payroll-title">Payroll Estimator</h1>
           <p className="text-muted-foreground text-sm mt-1">Estimated payroll based on tracked hours</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Select value={filter} onValueChange={v => setFilter(v as PeriodFilter)}>
-            <SelectTrigger className="w-40" data-testid="select-payroll-period">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="this_week">This Week</SelectItem>
-              <SelectItem value="last_week">Last Week</SelectItem>
-              <SelectItem value="this_2_weeks">This 2 Weeks</SelectItem>
-              <SelectItem value="last_2_weeks">Last 2 Weeks</SelectItem>
-              <SelectItem value="this_month">This Month</SelectItem>
-              <SelectItem value="last_month">Last Month</SelectItem>
-            </SelectContent>
-          </Select>
-          <span className="text-xs text-muted-foreground hidden sm:block">
-            {formatD(dateRange.start)} – {formatD(dateRange.end)}
-          </span>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <Select value={filter} onValueChange={v => setFilter(v as AllPeriodFilter)}>
+              <SelectTrigger className="w-40" data-testid="select-payroll-period">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="this_week">This Week</SelectItem>
+                <SelectItem value="last_week">Last Week</SelectItem>
+                <SelectItem value="this_2_weeks">This 2 Weeks</SelectItem>
+                <SelectItem value="last_2_weeks">Last 2 Weeks</SelectItem>
+                <SelectItem value="this_month">This Month</SelectItem>
+                <SelectItem value="last_month">Last Month</SelectItem>
+                <SelectItem value="custom">Custom</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={empFilter} onValueChange={setEmpFilter}>
+              <SelectTrigger className="w-44" data-testid="select-payroll-employee">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Employees</SelectItem>
+                {(employees || []).map(emp => (
+                  <SelectItem key={emp.id} value={emp.id}>{emp.firstName} {emp.lastName}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {filter === "custom" ? (
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <div className="flex items-center gap-1.5">
+                <Label className="text-xs text-muted-foreground">From</Label>
+                <Input
+                  type="date"
+                  value={customStart}
+                  onChange={e => setCustomStart(e.target.value)}
+                  className="h-8 w-36 text-xs"
+                  data-testid="input-custom-start"
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Label className="text-xs text-muted-foreground">To</Label>
+                <Input
+                  type="date"
+                  value={customEnd}
+                  onChange={e => setCustomEnd(e.target.value)}
+                  className="h-8 w-36 text-xs"
+                  data-testid="input-custom-end"
+                />
+              </div>
+            </div>
+          ) : (
+            <span className="text-xs text-muted-foreground hidden sm:block">
+              {formatD(dateRange.start)} – {formatD(dateRange.end)}
+            </span>
+          )}
         </div>
       </div>
 
@@ -574,7 +633,7 @@ export default function AdminPayroll() {
         <PayrollHistoryModal
           employee={selectedEmployee}
           allEntries={entries}
-          filter={filter}
+          filter={safePeriodForModal}
           cycleAnchor={cycleAnchor}
           overtimeThreshold={overtimeThreshold}
           deductionConfig={deductionConfig}

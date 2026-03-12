@@ -1,0 +1,330 @@
+DEV NOTE
+
+Task
+Add employee filtering and custom date range support to the Payroll Estimator without affecting any other working features.
+
+Main instruction
+Do not touch anything else that is already working.
+Do not modify:
+
+auth
+
+employee login
+
+admin login
+
+client login
+
+payroll calculation formulas already working
+
+deduction settings already working
+
+attendance creation
+
+schedule creation
+
+employee creation
+
+dashboard logic
+
+requests
+
+existing pay-period logic unless needed to support custom range cleanly
+
+This task is only to improve the Payroll Estimator filters.
+
+Main goal
+The Payroll Estimator currently supports period filtering only.
+It needs two additional improvements:
+
+Employee filter
+Admin should be able to select one employee and see payroll totals only for that employee
+
+Custom period filter
+Admin should be able to select a custom start date and end date and generate the payroll estimate for that exact range
+
+Current issue
+Right now payroll is showing totals for all employees combined.
+That is useful, but admin also needs to isolate one employee.
+
+Example:
+Admin wants to see only David Zulu for This 2 Weeks
+or
+only Mackasy Xulu for Mar 1 to Mar 14
+
+The Payroll page should support that cleanly.
+
+Required UI changes
+
+Add employee filter to payroll filter bar
+Place it near the period selector.
+
+Recommended order:
+
+Period selector
+
+Employee selector
+
+Date range display or custom date inputs
+
+Employee filter options:
+
+All Employees
+
+Individual employee names
+
+Example:
+All Employees
+David Zulu
+Mackasy Xulu
+David Maluti2
+David Maluti
+
+Default:
+All Employees
+
+Behavior:
+If one employee is selected:
+
+top totals should reflect only that employee
+
+payroll table should show only that employee row
+
+employee count card should show 1
+
+payroll history popup can still work normally when clicking the row
+
+Add custom period option to period selector
+Current period selector includes things like:
+
+This Week
+
+Last Week
+
+This 2 Weeks
+
+Last 2 Weeks
+
+This Month
+
+Last Month
+
+Add:
+
+Custom
+
+When Custom is selected:
+show two date inputs:
+
+Start Date
+
+End Date
+
+Example:
+From: 2026-03-01
+To: 2026-03-14
+
+Behavior:
+Payroll estimator must use that exact selected range.
+
+Required filter behavior
+
+A. All Employees + preset period
+Use current behavior
+Example:
+All Employees + This 2 Weeks
+Show combined totals and all rows for that period
+
+B. One Employee + preset period
+Example:
+David Zulu + This 2 Weeks
+Show totals and table only for David Zulu in that period
+
+C. All Employees + Custom
+Example:
+All Employees + Mar 1 to Mar 20
+Show totals and all rows only for entries in that range
+
+D. One Employee + Custom
+Example:
+David Zulu + Mar 1 to Mar 20
+Show totals and row only for David Zulu in that range
+
+Important consistency rule
+The top summary cards and payroll table must always use the exact same filtered dataset.
+
+That means:
+
+same employee filter
+
+same period filter
+
+same custom range
+
+same deduction logic
+
+Do not let the cards show one thing and the table show another.
+
+Required top cards behavior
+The top cards must respond to both filters.
+
+Cards should continue to show:
+
+Total Gross
+
+Total Deductions
+
+Total Net
+
+Total Hours
+
+Employees
+
+When one employee is selected:
+
+Total Gross = that employee only
+
+Total Deductions = that employee only
+
+Total Net = that employee only
+
+Total Hours = that employee only
+
+Employees = 1
+
+When All Employees is selected:
+
+current combined behavior remains
+
+Table behavior
+Table must update based on filters.
+
+If one employee is selected:
+show only that employee row
+
+If all employees selected:
+show all employee rows matching the period
+
+Do not change existing columns.
+Only change which rows are shown.
+
+Recommended filter placement
+Place the employee filter beside the period selector at the top right area.
+
+Suggested layout:
+
+Period dropdown
+
+Employee dropdown
+
+If Custom selected, show date inputs inline or just below
+
+Example:
+[ This 2 Weeks ] [ All Employees ]
+or
+[ Custom ] [ David Zulu ] [ Start Date ] [ End Date ]
+
+Source of truth
+Use the existing payroll estimator logic.
+Do not create a second payroll calculation path.
+
+The new employee and custom filters must pass into the same shared payroll calculation helper already used by the page.
+
+That helper should receive:
+
+employeeId optional
+
+period preset optional
+
+startDate optional
+
+endDate optional
+
+Example logic
+If employeeId is null:
+calculate for all employees
+
+If employeeId exists:
+calculate only for that employee
+
+If period preset is custom:
+use startDate and endDate
+
+If period preset is standard:
+use shared date-range helper
+
+Custom range date handling
+Use inclusive range logic.
+Do not accidentally drop entries on the end date.
+
+Safe rule:
+
+startDate = selected start day at 00:00:00
+
+endDate = selected end day at 23:59:59
+or equivalent inclusive logic in your current system
+
+Recommended labels
+Period selector options:
+
+This Week
+
+Last Week
+
+This 2 Weeks
+
+Last 2 Weeks
+
+This Month
+
+Last Month
+
+Custom
+
+Employee selector label:
+
+All Employees
+
+Optional helper text when custom is selected:
+Showing payroll estimate for selected custom period
+
+Do not break popup behavior
+The employee payroll popup should continue working.
+If the page is already filtered to one employee, clicking that employee can still open the same popup with that employee’s payroll history.
+
+Do not redesign popup behavior in this task.
+This task is only about top-level Payroll page filtering.
+
+Acceptance criteria
+
+Payroll page still works normally for all employees
+
+Admin can filter payroll by one employee
+
+Admin can filter payroll by custom date range
+
+Top totals update correctly for selected employee and period
+
+Table rows update correctly for selected employee and period
+
+Employee count card updates correctly
+
+Existing deduction calculations still apply
+
+No regression to payroll popup
+
+No regression to attendance, schedule, auth, or any other working system
+
+Direct instruction for agent
+Improve only the Payroll Estimator filter bar. Add an employee selector so admin can view payroll totals for a single employee or all employees. Add a Custom period option to the existing period filter so admin can choose a start date and end date. Make sure the payroll summary cards and the payroll table both use the exact same filtered dataset based on the selected employee and selected period. Reuse the current payroll calculation logic and deduction logic. Do not redesign the page and do not touch any unrelated working modules.
+
+Best final UX behavior
+Top right filters should work like this:
+
+Period dropdown
+
+Employee dropdown
+
+Custom date inputs appear only when Custom is selected
+
+That is the cleanest and safest way to add what you need.
