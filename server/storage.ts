@@ -76,6 +76,7 @@ export interface IStorage {
   updateClientRequest(id: string, data: Partial<InsertClientRequest>): Promise<ClientRequest | undefined>;
 
   createRequestMessage(data: InsertRequestMessage): Promise<RequestMessage>;
+  getRequestMessage(id: string): Promise<RequestMessage | undefined>;
   getRequestMessages(requestId: string): Promise<RequestMessage[]>;
   createRequestAttachment(data: InsertRequestAttachment): Promise<RequestAttachment>;
   getRequestAttachment(id: string): Promise<RequestAttachment | undefined>;
@@ -336,6 +337,11 @@ export class DatabaseStorage implements IStorage {
 
   async createRequestMessage(data: InsertRequestMessage): Promise<RequestMessage> {
     const [msg] = await db.insert(requestMessages).values(data).returning();
+    return msg;
+  }
+
+  async getRequestMessage(id: string): Promise<RequestMessage | undefined> {
+    const [msg] = await db.select().from(requestMessages).where(eq(requestMessages.id, id));
     return msg;
   }
 

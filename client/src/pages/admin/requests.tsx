@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { PhotoUploader, type PhotoItem } from "@/components/photo-uploader";
-import { MessageSquare, X, AlertTriangle, User2, ChevronRight, Clock, Send, ChevronLeft, ChevronRight as ChevronRightIcon } from "lucide-react";
+import { MessageSquare, X, AlertTriangle, User2, ChevronRight, Clock, Send, ChevronLeft, ChevronRight as ChevronRightIcon, Image } from "lucide-react";
 
 const OPEN_STATUSES = new Set(["new", "open", "in_review", "scheduled", "replied", "in_progress"]);
 
@@ -34,6 +34,54 @@ const PRIORITY_VARIANT: Record<string, string> = {
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function UrlLightbox({ urls, startIndex, onClose }: { urls: string[]; startIndex: number; onClose: () => void }) {
+  const [idx, setIdx] = useState(startIndex);
+  return (
+    <div
+      className="fixed inset-0 z-[200] bg-black/90 flex flex-col items-center justify-center"
+      onClick={onClose}
+      data-testid="lightbox-overlay"
+    >
+      <button
+        className="absolute top-4 right-4 text-white bg-black/40 rounded-full p-2 hover:bg-black/70"
+        onClick={onClose}
+        data-testid="button-lightbox-close"
+      >
+        <X className="w-5 h-5" />
+      </button>
+      <div className="relative flex items-center justify-center w-full max-w-3xl px-14" onClick={e => e.stopPropagation()}>
+        {urls.length > 1 && (
+          <button
+            className="absolute left-2 text-white bg-black/40 rounded-full p-2 hover:bg-black/70 disabled:opacity-30"
+            onClick={() => setIdx(i => Math.max(0, i - 1))}
+            disabled={idx === 0}
+            data-testid="button-lightbox-prev"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+        )}
+        <img
+          src={urls[idx]}
+          alt={`photo ${idx + 1}`}
+          className="max-h-[80vh] max-w-full object-contain rounded-lg shadow-xl"
+          data-testid="lightbox-image"
+        />
+        {urls.length > 1 && (
+          <button
+            className="absolute right-2 text-white bg-black/40 rounded-full p-2 hover:bg-black/70 disabled:opacity-30"
+            onClick={() => setIdx(i => Math.min(urls.length - 1, i + 1))}
+            disabled={idx === urls.length - 1}
+            data-testid="button-lightbox-next"
+          >
+            <ChevronRightIcon className="w-5 h-5" />
+          </button>
+        )}
+      </div>
+      {urls.length > 1 && <p className="text-white/50 text-xs mt-2">{idx + 1} / {urls.length}</p>}
+    </div>
+  );
 }
 
 function AttachmentLightbox({ attachments, startIndex, onClose }: { attachments: any[]; startIndex: number; onClose: () => void }) {
@@ -157,6 +205,7 @@ export default function AdminRequests() {
   const [replyText, setReplyText] = useState("");
   const [replyPhotos, setReplyPhotos] = useState<PhotoItem[]>([]);
   const [pendingStatus, setPendingStatus] = useState<string>("");
+  const [urlLightbox, setUrlLightbox] = useState<{ urls: string[]; idx: number } | null>(null);
 
   const { data: requests, isLoading } = useQuery<any[]>({ queryKey: ["/api/client-requests"] });
   const { data: clientsList } = useQuery<any[]>({ queryKey: ["/api/clients"] });
@@ -260,6 +309,13 @@ export default function AdminRequests() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
+      {urlLightbox && (
+        <UrlLightbox
+          urls={urlLightbox.urls}
+          startIndex={urlLightbox.idx}
+          onClose={() => setUrlLightbox(null)}
+        />
+      )}
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -374,6 +430,25 @@ export default function AdminRequests() {
                   </SelectContent>
                 </Select>
               </div>
+              {detailReq.imageUrls?.length > 0 && (
+                <div className="pt-1">
+                  <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1.5">
+                    <Image className="w-3 h-3" />Request Photos ({detailReq.imageUrls.length})
+                  </p>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {detailReq.imageUrls.map((url: string, i: number) => (
+                      <img
+                        key={url}
+                        src={url}
+                        alt={`photo ${i + 1}`}
+                        className="w-full h-20 object-cover rounded-md cursor-pointer hover:opacity-90 transition-opacity border"
+                        onClick={() => setUrlLightbox({ urls: detailReq.imageUrls, idx: i })}
+                        data-testid={`img-req-photo-${i}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </DialogHeader>
 
             {/* Thread */}

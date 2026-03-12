@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { PhotoUploader, type PhotoItem } from "@/components/photo-uploader";
-import { Plus, MessageSquare, ChevronRight, Image, Clock, X, ChevronLeft, ChevronRight as ChevronRightIcon } from "lucide-react";
+import { Plus, MessageSquare, ChevronRight, Image, Clock, X, ChevronLeft, ChevronRight as ChevronRightIcon, Loader2 } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = {
   new: "Pending", pending: "Pending", replied: "Replied",
@@ -29,6 +29,54 @@ const STATUS_VARIANT: Record<string, string> = {
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function UrlLightbox({ urls, startIndex, onClose }: { urls: string[]; startIndex: number; onClose: () => void }) {
+  const [idx, setIdx] = useState(startIndex);
+  return (
+    <div
+      className="fixed inset-0 z-[200] bg-black/90 flex flex-col items-center justify-center"
+      onClick={onClose}
+      data-testid="lightbox-overlay"
+    >
+      <button
+        className="absolute top-4 right-4 text-white bg-black/40 rounded-full p-2 hover:bg-black/70"
+        onClick={onClose}
+        data-testid="button-lightbox-close"
+      >
+        <X className="w-5 h-5" />
+      </button>
+      <div className="relative flex items-center justify-center w-full max-w-2xl px-12" onClick={e => e.stopPropagation()}>
+        {urls.length > 1 && (
+          <button
+            className="absolute left-2 text-white bg-black/40 rounded-full p-2 hover:bg-black/70 disabled:opacity-30"
+            onClick={() => setIdx(i => Math.max(0, i - 1))}
+            disabled={idx === 0}
+            data-testid="button-lightbox-prev"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+        )}
+        <img
+          src={urls[idx]}
+          alt={`photo ${idx + 1}`}
+          className="max-h-[80vh] max-w-full object-contain rounded-lg shadow-xl"
+          data-testid="lightbox-image"
+        />
+        {urls.length > 1 && (
+          <button
+            className="absolute right-2 text-white bg-black/40 rounded-full p-2 hover:bg-black/70 disabled:opacity-30"
+            onClick={() => setIdx(i => Math.min(urls.length - 1, i + 1))}
+            disabled={idx === urls.length - 1}
+            data-testid="button-lightbox-next"
+          >
+            <ChevronRightIcon className="w-5 h-5" />
+          </button>
+        )}
+      </div>
+      {urls.length > 1 && <p className="text-white/50 text-xs mt-2">{idx + 1} / {urls.length}</p>}
+    </div>
+  );
 }
 
 function AttachmentLightbox({ attachments, startIndex, onClose }: { attachments: any[]; startIndex: number; onClose: () => void }) {
@@ -76,8 +124,98 @@ function AttachmentLightbox({ attachments, startIndex, onClose }: { attachments:
         )}
       </div>
       {att.caption && <p className="text-white/70 text-sm mt-3">{att.caption}</p>}
-      {attachments.length > 1 && (
-        <p className="text-white/50 text-xs mt-2">{idx + 1} / {attachments.length}</p>
+      {attachments.length > 1 && <p className="text-white/50 text-xs mt-2">{idx + 1} / {attachments.length}</p>}
+    </div>
+  );
+}
+
+function UploadOnSelect({ urls, onChange }: { urls: string[]; onChange: (urls: string[]) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const ALLOWED = ["image/jpeg", "image/jpg", "image/png"];
+  const MAX_MB = 10;
+  const MAX_FILES = 3;
+
+  const handleFiles = async (files: FileList | null) => {
+    if (!files) return;
+    setError(null);
+    const remaining = MAX_FILES - urls.length;
+    if (remaining <= 0) { setError(`Max ${MAX_FILES} photos allowed`); return; }
+    const toUpload = Array.from(files).slice(0, remaining);
+    for (const f of toUpload) {
+      if (!ALLOWED.includes(f.type)) { setError("Only JPG and PNG files are allowed"); return; }
+      if (f.size > MAX_MB * 1024 * 1024) { setError(`Each photo must be under ${MAX_MB}MB`); return; }
+    }
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      for (const f of toUpload) formData.append("photos", f);
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const e = await res.json();
+        throw new Error(e.message || "Upload failed");
+      }
+      const data = await res.json();
+      onChange([...urls, ...(data.urls || [])]);
+    } catch (err: any) {
+      setError(err.message || "Upload failed");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {urls.length < MAX_FILES && (
+        <div>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/jpeg,image/jpg,image/png"
+            multiple
+            className="hidden"
+            onChange={e => handleFiles(e.target.files)}
+            data-testid="input-photo-file"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+            className="w-full border-dashed"
+            data-testid="button-add-photos"
+          >
+            {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Image className="w-4 h-4 mr-2" />}
+            {uploading ? "Uploading..." : `Add Photos (${urls.length}/${MAX_FILES})`}
+          </Button>
+        </div>
+      )}
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      {urls.length > 0 && (
+        <div className="grid grid-cols-3 gap-2">
+          {urls.map((url, idx) => (
+            <div key={url} className="relative group" data-testid={`photo-preview-${idx}`}>
+              <img src={url} alt={`upload ${idx + 1}`} className="w-full h-20 object-cover rounded-md border" />
+              <button
+                type="button"
+                onClick={() => onChange(urls.filter((_, i) => i !== idx))}
+                className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                data-testid={`button-remove-photo-${idx}`}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -141,10 +279,11 @@ export default function ClientRequests() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [detailReq, setDetailReq] = useState<any>(null);
-  const [photos, setPhotos] = useState<PhotoItem[]>([]);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [form, setForm] = useState({ title: "", description: "", requestType: "service_request", priority: "normal" });
   const [replyText, setReplyText] = useState("");
   const [replyPhotos, setReplyPhotos] = useState<PhotoItem[]>([]);
+  const [urlLightbox, setUrlLightbox] = useState<{ urls: string[]; idx: number } | null>(null);
 
   const { data: requests, isLoading } = useQuery<any[]>({ queryKey: ["/api/client-requests"] });
   const { data: messages, isLoading: msgsLoading, isError: msgsError } = useQuery<any[]>({
@@ -165,7 +304,7 @@ export default function ClientRequests() {
       toast({ title: "Request submitted" });
       setCreateOpen(false);
       setForm({ title: "", description: "", requestType: "service_request", priority: "normal" });
-      setPhotos([]);
+      setImageUrls([]);
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
@@ -191,6 +330,14 @@ export default function ClientRequests() {
 
   return (
     <div className="p-4 pb-24 space-y-5">
+      {urlLightbox && (
+        <UrlLightbox
+          urls={urlLightbox.urls}
+          startIndex={urlLightbox.idx}
+          onClose={() => setUrlLightbox(null)}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div>
@@ -231,6 +378,9 @@ export default function ClientRequests() {
                   <span>{req.requestType.replace(/_/g, " ")}</span>
                   <span>·</span>
                   <span>{new Date(req.createdAt).toLocaleDateString()}</span>
+                  {req.imageUrls?.length > 0 && (
+                    <span className="flex items-center gap-0.5"><Image className="w-3 h-3" />{req.imageUrls.length}</span>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -244,7 +394,7 @@ export default function ClientRequests() {
           <DialogHeader><DialogTitle>New Request</DialogTitle></DialogHeader>
           <form onSubmit={e => {
             e.preventDefault();
-            createMut.mutate({ ...form, photos: photos.map(p => ({ dataUrl: p.dataUrl, caption: p.caption })) });
+            createMut.mutate({ ...form, imageUrls });
           }} className="space-y-4">
             <div className="space-y-2">
               <Label>Title</Label>
@@ -280,8 +430,8 @@ export default function ClientRequests() {
               <Textarea data-testid="input-req-description" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} rows={3} />
             </div>
             <div className="space-y-2">
-              <Label className="flex items-center gap-1"><Image className="w-3.5 h-3.5" />Photos (optional, up to 3 · JPG/PNG · max 10 MB each)</Label>
-              <PhotoUploader photos={photos} onChange={setPhotos} maxPhotos={3} maxSizeMB={10} label="Add Photos" />
+              <Label className="flex items-center gap-1"><Image className="w-3.5 h-3.5" />Photos (optional · up to 3 · JPG/PNG · max 10 MB each)</Label>
+              <UploadOnSelect urls={imageUrls} onChange={setImageUrls} />
             </div>
             <Button type="submit" className="w-full" disabled={createMut.isPending} data-testid="button-submit-request">
               {createMut.isPending ? "Submitting..." : "Submit Request"}
@@ -308,6 +458,20 @@ export default function ClientRequests() {
                 <span>·</span>
                 <span><Clock className="w-3 h-3 inline mr-0.5" />{new Date(detailReq.createdAt).toLocaleDateString()}</span>
               </div>
+              {detailReq.imageUrls?.length > 0 && (
+                <div className="grid grid-cols-3 gap-1 mt-2">
+                  {detailReq.imageUrls.map((url: string, i: number) => (
+                    <img
+                      key={url}
+                      src={url}
+                      alt={`photo ${i + 1}`}
+                      className="w-full h-20 object-cover rounded-md cursor-pointer hover:opacity-90 transition-opacity"
+                      onClick={() => setUrlLightbox({ urls: detailReq.imageUrls, idx: i })}
+                      data-testid={`img-req-photo-${i}`}
+                    />
+                  ))}
+                </div>
+              )}
             </DialogHeader>
 
             {/* Thread */}

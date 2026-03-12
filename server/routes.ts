@@ -4,6 +4,22 @@ import { storage } from "./storage";
 import { setupAuth, hashPassword, comparePasswords, requireAuth, requireRole } from "./auth";
 import passport from "passport";
 import { randomBytes } from "crypto";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+
+const UPLOADS_DIR = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+const upload = multer({
+  dest: UPLOADS_DIR,
+  limits: { fileSize: 10 * 1024 * 1024, files: 3 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ["image/jpeg", "image/jpg", "image/png"];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error("Only JPG and PNG files are allowed"));
+  },
+});
 
 function generateTempPin(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -14,6 +30,26 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   setupAuth(app);
+
+  // ── File Upload ────────────────────────────────────────────────────────────
+  app.post("/api/upload", requireAuth, (req, res) => {
+    upload.array("photos", 3)(req, res, (err: any) => {
+      if (err) {
+        if (err.code === "LIMIT_FILE_SIZE") return res.status(400).json({ message: "Each photo must be under 10MB" });
+        if (err.code === "LIMIT_FILE_COUNT") return res.status(400).json({ message: "Maximum 3 photos allowed" });
+        return res.status(400).json({ message: err.message || "Upload failed" });
+      }
+      const files = req.files as Express.Multer.File[];
+      if (!files || files.length === 0) return res.status(400).json({ message: "No files uploaded" });
+      const urls = files.map(f => {
+        const ext = f.mimetype === "image/png" ? ".png" : ".jpg";
+        const newName = f.filename + ext;
+        fs.renameSync(f.path, path.join(UPLOADS_DIR, newName));
+        return `/uploads/${newName}`;
+      });
+      res.json({ urls });
+    });
+  });
 
   app.post("/api/auth/register", async (req, res) => {
     try {
@@ -777,9 +813,20 @@ export async function registerRoutes(
   app.post("/api/client-requests", requireAuth, async (req, res) => {
     try {
       const user = req.user as any;
-      const { title, description, requestType, priority, photos } = req.body;
+      const { title, description, requestType, priority, photos, imageUrls } = req.body;
       if (!title?.trim()) return res.status(400).json({ message: "Title is required" });
 
+      // Validate imageUrls (returned by /api/upload)
+      if (imageUrls && Array.isArray(imageUrls)) {
+        if (imageUrls.length > 3) return res.status(400).json({ message: "Maximum 3 photos allowed per request" });
+        for (const url of imageUrls) {
+          if (typeof url !== "string" || !url.startsWith("/uploads/")) {
+            return res.status(400).json({ message: "Invalid image URL" });
+          }
+        }
+      }
+
+      // Legacy base64 validation (for backward compatibility)
       if (photos && Array.isArray(photos)) {
         if (photos.length > 3) return res.status(400).json({ message: "Maximum 3 photos allowed per request" });
         for (const photo of photos) {
@@ -820,6 +867,7 @@ export async function registerRoutes(
         priority: priority || "normal",
         status: "new",
         visibilityScope,
+        imageUrls: (imageUrls && imageUrls.length > 0) ? imageUrls : undefined,
         createdAt: new Date().toISOString(),
       });
 
@@ -907,8 +955,26 @@ export async function registerRoutes(
   // ── Attachment image endpoint ─────────────────────────────────────────────
   app.get("/api/attachments/:id/image", requireAuth, async (req, res) => {
     try {
+      const user = req.user as any;
       const att = await storage.getRequestAttachment(req.params.id);
       if (!att) return res.status(404).json({ message: "Not found" });
+
+      // IDOR protection: verify this attachment belongs to a request the user can access
+      const msg = await storage.getRequestMessage(att.requestMessageId);
+      if (!msg) return res.status(404).json({ message: "Not found" });
+      const requestRecord = await storage.getClientRequest(msg.requestId);
+      if (!requestRecord || requestRecord.companyId !== user.companyId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      if (user.role === "client") {
+        const clientRecord = await storage.getClientByUserId(user.id);
+        if (!clientRecord || requestRecord.clientId !== clientRecord.id) {
+          return res.status(403).json({ message: "Forbidden" });
+        }
+      } else if (user.role === "employee" && requestRecord.employeeId !== user.id) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
       const dataUrl = att.fileUrl;
       // Parse data URL: data:image/jpeg;base64,<data>
       const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/s);

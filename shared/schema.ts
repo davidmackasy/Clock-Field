@@ -152,6 +152,7 @@ export const clientRequests = pgTable("client_requests", {
   createdByRole: text("created_by_role").default("client"),
   employeeId: varchar("employee_id"),
   visibilityScope: text("visibility_scope").notNull().default("admin_and_client"),
+  imageUrls: text("image_urls").array(),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at"),
   resolvedAt: text("resolved_at"),
