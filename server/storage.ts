@@ -74,6 +74,7 @@ export interface IStorage {
   createRequestMessage(data: InsertRequestMessage): Promise<RequestMessage>;
   getRequestMessages(requestId: string): Promise<RequestMessage[]>;
   createRequestAttachment(data: InsertRequestAttachment): Promise<RequestAttachment>;
+  getRequestAttachment(id: string): Promise<RequestAttachment | undefined>;
   getRequestAttachmentsByMessage(messageId: string): Promise<RequestAttachment[]>;
   getRequestAttachmentsByMessageIds(messageIds: string[]): Promise<RequestAttachment[]>;
 
@@ -333,6 +334,11 @@ export class DatabaseStorage implements IStorage {
     if (!messageIds.length) return [];
     const rows = await Promise.all(messageIds.map(id => this.getRequestAttachmentsByMessage(id)));
     return rows.flat();
+  }
+
+  async getRequestAttachment(id: string): Promise<RequestAttachment | undefined> {
+    const [att] = await db.select().from(requestAttachments).where(eq(requestAttachments.id, id));
+    return att;
   }
 
   async getPayrollDeductionsByCompany(companyId: string): Promise<PayrollDeduction[]> {

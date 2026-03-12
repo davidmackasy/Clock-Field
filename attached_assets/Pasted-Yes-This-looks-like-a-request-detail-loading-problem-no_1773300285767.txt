@@ -1,0 +1,452 @@
+Yes. This looks like a request-detail loading problem, not a UI design problem.
+
+Most likely cause
+The request modal opens, but the thread/messages/attachments query is either:
+
+slow
+
+waiting on attachments one by one
+
+blocked by a bad status filter for closed or resolved requests
+
+using the wrong request id or role visibility filter
+
+returning empty/loading state and never resolving properly
+
+Because you said it happens on both:
+
+cleaner side
+
+client side
+
+the issue is probably in the shared request detail loader, not just one screen.
+
+Use this focused dev note:
+
+DEV NOTE
+
+Task
+Fix slow or stuck request-detail loading on cleaner and client side so request conversations open quickly and always show saved thread history.
+
+Critical rule
+Do not break or affect anything else that is already working.
+
+Do not modify:
+
+auth
+
+login
+
+employee creation
+
+admin creation
+
+client creation
+
+attendance
+
+payroll
+
+schedule
+
+dashboard
+
+request creation flow unless directly required for request detail loading
+
+existing request persistence logic unless directly required for fetch performance or correctness
+
+This task is only to fix request conversation loading when opening an existing request.
+
+Problem
+When a cleaner or client clicks an existing request, the request detail popup opens, but the conversation/thread takes too long to load or appears stuck with empty placeholders.
+
+This happens even for:
+
+resolved requests
+
+replied requests
+
+closed requests
+
+open requests
+
+Expected behavior
+When a user clicks a request:
+
+the modal opens quickly
+
+the request thread loads quickly
+
+previous conversation is visible
+
+attached photos are visible
+
+status is visible
+
+reply box is ready
+
+This must work on:
+
+cleaner side
+
+client side
+
+without breaking admin side
+
+Main goal
+Make request detail loading fast, reliable, and consistent.
+
+Likely root causes to check
+
+Shared request detail query is too heavy
+Possible issues:
+
+loading all attachments inefficiently
+
+N+1 queries for messages and images
+
+sequential fetches instead of one combined fetch
+
+unindexed database lookup by request_id
+
+Closed/resolved requests filtered incorrectly
+Possible issue:
+The loader may be excluding messages or attachments when status is resolved/closed.
+
+Example bad logic:
+only fetch messages where request.status != 'closed'
+
+That would be wrong.
+Closed/resolved requests must still load full history.
+
+Visibility filter bug
+Possible issue:
+Cleaner/client request loader is using wrong role visibility conditions and returns empty message list.
+
+Modal opens before detail request resolves, but loading state never clears
+Possible issue:
+frontend waits on one failed sub-call and leaves skeleton UI hanging.
+
+Attachments loading blocks thread render
+Possible issue:
+thread waits for all image URLs or metadata before rendering anything.
+
+That is bad UX.
+
+Fix strategy
+
+Make request detail use one shared fast loader
+Create or fix one shared request detail fetch path used by:
+
+cleaner request detail modal
+
+client request detail modal
+
+optionally admin request detail if appropriate
+
+Recommended endpoint or helper:
+GET /api/requests/:requestId/detail
+
+Response should include:
+
+request header
+
+request status
+
+request metadata
+
+thread messages
+
+message attachments
+
+visibility-filtered content only
+
+Do not fetch:
+
+request first
+
+then messages
+
+then each message attachments one by one
+if that causes latency
+
+Instead return a single normalized payload.
+
+Recommended response shape
+{
+request: {
+id,
+title,
+status,
+priority,
+requestType,
+createdAt
+},
+messages: [
+{
+id,
+body,
+authorRole,
+authorName,
+messageType,
+createdAt,
+attachments: [
+{
+id,
+fileUrl,
+fileType,
+caption
+}
+]
+}
+]
+}
+
+Do not block thread rendering on attachments
+Very important.
+
+The modal should render:
+
+request header
+
+text messages
+first
+
+Attachments can load progressively after that.
+
+If image previews are slow, the conversation text should still appear immediately.
+
+Best rule
+Render thread as soon as messages arrive.
+Do not keep the entire modal in skeleton state waiting for all image thumbnails.
+
+Ensure closed and resolved requests still load full history
+Resolved or closed status must not reduce visible thread history.
+
+Required rule
+If a user has permission to view a request, they must be able to open it regardless of:
+
+pending
+
+replied
+
+in progress
+
+resolved
+
+closed
+
+And see:
+
+all past messages
+
+all visible attachments
+
+all status changes
+
+Fix query efficiency
+Agent should inspect request detail query and optimize:
+
+query by request_id with index
+
+fetch messages by request_id in one query
+
+fetch attachments for all relevant message_ids in one query
+
+join or map in memory
+
+avoid one query per message
+
+Recommended database optimization
+Ensure indexes exist on:
+
+requests.id
+
+request_messages.request_id
+
+request_attachments.request_message_id
+
+This is a safe performance fix and should not affect existing logic.
+
+Fix loading state handling in frontend
+Current bug may be that loading skeleton stays forever if one fetch partially fails.
+
+Required behavior
+
+open modal immediately
+
+start loading request detail
+
+if data succeeds, render thread
+
+if no messages, show “No conversation yet”
+
+if attachments fail, show messages anyway and safe fallback for images
+
+if request fetch fails, show clean error state, not endless skeleton
+
+Do not leave placeholder blocks forever.
+
+Add timeout-safe fallback UI
+If conversation data fails to load:
+show a clean message like:
+Unable to load this request right now. Please try again.
+
+Do not show blank skeleton forever.
+
+This is important for production trust.
+
+Preserve reply box behavior
+Even if the request is resolved or closed, define clear behavior:
+
+Option A
+Resolved:
+
+still view thread
+
+reply optional depending on business rule
+
+Option B
+Closed:
+
+view thread only
+
+disable reply with message:
+This request is closed
+
+But regardless, thread must load.
+
+Do not tie conversation visibility to reply availability.
+
+Check role-based visibility logic carefully
+Cleaner request detail:
+
+cleaner should see their own request thread and admin-visible replies
+
+Client request detail:
+
+client should see their own request thread and admin-visible replies
+
+Possible bug:
+admin replies may exist but are filtered out because visibility flags are wrong.
+
+Agent should verify:
+
+request belongs to current viewer
+
+messages marked visible to that viewer are returned
+
+closed/resolved requests still return visible history
+
+UI performance improvement
+Do not render huge blocking image components before text.
+
+Recommended rendering order inside modal:
+
+header
+
+status badge
+
+basic metadata
+
+thread text messages
+
+attachment thumbnails lazy-loaded
+
+reply box
+
+This will make the popup feel much faster even if images are present.
+
+Scope boundaries
+Allowed changes:
+
+request detail loader
+
+request detail query optimization
+
+loading state logic
+
+attachment loading strategy
+
+closed/resolved visibility fix
+
+indexes for request detail performance
+
+Do not change:
+
+request list page layout
+
+request creation structure
+
+auth
+
+other modules
+
+request status system beyond visibility/load correctness
+
+Acceptance criteria
+
+Cleaner side
+
+clicking any request opens modal quickly
+
+previous conversation appears
+
+resolved request still shows thread
+
+attached photos appear or progressively load
+
+no endless placeholder blocks
+
+Client side
+
+clicking any request opens modal quickly
+
+previous conversation appears
+
+replied or closed request still shows history
+
+attached photos appear or progressively load
+
+no endless placeholder blocks
+
+System
+
+request detail fetch uses one efficient path
+
+no N+1 attachment fetch pattern
+
+no regression to request creation
+
+no regression to admin requests
+
+no regression to anything else in production
+
+Direct instruction for agent
+
+Fix only the request detail loading issue on cleaner and client side. When a user clicks a request, the modal should load the saved conversation and attachments quickly and reliably, including for resolved or closed requests. Investigate the shared request detail loader, optimize the request/messages/attachments query path, prevent N+1 attachment loading, ensure resolved and closed requests still return full visible history, and make sure the frontend does not stay stuck in skeleton loading state. Render text messages first and load attachments progressively if needed. Do not modify unrelated working systems.
+
+Most likely exact bug
+Most likely one of these is true:
+
+request detail loader is fetching attachments message-by-message
+
+resolved/closed requests are being filtered incorrectly
+
+frontend waits for all attachments before showing any thread
+
+one failing attachment call keeps the modal stuck
+
+So the first fix order should be:
+
+inspect request detail query path
+
+combine request/messages/attachments fetch
+
+render text immediately
+
+lazy-load attachments
+
+ensure closed/resolved still return history
+
+That is the safest fix.

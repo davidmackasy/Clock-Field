@@ -58,7 +58,12 @@ function ThreadMessage({ msg, authorName }: { msg: any; authorName: string }) {
           <div className="grid grid-cols-2 gap-1 mt-2">
             {msg.attachments.map((att: any) => (
               <div key={att.id}>
-                <img src={att.fileUrl} alt={att.caption || "photo"} className="w-full h-24 object-cover rounded-md" />
+                <img
+                  src={`/api/attachments/${att.id}/image`}
+                  alt={att.caption || "photo"}
+                  className="w-full h-24 object-cover rounded-md bg-muted"
+                  loading="lazy"
+                />
                 {att.caption && <p className="text-[10px] opacity-70 mt-0.5 text-center">{att.caption}</p>}
               </div>
             ))}
@@ -84,9 +89,11 @@ export default function EmployeeRequests() {
   const [replyPhotos, setReplyPhotos] = useState<PhotoItem[]>([]);
 
   const { data: requests, isLoading } = useQuery<any[]>({ queryKey: ["/api/client-requests"] });
-  const { data: messages, isLoading: msgsLoading } = useQuery<any[]>({
+  const { data: messages, isLoading: msgsLoading, isError: msgsError } = useQuery<any[]>({
     queryKey: ["/api/client-requests", detailReq?.id, "messages"],
-    enabled: !!detailReq,
+    enabled: !!detailReq?.id,
+    staleTime: 30 * 1000,
+    retry: 1,
   });
 
   const createMut = useMutation({
@@ -262,7 +269,12 @@ export default function EmployeeRequests() {
 
             <div className="flex-1 overflow-y-auto space-y-4 py-2 min-h-0">
               {msgsLoading ? (
-                <div className="space-y-3">{[1,2].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
+                <div className="space-y-3 pt-1">
+                  <Skeleton className="h-12 w-3/4" />
+                  <Skeleton className="h-12 w-2/3 ml-auto" />
+                </div>
+              ) : msgsError ? (
+                <p className="text-xs text-muted-foreground text-center py-6">Unable to load messages. Please close and try again.</p>
               ) : !messages?.length ? (
                 <p className="text-xs text-muted-foreground text-center py-4">Report sent. Admin will reply soon.</p>
               ) : (

@@ -862,7 +862,6 @@ export async function registerRoutes(
       const user = req.user as any;
       const target = await storage.getClientRequest(req.params.id);
       if (!target) return res.status(404).json({ message: "Not found" });
-      // Visibility: admin sees all; client sees their own; employee sees their own
       if (user.role === "admin" && target.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
       if (user.role === "client") {
         const clientRecord = await storage.getClientByUserId(user.id);
@@ -871,7 +870,6 @@ export async function registerRoutes(
       if (user.role === "employee" && target.employeeId !== user.id) return res.status(403).json({ message: "Forbidden" });
 
       const msgs = await storage.getRequestMessages(req.params.id);
-      // Filter visibility for non-admins
       const visible = user.role === "admin" ? msgs :
         user.role === "client" ? msgs.filter(m => m.isVisibleToClient) :
         msgs.filter(m => m.isVisibleToEmployee);
@@ -881,10 +879,34 @@ export async function registerRoutes(
       const attByMsg: Record<string, any[]> = {};
       for (const att of attachments) {
         if (!attByMsg[att.requestMessageId]) attByMsg[att.requestMessageId] = [];
-        attByMsg[att.requestMessageId].push(att);
+        // Strip the heavy base64 fileUrl — serve via /api/attachments/:id/image instead
+        attByMsg[att.requestMessageId].push({
+          id: att.id,
+          caption: att.caption,
+          fileType: att.fileType,
+          createdAt: att.createdAt,
+        });
       }
 
       res.json(visible.map(m => ({ ...m, attachments: attByMsg[m.id] || [] })));
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ── Attachment image endpoint ─────────────────────────────────────────────
+  app.get("/api/attachments/:id/image", requireAuth, async (req, res) => {
+    try {
+      const att = await storage.getRequestAttachment(req.params.id);
+      if (!att) return res.status(404).json({ message: "Not found" });
+      const dataUrl = att.fileUrl;
+      // Parse data URL: data:image/jpeg;base64,<data>
+      const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/s);
+      if (!match) return res.status(400).json({ message: "Invalid image data" });
+      const mimeType = match[1];
+      const base64Data = match[2];
+      const buffer = Buffer.from(base64Data, "base64");
+      res.set("Content-Type", mimeType);
+      res.set("Cache-Control", "private, max-age=86400");
+      res.send(buffer);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
@@ -953,7 +975,11 @@ export async function registerRoutes(
       }
 
       const attachments = await storage.getRequestAttachmentsByMessage(msg.id);
-      res.status(201).json({ ...msg, attachments });
+      // Strip base64 from response — images served via /api/attachments/:id/image
+      const attachmentsMeta = attachments.map(({ id, caption, fileType, createdAt, requestMessageId, uploadedByUserId }) =>
+        ({ id, caption, fileType, createdAt, requestMessageId, uploadedByUserId })
+      );
+      res.status(201).json({ ...msg, attachments: attachmentsMeta });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

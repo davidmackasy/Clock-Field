@@ -64,7 +64,13 @@ function ThreadMessage({ msg, clientName }: { msg: any; clientName: string }) {
           <div className="grid grid-cols-2 gap-1.5 mt-2">
             {msg.attachments.map((att: any) => (
               <div key={att.id}>
-                <img src={att.fileUrl} alt={att.caption || "photo"} className="w-full h-28 object-cover rounded-md cursor-pointer" onClick={() => window.open(att.fileUrl)} />
+                <img
+                  src={`/api/attachments/${att.id}/image`}
+                  alt={att.caption || "photo"}
+                  className="w-full h-28 object-cover rounded-md cursor-pointer bg-muted"
+                  loading="lazy"
+                  onClick={() => window.open(`/api/attachments/${att.id}/image`)}
+                />
                 {att.caption && <p className="text-[10px] opacity-70 mt-0.5 text-center">{att.caption}</p>}
               </div>
             ))}
@@ -92,9 +98,11 @@ export default function AdminRequests() {
   const { data: requests, isLoading } = useQuery<any[]>({ queryKey: ["/api/client-requests"] });
   const { data: clientsList } = useQuery<any[]>({ queryKey: ["/api/clients"] });
   const { data: employeesList } = useQuery<any[]>({ queryKey: ["/api/employees"] });
-  const { data: messages, isLoading: msgsLoading } = useQuery<any[]>({
+  const { data: messages, isLoading: msgsLoading, isError: msgsError } = useQuery<any[]>({
     queryKey: ["/api/client-requests", detailReq?.id, "messages"],
-    enabled: !!detailReq,
+    enabled: !!detailReq?.id,
+    staleTime: 30 * 1000,
+    retry: 1,
   });
 
   const replyMut = useMutation({
@@ -308,7 +316,13 @@ export default function AdminRequests() {
             {/* Thread */}
             <div className="flex-1 overflow-y-auto space-y-4 py-2 min-h-0 border-t">
               {msgsLoading ? (
-                <div className="space-y-3 pt-2">{[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
+                <div className="space-y-3 pt-2">
+                  <Skeleton className="h-14 w-3/4" />
+                  <Skeleton className="h-14 w-2/3 ml-auto" />
+                  <Skeleton className="h-14 w-3/4" />
+                </div>
+              ) : msgsError ? (
+                <p className="text-xs text-muted-foreground text-center py-8">Unable to load messages. Please close and try again.</p>
               ) : !messages?.length ? (
                 <p className="text-xs text-muted-foreground text-center py-8">No messages yet. Send a reply below.</p>
               ) : (
