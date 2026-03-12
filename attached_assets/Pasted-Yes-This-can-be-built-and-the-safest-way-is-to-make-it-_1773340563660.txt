@@ -1,0 +1,727 @@
+Yes. This can be built, and the safest way is to make it a separate public report link system generated from a submitted work submission.
+
+Do not make it part of client login.
+Do not make it replace requests.
+Do not make it replace reports.
+Just add:
+
+Mark as Reviewed
+
+Generate Public Link
+
+That is the cleanest way.
+
+Use this dev note for your agent.
+
+DEV NOTE
+
+Task
+Add a public share link feature to admin Work Log so an admin can generate a professional public report page from a submitted cleaner work submission and share it with a client.
+
+Critical rule
+Do not break or affect anything else that is already working.
+
+Do not modify:
+
+clock in / clock out
+
+attendance
+
+payroll
+
+schedules
+
+request system
+
+existing client login
+
+existing employee login
+
+existing admin login
+
+work submission capture flow on cleaner side
+
+existing reviewed flow unless only extending it safely
+
+This feature must be additive only.
+
+Main goal
+When admin opens a submitted work submission, they should have two actions:
+
+Mark as Reviewed
+
+Generate Public Link
+
+The generated public link should open a clean, professional public page showing the completed work in a client-friendly format.
+
+This is for sharing proof of work with clients without manually downloading and sending pictures.
+
+Product rule
+This is a public report link, not a dashboard page.
+It should be:
+
+clean
+
+read-only
+
+professional
+
+safe to share
+
+easy to open on phone or desktop
+
+It should not require the client to log in.
+
+==================================
+
+ADMIN WORKFLOW CHANGE
+==================================
+
+Current admin submission modal already has:
+
+submission details
+
+categorized work items
+
+before photos
+
+after photos
+
+Mark as Reviewed button
+
+Add another button:
+Generate Public Link
+
+Recommended button layout
+Primary actions at bottom:
+
+Generate Public Link
+
+Mark as Reviewed
+
+If layout needs hierarchy:
+
+Generate Public Link as secondary outlined button
+
+Mark as Reviewed as primary solid button
+
+Alternative
+If public link already exists, button should become:
+Copy Public Link
+
+Even better:
+If no link exists:
+
+Generate Public Link
+
+If link exists:
+
+Copy Public Link
+
+Regenerate Link optional later
+
+Safest MVP
+Generate once, then show Copy Link.
+
+==================================
+2. WHAT THE PUBLIC LINK SHOULD DO
+
+Goal
+Create a public URL for a specific work submission.
+
+Example
+/public/work-report/{publicToken}
+or
+/r/{publicToken}
+
+Do not expose internal numeric ids directly.
+Use a secure random token.
+
+Public page should show:
+
+company name
+
+report title
+
+cleaner name
+
+date
+
+time submitted
+
+client/location name
+
+categorized work sections
+
+cleaner notes/comments
+
+before photos
+
+after photos
+
+footer branding
+
+This should look like a proper service report.
+
+==================================
+3. PUBLIC LINK DATA MODEL
+
+Recommended approach
+Add public link fields to work_submissions table or a linked table.
+
+Option A, simplest
+Add to work_submissions:
+
+public_share_token nullable
+
+public_share_enabled boolean default false
+
+public_shared_at nullable
+
+Option B, cleaner separation
+Create work_submission_public_links table:
+
+id
+
+submission_id
+
+token
+
+is_active
+
+created_at
+
+revoked_at nullable
+
+Safest MVP
+Use Option A.
+It is simpler and faster.
+
+Recommended fields
+
+public_share_token
+
+public_share_enabled
+
+public_shared_at
+
+Token rules
+
+use long random token
+
+not guessable
+
+not sequential
+
+not based on submission id
+
+Example:
+32 to 64 char secure token
+
+==================================
+4. PUBLIC PAGE CONTENT
+
+Goal
+Make the public page clean and professional.
+
+Header section
+Show:
+
+Company Name
+
+Report title like:
+Cleaning Service Report
+
+Submission date
+
+Submitted time
+
+Cleaner name
+
+Location name
+
+Client name if appropriate
+
+Example header
+Cleaning Service Report
+Prepared by: David Zulu
+Date: Mar 12, 2026
+Location: Olympic Building
+Company: Master Cleaning
+
+Then show categorized sections.
+
+Per section/work item
+Example:
+Washrooms
+Washroom 1
+Note: Sinks and mirrors cleaned thoroughly
+
+Before Photos
+[grid]
+
+After Photos
+[grid]
+
+Then next section:
+Offices
+Office 1
+Note: Desk area completed
+
+Before Photos
+[grid]
+
+After Photos
+[grid]
+
+This should follow the grouped structure already captured in the work submission.
+
+==================================
+5. PUBLIC PAGE LAYOUT
+
+Goal
+Make it look client-ready.
+
+Recommended structure
+
+A. Hero/Header
+
+company logo optional later
+
+company name
+
+report title
+
+date
+
+cleaner name
+
+location
+
+B. Summary card
+
+Submission date
+
+Submission time
+
+Cleaner
+
+Location
+
+Total work items
+
+C. Work sections
+Each work item card contains:
+
+category badge
+
+sub-area title
+
+optional note
+
+before photo grid
+
+after photo grid
+
+D. Footer
+Show:
+
+company name
+
+optional support contact later
+
+generated by ClockField optional later if desired
+
+You asked for footer with company name.
+Do that.
+
+Example footer
+Prepared by Master Cleaning
+Service documentation report
+
+==================================
+6. PHOTO DISPLAY
+
+Use the improved grid layout from admin side.
+
+Public page photo rules:
+
+compact responsive grid
+
+before photos grouped
+
+after photos grouped
+
+no large blank spaces
+
+click to enlarge preview optional
+
+mobile-friendly
+
+Recommended:
+
+3 columns desktop
+
+2 columns mobile
+
+Do not expose internal upload URLs in a messy way.
+Render clean image cards.
+
+==================================
+7. NOTES / COMMENTS
+
+Include cleaner notes when present.
+
+If work item has note/comment:
+show it in a small content block under the section title.
+
+Example
+Waiting Room
+Note: 5 people waiting here
+
+This should carry into public report because it adds context.
+
+==================================
+8. ADMIN ACTION FLOW
+
+Desired behavior
+
+Admin opens a submitted work submission.
+Buttons visible:
+
+Generate Public Link
+
+Mark as Reviewed
+
+If admin clicks Generate Public Link:
+
+system generates token
+
+saves public link
+
+returns public URL
+
+show success message
+
+show copy button
+
+Then admin can copy and send it to client manually.
+
+Optional next step later:
+
+“Send to client” button if email/SMS exists
+Not needed now.
+
+==================================
+9. LINK LIFECYCLE
+
+Safest MVP rules
+
+once generated, link remains active
+
+admin can copy it anytime
+
+no expiration in v1
+
+Optional later
+
+revoke link
+
+regenerate token
+
+expire after X days
+
+If you want minimum control now:
+Add:
+
+Public link active yes/no
+
+Revoke link button later
+
+But safest first version:
+generate once and keep active
+
+==================================
+10. SECURITY RULES
+
+Because this is public:
+
+the token must be unguessable
+
+page must expose only intended submission content
+
+do not expose internal ids
+
+do not show admin-only notes
+
+do not show employee-only private data
+
+do not show payroll or attendance info
+
+do not show unrelated submissions
+
+The public page should show only:
+
+submission report content
+
+cleaner name
+
+date/time
+
+location/client-facing details
+
+photos
+
+work notes intended for the client
+
+If there are internal-only notes in future, do not expose them.
+
+==================================
+11. WHAT SHOULD NOT BE PUBLIC
+
+Do not show on public link:
+
+internal admin comments
+
+employee phone
+
+employee email
+
+employee wage
+
+company internal ids
+
+request system data
+
+attendance data
+
+raw storage paths beyond rendered images
+
+other work submissions
+
+Only this one selected submission.
+
+==================================
+12. ROUTE RECOMMENDATION
+
+Suggested public route
+/public/work-report/:token
+
+or shorter
+/r/:token
+
+Best option
+/public/work-report/:token
+
+That is clearer.
+
+==================================
+13. ADMIN UI DETAILS
+
+Inside admin work submission modal/page:
+Add section near bottom or header:
+Public Report
+
+If no public link exists:
+
+Generate Public Link button
+
+If public link exists:
+
+Copy Public Link button
+
+small text:
+Public link generated
+
+Optional:
+
+Open Public Link
+
+Best compact setup:
+
+Generate Public Link
+or after creation:
+
+Copy Link
+
+Open Link
+
+==================================
+14. DATABASE / BACKEND CHANGES
+
+Recommended minimal additions to work_submissions:
+
+public_share_enabled boolean default false
+
+public_share_token text nullable
+
+public_shared_at timestamp nullable
+
+Backend endpoints
+
+POST /api/work-submissions/:id/generate-public-link
+Admin only
+
+Behavior:
+
+verify submission belongs to admin’s company
+
+generate token if missing
+
+enable public share
+
+return URL
+
+GET /public/work-report/:token
+Public route
+
+Behavior:
+
+find submission by token and enabled status
+
+return only public-safe report data
+
+render public page
+
+If using frontend route with API:
+
+public page fetches public report data by token
+
+==================================
+15. FRONTEND PUBLIC PAGE
+
+Create a dedicated public page component.
+
+Must be:
+
+mobile responsive
+
+desktop clean
+
+no sidebar
+
+no dashboard chrome
+
+report-style layout
+
+This is important.
+It should not feel like logged-in app UI.
+It should feel like a shared service report.
+
+==================================
+16. MARK AS REVIEWED RELATION
+
+Do not tie public link generation to reviewed status too tightly.
+
+Best behavior
+Admin can:
+
+generate link before review
+or
+
+review first then generate
+
+But if you want more control:
+allow only submitted or reviewed submissions to generate public link
+
+Safest business rule
+Only allow public link generation when submission status is:
+
+submitted
+
+reviewed
+
+Do not allow draft submissions to be shared publicly.
+
+==================================
+17. ACCEPTANCE CRITERIA
+
+Admin side
+
+open submitted work submission
+
+see Generate Public Link button
+
+click Generate Public Link
+
+receive public share link
+
+copy link works
+
+existing Mark as Reviewed still works
+
+Public page
+
+opening public link shows professional report
+
+shows cleaner name
+
+shows date/time
+
+shows location
+
+shows categorized work items
+
+shows notes/comments
+
+shows before/after photo grids
+
+shows company name in footer
+
+works on mobile and desktop
+
+Security
+
+token is not guessable
+
+unrelated data is not exposed
+
+only intended work submission appears
+
+Regression
+
+cleaner work submission still works
+
+admin Work Log still works
+
+reviewed action still works
+
+no changes to clock in/out, payroll, attendance, requests, auth
+
+==================================
+18. DIRECT BUILD INSTRUCTION FOR AGENT
+
+Add a public share link feature to the admin Work Log submission detail view. Admin must be able to generate a public link for a submitted cleaner work submission and copy that link to share with clients. The public link should open a clean, professional, read-only report page showing the cleaner name, date, time, location, categorized work items, notes, before photo grids, after photo grids, and a footer with the company name. Use a secure unguessable public token, store it on the work submission or a linked public-share record, and do not expose unrelated internal data. Keep this fully additive and do not modify any unrelated working systems.
+
+==================================
+19. SAFEST MVP VERSION
+
+Build this first:
+
+Generate Public Link button
+
+secure token
+
+public report page
+
+copy link action
+
+categorized before/after grids
+
+footer company name
+
+Later enhancements can be:
+
+revoke link
+
+regenerate token
+
+company logo
+
+branded PDF export
+
+send directly to client
+
+expiration settings
+
+That is the safest way to ship this without breaking the live app.

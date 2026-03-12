@@ -818,7 +818,7 @@ export async function registerRoutes(
 
       // Validate imageUrls (returned by /api/upload)
       if (imageUrls && Array.isArray(imageUrls)) {
-        if (imageUrls.length > 3) return res.status(400).json({ message: "Maximum 3 photos allowed per request" });
+        if (imageUrls.length > 10) return res.status(400).json({ message: "Maximum 10 photos allowed per request" });
         for (const url of imageUrls) {
           if (typeof url !== "string" || !url.startsWith("/uploads/")) {
             return res.status(400).json({ message: "Invalid image URL" });
@@ -826,9 +826,9 @@ export async function registerRoutes(
         }
       }
 
-      // Legacy base64 validation (for backward compatibility)
+      // Base64 photos (stored as attachments on initial_request message)
       if (photos && Array.isArray(photos)) {
-        if (photos.length > 3) return res.status(400).json({ message: "Maximum 3 photos allowed per request" });
+        if (photos.length > 10) return res.status(400).json({ message: "Maximum 10 photos allowed per request" });
         for (const photo of photos) {
           if (!photo.dataUrl) continue;
           const mimeMatch = photo.dataUrl.match(/^data:(image\/(?:jpeg|png|jpg));base64,/);
@@ -1006,7 +1006,7 @@ export async function registerRoutes(
       const { body, photos, statusChange, isVisibleToClient = true, isVisibleToEmployee = true } = req.body;
 
       if (photos && Array.isArray(photos)) {
-        if (photos.length > 3) return res.status(400).json({ message: "Maximum 3 photos allowed per message" });
+        if (photos.length > 10) return res.status(400).json({ message: "Maximum 10 photos allowed per message" });
         for (const photo of photos) {
           if (!photo.dataUrl) continue;
           const mimeMatch = photo.dataUrl.match(/^data:(image\/(?:jpeg|png|jpg));base64,/);
@@ -1490,6 +1490,82 @@ export async function registerRoutes(
       const buffer = Buffer.from(match[2], "base64");
       res.set("Content-Type", match[1]);
       res.set("Cache-Control", "private, max-age=86400");
+      res.send(buffer);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ── Public Share Links ──────────────────────────────────────────────────────
+  // Generate / return share token (admin only)
+  app.post("/api/work-submissions/:id/share", requireRole("admin"), async (req, res) => {
+    try {
+      const sub = await storage.getWorkSubmission(req.params.id);
+      if (!sub) return res.status(404).json({ message: "Not found" });
+      const user = req.user as any;
+      if (sub.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
+      // If token already exists, just return it
+      if (sub.publicShareToken && sub.publicShareEnabled) {
+        const url = `/public/work-report/${sub.publicShareToken}`;
+        return res.json({ token: sub.publicShareToken, url });
+      }
+      const updated = await storage.generateWorkSubmissionShareToken(req.params.id);
+      if (!updated) return res.status(500).json({ message: "Failed to generate link" });
+      const url = `/public/work-report/${updated.publicShareToken}`;
+      res.json({ token: updated.publicShareToken, url });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Public report data (no auth required)
+  app.get("/api/public/work-report/:token", async (req, res) => {
+    try {
+      const sub = await storage.getWorkSubmissionByToken(req.params.token);
+      if (!sub || !sub.publicShareEnabled) return res.status(404).json({ message: "Report not found or no longer active" });
+      // Load items + photos
+      const items = await storage.getWorkSubmissionItems(sub.id);
+      const itemIds = items.map(i => i.id);
+      const photos = itemIds.length > 0 ? await storage.getWorkSubmissionPhotosByItemIds(itemIds) : [];
+      // Load company name
+      const company = await storage.getCompany(sub.companyId);
+      // Load employee name
+      const employee = sub.employeeId ? await storage.getUser(sub.employeeId) : null;
+      const employeeName = employee ? `${employee.firstName} ${employee.lastName}`.trim() : "Staff";
+      const itemsWithPhotos = items.map(item => ({
+        id: item.id,
+        section: item.section,
+        subArea: item.subArea,
+        notes: item.notes,
+        sortOrder: item.sortOrder,
+        photos: photos
+          .filter(p => p.submissionItemId === item.id)
+          .map(p => ({ id: p.id, photoType: p.photoType, caption: p.caption })),
+      }));
+      res.json({
+        id: sub.id,
+        workDate: sub.workDate,
+        submittedAt: sub.submittedAt,
+        locationName: sub.locationName,
+        status: sub.status,
+        companyName: company?.name || "ClockField",
+        employeeName,
+        items: itemsWithPhotos,
+      });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Public photo serving (no auth, validates via token)
+  app.get("/api/public/work-report/:token/photos/:photoId", async (req, res) => {
+    try {
+      const sub = await storage.getWorkSubmissionByToken(req.params.token);
+      if (!sub || !sub.publicShareEnabled) return res.status(404).json({ message: "Not found" });
+      const photo = await storage.getWorkSubmissionPhoto(req.params.photoId);
+      if (!photo) return res.status(404).json({ message: "Not found" });
+      // Verify photo belongs to this submission
+      const item = await storage.getWorkSubmissionItem(photo.submissionItemId);
+      if (!item || item.submissionId !== sub.id) return res.status(403).json({ message: "Forbidden" });
+      const match = photo.fileUrl.match(/^data:([^;]+);base64,(.+)$/s);
+      if (!match) return res.status(400).json({ message: "Invalid image data" });
+      const buffer = Buffer.from(match[2], "base64");
+      res.set("Content-Type", match[1]);
+      res.set("Cache-Control", "public, max-age=86400");
       res.send(buffer);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });

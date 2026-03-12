@@ -294,7 +294,7 @@ export default function EmployeeRequests() {
                   className="resize-none text-sm"
                   data-testid="input-emp-reply"
                 />
-                <PhotoUploader photos={replyPhotos} onChange={setReplyPhotos} maxPhotos={3} label="Attach Photos" />
+                <PhotoUploader photos={replyPhotos} onChange={setReplyPhotos} maxPhotos={5} maxSizeMB={10} label="Attach Photos" />
                 <Button
                   className="w-full"
                   size="sm"

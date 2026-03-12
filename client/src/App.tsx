@@ -32,6 +32,7 @@ import SetPasswordPage from "@/pages/employee/set-password";
 import ClientDashboard from "@/pages/client/dashboard";
 import ClientRequestsPage from "@/pages/client/requests";
 import ClientProfile from "@/pages/client/profile";
+import PublicWorkReport from "@/pages/public/work-report";
 
 function LoadingScreen() {
   return (
@@ -122,6 +123,15 @@ function ClientLayout() {
 function AppRouter() {
   const { user, isLoading } = useAuth();
   const [location] = useLocation();
+
+  // Public routes — no auth required
+  if (location.startsWith("/public/work-report/")) {
+    return (
+      <Switch>
+        <Route path="/public/work-report/:token" component={PublicWorkReport} />
+      </Switch>
+    );
+  }
 
   if (isLoading) return <LoadingScreen />;
 

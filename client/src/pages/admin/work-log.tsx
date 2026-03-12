@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { MapPin, User, Calendar, ChevronRight, CheckCircle, Search, Eye, X, ChevronLeft, ChevronRight as ChevronRightIcon } from "lucide-react";
+import { MapPin, User, Calendar, ChevronRight, CheckCircle, Search, Eye, X, ChevronLeft, ChevronRight as ChevronRightIcon, Link, Copy, ExternalLink } from "lucide-react";
 
 function fmt(iso: string) {
   return new Date(iso).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -222,6 +222,8 @@ export default function AdminWorkLog() {
   const [search, setSearch] = useState("");
   const [detailSub, setDetailSub] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const { data: submissions, isLoading } = useQuery<any[]>({
     queryKey: ["/api/work-submissions"],
@@ -241,6 +243,31 @@ export default function AdminWorkLog() {
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
+
+  const generateLinkMut = useMutation({
+    mutationFn: async (subId: string) => {
+      const res = await apiRequest("POST", `/api/work-submissions/${subId}/share`, {});
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      const fullUrl = `${window.location.origin}${data.url}`;
+      setShareUrl(fullUrl);
+      toast({ title: "Public link ready" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const copyLink = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast({ title: "Link copied to clipboard" });
+    } catch {
+      toast({ title: "Copy failed", description: "Please copy the link manually", variant: "destructive" });
+    }
+  };
 
   const empMap: Record<string, string> = {};
   (employees || []).forEach((e: any) => { empMap[e.id] = `${e.firstName} ${e.lastName}`; });
@@ -348,7 +375,7 @@ export default function AdminWorkLog() {
       )}
 
       {/* Detail Dialog */}
-      <Dialog open={!!detailSub} onOpenChange={(v) => { if (!v) setDetailSub(null); }}>
+      <Dialog open={!!detailSub} onOpenChange={(v) => { if (!v) { setDetailSub(null); setShareUrl(null); setCopied(false); } }}>
         <DialogContent className="max-w-2xl mx-auto max-h-[90vh] flex flex-col gap-4">
           {detailSub && (
             <>
@@ -374,8 +401,47 @@ export default function AdminWorkLog() {
 
               <SubmissionDetail subId={detailSub.id} />
 
-              {detailSub.status === "submitted" && (
-                <div className="pt-2 border-t shrink-0">
+              <div className="pt-2 border-t shrink-0 space-y-2">
+                {/* Share link area */}
+                {shareUrl ? (
+                  <div className="flex gap-2">
+                    <div className="flex-1 flex items-center gap-2 bg-muted rounded-lg px-3 py-2 min-w-0">
+                      <Link className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                      <p className="text-xs text-muted-foreground truncate">{shareUrl}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0 h-9"
+                      onClick={copyLink}
+                      data-testid="button-copy-link"
+                    >
+                      <Copy className="w-3.5 h-3.5 mr-1.5" />
+                      {copied ? "Copied!" : "Copy"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0 h-9"
+                      onClick={() => window.open(shareUrl, "_blank")}
+                      data-testid="button-open-link"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => generateLinkMut.mutate(detailSub.id)}
+                    disabled={generateLinkMut.isPending}
+                    data-testid="button-generate-link"
+                  >
+                    <Link className="w-4 h-4 mr-2" />
+                    {generateLinkMut.isPending ? "Generating..." : "Generate Public Link"}
+                  </Button>
+                )}
+                {detailSub.status === "submitted" && (
                   <Button
                     className="w-full"
                     onClick={() => markReviewedMut.mutate(detailSub.id)}
@@ -385,8 +451,8 @@ export default function AdminWorkLog() {
                     <CheckCircle className="w-4 h-4 mr-2" />
                     {markReviewedMut.isPending ? "Marking..." : "Mark as Reviewed"}
                   </Button>
-                </div>
-              )}
+                )}
+              </div>
             </>
           )}
         </DialogContent>

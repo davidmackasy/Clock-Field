@@ -95,6 +95,8 @@ export interface IStorage {
   getWorkSubmissionsByCompany(companyId: string): Promise<WorkSubmission[]>;
   updateWorkSubmission(id: string, data: Partial<InsertWorkSubmission>): Promise<WorkSubmission | undefined>;
   deleteWorkSubmission(id: string): Promise<void>;
+  generateWorkSubmissionShareToken(id: string): Promise<WorkSubmission | undefined>;
+  getWorkSubmissionByToken(token: string): Promise<WorkSubmission | undefined>;
 
   createWorkSubmissionItem(data: InsertWorkSubmissionItem): Promise<WorkSubmissionItem>;
   getWorkSubmissionItem(id: string): Promise<WorkSubmissionItem | undefined>;
@@ -410,6 +412,20 @@ export class DatabaseStorage implements IStorage {
   }
   async deleteWorkSubmission(id: string): Promise<void> {
     await db.delete(workSubmissions).where(eq(workSubmissions.id, id));
+  }
+  async generateWorkSubmissionShareToken(id: string): Promise<WorkSubmission | undefined> {
+    const { randomBytes } = await import("crypto");
+    const token = randomBytes(32).toString("hex");
+    const [row] = await db.update(workSubmissions)
+      .set({ publicShareToken: token, publicShareEnabled: true })
+      .where(eq(workSubmissions.id, id))
+      .returning();
+    return row;
+  }
+  async getWorkSubmissionByToken(token: string): Promise<WorkSubmission | undefined> {
+    const [row] = await db.select().from(workSubmissions)
+      .where(eq(workSubmissions.publicShareToken, token));
+    return row;
   }
 
   async createWorkSubmissionItem(data: InsertWorkSubmissionItem): Promise<WorkSubmissionItem> {

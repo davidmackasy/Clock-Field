@@ -199,6 +199,8 @@ export const workSubmissions = pgTable("work_submissions", {
   createdAt: text("created_at").notNull(),
   submittedAt: text("submitted_at"),
   updatedAt: text("updated_at").notNull(),
+  publicShareToken: text("public_share_token"),
+  publicShareEnabled: boolean("public_share_enabled").notNull().default(false),
 });
 
 export const workSubmissionItems = pgTable("work_submission_items", {
