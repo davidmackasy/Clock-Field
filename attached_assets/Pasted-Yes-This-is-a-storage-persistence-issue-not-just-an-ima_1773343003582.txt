@@ -1,0 +1,336 @@
+Yes. This is a storage persistence issue, not just an image rendering issue.
+
+What is happening
+Your uploaded images are likely being stored in a local filesystem path like /uploads/... inside the app container or server instance. When you redeploy or republish, that environment gets rebuilt, and those local files can disappear or their paths stop being valid.
+
+That is why:
+
+images looked fine before deploy
+
+after republish, older submitted images are broken
+
+For a production app, uploaded files must not rely on temporary deploy storage.
+
+Use this exact dev note for your agent.
+
+DEV NOTE
+
+Task
+Fix production image persistence so uploaded photos for requests, work log submissions, and public work links do not break after redeploys or republishes.
+
+Critical instruction
+Do not change anything else unless directly required for durable image storage.
+Do not touch:
+
+auth
+
+login
+
+attendance
+
+payroll
+
+schedule logic
+
+request thread behavior
+
+work log flow
+
+public link logic except to repair image source URLs
+
+UI layouts
+
+business rules
+
+This is a production-safe storage fix only.
+
+Main goal
+Make sure uploaded images remain available after:
+
+app republish
+
+redeploy
+
+restart
+
+update from development to production
+
+Uploaded images must be persistent and not tied to temporary local deploy storage.
+
+Problem
+Right now, older images break after publish/update.
+That strongly suggests current uploads are stored in ephemeral local storage, such as:
+
+local /uploads folder inside the app runtime
+
+temporary container filesystem
+
+build output directory
+
+any path that gets replaced on deploy
+
+This is not acceptable for production.
+
+Required solution
+Move uploaded image storage to persistent storage.
+
+Accepted production-safe approaches
+Use one of these:
+
+Option A, preferred
+Cloud object storage
+Examples:
+
+Supabase Storage
+
+AWS S3
+
+Cloudflare R2
+
+Google Cloud Storage
+
+Option B
+A persistent mounted volume supported by hosting platform
+Only if truly persistent across redeploys
+
+Best recommendation
+Use object storage, not local server disk.
+
+Do not keep production request/work images only in /uploads on the app server.
+
+What must be covered
+This fix must apply to all uploaded images used in:
+
+client requests
+
+admin request replies
+
+cleaner request replies
+
+work log / work submissions
+
+public work-report links
+
+any photo evidence already tied to production records
+
+Most likely root cause
+The app currently stores image files locally and stores only local path URLs such as:
+
+/uploads/file.jpg
+
+After deploy:
+
+file no longer exists
+or
+
+path changes
+or
+
+server instance is replaced
+
+That breaks old images.
+
+Required implementation plan
+
+Introduce durable file storage abstraction
+Create one storage layer/service for image upload and retrieval.
+
+Do not scatter upload logic across multiple routes.
+
+Create a shared file service like:
+
+uploadImage(file)
+
+getPublicUrl(storageKey)
+
+deleteImage(storageKey) optional later
+
+All request/work image flows should use this shared service.
+
+Store durable file references in database
+Do not store only temporary local paths.
+
+Store durable file metadata such as:
+
+storage_key
+
+public_url
+
+bucket/provider
+
+created_at
+
+If current schema stores only file_url, that is okay if the URL is stable and durable.
+But if it points to local /uploads/..., that must be migrated going forward.
+
+Recommended fields if needed:
+
+storage_key
+
+file_url
+
+storage_provider
+
+Update upload routes to save to durable storage
+Any endpoint that currently writes to local /uploads should instead:
+
+upload file to persistent storage
+
+get stable public URL or signed/public path
+
+save that stable reference in DB
+
+Do not rely on local disk for production assets.
+
+Keep old image references working if possible
+There are two cases:
+
+Case A
+Old local files still exist somewhere and can be migrated
+Best path:
+
+migrate old /uploads files to persistent storage
+
+update DB URLs
+
+Case B
+Old local files are already gone
+Then those broken images may not be recoverable.
+Be honest in implementation notes.
+But prevent it from happening again by fixing storage now.
+
+If migration is possible, do it carefully.
+
+Fix public link image rendering
+The public work-report links must also use the new persistent image URLs.
+Do not let public pages depend on local app disk paths.
+
+Any generated public report must render images from durable storage.
+
+Do not break existing image display components
+UI components should continue to receive image URLs.
+The difference is:
+those URLs must now come from persistent storage.
+
+This should be mostly a backend/storage fix, not a UI rewrite.
+
+Environment and deployment requirements
+Add required environment variables for the chosen storage provider.
+
+Examples:
+
+STORAGE_PROVIDER
+
+STORAGE_BUCKET
+
+STORAGE_REGION
+
+STORAGE_PUBLIC_BASE_URL
+
+STORAGE_ACCESS_KEY
+
+STORAGE_SECRET_KEY
+
+Do not hardcode secrets.
+
+Production-safe fallback behavior
+If image upload fails:
+
+do not save broken image reference
+
+return clean error
+
+keep form state when possible
+
+If image URL cannot load:
+
+show image fallback placeholder
+
+do not crash the request or work log detail page
+
+But the real fix is storage persistence, not just fallback UI.
+
+Minimum migration plan
+Agent must inspect where images are currently stored for:
+
+request attachments
+
+request imageUrls
+
+work submission photos
+
+public report photos
+
+Then:
+
+switch new uploads to persistent storage first
+
+if possible, migrate existing recoverable files
+
+update existing render logic to use stored durable URLs
+
+Scope boundaries
+Allowed changes:
+
+upload service
+
+storage backend
+
+file URL generation
+
+request/work image persistence
+
+public link image source updates
+
+migration script if needed
+
+Do not change:
+
+feature behavior
+
+request limits
+
+work log logic
+
+business permissions
+
+unrelated layouts
+
+Acceptance criteria
+
+upload a new request image
+
+redeploy app
+
+image still loads
+
+upload a new work log image
+
+redeploy app
+
+image still loads
+
+public work-report link still shows images after redeploy
+
+request thread images still show after redeploy
+
+no regression to request or work log flows
+
+no unrelated system changes
+
+Direct instruction for agent
+Fix only the production image persistence problem. Uploaded images for requests, work log submissions, and public work-report links must not break after redeploys or republishes. Replace any local ephemeral /uploads storage dependency with durable persistent storage, such as object storage or a truly persistent volume, and make sure the database stores stable file references that remain valid across deployments. Keep all existing feature behavior intact and do not modify unrelated systems.
+
+Important note for agent
+Do not patch this by only changing the frontend image component.
+Do not patch this by only adding fallback placeholders.
+The root problem is persistent storage.
+
+That is what must be fixed.
+
+Most likely exact issue
+Most likely the app is saving uploaded files to a local server directory that gets wiped or replaced on each deploy.
+
+That is why older images break after publish.
+
+That must be replaced with durable storage now.

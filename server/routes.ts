@@ -1,12 +1,15 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { db } from "./db";
 import { setupAuth, hashPassword, comparePasswords, requireAuth, requireRole } from "./auth";
 import passport from "passport";
 import { randomBytes } from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { isNotNull, eq } from "drizzle-orm";
+import { clientRequests } from "@shared/schema";
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -23,6 +26,68 @@ const upload = multer({
 
 function generateTempPin(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+async function migrateUploadsToBase64(): Promise<void> {
+  try {
+    const allRequests = await db.select().from(clientRequests).where(isNotNull(clientRequests.imageUrls));
+    const toMigrate = allRequests.filter(r =>
+      r.imageUrls?.some(url => url.startsWith("/uploads/"))
+    );
+    if (toMigrate.length === 0) return;
+    console.log(`[img-migration] Migrating ${toMigrate.length} request(s) with local /uploads/ images to base64 in DB...`);
+
+    for (const req of toMigrate) {
+      const uploadUrls = (req.imageUrls || []).filter(u => u.startsWith("/uploads/"));
+      const converted: string[] = [];
+
+      for (const url of uploadUrls) {
+        const filePath = path.join(process.cwd(), url);
+        if (!fs.existsSync(filePath)) {
+          console.log(`[img-migration] File not found on disk, skipping: ${filePath}`);
+          continue;
+        }
+        const buf = fs.readFileSync(filePath);
+        const ext = path.extname(filePath).toLowerCase();
+        const mime = ext === ".png" ? "image/png" : "image/jpeg";
+        converted.push(`data:${mime};base64,${buf.toString("base64")}`);
+      }
+
+      const messages = await storage.getRequestMessages(req.id);
+      let initialMsg = messages.find(m => m.messageType === "initial_request");
+      if (!initialMsg) {
+        initialMsg = await storage.createRequestMessage({
+          requestId: req.id,
+          authorUserId: req.createdByUserId || "system",
+          authorRole: req.createdByRole || "client",
+          body: req.description || null,
+          messageType: "initial_request",
+          isVisibleToClient: true,
+          isVisibleToEmployee: true,
+          isStatusUpdate: false,
+          statusValue: null,
+          createdAt: req.createdAt,
+        });
+      }
+
+      for (const dataUrl of converted) {
+        await storage.createRequestAttachment({
+          requestMessageId: initialMsg.id,
+          fileUrl: dataUrl,
+          fileType: "image",
+          caption: null,
+          uploadedByUserId: req.createdByUserId || "system",
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      await db.update(clientRequests).set({ imageUrls: null }).where(eq(clientRequests.id, req.id));
+      console.log(`[img-migration] Migrated ${converted.length}/${uploadUrls.length} photo(s) for request ${req.id}`);
+    }
+    console.log("[img-migration] Done.");
+  } catch (err: any) {
+    console.error("[img-migration] Migration failed:", err.message);
+  }
 }
 
 export async function registerRoutes(
@@ -1578,6 +1643,9 @@ export async function registerRoutes(
       res.send(buffer);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
+
+  // Run once at startup to migrate any /uploads/ imageUrls to base64 in DB
+  void migrateUploadsToBase64();
 
   return httpServer;
 }
