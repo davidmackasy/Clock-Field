@@ -780,6 +780,18 @@ export async function registerRoutes(
       const { title, description, requestType, priority, photos } = req.body;
       if (!title?.trim()) return res.status(400).json({ message: "Title is required" });
 
+      if (photos && Array.isArray(photos)) {
+        if (photos.length > 3) return res.status(400).json({ message: "Maximum 3 photos allowed per request" });
+        for (const photo of photos) {
+          if (!photo.dataUrl) continue;
+          const mimeMatch = photo.dataUrl.match(/^data:(image\/(?:jpeg|png|jpg));base64,/);
+          if (!mimeMatch) return res.status(400).json({ message: "Only JPG and PNG images are allowed" });
+          const base64Data = photo.dataUrl.split(",")[1] || "";
+          const sizeBytes = Math.ceil(base64Data.length * 3 / 4);
+          if (sizeBytes > 10 * 1024 * 1024) return res.status(400).json({ message: "Each photo must be under 10MB" });
+        }
+      }
+
       let clientId: string | null = null;
       let employeeId: string | null = null;
       let visibilityScope = "admin_and_client";
@@ -926,6 +938,19 @@ export async function registerRoutes(
       }
 
       const { body, photos, statusChange, isVisibleToClient = true, isVisibleToEmployee = true } = req.body;
+
+      if (photos && Array.isArray(photos)) {
+        if (photos.length > 3) return res.status(400).json({ message: "Maximum 3 photos allowed per message" });
+        for (const photo of photos) {
+          if (!photo.dataUrl) continue;
+          const mimeMatch = photo.dataUrl.match(/^data:(image\/(?:jpeg|png|jpg));base64,/);
+          if (!mimeMatch) return res.status(400).json({ message: "Only JPG and PNG images are allowed" });
+          const base64Data = photo.dataUrl.split(",")[1] || "";
+          const sizeBytes = Math.ceil(base64Data.length * 3 / 4);
+          if (sizeBytes > 10 * 1024 * 1024) return res.status(400).json({ message: "Each photo must be under 10MB" });
+        }
+      }
+
       const isStatusUpdate = !!statusChange;
       const now = new Date().toISOString();
 
