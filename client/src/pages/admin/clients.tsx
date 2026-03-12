@@ -219,7 +219,7 @@ export default function AdminClients() {
                     {locs.length > 0 && <div className="flex items-center gap-1.5"><MapPin className="w-3 h-3" />{locs.length} location{locs.length > 1 ? "s" : ""}</div>}
                   </div>
                   <div className="flex flex-wrap gap-2 mt-3 border-t pt-3" onClick={(e) => e.stopPropagation()}>
-                    {!client.userId ? (
+                    {!client.userId || !client.loginEnabled ? (
                       <Button
                         size="sm"
                         variant="outline"

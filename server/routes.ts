@@ -517,7 +517,15 @@ export async function registerRoutes(
   app.get("/api/clients", requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
-      res.json(await storage.getClientsByCompany(user.companyId));
+      const clients = await storage.getClientsByCompany(user.companyId);
+      const enriched = await Promise.all(clients.map(async (client: any) => {
+        if (client.userId) {
+          const linkedUser = await storage.getUser(client.userId);
+          return { ...client, loginEnabled: linkedUser?.loginEnabled ?? false, userAccountStatus: linkedUser?.accountStatus };
+        }
+        return { ...client, loginEnabled: false, userAccountStatus: null };
+      }));
+      res.json(enriched);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
