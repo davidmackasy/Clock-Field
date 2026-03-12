@@ -1,0 +1,198 @@
+Yes. This should be a very small UI-only auth error improvement.
+
+Use this dev note for your agent:
+
+DEV NOTE
+
+Task
+Improve the login error message UI so failed login attempts look professional and match the app design.
+
+Main instruction
+Do not touch anything else that is already working.
+Do not modify:
+
+auth logic
+
+session logic
+
+password validation
+
+employee login flow
+
+admin login flow
+
+client login flow
+
+registration flow
+
+redirects
+
+role logic
+
+This task is only about:
+
+improving the displayed error message
+
+making the error toast/card look professional
+
+removing raw server error formatting from the UI
+
+Goal
+When a user enters a wrong email or password, the UI should show a clean, professional message like:
+
+Incorrect email or password. Please try again.
+
+It should not show:
+
+401
+
+JSON
+
+raw error payload
+
+technical server message
+
+ugly developer formatting
+
+Problem now
+Current UI shows something like:
+Login failed
+401: {"message":"Invalid credentials"}
+
+That looks unprofessional and too technical for end users.
+
+Required fix
+
+Replace raw backend error display
+Do not render raw API response text directly in the toast.
+
+Current bad behavior:
+
+frontend displays status code and raw JSON string
+
+Required behavior:
+Map auth failure to a clean message.
+
+If login fails due to invalid credentials, show:
+Incorrect email or password. Please try again.
+
+Keep the visual style matched to app UI
+The error UI should match the rest of the app.
+
+Requirements:
+
+clean toast, alert, or inline error
+
+same border radius style as app
+
+same font style as app
+
+same spacing as app
+
+no oversized harsh developer-style warning box unless that is already your design system
+
+professional SaaS-style wording
+
+Recommended wording
+Use this exact message for invalid login:
+
+Incorrect email or password. Please try again.
+
+Optional title:
+Unable to sign in
+
+Or no title at all if using inline form error.
+
+Best clean version:
+Incorrect email or password. Please try again.
+
+Error mapping rules
+Frontend should map responses like this:
+
+401 or invalid credentials
+Show:
+Incorrect email or password. Please try again.
+
+Network/server unavailable
+Show:
+Unable to sign in right now. Please try again in a moment.
+
+Unexpected error
+Show:
+Something went wrong. Please try again.
+
+Do not expose raw backend payloads.
+
+Do not reveal whether email exists
+For security and professionalism, do not say:
+
+email not found
+
+password incorrect
+
+account does not exist
+
+Always use one generic login error:
+Incorrect email or password. Please try again.
+
+UI placement
+Best options:
+
+inline error inside login card above or below submit button
+or
+
+small styled toast matching your design
+
+Recommended:
+If keeping toast, make it softer and cleaner.
+If using inline, place it below password field or above sign in button.
+
+Either is fine.
+Main rule is:
+it must match the app UI.
+
+Styling guidance
+Use app design language:
+
+rounded corners
+
+compact spacing
+
+readable text
+
+no raw JSON
+
+no giant alarming red developer block
+
+If using red, keep it subtle and polished.
+
+Backend rule
+No need to change backend auth behavior unless absolutely necessary.
+Frontend should intercept error response and map it to user-friendly copy.
+
+If backend currently returns:
+{ "message": "Invalid credentials" }
+
+That is fine.
+Just do not show the raw object directly in the UI.
+
+Acceptance criteria
+
+entering wrong email or password no longer shows 401 or JSON
+
+user sees:
+Incorrect email or password. Please try again.
+
+message matches app styling
+
+successful login still works
+
+no regression to admin, employee, or client login
+
+no changes to auth logic beyond display mapping
+
+Direct instruction for agent
+Improve only the login error UI. When authentication fails, do not display raw status codes or JSON responses. Replace them with a clean, professional message that says: “Incorrect email or password. Please try again.” Make the error styling match the app’s design system and keep the rest of the login flow unchanged. Do not modify working auth behavior, only the user-facing error presentation.
+
+Best final UX copy
+Incorrect email or password. Please try again.

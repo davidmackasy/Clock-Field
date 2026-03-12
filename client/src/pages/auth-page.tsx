@@ -32,6 +32,17 @@ export default function AuthPage() {
     return null;
   }
 
+  const loginErrorMessage = (err: any): string => {
+    const msg: string = err?.message || "";
+    if (msg.includes("401") || msg.toLowerCase().includes("invalid") || msg.toLowerCase().includes("credentials") || msg.toLowerCase().includes("incorrect"))
+      return "Incorrect email or password. Please try again.";
+    if (msg.includes("403") || msg.toLowerCase().includes("inactive") || msg.toLowerCase().includes("disabled"))
+      return "Your account is not active. Please contact your administrator.";
+    if (msg.includes("fetch") || msg.toLowerCase().includes("network") || msg.toLowerCase().includes("failed to fetch"))
+      return "Unable to sign in right now. Please try again in a moment.";
+    return "Something went wrong. Please try again.";
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -39,7 +50,7 @@ export default function AuthPage() {
       await login(loginEmail, loginPassword);
       toast({ title: "Welcome back!" });
     } catch (err: any) {
-      toast({ title: "Login failed", description: err.message, variant: "destructive" });
+      toast({ title: "Unable to sign in", description: loginErrorMessage(err), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -52,7 +63,7 @@ export default function AuthPage() {
       await employeeLogin(empId.trim().toUpperCase(), empPin.trim());
       toast({ title: "Welcome!" });
     } catch (err: any) {
-      toast({ title: "Login failed", description: err.message, variant: "destructive" });
+      toast({ title: "Unable to sign in", description: loginErrorMessage(err), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
