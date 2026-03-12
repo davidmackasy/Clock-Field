@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { PhotoUploader, type PhotoItem } from "@/components/photo-uploader";
-import { MessageSquare, X, AlertTriangle, User2, ChevronRight, Clock, Send } from "lucide-react";
+import { MessageSquare, X, AlertTriangle, User2, ChevronRight, Clock, Send, ChevronLeft, ChevronRight as ChevronRightIcon } from "lucide-react";
 
 const OPEN_STATUSES = new Set(["new", "open", "in_review", "scheduled", "replied", "in_progress"]);
 
@@ -36,9 +36,62 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+function AttachmentLightbox({ attachments, startIndex, onClose }: { attachments: any[]; startIndex: number; onClose: () => void }) {
+  const [idx, setIdx] = useState(startIndex);
+  const att = attachments[idx];
+  return (
+    <div
+      className="fixed inset-0 z-[200] bg-black/90 flex flex-col items-center justify-center"
+      onClick={onClose}
+      data-testid="lightbox-overlay"
+    >
+      <button
+        className="absolute top-4 right-4 text-white bg-black/40 rounded-full p-2 hover:bg-black/70"
+        onClick={onClose}
+        data-testid="button-lightbox-close"
+      >
+        <X className="w-5 h-5" />
+      </button>
+      <div className="relative flex items-center justify-center w-full max-w-3xl px-14" onClick={e => e.stopPropagation()}>
+        {attachments.length > 1 && (
+          <button
+            className="absolute left-2 text-white bg-black/40 rounded-full p-2 hover:bg-black/70 disabled:opacity-30"
+            onClick={() => setIdx(i => Math.max(0, i - 1))}
+            disabled={idx === 0}
+            data-testid="button-lightbox-prev"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+        )}
+        <img
+          src={`/api/attachments/${att.id}/image`}
+          alt={att.caption || "photo"}
+          className="max-h-[80vh] max-w-full object-contain rounded-lg shadow-xl"
+          data-testid="lightbox-image"
+        />
+        {attachments.length > 1 && (
+          <button
+            className="absolute right-2 text-white bg-black/40 rounded-full p-2 hover:bg-black/70 disabled:opacity-30"
+            onClick={() => setIdx(i => Math.min(attachments.length - 1, i + 1))}
+            disabled={idx === attachments.length - 1}
+            data-testid="button-lightbox-next"
+          >
+            <ChevronRightIcon className="w-5 h-5" />
+          </button>
+        )}
+      </div>
+      {att.caption && <p className="text-white/70 text-sm mt-3">{att.caption}</p>}
+      {attachments.length > 1 && (
+        <p className="text-white/50 text-xs mt-2">{idx + 1} / {attachments.length}</p>
+      )}
+    </div>
+  );
+}
+
 function ThreadMessage({ msg, clientName }: { msg: any; clientName: string }) {
   const isAdmin = msg.authorRole === "admin";
   const isStatus = msg.messageType === "status_change";
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
 
   if (isStatus) {
     return (
@@ -52,33 +105,43 @@ function ThreadMessage({ msg, clientName }: { msg: any; clientName: string }) {
   }
 
   return (
-    <div className={`flex flex-col gap-1 ${isAdmin ? "items-end" : "items-start"}`}>
-      <div className={`max-w-[85%] rounded-xl px-4 py-3 text-sm shadow-sm ${
-        isAdmin ? "bg-primary text-primary-foreground" : "bg-card border border-border"
-      }`}>
-        <p className="text-xs font-medium mb-1 opacity-70">
-          {isAdmin ? "You (Admin)" : `${clientName} (${msg.authorRole})`}
-        </p>
-        {msg.body && <p className="whitespace-pre-wrap">{msg.body}</p>}
-        {msg.attachments?.length > 0 && (
-          <div className="grid grid-cols-2 gap-1.5 mt-2">
-            {msg.attachments.map((att: any) => (
-              <div key={att.id}>
-                <img
-                  src={`/api/attachments/${att.id}/image`}
-                  alt={att.caption || "photo"}
-                  className="w-full h-28 object-cover rounded-md cursor-pointer bg-muted"
-                  loading="lazy"
-                  onClick={() => window.open(`/api/attachments/${att.id}/image`)}
-                />
-                {att.caption && <p className="text-[10px] opacity-70 mt-0.5 text-center">{att.caption}</p>}
-              </div>
-            ))}
-          </div>
-        )}
+    <>
+      {lightboxIdx !== null && msg.attachments?.length > 0 && (
+        <AttachmentLightbox
+          attachments={msg.attachments}
+          startIndex={lightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+        />
+      )}
+      <div className={`flex flex-col gap-1 ${isAdmin ? "items-end" : "items-start"}`}>
+        <div className={`max-w-[85%] rounded-xl px-4 py-3 text-sm shadow-sm ${
+          isAdmin ? "bg-primary text-primary-foreground" : "bg-card border border-border"
+        }`}>
+          <p className="text-xs font-medium mb-1 opacity-70">
+            {isAdmin ? "You (Admin)" : `${clientName} (${msg.authorRole})`}
+          </p>
+          {msg.body && <p className="whitespace-pre-wrap">{msg.body}</p>}
+          {msg.attachments?.length > 0 && (
+            <div className="grid grid-cols-2 gap-1.5 mt-2">
+              {msg.attachments.map((att: any, i: number) => (
+                <div key={att.id}>
+                  <img
+                    src={`/api/attachments/${att.id}/image`}
+                    alt={att.caption || "photo"}
+                    className="w-full h-28 object-cover rounded-md cursor-pointer bg-muted hover:opacity-90 transition-opacity"
+                    loading="lazy"
+                    onClick={() => setLightboxIdx(i)}
+                    data-testid={`img-attachment-${att.id}`}
+                  />
+                  {att.caption && <p className="text-[10px] opacity-70 mt-0.5 text-center">{att.caption}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <span className="text-[10px] text-muted-foreground px-1">{formatTime(msg.createdAt)}</span>
       </div>
-      <span className="text-[10px] text-muted-foreground px-1">{formatTime(msg.createdAt)}</span>
-    </div>
+    </>
   );
 }
 
@@ -344,7 +407,7 @@ export default function AdminRequests() {
                 className="resize-none text-sm"
                 data-testid="input-admin-reply"
               />
-              <PhotoUploader photos={replyPhotos} onChange={setReplyPhotos} maxPhotos={10} label="Attach Photos" />
+              <PhotoUploader photos={replyPhotos} onChange={setReplyPhotos} maxPhotos={3} maxSizeMB={10} label="Attach Photos" />
               <div className="flex items-center justify-end gap-2">
                 <Button
                   onClick={sendReply}

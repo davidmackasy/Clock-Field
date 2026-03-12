@@ -21,6 +21,8 @@ export function PhotoUploader({ photos, onChange, maxPhotos = 10, maxSizeMB = 3,
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png"];
+
   const handleFiles = (files: FileList | null) => {
     if (!files) return;
     setError(null);
@@ -28,12 +30,12 @@ export function PhotoUploader({ photos, onChange, maxPhotos = 10, maxSizeMB = 3,
     if (remaining <= 0) { setError(`Max ${maxPhotos} photos allowed`); return; }
     const toAdd = Array.from(files).slice(0, remaining);
     const readers: Promise<PhotoItem>[] = toAdd.map(file => new Promise((resolve, reject) => {
-      if (file.size > maxSizeMB * 1024 * 1024) {
-        reject(new Error(`${file.name} exceeds ${maxSizeMB}MB limit`));
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        reject(new Error(`${file.name}: only JPG and PNG files are allowed`));
         return;
       }
-      if (!file.type.startsWith("image/")) {
-        reject(new Error(`${file.name} is not an image`));
+      if (file.size > maxSizeMB * 1024 * 1024) {
+        reject(new Error(`${file.name} exceeds ${maxSizeMB}MB limit`));
         return;
       }
       const reader = new FileReader();
@@ -66,7 +68,7 @@ export function PhotoUploader({ photos, onChange, maxPhotos = 10, maxSizeMB = 3,
           <input
             ref={inputRef}
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/jpg,image/png"
             multiple
             className="hidden"
             onChange={e => handleFiles(e.target.files)}
