@@ -259,14 +259,14 @@ export async function registerRoutes(
   app.post("/api/admins/invite", requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
-      const { firstName, lastName, email, phone } = req.body;
+      const { firstName, lastName, email, phone, tempPin: customPin } = req.body;
       if (!email) return res.status(400).json({ message: "Email is required" });
       if (!firstName || !lastName) return res.status(400).json({ message: "Full name is required" });
 
       const existing = await storage.getUserByEmail(email);
       if (existing) return res.status(400).json({ message: "A user with this email already exists" });
 
-      const pin = generateTempPin();
+      const pin = customPin && customPin.length >= 4 ? customPin : generateTempPin();
       const hashedPin = await hashPassword(pin);
 
       const admin = await storage.createUser({
@@ -281,6 +281,7 @@ export async function registerRoutes(
         accountStatus: "pending_activation",
         mustChangePassword: true,
         tempPin: pin,
+        createdAt: new Date().toISOString(),
       });
 
       const { password: _, tempPin: __, ...safe } = admin;

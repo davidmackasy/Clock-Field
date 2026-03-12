@@ -38,6 +38,7 @@ export const users = pgTable("users", {
   mustChangePassword: boolean("must_change_password").notNull().default(false),
   tempPin: text("temp_pin"),
   position: text("position"),
+  createdAt: text("created_at"),
 });
 
 export const clients = pgTable("clients", {

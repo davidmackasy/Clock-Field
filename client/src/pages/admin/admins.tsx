@@ -6,12 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { Plus, Search, Mail, Phone, ShieldCheck, Copy, RefreshCw, UserX, UserCheck } from "lucide-react";
+import { Plus, Search, ShieldCheck, Copy, RefreshCw, UserX, UserCheck } from "lucide-react";
 
 type Admin = {
   id: string;
@@ -22,6 +22,7 @@ type Admin = {
   isActive: boolean;
   accountStatus?: string;
   loginEnabled?: boolean;
+  createdAt?: string;
 };
 
 type InviteResult = Admin & { tempPin: string };
@@ -32,6 +33,15 @@ function statusBadge(admin: Admin) {
   return <Badge variant="default" className="text-xs">Active</Badge>;
 }
 
+function formatDate(dateStr?: string) {
+  if (!dateStr) return "—";
+  try {
+    return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  } catch {
+    return "—";
+  }
+}
+
 export default function AdminAdmins() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -39,7 +49,7 @@ export default function AdminAdmins() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [credDialog, setCredDialog] = useState<{ email: string; tempPin: string } | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<Admin | null>(null);
-  const [formData, setFormData] = useState({ firstName: "", lastName: "", email: "", phone: "" });
+  const [formData, setFormData] = useState({ firstName: "", lastName: "", email: "", phone: "", tempPin: "" });
 
   const { data: admins, isLoading } = useQuery<Admin[]>({ queryKey: ["/api/admins"] });
 
@@ -52,7 +62,7 @@ export default function AdminAdmins() {
       queryClient.invalidateQueries({ queryKey: ["/api/admins"] });
       setCredDialog({ email: data.email!, tempPin: data.tempPin });
       setInviteOpen(false);
-      setFormData({ firstName: "", lastName: "", email: "", phone: "" });
+      setFormData({ firstName: "", lastName: "", email: "", phone: "", tempPin: "" });
     },
     onError: (err: any) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -113,6 +123,7 @@ export default function AdminAdmins() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Invite New Admin</DialogTitle>
+              <DialogDescription>Create a new admin account. You can set a custom temporary PIN or leave it blank to auto-generate one.</DialogDescription>
             </DialogHeader>
             <form onSubmit={(e) => { e.preventDefault(); inviteMutation.mutate(formData); }} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
@@ -133,8 +144,18 @@ export default function AdminAdmins() {
                 <Label>Phone <span className="text-muted-foreground font-normal">(optional)</span></Label>
                 <Input data-testid="input-admin-phone" value={formData.phone} onChange={e => setFormData(p => ({ ...p, phone: e.target.value }))} placeholder="+1 555-000-0000" />
               </div>
+              <div className="space-y-2">
+                <Label>Temporary PIN <span className="text-muted-foreground font-normal">(optional — leave blank to auto-generate)</span></Label>
+                <Input
+                  data-testid="input-admin-temp-pin"
+                  value={formData.tempPin}
+                  onChange={e => setFormData(p => ({ ...p, tempPin: e.target.value }))}
+                  placeholder="e.g. 123456"
+                  minLength={4}
+                />
+              </div>
               <p className="text-xs text-muted-foreground">
-                A temporary PIN will be generated. Share the email and PIN with the new admin so they can log in and set their own password.
+                Share the email and PIN with the new admin so they can log in and set their own password.
               </p>
               <Button type="submit" className="w-full" disabled={inviteMutation.isPending} data-testid="button-save-admin">
                 {inviteMutation.isPending ? "Creating..." : "Create Admin Account"}
@@ -150,8 +171,8 @@ export default function AdminAdmins() {
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3].map(i => <Skeleton key={i} className="h-40" />)}
+        <div className="space-y-2">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full" />)}
         </div>
       ) : filtered.length === 0 ? (
         <Card>
@@ -161,82 +182,77 @@ export default function AdminAdmins() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filtered.map((admin: Admin) => {
-            const isCurrentUser = admin.id === (user as any)?.id;
-            return (
-              <Card key={admin.id} data-testid={`card-admin-${admin.id}`}>
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex items-start gap-3">
-                    <Avatar className="w-10 h-10 flex-shrink-0">
-                      <AvatarFallback className="bg-primary/10 text-sm">
-                        {admin.firstName[0]}{admin.lastName[0]}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-medium text-sm">{admin.firstName} {admin.lastName}</p>
-                        {statusBadge(admin)}
+        <div className="border rounded-lg overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Date Added</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((admin: Admin) => {
+                const isCurrentUser = admin.id === (user as any)?.id;
+                return (
+                  <TableRow key={admin.id} data-testid={`row-admin-${admin.id}`}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        {admin.firstName} {admin.lastName}
                         {isCurrentUser && <Badge variant="outline" className="text-xs">You</Badge>}
                       </div>
-                      {admin.email && (
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <Mail className="w-3 h-3 text-muted-foreground" />
-                          <p className="text-xs text-muted-foreground truncate">{admin.email}</p>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{admin.email}</TableCell>
+                    <TableCell>{statusBadge(admin)}</TableCell>
+                    <TableCell className="text-muted-foreground">{formatDate(admin.createdAt)}</TableCell>
+                    <TableCell className="text-right">
+                      {!isCurrentUser && (
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs h-7 gap-1"
+                            disabled={resetPinMutation.isPending || !admin.isActive}
+                            onClick={() => resetPinMutation.mutate(admin.id)}
+                            data-testid={`button-reset-pin-admin-${admin.id}`}
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                            Reset PIN
+                          </Button>
+                          {admin.isActive ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7 gap-1 text-destructive hover:text-destructive"
+                              onClick={() => setDeactivateTarget(admin)}
+                              data-testid={`button-deactivate-admin-${admin.id}`}
+                            >
+                              <UserX className="w-3 h-3" />
+                              Deactivate
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7 gap-1"
+                              disabled={toggleActiveMutation.isPending}
+                              onClick={() => toggleActiveMutation.mutate({ id: admin.id, isActive: true })}
+                              data-testid={`button-reactivate-admin-${admin.id}`}
+                            >
+                              <UserCheck className="w-3 h-3" />
+                              Reactivate
+                            </Button>
+                          )}
                         </div>
                       )}
-                      {admin.phone && (
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <Phone className="w-3 h-3 text-muted-foreground" />
-                          <p className="text-xs text-muted-foreground">{admin.phone}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {!isCurrentUser && (
-                    <div className="flex flex-wrap gap-2 border-t pt-3">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs h-7 gap-1"
-                        data-testid={`button-reset-pin-admin-${admin.id}`}
-                        disabled={resetPinMutation.isPending || !admin.isActive}
-                        onClick={() => resetPinMutation.mutate(admin.id)}
-                      >
-                        <RefreshCw className="w-3 h-3" />
-                        Reset PIN
-                      </Button>
-                      {admin.isActive ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-xs h-7 gap-1 text-destructive hover:text-destructive"
-                          data-testid={`button-deactivate-admin-${admin.id}`}
-                          onClick={() => setDeactivateTarget(admin)}
-                        >
-                          <UserX className="w-3 h-3" />
-                          Deactivate
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-xs h-7 gap-1"
-                          data-testid={`button-reactivate-admin-${admin.id}`}
-                          disabled={toggleActiveMutation.isPending}
-                          onClick={() => toggleActiveMutation.mutate({ id: admin.id, isActive: true })}
-                        >
-                          <UserCheck className="w-3 h-3" />
-                          Reactivate
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </div>
       )}
 
