@@ -1,0 +1,114 @@
+DEV NOTE
+
+Task
+Update the app favicon to the new uploaded ClockField icon.
+
+Critical rule
+Do not change anything else in the app.
+Do not touch:
+
+auth
+
+routes
+
+layouts
+
+styles
+
+branding text
+
+logos in the UI
+
+manifest settings unless required for favicon support
+
+PWA icons unless intentionally updating them too
+
+This is a favicon-only update.
+
+Goal
+Replace the current browser tab favicon with the new uploaded blue ClockField icon.
+
+Source asset
+Use the uploaded image as the favicon source.
+
+Required implementation
+
+Save the favicon asset
+Add the new icon file into the app’s public/static assets location, using a clean name like:
+
+favicon.png
+or
+
+favicon.ico if converted
+
+Best safe option:
+
+keep the uploaded image as a PNG
+
+generate favicon sizes from it if needed
+
+Update the HTML head
+Replace the existing favicon link with the new file.
+
+Typical tags to check:
+
+<link rel="icon" href="/favicon.png" />
+<link rel="shortcut icon" href="/favicon.png" />
+
+If the app already uses .ico, either:
+
+replace the .ico file with the new icon converted properly
+or
+
+switch the head link to the new .png
+
+If there is a manifest
+Only if the app uses a web manifest and favicon/app icons are tied there, update the icon reference carefully.
+Do not change manifest behavior unless needed.
+
+Clear cache safely
+Favicons are often cached heavily.
+Use one of these safe approaches:
+
+rename the favicon file so the browser fetches the new one
+
+or add a version query like /favicon.png?v=2
+
+Best safe option:
+
+<link rel="icon" href="/favicon.png?v=2" />
+
+Keep desktop and mobile browser support
+If the app already supports:
+
+browser tab icon
+
+pinned icon
+
+apple touch icon
+
+do not break those.
+Only update the main favicon unless intentionally replacing all icon variants.
+
+Recommended final files
+
+favicon.png
+
+optionally favicon.ico generated from the same image
+
+optional apple-touch-icon.png later if needed
+
+Acceptance criteria
+
+browser tab shows the new blue ClockField icon
+
+app loads normally
+
+no other UI or branding is changed
+
+no routes or layouts are affected
+
+favicon updates after cache refresh
+
+Direct instruction for agent
+Update only the app favicon to the uploaded blue ClockField icon. Replace the existing favicon asset and head reference safely, use cache-busting if needed so browsers load the new icon, and do not modify any other part of the application.
