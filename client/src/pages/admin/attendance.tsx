@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,17 +26,20 @@ const flagColors: Record<string, string> = {
 };
 
 export default function AdminAttendance() {
+  const search_ = useSearch();
+  const initParams = new URLSearchParams(search_);
+
   const { data: entries, isLoading } = useQuery<any[]>({ queryKey: ["/api/time-entries"] });
   const { data: employees } = useQuery<any[]>({ queryKey: ["/api/employees"] });
   const { data: shifts } = useQuery<any[]>({ queryKey: ["/api/shifts"] });
 
   const [search, setSearch] = useState("");
-  const [dateRange, setDateRange] = useState<string>("this_week");
+  const [dateRange, setDateRange] = useState<string>(initParams.get("dateRange") || "this_week");
   const [customRange, setCustomRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: subDays(new Date(), 7),
     to: new Date(),
   });
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>(initParams.get("status") || "all");
   const [employeeFilter, setEmployeeFilter] = useState<string>("all");
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
 
@@ -199,6 +203,7 @@ export default function AdminAttendance() {
             <SelectItem value="left_early">Left Early</SelectItem>
             <SelectItem value="early_clock_in">Early Clock-in</SelectItem>
             <SelectItem value="overtime">Overtime</SelectItem>
+            <SelectItem value="no_show">No Show / Missed</SelectItem>
           </SelectContent>
         </Select>
         <Select value={employeeFilter} onValueChange={setEmployeeFilter}>

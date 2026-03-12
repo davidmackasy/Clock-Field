@@ -1,0 +1,395 @@
+Yes. Below is a focused dev note for this dashboard improvement only.
+
+DEV NOTE
+
+Task
+Make the dashboard summary cards clickable and improve their visual design without affecting any other working functionality.
+
+Main instruction
+Do not touch anything else that is already working.
+Do not modify:
+
+auth
+
+login flows
+
+employee access
+
+client access
+
+admin access
+
+schedule creation logic
+
+attendance creation logic
+
+payroll calculations
+
+request creation logic
+
+existing page filters unless needed for deep-linking
+
+existing API endpoints unless needed for filtered navigation support
+
+This task is only about:
+
+making dashboard stat cards clickable
+
+routing users to the correct destination page with the correct filter applied
+
+improving the UI styling of those cards so they look more polished and software-like
+
+Main goal
+The top dashboard cards should not just be display-only.
+They should act like quick action summary cards.
+
+When admin clicks a dashboard stat card, it should navigate them to the correct page and show the relevant filtered records.
+
+Cards to update
+
+Active Now
+
+Late Today
+
+Missed Shifts
+
+Total Employees
+
+Open Requests
+
+Hours Today
+
+Desired behavior
+
+Active Now
+When clicked:
+
+take admin to Attendance page
+
+pre-filter attendance to show employees who are currently active or currently clocked in
+
+If your current attendance system does not yet support “active” filter directly, add a safe filtered state such as:
+status = active_now
+or
+clock_out is null
+
+Result:
+Admin sees which employees are currently clocked in.
+
+Late Today
+When clicked:
+
+take admin to Attendance page
+
+pre-filter to today
+
+pre-filter to late arrivals only
+
+Result:
+Admin sees only employees who clocked in late today.
+
+Missed Shifts
+When clicked:
+
+take admin to Attendance page
+
+pre-filter to missed shifts or no-show records
+
+Important logic
+A missed shift should appear once:
+
+scheduled shift start time or scheduled shift end threshold has passed
+
+employee never clocked in for that shift
+
+If this is already being calculated elsewhere, reuse it.
+Do not rewrite attendance engine unless necessary.
+
+If missed-shift records are not fully surfaced yet, safely wire this card to the existing missed-shift or no-show filter source used by attendance logic.
+
+Total Employees
+When clicked:
+
+take admin to Employees page
+
+Optional:
+
+no special filter needed
+or
+
+apply active employees filter if that is how current count is calculated
+
+Open Requests
+When clicked:
+
+take admin to Requests page
+
+pre-filter to open or pending requests
+
+Result:
+Admin immediately sees unresolved client or system requests.
+
+Hours Today
+When clicked:
+
+take admin to Attendance page
+
+pre-filter to today
+
+optionally highlight all completed/active entries for today
+
+If possible:
+show total worked attendance records for today using current date filter
+
+Navigation behavior
+Use route query params or route state for filters.
+Do not hardcode temporary frontend-only hacks if filter state is already supported properly.
+
+Examples
+Attendance deep links can use something like:
+
+/admin/attendance?range=today&status=late
+
+/admin/attendance?range=today&status=active
+
+/admin/attendance?range=today&status=missed
+
+/admin/requests?status=open
+
+Use whatever route format fits the current app structure.
+Do not rename existing routes if avoidable.
+
+Important consistency rule
+The dashboard counts and the destination page filter results must match.
+
+Example
+If Late Today card shows 3,
+clicking it should lead to attendance showing those same 3 late employees for today.
+
+If Open Requests shows 1,
+clicking it should lead to the requests page filtered to that 1 open request.
+
+Do not let cards and filtered pages drift apart.
+
+UI improvement requirements
+
+Goal
+Make the cards look more polished, premium, and software-like.
+
+Do not redesign the whole dashboard.
+Keep the same layout structure.
+Just improve the card styling.
+
+Required visual improvements
+
+cards should clearly look clickable
+
+add hover state on desktop
+
+add pressed/tap feedback
+
+add cursor pointer
+
+slightly stronger visual hierarchy
+
+better color accents
+
+clearer icon treatment
+
+soft shadows or subtle elevation if it fits current UI
+
+maintain clean SaaS style
+
+Suggested design direction
+Each card should keep a light neutral background, but the icon area and subtle accents can be color-coded.
+
+Recommended card colors
+
+Active Now: green accent
+
+Late Today: amber/orange accent
+
+Missed Shifts: red accent
+
+Total Employees: blue accent
+
+Open Requests: purple accent
+
+Hours Today: cyan/teal accent
+
+Important
+Do not make the cards overly bright or childish.
+Keep them premium and clean.
+
+Recommended styling details
+
+slightly stronger border or shadow than now
+
+icon badge with soft tinted background
+
+subtle colored top border or side accent optional
+
+smooth hover transition
+
+slight lift on hover
+
+clear active/focus states for accessibility
+
+Example visual behavior
+Default
+
+white card
+
+soft border
+
+icon in tinted pill background
+
+Hover
+
+slightly stronger shadow
+
+slight upward movement or border emphasis
+
+Active click
+
+subtle press effect
+
+Accessibility
+Cards should also be keyboard accessible if possible.
+Use button-like or link-like semantics if appropriate.
+
+Implementation details
+
+Dashboard cards should become interactive components
+Turn each summary card into a reusable clickable stat card component.
+
+Props should include:
+
+title
+
+value
+
+icon
+
+accent color
+
+destination route
+
+destination filter state
+
+Deep-link filter support
+Attendance page and Requests page should read incoming query/filter state and initialize their filters from it.
+
+Examples
+Attendance page should support incoming filter presets like:
+
+today + late
+
+today + active
+
+today + missed
+
+Requests page should support:
+
+status = open
+
+Employees page should support:
+
+no filter or current-active filter
+
+Do not break current manual filters.
+This should only prefill them when arriving from dashboard.
+
+Missed shift logic
+If “Missed Shifts” count is currently already shown, use that same backend/source of truth for click-through results.
+
+Do not invent a new missed shift formula in dashboard only.
+
+If needed, missed shift should be based on:
+
+scheduled shift exists
+
+clock-in missing
+
+shift start/end cutoff passed
+
+Use the current attendance/schedule truth.
+
+Hours Today click-through
+This can go to Attendance page filtered by:
+
+today
+
+completed + active entries
+
+Optional later:
+Could go to a dedicated today hours detail view, but for now Attendance is correct.
+
+Open Requests
+This must route to Requests page and show only unresolved/open requests.
+
+Suggested labels
+Keep labels same:
+
+Active Now
+
+Late Today
+
+Missed Shifts
+
+Total Employees
+
+Open Requests
+
+Hours Today
+
+Do not rename them unless necessary.
+
+Acceptance criteria
+
+Functionality
+
+Active Now card is clickable and routes correctly
+
+Late Today card is clickable and routes correctly
+
+Missed Shifts card is clickable and routes correctly
+
+Total Employees card is clickable and routes correctly
+
+Open Requests card is clickable and routes correctly
+
+Hours Today card is clickable and routes correctly
+
+Filter behavior
+
+destination page loads with matching filter state
+
+counts on dashboard align with destination page records
+
+UI
+
+cards visibly look clickable
+
+colors are improved and more polished
+
+hover/tap states feel modern
+
+no clutter added
+
+dashboard remains professional
+
+Regression
+
+dashboard still loads correctly
+
+attendance still works
+
+requests still works
+
+employees page still works
+
+no change to auth or business logic outside this scope
+
+Direct instruction for agent
+Upgrade the dashboard summary cards so they behave as clickable navigation cards. Each card must route to the correct destination page with the relevant filters already applied: Active Now → Attendance filtered to active employees, Late Today → Attendance filtered to today’s late entries, Missed Shifts → Attendance filtered to missed/no-show shifts, Total Employees → Employees page, Open Requests → Requests filtered to open items, and Hours Today → Attendance filtered to today’s entries. Keep the current dashboard layout but improve the card styling with polished SaaS-style color accents, hover states, and clear clickability. Do not modify unrelated working features or redesign the rest of the app.

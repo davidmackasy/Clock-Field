@@ -2,20 +2,116 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, Clock, AlertTriangle, CalendarCheck, MessageSquare, Timer } from "lucide-react";
+import { Users, Clock, AlertTriangle, CalendarCheck, MessageSquare, Timer, ChevronRight } from "lucide-react";
+import { useLocation } from "wouter";
+
+type StatCardProps = {
+  label: string;
+  value: string | number;
+  icon: React.ElementType;
+  color: string;
+  bg: string;
+  border: string;
+  href: string;
+  isLoading?: boolean;
+};
+
+function StatCard({ label, value, icon: Icon, color, bg, border, href, isLoading }: StatCardProps) {
+  const [, setLocation] = useLocation();
+  return (
+    <button
+      type="button"
+      onClick={() => setLocation(href)}
+      className={`w-full text-left rounded-xl border-2 bg-card shadow-sm transition-all duration-150 hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group ${border}`}
+      data-testid={`card-stat-${label.toLowerCase().replace(/\s/g, "-")}`}
+    >
+      <div className="p-4">
+        {isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-8 w-12" />
+          </div>
+        ) : (
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
+              <p className={`text-2xl font-bold mt-1`} data-testid={`stat-${label.toLowerCase().replace(/\s/g, "-")}`}>{value}</p>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center flex-shrink-0`}>
+                <Icon className={`w-4 h-4 ${color}`} />
+              </div>
+              <ChevronRight className="w-3 h-3 text-muted-foreground/40 group-hover:text-muted-foreground/70 transition-colors" />
+            </div>
+          </div>
+        )}
+      </div>
+    </button>
+  );
+}
 
 export default function AdminDashboard() {
-  const { data: stats, isLoading } = useQuery<any>({
-    queryKey: ["/api/dashboard/stats"],
-  });
+  const { data: stats, isLoading } = useQuery<any>({ queryKey: ["/api/dashboard/stats"] });
 
-  const statCards = [
-    { label: "Active Now", value: stats?.activeNow ?? 0, icon: Timer, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
-    { label: "Late Today", value: stats?.lateToday ?? 0, icon: AlertTriangle, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/30" },
-    { label: "Missed Shifts", value: stats?.missedToday ?? 0, icon: CalendarCheck, color: "text-red-600 dark:text-red-400", bg: "bg-red-50 dark:bg-red-950/30" },
-    { label: "Total Employees", value: stats?.totalEmployees ?? 0, icon: Users, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-950/30" },
-    { label: "Open Requests", value: stats?.openRequests ?? 0, icon: MessageSquare, color: "text-violet-600 dark:text-violet-400", bg: "bg-violet-50 dark:bg-violet-950/30" },
-    { label: "Hours Today", value: stats?.totalWorkedToday ? `${Math.round(stats.totalWorkedToday / 60)}h ${stats.totalWorkedToday % 60}m` : "0h", icon: Clock, color: "text-cyan-600 dark:text-cyan-400", bg: "bg-cyan-50 dark:bg-cyan-950/30" },
+  const hours = stats?.totalWorkedToday ? Math.floor(stats.totalWorkedToday / 60) : 0;
+  const mins = stats?.totalWorkedToday ? stats.totalWorkedToday % 60 : 0;
+  const hoursDisplay = stats?.totalWorkedToday ? `${hours}h ${mins}m` : "0h";
+
+  const statCards: StatCardProps[] = [
+    {
+      label: "Active Now",
+      value: stats?.activeNow ?? 0,
+      icon: Timer,
+      color: "text-emerald-600 dark:text-emerald-400",
+      bg: "bg-emerald-50 dark:bg-emerald-950/40",
+      border: "border-emerald-100 dark:border-emerald-900/50 hover:border-emerald-200 dark:hover:border-emerald-800",
+      href: "/admin/attendance?dateRange=today&status=active",
+    },
+    {
+      label: "Late Today",
+      value: stats?.lateToday ?? 0,
+      icon: AlertTriangle,
+      color: "text-amber-600 dark:text-amber-400",
+      bg: "bg-amber-50 dark:bg-amber-950/40",
+      border: "border-amber-100 dark:border-amber-900/50 hover:border-amber-200 dark:hover:border-amber-800",
+      href: "/admin/attendance?dateRange=today&status=late_clock_in",
+    },
+    {
+      label: "Missed Shifts",
+      value: stats?.missedToday ?? 0,
+      icon: CalendarCheck,
+      color: "text-red-600 dark:text-red-400",
+      bg: "bg-red-50 dark:bg-red-950/40",
+      border: "border-red-100 dark:border-red-900/50 hover:border-red-200 dark:hover:border-red-800",
+      href: "/admin/attendance?dateRange=today&status=no_show",
+    },
+    {
+      label: "Total Employees",
+      value: stats?.totalEmployees ?? 0,
+      icon: Users,
+      color: "text-blue-600 dark:text-blue-400",
+      bg: "bg-blue-50 dark:bg-blue-950/40",
+      border: "border-blue-100 dark:border-blue-900/50 hover:border-blue-200 dark:hover:border-blue-800",
+      href: "/admin/employees",
+    },
+    {
+      label: "Open Requests",
+      value: stats?.openRequests ?? 0,
+      icon: MessageSquare,
+      color: "text-violet-600 dark:text-violet-400",
+      bg: "bg-violet-50 dark:bg-violet-950/40",
+      border: "border-violet-100 dark:border-violet-900/50 hover:border-violet-200 dark:hover:border-violet-800",
+      href: "/admin/requests?status=open",
+    },
+    {
+      label: "Hours Today",
+      value: hoursDisplay,
+      icon: Clock,
+      color: "text-cyan-600 dark:text-cyan-400",
+      bg: "bg-cyan-50 dark:bg-cyan-950/40",
+      border: "border-cyan-100 dark:border-cyan-900/50 hover:border-cyan-200 dark:hover:border-cyan-800",
+      href: "/admin/attendance?dateRange=today",
+    },
   ];
 
   return (
@@ -26,27 +122,8 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-        {statCards.map((stat, i) => (
-          <Card key={i}>
-            <CardContent className="p-4">
-              {isLoading ? (
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-20" />
-                  <Skeleton className="h-8 w-12" />
-                </div>
-              ) : (
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{stat.label}</p>
-                    <p className="text-2xl font-bold mt-1" data-testid={`stat-${stat.label.toLowerCase().replace(/\s/g, "-")}`}>{stat.value}</p>
-                  </div>
-                  <div className={`w-9 h-9 rounded-md ${stat.bg} flex items-center justify-center flex-shrink-0`}>
-                    <stat.icon className={`w-4 h-4 ${stat.color}`} />
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        {statCards.map((card, i) => (
+          <StatCard key={i} {...card} isLoading={isLoading} />
         ))}
       </div>
 
