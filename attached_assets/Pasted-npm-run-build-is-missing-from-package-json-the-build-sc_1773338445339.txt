@@ -1,0 +1,186 @@
+npm run build is missing from package.json
+
+the build script exists but exits immediately
+
+the install step failed before build started
+
+the deploy environment crashed or timed out before logs were captured
+
+a recent change broke the app entry/build config
+
+Give your agent this exact fix note:
+
+DEV NOTE
+
+Task
+Fix deployment build failure where npm run build terminates prematurely and no build logs are captured.
+
+Critical rule
+Do not change working product logic.
+Do not touch auth, payroll, attendance, schedule, requests, or UI features unless the build error directly comes from a file import or config inside them.
+
+Goal
+Get deployment build running successfully again and make sure npm run build produces a real output.
+
+What the error means
+The deploy system is not getting a valid completed result from:
+
+npm run build
+
+So first, confirm the build command actually exists and works locally in the project environment.
+
+Step 1: Check package.json
+Verify package.json has a valid build script.
+
+Expected:
+
+{
+  "scripts": {
+    "build": "..."
+  }
+}
+
+If missing, add the correct build command for the project.
+Do not guess randomly. Match the app stack already being used.
+
+Step 2: Run build manually in the workspace
+Run:
+
+npm run build
+
+This must be done in the project root.
+
+If it fails, capture the real error and fix that specific issue first.
+
+Step 3: Check for recent config breakage
+Inspect these first:
+
+package.json
+
+tsconfig.json
+
+vite.config.*
+
+next.config.*
+
+webpack.config.*
+
+app entry files
+
+path aliases
+
+environment variable usage in build-time code
+
+Only inspect the config files actually used by this app.
+
+Step 4: Verify dependencies installed correctly
+Run:
+
+npm install
+
+Then:
+
+npm run build
+
+If install fails, fix install first.
+
+Step 5: Check for import/runtime issues that break build
+Common causes:
+
+missing file import
+
+bad alias path
+
+server-only code imported into client code
+
+invalid TypeScript type crash during build
+
+syntax error introduced in recent edits
+
+package added but not installed
+
+wrong multer or Node-only package imported into frontend code
+
+Because recent request upload changes were added, inspect those files first for bad imports or server/client mixing.
+
+Step 6: Check build script output path
+Make sure the build script actually generates the expected output and does not exit silently.
+
+Examples:
+
+Vite should produce dist
+
+Next should produce .next
+
+Step 7: Check for hanging build hooks
+Look for scripts like:
+
+prebuild
+
+postinstall
+
+prepare
+
+One of those may be hanging or crashing before build output appears.
+
+Step 8: Safe cleanup
+If needed, do this safely:
+
+rm -rf node_modules package-lock.json
+npm install
+npm run build
+
+Only do this if dependency state looks corrupted.
+
+Step 9: Focus on latest changes first
+Since the app was working before, inspect the most recent changes first:
+
+upload endpoint additions
+
+multer install
+
+schema changes
+
+request page rewrites
+
+image lightbox components
+
+new imports
+
+server static uploads config
+
+A build failure right after those changes usually means one of them introduced:
+
+bad import
+
+missing dependency
+
+client/server boundary issue
+
+type error
+
+unresolved module
+
+Step 10: Do not publish until local build passes
+Deployment should not be retried until:
+
+npm run build
+
+runs successfully in the workspace and produces real output.
+
+Acceptance criteria
+
+npm install completes
+
+npm run build completes
+
+build output folder is generated
+
+no silent termination
+
+deployment can run the same build command successfully
+
+no unrelated app logic is changed
+
+Direct instruction for agent
+Fix the deployment failure by first making npm run build run successfully in the project root and produce real output. Check package.json build script, dependency installation, recent imports, and recent request-upload changes first. Do not modify unrelated product features. Only fix the actual build/config/dependency issue preventing the build from starting or completing.
