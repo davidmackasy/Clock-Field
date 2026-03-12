@@ -20,6 +20,7 @@ import AdminPayroll from "@/pages/admin/payroll";
 import AdminClients from "@/pages/admin/clients";
 import AdminRequests from "@/pages/admin/requests";
 import AdminSettings from "@/pages/admin/settings";
+import AdminAdmins from "@/pages/admin/admins";
 import EmployeeHome from "@/pages/employee/home";
 import EmployeeSchedule from "@/pages/employee/schedule";
 import EmployeeHours from "@/pages/employee/hours";
@@ -65,6 +66,7 @@ function AdminLayout() {
               <Route path="/admin/attendance" component={AdminAttendance} />
               <Route path="/admin/payroll" component={AdminPayroll} />
               <Route path="/admin/clients" component={AdminClients} />
+              <Route path="/admin/admins" component={AdminAdmins} />
               <Route path="/admin/requests" component={AdminRequests} />
               <Route path="/admin/settings" component={AdminSettings} />
               <Route component={NotFound} />
@@ -122,8 +124,7 @@ function AppRouter() {
     return <AuthPage />;
   }
 
-  // Employee must set a new password before accessing the app
-  if (user.role === "employee" && (user as any).mustChangePassword) {
+  if ((user as any).mustChangePassword) {
     return <SetPasswordPage />;
   }
 

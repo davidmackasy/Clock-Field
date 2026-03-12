@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Building2, Mail, Phone, MapPin, ClipboardList } from "lucide-react";
+import { Plus, Search, Building2, Mail, Phone, MapPin, ClipboardList, KeyRound, RefreshCw, Copy, UserCheck, UserX } from "lucide-react";
 
 export default function AdminClients() {
   const { toast } = useToast();
@@ -24,6 +24,7 @@ export default function AdminClients() {
   const [form, setForm] = useState({ name: "", contactName: "", contactEmail: "", contactPhone: "" });
   const [locForm, setLocForm] = useState({ name: "", address: "", clientId: "", notes: "" });
   const [editForm, setEditForm] = useState({ name: "", contactName: "", contactEmail: "", contactPhone: "", isActive: true });
+  const [credDialog, setCredDialog] = useState<{ email: string; tempPin: string } | null>(null);
 
   const { data: clientsList, isLoading } = useQuery<any[]>({ queryKey: ["/api/clients"] });
   const { data: locationsList } = useQuery<any[]>({ queryKey: ["/api/locations"] });
@@ -53,6 +54,48 @@ export default function AdminClients() {
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
+
+  const enableLoginMut = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/clients/${id}/enable-login`);
+      return res.json();
+    },
+    onSuccess: (data: { email: string; tempPin: string }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      setCredDialog(data);
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const resetPinMut = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/clients/${id}/reset-pin`);
+      return res.json();
+    },
+    onSuccess: (data: { email: string; tempPin: string }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      setCredDialog(data);
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const disableLoginMut = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/clients/${id}/disable-login`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      toast({ title: "Client login disabled" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast({ title: `${label} copied` });
+    });
+  };
 
   const handleClientClick = (client: any) => {
     setSelectedClient(client);
@@ -165,12 +208,55 @@ export default function AdminClients() {
                       <p className="font-medium text-foreground">{client.name}</p>
                       {client.contactName && <p className="text-sm text-muted-foreground">{client.contactName}</p>}
                     </div>
-                    <Badge variant={client.isActive ? "default" : "secondary"} className="text-xs">{client.isActive ? "Active" : "Inactive"}</Badge>
+                    <div className="flex items-center gap-1.5">
+                      {client.userId && <Badge variant="outline" className="text-xs"><KeyRound className="w-3 h-3 mr-1" />Login</Badge>}
+                      <Badge variant={client.isActive ? "default" : "secondary"} className="text-xs">{client.isActive ? "Active" : "Inactive"}</Badge>
+                    </div>
                   </div>
                   <div className="space-y-0.5 text-xs text-muted-foreground">
                     {client.contactEmail && <div className="flex items-center gap-1.5"><Mail className="w-3 h-3" />{client.contactEmail}</div>}
                     {client.contactPhone && <div className="flex items-center gap-1.5"><Phone className="w-3 h-3" />{client.contactPhone}</div>}
                     {locs.length > 0 && <div className="flex items-center gap-1.5"><MapPin className="w-3 h-3" />{locs.length} location{locs.length > 1 ? "s" : ""}</div>}
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-3 border-t pt-3" onClick={(e) => e.stopPropagation()}>
+                    {!client.userId ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs h-7 gap-1"
+                        data-testid={`button-enable-login-client-${client.id}`}
+                        disabled={enableLoginMut.isPending || !client.contactEmail}
+                        onClick={() => enableLoginMut.mutate(client.id)}
+                      >
+                        <UserCheck className="w-3 h-3" />
+                        Enable Login
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs h-7 gap-1"
+                          data-testid={`button-reset-pin-client-${client.id}`}
+                          disabled={resetPinMut.isPending}
+                          onClick={() => resetPinMut.mutate(client.id)}
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          Reset PIN
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs h-7 gap-1 text-destructive hover:text-destructive"
+                          data-testid={`button-disable-login-client-${client.id}`}
+                          disabled={disableLoginMut.isPending}
+                          onClick={() => disableLoginMut.mutate(client.id)}
+                        >
+                          <UserX className="w-3 h-3" />
+                          Disable Login
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -315,6 +401,40 @@ export default function AdminClients() {
               })()}
             </TabsContent>
           </Tabs>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!credDialog} onOpenChange={(v) => !v && setCredDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Client Login Credentials</DialogTitle>
+          </DialogHeader>
+          {credDialog && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Share these credentials with the client. They will be asked to set their own password on first login.</p>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-muted px-3 py-2 rounded text-sm font-mono" data-testid="text-client-cred-email">{credDialog.email}</code>
+                  <Button size="icon" variant="outline" onClick={() => copyToClipboard(credDialog.email, "Email")} data-testid="button-copy-client-email">
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Temporary PIN</Label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-muted px-3 py-2 rounded text-sm font-mono text-lg tracking-wider" data-testid="text-client-cred-pin">{credDialog.tempPin}</code>
+                  <Button size="icon" variant="outline" onClick={() => copyToClipboard(credDialog.tempPin, "PIN")} data-testid="button-copy-client-pin">
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                The client will log in via the Admin / Client tab using their email and this PIN as the password. They will then be required to set a new password.
+              </p>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

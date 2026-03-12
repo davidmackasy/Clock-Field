@@ -107,6 +107,11 @@ export function requireAuth(req: Request, res: any, next: any) {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ message: "Not authenticated" });
   }
+  const user = req.user as any;
+  if (!user.isActive) {
+    req.logout(() => {});
+    return res.status(401).json({ message: "Account is disabled" });
+  }
   next();
 }
 
@@ -116,6 +121,10 @@ export function requireRole(...roles: string[]) {
       return res.status(401).json({ message: "Not authenticated" });
     }
     const user = req.user as any;
+    if (!user.isActive) {
+      req.logout(() => {});
+      return res.status(401).json({ message: "Account is disabled" });
+    }
     if (!roles.includes(user.role)) {
       return res.status(403).json({ message: "Forbidden" });
     }

@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Users, Calendar, ClipboardList,
   DollarSign, Building2, MessageSquare, Settings,
-  LogOut, MoreHorizontal, Clock, ChevronRight,
+  LogOut, MoreHorizontal, Clock, ChevronRight, ShieldCheck,
 } from "lucide-react";
 
 const primaryTabs = [
@@ -22,6 +22,7 @@ const primaryTabs = [
 const moreItems = [
   { label: "Payroll", href: "/admin/payroll", icon: DollarSign },
   { label: "Clients", href: "/admin/clients", icon: Building2 },
+  { label: "Admins", href: "/admin/admins", icon: ShieldCheck },
   { label: "Requests", href: "/admin/requests", icon: MessageSquare },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
@@ -33,6 +34,7 @@ const pageTitles: Record<string, string> = {
   "/admin/attendance": "Attendance",
   "/admin/payroll": "Payroll",
   "/admin/clients": "Clients",
+  "/admin/admins": "Admins",
   "/admin/requests": "Requests",
   "/admin/settings": "Settings",
 };

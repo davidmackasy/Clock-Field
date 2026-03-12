@@ -248,6 +248,217 @@ export async function registerRoutes(
     }
   });
 
+  // ── Admin Management ─────────────────────────────────────────────────────
+  app.get("/api/admins", requireRole("admin"), async (req, res) => {
+    const user = req.user as any;
+    const admins = await storage.getAdminsByCompany(user.companyId);
+    const safe = admins.map(({ password: _, tempPin: __, ...a }) => a);
+    res.json(safe);
+  });
+
+  app.post("/api/admins/invite", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { firstName, lastName, email, phone } = req.body;
+      if (!email) return res.status(400).json({ message: "Email is required" });
+      if (!firstName || !lastName) return res.status(400).json({ message: "Full name is required" });
+
+      const existing = await storage.getUserByEmail(email);
+      if (existing) return res.status(400).json({ message: "A user with this email already exists" });
+
+      const pin = generateTempPin();
+      const hashedPin = await hashPassword(pin);
+
+      const admin = await storage.createUser({
+        companyId: user.companyId,
+        email,
+        password: hashedPin,
+        role: "admin",
+        firstName,
+        lastName,
+        phone: phone || null,
+        loginEnabled: true,
+        accountStatus: "pending_activation",
+        mustChangePassword: true,
+        tempPin: pin,
+      });
+
+      const { password: _, tempPin: __, ...safe } = admin;
+      res.json({ ...safe, tempPin: pin });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/admins/:id/reset-pin", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const target = await storage.getUser(req.params.id);
+      if (!target || target.companyId !== user.companyId || target.role !== "admin") {
+        return res.status(404).json({ message: "Not found" });
+      }
+
+      const pin = generateTempPin();
+      const hashedPin = await hashPassword(pin);
+
+      await storage.updateUser(req.params.id, {
+        password: hashedPin,
+        tempPin: pin,
+        mustChangePassword: true,
+        accountStatus: "pending_activation",
+      });
+
+      res.json({ tempPin: pin });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch("/api/admins/:id", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const target = await storage.getUser(req.params.id);
+      if (!target || target.companyId !== user.companyId || target.role !== "admin") {
+        return res.status(404).json({ message: "Not found" });
+      }
+
+      const { isActive } = req.body;
+      const updates: any = {};
+      if (typeof isActive === "boolean") {
+        updates.isActive = isActive;
+        if (!isActive) {
+          updates.accountStatus = "disabled";
+          updates.loginEnabled = false;
+        } else {
+          updates.loginEnabled = true;
+          if (target.accountStatus === "disabled") {
+            updates.accountStatus = "active";
+          }
+        }
+      }
+
+      const updated = await storage.updateUser(req.params.id, updates);
+      if (!updated) return res.status(404).json({ message: "Not found" });
+      const { password: _, tempPin: __, ...safe } = updated;
+      res.json(safe);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ── Client Login Enablement ─────────────────────────────────────────────
+  app.post("/api/clients/:id/enable-login", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const client = await storage.getClient(req.params.id);
+      if (!client || client.companyId !== user.companyId) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+
+      if (!client.contactEmail) {
+        return res.status(400).json({ message: "Client must have a contact email to enable login" });
+      }
+
+      const existingUser = await storage.getUserByEmail(client.contactEmail);
+      if (existingUser && existingUser.id !== client.userId) {
+        return res.status(400).json({ message: "A user with this email already exists" });
+      }
+
+      const pin = generateTempPin();
+      const hashedPin = await hashPassword(pin);
+
+      let clientUser;
+      if (client.userId) {
+        clientUser = await storage.updateUser(client.userId, {
+          password: hashedPin,
+          tempPin: pin,
+          isActive: true,
+          loginEnabled: true,
+          accountStatus: "pending_activation",
+          mustChangePassword: true,
+        });
+      } else {
+        clientUser = await storage.createUser({
+          companyId: user.companyId,
+          email: client.contactEmail,
+          password: hashedPin,
+          role: "client",
+          firstName: client.contactName || client.name,
+          lastName: "",
+          loginEnabled: true,
+          accountStatus: "pending_activation",
+          mustChangePassword: true,
+          tempPin: pin,
+        });
+        await storage.updateClient(client.id, { userId: clientUser.id });
+      }
+
+      res.json({ email: client.contactEmail, tempPin: pin });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/clients/:id/reset-pin", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const client = await storage.getClient(req.params.id);
+      if (!client || client.companyId !== user.companyId) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+      if (!client.userId) {
+        return res.status(400).json({ message: "Client does not have a login account" });
+      }
+
+      const targetUser = await storage.getUser(client.userId);
+      if (!targetUser || targetUser.companyId !== user.companyId || targetUser.role !== "client") {
+        return res.status(400).json({ message: "Invalid client account link" });
+      }
+
+      const pin = generateTempPin();
+      const hashedPin = await hashPassword(pin);
+
+      await storage.updateUser(client.userId, {
+        password: hashedPin,
+        tempPin: pin,
+        mustChangePassword: true,
+        accountStatus: "pending_activation",
+      });
+
+      res.json({ email: client.contactEmail, tempPin: pin });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/clients/:id/disable-login", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const client = await storage.getClient(req.params.id);
+      if (!client || client.companyId !== user.companyId) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+      if (!client.userId) {
+        return res.status(400).json({ message: "Client does not have a login account" });
+      }
+
+      const targetUser = await storage.getUser(client.userId);
+      if (!targetUser || targetUser.companyId !== user.companyId || targetUser.role !== "client") {
+        return res.status(400).json({ message: "Invalid client account link" });
+      }
+
+      await storage.updateUser(client.userId, {
+        isActive: false,
+        loginEnabled: false,
+        accountStatus: "disabled",
+      });
+
+      res.json({ message: "Client login disabled" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // ── Company ──────────────────────────────────────────────────────────────
   app.get("/api/company", requireRole("admin"), async (req, res) => {
     try {

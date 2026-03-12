@@ -59,7 +59,11 @@ export default function SetPasswordPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Create New Password</CardTitle>
             <CardDescription className="text-xs">
-              Your Employee ID is <strong className="font-mono">{(user as any)?.employeeId}</strong>. You will use this along with your new password to sign in.
+              {(user as any)?.role === "employee" ? (
+                <>Your Employee ID is <strong className="font-mono">{(user as any)?.employeeId}</strong>. You will use this along with your new password to sign in.</>
+              ) : (
+                <>You will use your email and new password to sign in.</>
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent>

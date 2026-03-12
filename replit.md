@@ -21,9 +21,9 @@ A workforce operations platform for service businesses with 3 user roles: Admin,
 - **Dual Passport strategies**: `local` (email+password) and `employee-local` (employeeId+pin)
 
 ## User Roles
-- **Admin**: Full dashboard. Desktop: sidebar nav. Mobile: native-app style bottom tab nav (Dashboard, Employees, Schedule, Attendance, More) + fixed top header with profile/sign-out. Manages employees, schedules, attendance, payroll estimation, clients, requests, and company settings.
+- **Admin**: Full dashboard. Desktop: sidebar nav. Mobile: native-app style bottom tab nav (Dashboard, Employees, Schedule, Attendance, More) + fixed top header with profile/sign-out. Manages employees, schedules, attendance, payroll estimation, clients, requests, admin management, and company settings.
 - **Employee**: Mobile-first bottom nav. Home with clock in/out + live timer, schedule view (Today/Week/Upcoming), hours tracking, profile (with change password).
-- **Client**: Mobile-first bottom nav. Service request submission + tracking, profile.
+- **Client**: Mobile-first bottom nav. Service request submission + tracking, profile. Login created by admin from Clients page.
 
 ## Employee Account Statuses
 - `profile_only` - Record created but no login access
@@ -42,8 +42,10 @@ A workforce operations platform for service businesses with 3 user roles: Admin,
 - Role-based authentication with secure session management
 - Employee CRUD management with hourly rate tracking
 - Employee login access management (enable, disable, reset PIN) from admin panel
+- **Admin management** - Invite additional admins with temp PIN, reset PIN, deactivate/reactivate
+- **Client login enablement** - Enable/disable login for clients from Clients page, generates email+PIN credentials
 - Email-free employee accounts supported (Employee ID + PIN login)
-- Forced password change on first employee login
+- Forced password change on first login (all roles: admin, employee, client)
 - **Recurring shift scheduling** - Create one-time, recurring (daily/weekly/biweekly), or extra shifts with day-of-week selection and 90-day auto-generation
 - **Schedule calendar views** - Day, Week, and Month calendar views with shift indicators
 - **Recurring schedule management** - List, pause, resume, end, or delete recurring schedules
@@ -64,9 +66,10 @@ A workforce operations platform for service businesses with 3 user roles: Admin,
 ## API Routes (server/routes.ts)
 - Auth: POST /api/auth/login, /api/auth/employee-login, /api/auth/change-password, /api/auth/logout, GET /api/auth/me
 - Employees: GET/POST /api/employees, PATCH /api/employees/:id, POST /api/employees/:id/enable-access|reset-pin|disable-access
+- Admins: GET /api/admins, POST /api/admins/invite, POST /api/admins/:id/reset-pin, PATCH /api/admins/:id
 - Company: GET/PATCH /api/company
 - Dashboard: GET /api/dashboard/stats
-- Clients: GET/POST/PATCH /api/clients/:id
+- Clients: GET/POST/PATCH /api/clients/:id, POST /api/clients/:id/enable-login|reset-pin|disable-login
 - Locations: GET/POST /api/locations
 - Recurring Schedules: GET/POST /api/recurring-schedules, PATCH/DELETE /api/recurring-schedules/:id
 - Shifts: GET/POST /api/shifts, GET /api/shifts/date/:date, PATCH/DELETE /api/shifts/:id
