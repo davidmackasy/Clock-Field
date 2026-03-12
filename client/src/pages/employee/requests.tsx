@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { PhotoUploader, type PhotoItem } from "@/components/photo-uploader";
-import { Plus, MessageSquare, ChevronRight, Image, Clock } from "lucide-react";
+import { Plus, MessageSquare, ChevronRight, AlertTriangle, Clock } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = {
   new: "Pending", pending: "Pending", replied: "Replied",
@@ -25,6 +25,10 @@ const STATUS_VARIANT: Record<string, string> = {
   new: "secondary", pending: "secondary", replied: "default",
   in_review: "default", in_progress: "default",
   scheduled: "secondary", resolved: "secondary", closed: "outline",
+};
+
+const PRIORITY_VARIANT: Record<string, string> = {
+  low: "secondary", normal: "secondary", high: "destructive", urgent: "destructive",
 };
 
 function formatTime(iso: string) {
@@ -46,7 +50,7 @@ function ThreadMessage({ msg, authorName }: { msg: any; authorName: string }) {
           </p>
         ) : (
           <>
-            <p className="text-xs font-medium mb-1 opacity-70">{isAdmin ? "Support Team" : authorName}</p>
+            <p className="text-xs font-medium mb-1 opacity-70">{isAdmin ? "Admin" : authorName}</p>
             {msg.body && <p className="whitespace-pre-wrap">{msg.body}</p>}
           </>
         )}
@@ -66,14 +70,16 @@ function ThreadMessage({ msg, authorName }: { msg: any; authorName: string }) {
   );
 }
 
-export default function ClientRequests() {
+export default function EmployeeRequests() {
   const { user } = useAuth();
   const { toast } = useToast();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [detailReq, setDetailReq] = useState<any>(null);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
-  const [form, setForm] = useState({ title: "", description: "", requestType: "service_request", priority: "normal" });
+  const [form, setForm] = useState({
+    title: "", description: "", requestType: "issue_report", priority: "normal",
+  });
   const [replyText, setReplyText] = useState("");
   const [replyPhotos, setReplyPhotos] = useState<PhotoItem[]>([]);
 
@@ -91,9 +97,9 @@ export default function ClientRequests() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/client-requests"] });
-      toast({ title: "Request submitted" });
+      toast({ title: "Request submitted to admin" });
       setCreateOpen(false);
-      setForm({ title: "", description: "", requestType: "service_request", priority: "normal" });
+      setForm({ title: "", description: "", requestType: "issue_report", priority: "normal" });
       setPhotos([]);
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
@@ -107,26 +113,24 @@ export default function ClientRequests() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/client-requests", detailReq?.id, "messages"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/client-requests"] });
       setReplyText("");
       setReplyPhotos([]);
-      toast({ title: "Reply sent" });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
   const sorted = [...(requests || [])].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  const clientName = `${user?.firstName || ""} ${user?.lastName || ""}`.trim();
+  const authorName = `${user?.firstName || ""} ${user?.lastName || ""}`.trim();
 
   return (
     <div className="p-4 pb-24 space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold" data-testid="text-requests-title">Requests</h1>
-          <p className="text-sm text-muted-foreground">Submit and track service requests</p>
+          <h1 className="text-xl font-bold" data-testid="text-emp-requests-title">My Reports</h1>
+          <p className="text-sm text-muted-foreground">Submit operational issues to admin</p>
         </div>
-        <Button size="sm" onClick={() => setCreateOpen(true)} data-testid="button-new-request">
+        <Button size="sm" onClick={() => setCreateOpen(true)} data-testid="button-new-emp-request">
           <Plus className="w-4 h-4 mr-1" />New
         </Button>
       </div>
@@ -138,16 +142,22 @@ export default function ClientRequests() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <MessageSquare className="w-12 h-12 text-muted-foreground/20 mb-3" />
-            <p className="text-muted-foreground text-sm">No requests yet</p>
+            <p className="text-muted-foreground text-sm font-medium">No reports yet</p>
+            <p className="text-muted-foreground text-xs mt-1">Tap New to report an issue to admin</p>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-2">
           {sorted.map((req: any) => (
-            <Card key={req.id} className="cursor-pointer hover:shadow-sm transition-shadow" data-testid={`request-card-${req.id}`} onClick={() => setDetailReq(req)}>
+            <Card key={req.id} className="cursor-pointer hover:shadow-sm transition-shadow" data-testid={`emp-request-card-${req.id}`} onClick={() => setDetailReq(req)}>
               <CardContent className="p-3">
                 <div className="flex items-start justify-between gap-2 mb-1">
-                  <p className="text-sm font-medium flex-1 min-w-0 truncate">{req.title}</p>
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    {(req.priority === "urgent" || req.priority === "high") && (
+                      <AlertTriangle className="w-3.5 h-3.5 text-destructive flex-shrink-0" />
+                    )}
+                    <p className="text-sm font-medium truncate">{req.title}</p>
+                  </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <Badge variant={(STATUS_VARIANT[req.status] as any) || "secondary"} className="text-xs">
                       {STATUS_LABELS[req.status] || req.status}
@@ -159,6 +169,10 @@ export default function ClientRequests() {
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span>{req.requestType.replace(/_/g, " ")}</span>
                   <span>·</span>
+                  <Badge variant={(PRIORITY_VARIANT[req.priority] as any) || "secondary"} className="text-[10px] h-4 px-1">
+                    {req.priority}
+                  </Badge>
+                  <span>·</span>
                   <span>{new Date(req.createdAt).toLocaleDateString()}</span>
                 </div>
               </CardContent>
@@ -169,26 +183,26 @@ export default function ClientRequests() {
 
       {/* Create dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>New Request</DialogTitle></DialogHeader>
+        <DialogContent className="max-h-[92vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>New Report to Admin</DialogTitle></DialogHeader>
           <form onSubmit={e => {
             e.preventDefault();
             createMut.mutate({ ...form, photos: photos.map(p => ({ dataUrl: p.dataUrl, caption: p.caption })) });
           }} className="space-y-4">
             <div className="space-y-2">
               <Label>Title</Label>
-              <Input data-testid="input-req-title" value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} required />
+              <Input data-testid="input-emp-req-title" value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} required placeholder="Brief description of the issue" />
             </div>
             <div className="space-y-2">
               <Label>Type</Label>
               <Select value={form.requestType} onValueChange={v => setForm(p => ({ ...p, requestType: v }))}>
-                <SelectTrigger data-testid="select-req-type"><SelectValue /></SelectTrigger>
+                <SelectTrigger data-testid="select-emp-req-type"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="service_request">Service Request</SelectItem>
-                  <SelectItem value="complaint">Complaint</SelectItem>
                   <SelectItem value="issue_report">Issue Report</SelectItem>
-                  <SelectItem value="follow_up">Follow-up</SelectItem>
-                  <SelectItem value="special_task">Special Task</SelectItem>
+                  <SelectItem value="damage_report">Damage Report</SelectItem>
+                  <SelectItem value="supply_issue">Supply Issue</SelectItem>
+                  <SelectItem value="emergency_issue">Emergency Issue</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -200,20 +214,26 @@ export default function ClientRequests() {
                   <SelectItem value="low">Low</SelectItem>
                   <SelectItem value="normal">Normal</SelectItem>
                   <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
+                  <SelectItem value="urgent">🚨 Urgent / Emergency</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label>Description</Label>
-              <Textarea data-testid="input-req-description" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} rows={3} />
+              <Textarea
+                data-testid="input-emp-req-description"
+                value={form.description}
+                onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                rows={3}
+                placeholder="Describe what you found or what happened..."
+              />
             </div>
             <div className="space-y-2">
-              <Label className="flex items-center gap-1"><Image className="w-3.5 h-3.5" />Photos (optional, up to 10)</Label>
-              <PhotoUploader photos={photos} onChange={setPhotos} maxPhotos={10} label="Add Photos" />
+              <Label>Photos (optional, up to 5)</Label>
+              <PhotoUploader photos={photos} onChange={setPhotos} maxPhotos={5} label="Add Evidence Photos" />
             </div>
-            <Button type="submit" className="w-full" disabled={createMut.isPending} data-testid="button-submit-request">
-              {createMut.isPending ? "Submitting..." : "Submit Request"}
+            <Button type="submit" className="w-full" disabled={createMut.isPending} data-testid="button-submit-emp-request">
+              {createMut.isPending ? "Submitting..." : "Submit Report"}
             </Button>
           </form>
         </DialogContent>
@@ -224,35 +244,34 @@ export default function ClientRequests() {
         <Dialog open={!!detailReq} onOpenChange={() => setDetailReq(null)}>
           <DialogContent className="max-w-lg max-h-[92vh] flex flex-col">
             <DialogHeader>
-              <div className="flex items-start justify-between gap-2">
-                <DialogTitle className="pr-6 text-base leading-snug">{detailReq.title}</DialogTitle>
-                <Badge variant={(STATUS_VARIANT[detailReq.status] as any) || "secondary"} className="text-xs flex-shrink-0 mt-0.5">
+              <div className="flex items-start gap-2">
+                {(detailReq.priority === "urgent" || detailReq.priority === "high") && (
+                  <AlertTriangle className="w-4 h-4 text-destructive mt-1 flex-shrink-0" />
+                )}
+                <DialogTitle className="text-base leading-snug pr-6">{detailReq.title}</DialogTitle>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1 flex-wrap">
+                <Badge variant={(STATUS_VARIANT[detailReq.status] as any) || "secondary"} className="text-xs">
                   {STATUS_LABELS[detailReq.status] || detailReq.status}
                 </Badge>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
                 <span>{detailReq.requestType.replace(/_/g, " ")}</span>
-                <span>·</span>
-                <span className="capitalize">{detailReq.priority} priority</span>
-                <span>·</span>
+                <Badge variant={(PRIORITY_VARIANT[detailReq.priority] as any) || "secondary"} className="text-[10px] h-4 px-1">{detailReq.priority}</Badge>
                 <span><Clock className="w-3 h-3 inline mr-0.5" />{new Date(detailReq.createdAt).toLocaleDateString()}</span>
               </div>
             </DialogHeader>
 
-            {/* Thread */}
             <div className="flex-1 overflow-y-auto space-y-4 py-2 min-h-0">
               {msgsLoading ? (
                 <div className="space-y-3">{[1,2].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
               ) : !messages?.length ? (
-                <p className="text-xs text-muted-foreground text-center py-4">No messages yet. We'll reply soon!</p>
+                <p className="text-xs text-muted-foreground text-center py-4">Report sent. Admin will reply soon.</p>
               ) : (
                 messages.map((msg: any) => (
-                  <ThreadMessage key={msg.id} msg={msg} authorName={clientName} />
+                  <ThreadMessage key={msg.id} msg={msg} authorName={authorName} />
                 ))
               )}
             </div>
 
-            {/* Reply composer — only if not closed */}
             {detailReq.status !== "closed" && (
               <div className="border-t pt-3 space-y-2">
                 <Textarea
@@ -261,9 +280,9 @@ export default function ClientRequests() {
                   onChange={e => setReplyText(e.target.value)}
                   rows={2}
                   className="resize-none text-sm"
-                  data-testid="input-client-reply"
+                  data-testid="input-emp-reply"
                 />
-                <PhotoUploader photos={replyPhotos} onChange={setReplyPhotos} maxPhotos={5} label="Attach Photos" />
+                <PhotoUploader photos={replyPhotos} onChange={setReplyPhotos} maxPhotos={3} label="Attach Photos" />
                 <Button
                   className="w-full"
                   size="sm"
@@ -272,7 +291,7 @@ export default function ClientRequests() {
                     body: replyText.trim(),
                     photos: replyPhotos.map(p => ({ dataUrl: p.dataUrl, caption: p.caption })),
                   })}
-                  data-testid="button-send-client-reply"
+                  data-testid="button-send-emp-reply"
                 >
                   {replyMut.isPending ? "Sending..." : "Send"}
                 </Button>

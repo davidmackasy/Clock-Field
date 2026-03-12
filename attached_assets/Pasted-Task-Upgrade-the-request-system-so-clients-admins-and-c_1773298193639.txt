@@ -1,0 +1,1013 @@
+Task
+Upgrade the request system so clients, admins, and cleaners can communicate through request threads with photos, comments, replies, and status updates.
+
+Critical rule
+Do not break or affect anything else that is already working.
+
+Do not modify:
+
+auth
+
+admin login
+
+employee login
+
+client login
+
+schedule logic
+
+attendance logic
+
+payroll logic
+
+employee clock-in/out
+
+existing working client creation
+
+existing working employee creation
+
+current mobile navigation
+
+any working dashboard metrics
+
+This task is only about expanding the request system in a safe additive way.
+
+Main goal
+Turn requests into a proper issue communication flow.
+
+The system should support:
+
+client creates request with photos and comments
+
+admin receives request and replies with comments and photos
+
+cleaner can create operational or emergency requests to admin
+
+admin can update status
+
+client can see request updates
+
+each request behaves like a threaded issue conversation, not just a one-time form
+
+High-level roles
+
+Client
+Can:
+
+create a request
+
+upload up to 10 photos per request
+
+add comments and description
+
+see request thread
+
+see status updates
+
+see admin replies
+
+see admin-uploaded photos
+
+see when issue is resolved
+
+Admin
+Can:
+
+receive all requests
+
+reply in request thread
+
+upload photos in replies
+
+change status
+
+mark resolved
+
+send updates visible to client
+
+receive cleaner requests
+
+optionally forward or link cleaner issue to a client-facing request
+
+Cleaner / Employee
+Can:
+
+create request to admin
+
+upload up to 5 photos
+
+add title, description, priority
+
+mark as emergency if needed
+
+view own submitted requests and status
+
+see admin replies if allowed
+
+Product rule
+Do not build a full chat system.
+Build a request thread system.
+
+That means each request has:
+
+one main request record
+
+many messages or updates
+
+optional photos on each message
+
+status changes over time
+
+This is cleaner and safer.
+
+==================================
+
+REQUEST SYSTEM UPGRADE
+==================================
+
+Current issue
+The request form is too simple.
+It captures only:
+
+title
+
+type
+
+priority
+
+description
+
+It does not support:
+
+multiple images
+
+comment threads
+
+admin replies
+
+progress updates
+
+resolved flow
+
+cleaner-generated operational issues
+
+Required upgrade
+Every request should become a threaded issue card with conversation history.
+
+New request life cycle
+
+submitted
+
+pending review
+
+replied
+
+in progress
+
+resolved
+
+closed
+
+Recommended statuses
+
+new
+
+pending
+
+replied
+
+in_progress
+
+resolved
+
+closed
+
+Simplest visible status copy for users
+Client side:
+
+Pending
+
+Replied
+
+In Progress
+
+Resolved
+
+Admin side can keep more detailed internal statuses if needed.
+
+==================================
+2. CLIENT REQUEST CREATION FLOW
+
+Goal
+Client can submit richer requests with evidence.
+
+Update client request modal/form
+
+Fields
+
+Title
+
+Request Type
+
+Priority
+
+Description / Main reason
+
+Photo uploader
+
+Optional per-photo comment support
+
+General notes
+
+Photo upload rules
+
+allow up to 10 images max
+
+allow jpg, jpeg, png, webp if already supported
+
+enforce size limit per image
+
+show thumbnail preview before submit
+
+allow remove image before submit
+
+Comment behavior
+Best safe implementation:
+
+keep one main description field for the issue
+
+allow optional caption/comment for each uploaded image
+
+Recommended photo input structure
+For each uploaded photo:
+
+file
+
+optional caption/comment
+
+If that is too heavy for first pass:
+at minimum allow:
+
+up to 10 images
+
+one main description field
+
+But preferred version is:
+photo + optional comment
+
+Submission result
+Once submitted:
+
+request is created
+
+request status = pending
+
+request thread is initialized with the original request message
+
+all uploaded photos attach to first request message
+
+client can then view the request detail page/thread
+
+==================================
+3. ADMIN REQUEST REPLY FLOW
+
+Goal
+Admin should be able to respond properly, not just view the request.
+
+On admin request detail view add:
+
+reply box
+
+photo uploader
+
+status update control
+
+internal handling tools
+
+Admin reply capabilities
+
+write comment
+
+upload photos
+
+change status
+
+optionally mark request resolved
+
+optionally mark request closed
+
+Admin photo rules
+
+allow multiple images in reply
+
+suggested max 10 per reply is okay
+
+show previews before send
+
+Admin should be able to post replies like:
+
+We received your request and are reviewing it
+
+Team has completed the fix
+
+Attached are photos of the completed work
+
+When admin replies
+Client side should immediately reflect status change:
+
+if admin replied but not solved: Replied
+
+if admin marked work underway: In Progress
+
+if admin marked issue done: Resolved
+
+==================================
+4. REQUEST THREAD MODEL
+
+Do not store all request activity in one description field.
+Use a parent-child structure.
+
+Recommended data model
+
+A. requests table
+Main issue record
+
+Fields
+
+id
+
+company_id
+
+created_by_user_id
+
+created_by_role
+
+client_id nullable
+
+employee_id nullable
+
+location_id nullable
+
+title
+
+request_type
+
+priority
+
+status
+
+visibility_scope
+
+linked_client_request_id nullable
+
+created_at
+
+updated_at
+
+resolved_at nullable
+
+resolved_by_user_id nullable
+
+B. request_messages table
+Thread entries
+
+Fields
+
+id
+
+request_id
+
+author_user_id
+
+author_role
+
+body
+
+message_type
+
+is_status_update
+
+status_value nullable
+
+created_at
+
+message_type examples
+
+initial_request
+
+reply
+
+status_change
+
+internal_note only if needed later
+
+C. request_attachments table
+Files linked to each message
+
+Fields
+
+id
+
+request_message_id
+
+file_url
+
+file_type
+
+caption nullable
+
+uploaded_by_user_id
+
+created_at
+
+This structure is much safer and more scalable.
+
+==================================
+5. CLIENT REQUEST DETAIL PAGE / MODAL
+
+Client should be able to open a request and see:
+
+title
+
+status
+
+priority
+
+created date
+
+thread history
+
+images
+
+admin replies
+
+resolved message if completed
+
+Client detail view sections
+
+Request header
+
+Status badge
+
+Main description
+
+Thread timeline
+
+Attachments
+
+Reply area only if allowed later
+
+For now, safest rule:
+Client creates request and views replies.
+Optional later:
+client can add follow-up reply to same thread.
+
+If you want follow-up now, allow:
+
+one reply box
+
+add more photos up to 5 per follow-up reply
+
+But if keeping simpler:
+client can only create request and receive admin updates.
+
+==================================
+6. ADMIN REQUEST DETAIL PAGE
+
+Admin request detail should become the main handling screen.
+
+Required sections
+
+request header
+
+who submitted it
+
+submitted by role
+
+priority
+
+location
+
+original issue
+
+image gallery
+
+conversation thread
+
+reply composer
+
+status selector
+
+mark resolved action
+
+Reply composer
+
+comment textarea
+
+attach images
+
+send reply
+
+Status control
+Dropdown:
+
+Pending
+
+Replied
+
+In Progress
+
+Resolved
+
+Closed
+
+When admin changes status:
+
+save status on request
+
+create status update message in thread
+
+show that update to visible users
+
+==================================
+7. CLEANER REQUEST FEATURE
+
+Goal
+Cleaner should also be able to report issues to admin.
+
+Add a Requests section to cleaner app.
+Do not disturb existing cleaner pages.
+
+Cleaner requests page should allow:
+
+view own requests
+
+create new request
+
+upload up to 5 photos
+
+mark emergency priority
+
+send to admin
+
+Cleaner request fields
+
+Title
+
+Type
+
+Priority
+
+Description
+
+Photos up to 5
+
+Location optional if relevant
+
+Emergency toggle or priority high/urgent
+
+Suggested request types for cleaner
+
+issue report
+
+damage report
+
+supply issue
+
+emergency issue
+
+other
+
+Example use case
+Cleaner sees broken toilet
+Cleaner opens Requests
+Submits title:
+Broken toilet in washroom
+Adds description
+Uploads photos
+Sets priority = urgent
+Sends request
+
+Admin sees this immediately in Requests.
+
+Cleaner visibility
+Cleaner should be able to see:
+
+own submitted requests
+
+current status
+
+admin replies if request is visible back to cleaner
+
+==================================
+8. ADMIN TO CLIENT FORWARD / LINK FLOW
+
+You mentioned admin may want to send cleaner-found issues to the client.
+
+Best safe design
+Do not literally move one request between users.
+Instead allow admin to create or link a client-visible request from a cleaner request.
+
+Recommended approach
+From admin request detail:
+button:
+Create Client Update
+
+This can:
+
+create a linked client-facing request
+or
+
+mark selected admin reply as visible to client if the client is attached to that location
+
+Simplest safe MVP
+Add a field on request:
+visibility_scope
+
+Possible values
+
+admin_only
+
+admin_and_client
+
+admin_and_employee
+
+all_related_parties
+
+Cleaner-created requests default:
+
+admin_and_employee
+
+Client-created requests default:
+
+admin_and_client
+
+Admin can choose whether a reply is visible to client.
+This prevents leaking internal notes.
+
+This is important.
+
+==================================
+9. REQUEST STATUS UX
+
+Client side status meanings
+
+Pending: request received, waiting for admin
+
+Replied: admin responded
+
+In Progress: being handled
+
+Resolved: issue completed
+
+Closed: request finished and locked
+
+Cleaner side can use same statuses.
+
+Admin side can see all statuses plus timestamps.
+
+Status timeline examples
+Submitted
+Admin replied
+Admin attached completion photos
+Admin marked resolved
+
+==================================
+10. PHOTO SUPPORT RULES
+
+Client request
+
+max 10 photos on creation
+
+optional captions per photo
+
+allowed image formats only
+
+preview before upload
+
+Cleaner request
+
+max 5 photos on creation
+
+optional captions per photo
+
+Admin reply
+
+max 10 photos per reply is fine
+
+Storage
+Reuse existing media storage if already working.
+Do not create a second storage system if not needed.
+
+Recommended storage path
+requests/{requestId}/{messageId}/{filename}
+
+This keeps it organized.
+
+==================================
+11. MOBILE UX REQUIREMENTS
+
+For client and cleaner mobile UI:
+
+large upload button
+
+thumbnail preview grid
+
+remove image option
+
+scrollable thread
+
+sticky status badge near top
+
+clean card-based replies
+
+Do not overbuild chat bubbles if that creates risk.
+A timeline/thread card layout is safer.
+
+==================================
+12. NOTIFICATIONS / BADGES
+
+If existing notification system is minimal, keep it simple.
+
+At minimum:
+Admin side
+
+request count updates
+
+open requests count reflects new submissions
+
+Client side
+
+request status visibly updates
+
+thread shows new admin reply
+
+Cleaner side
+
+own request status updates
+
+Do not build real-time sockets unless already in place.
+Normal refresh or page reload support is acceptable for now.
+
+==================================
+13. REQUEST LIST PAGE UPDATES
+
+Admin Requests page should show:
+
+title
+
+submitted by
+
+role
+
+priority
+
+status
+
+date
+
+reply count
+
+attachment count optional
+
+Filters to add if easy
+
+Submitted by role: client / employee
+
+Status
+
+Priority
+
+Client Requests page should show:
+
+title
+
+status
+
+created date
+
+last update
+
+priority
+
+Cleaner Requests page should show:
+
+title
+
+status
+
+priority
+
+created date
+
+last update
+
+==================================
+14. SECURITY / VISIBILITY RULES
+
+Very important
+
+Client must not see:
+
+employee-only internal issues
+
+internal admin notes
+
+unrelated requests
+
+other clients’ requests
+
+Cleaner must not see:
+
+other cleaners’ requests
+
+client-only internal details unless admin explicitly shares
+
+Admin can see all company requests.
+
+This means thread messages need visibility rules.
+
+Simplest safe rule
+At request level:
+
+client request visible to admin + that client
+
+cleaner request visible to admin + that cleaner
+
+admin-created client update visible to admin + linked client
+
+admin internal replies not shown unless marked visible externally
+
+If needed, add on request_messages:
+is_visible_to_client
+is_visible_to_employee
+
+Default admin replies:
+visible to request owner
+Admin can toggle visibility if needed.
+
+==================================
+15. UI CHANGES SUMMARY
+
+Client side
+
+upgrade New Request modal
+
+allow up to 10 photos
+
+allow main description and optional image captions
+
+add request detail thread view
+
+Admin side
+
+request detail page/modal
+
+reply box
+
+upload photos
+
+change status
+
+mark resolved
+
+attach completion photos
+
+Cleaner side
+
+add Requests section/page
+
+create request
+
+upload up to 5 photos
+
+emergency / priority support
+
+view own request thread
+
+==================================
+16. STRICT DO NOT BREAK RULES
+
+Do not modify:
+
+existing auth behavior
+
+admin creation flow
+
+employee creation flow
+
+client creation flow
+
+attendance logic
+
+payroll logic
+
+schedule logic
+
+dashboard behavior
+
+working navigation structure unless adding one new cleaner Requests entry only
+
+existing request creation endpoint unless extending safely
+
+This must be additive.
+
+==================================
+17. ACCEPTANCE CRITERIA
+
+Client flow
+
+client can create request with up to 10 photos
+
+client can add description
+
+request appears in admin requests
+
+client can later see admin reply
+
+client sees status change from pending to replied or resolved
+
+Admin flow
+
+admin can open request
+
+admin can comment back
+
+admin can upload photos
+
+admin can mark resolved
+
+admin can send visible updates
+
+thread history shows timestamps and attachments
+
+Cleaner flow
+
+cleaner has Requests section
+
+cleaner can create request with up to 5 photos
+
+cleaner can mark urgent issue
+
+admin receives it
+
+cleaner can see status and replies if visible
+
+System
+
+request behaves like threaded issue conversation
+
+statuses update correctly
+
+no unrelated modules break
+
+==================================
+18. DIRECT BUILD INSTRUCTION FOR AGENT
+
+Upgrade the request system into a threaded issue communication flow for clients, admins, and cleaners. Clients must be able to create requests with up to 10 photos, descriptions, and optional image comments. Admins must be able to open requests, reply with comments and photos, update statuses, and mark issues resolved. Cleaners must get a new Requests section where they can submit operational or emergency issues to admin with up to 5 photos and comments. Each request must keep a thread history of messages, photos, and status changes. Use a request, request_messages, and request_attachments structure or equivalent. Keep visibility controlled so clients only see what belongs to them, cleaners only see their own requests, and admins see all company requests. Do not modify unrelated working systems.
+
+==================================
+19. RECOMMENDED BUILD ORDER
+
+Add request thread data model
+
+Extend client request creation with multi-image upload
+
+Build admin request detail + reply composer
+
+Add request status transitions
+
+Add cleaner Requests page and create flow
+
+Add visibility rules
+
+Add client request detail thread view
+
+Regression test everything
+
+==================================
+20. SAFEST MVP VERSION
+
+If agent needs the safest first version, do this first:
+
+client create request with up to 10 images
+
+admin reply with text + images
+
+status update
+
+cleaner create request with up to 5 images
+
+request detail thread view
+
+Then later add:
+
+per-photo captions
+
+visibility toggles
+
+client follow-up replies
+
+linked client-forward flow
+
+That is the safest way to ship this without breaking the live system.

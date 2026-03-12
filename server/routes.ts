@@ -766,40 +766,194 @@ export async function registerRoutes(
         const clientRecord = await storage.getClientByUserId(user.id);
         if (!clientRecord) return res.json([]);
         res.json(await storage.getClientRequestsByClient(clientRecord.id));
+      } else if (user.role === "employee") {
+        res.json(await storage.getClientRequestsByEmployee(user.id));
       } else {
         res.status(403).json({ message: "Forbidden" });
       }
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
-  app.post("/api/client-requests", requireRole("client"), async (req, res) => {
+  app.post("/api/client-requests", requireAuth, async (req, res) => {
     try {
       const user = req.user as any;
-      const clientRecord = await storage.getClientByUserId(user.id);
-      if (!clientRecord) return res.status(400).json({ message: "Client profile not found" });
-      const { title, description, requestType, priority } = req.body;
+      const { title, description, requestType, priority, photos } = req.body;
       if (!title?.trim()) return res.status(400).json({ message: "Title is required" });
+
+      let clientId: string | null = null;
+      let employeeId: string | null = null;
+      let visibilityScope = "admin_and_client";
+
+      if (user.role === "client") {
+        const clientRecord = await storage.getClientByUserId(user.id);
+        if (!clientRecord) return res.status(400).json({ message: "Client profile not found" });
+        clientId = clientRecord.id;
+        visibilityScope = "admin_and_client";
+      } else if (user.role === "employee") {
+        employeeId = user.id;
+        visibilityScope = "admin_and_employee";
+      } else if (user.role !== "admin") {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
       const request = await storage.createClientRequest({
         companyId: user.companyId,
-        clientId: clientRecord.id,
+        clientId: clientId || undefined,
+        employeeId: employeeId || undefined,
+        createdByUserId: user.id,
+        createdByRole: user.role,
         title: title.trim(),
         description: description?.trim() || null,
         requestType: requestType || "service_request",
         priority: priority || "normal",
         status: "new",
+        visibilityScope,
         createdAt: new Date().toISOString(),
       });
+
+      // Create initial message with description + photos
+      if (description?.trim() || (photos && photos.length > 0)) {
+        const msg = await storage.createRequestMessage({
+          requestId: request.id,
+          authorUserId: user.id,
+          authorRole: user.role,
+          body: description?.trim() || null,
+          messageType: "initial_request",
+          isVisibleToClient: true,
+          isVisibleToEmployee: true,
+          isStatusUpdate: false,
+          statusValue: null,
+          createdAt: new Date().toISOString(),
+        });
+        if (photos && Array.isArray(photos)) {
+          for (const photo of photos) {
+            if (photo.dataUrl) {
+              await storage.createRequestAttachment({
+                requestMessageId: msg.id,
+                fileUrl: photo.dataUrl,
+                fileType: "image",
+                caption: photo.caption || null,
+                uploadedByUserId: user.id,
+                createdAt: new Date().toISOString(),
+              });
+            }
+          }
+        }
+      }
+
       res.status(201).json(request);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
-  app.patch("/api/client-requests/:id", requireRole("admin"), async (req, res) => {
+  app.patch("/api/client-requests/:id", requireAuth, async (req, res) => {
     try {
       const user = req.user as any;
       const target = await storage.getClientRequest(req.params.id);
       if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      const updated = await storage.updateClientRequest(req.params.id, req.body);
+      if (user.role !== "admin") return res.status(403).json({ message: "Forbidden" });
+      const updated = await storage.updateClientRequest(req.params.id, { ...req.body, updatedAt: new Date().toISOString() });
       res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ── Request Thread Messages ───────────────────────────────────────────────
+  app.get("/api/client-requests/:id/messages", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const target = await storage.getClientRequest(req.params.id);
+      if (!target) return res.status(404).json({ message: "Not found" });
+      // Visibility: admin sees all; client sees their own; employee sees their own
+      if (user.role === "admin" && target.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
+      if (user.role === "client") {
+        const clientRecord = await storage.getClientByUserId(user.id);
+        if (!clientRecord || target.clientId !== clientRecord.id) return res.status(403).json({ message: "Forbidden" });
+      }
+      if (user.role === "employee" && target.employeeId !== user.id) return res.status(403).json({ message: "Forbidden" });
+
+      const msgs = await storage.getRequestMessages(req.params.id);
+      // Filter visibility for non-admins
+      const visible = user.role === "admin" ? msgs :
+        user.role === "client" ? msgs.filter(m => m.isVisibleToClient) :
+        msgs.filter(m => m.isVisibleToEmployee);
+
+      const messageIds = visible.map(m => m.id);
+      const attachments = await storage.getRequestAttachmentsByMessageIds(messageIds);
+      const attByMsg: Record<string, any[]> = {};
+      for (const att of attachments) {
+        if (!attByMsg[att.requestMessageId]) attByMsg[att.requestMessageId] = [];
+        attByMsg[att.requestMessageId].push(att);
+      }
+
+      res.json(visible.map(m => ({ ...m, attachments: attByMsg[m.id] || [] })));
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/client-requests/:id/messages", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const target = await storage.getClientRequest(req.params.id);
+      if (!target) return res.status(404).json({ message: "Not found" });
+      // Check access
+      if (user.role === "client") {
+        const clientRecord = await storage.getClientByUserId(user.id);
+        if (!clientRecord || target.clientId !== clientRecord.id) return res.status(403).json({ message: "Forbidden" });
+      } else if (user.role === "employee" && target.employeeId !== user.id) {
+        return res.status(403).json({ message: "Forbidden" });
+      } else if (user.role === "admin" && target.companyId !== user.companyId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const { body, photos, statusChange, isVisibleToClient = true, isVisibleToEmployee = true } = req.body;
+      const isStatusUpdate = !!statusChange;
+      const now = new Date().toISOString();
+
+      const msg = await storage.createRequestMessage({
+        requestId: req.params.id,
+        authorUserId: user.id,
+        authorRole: user.role,
+        body: body?.trim() || null,
+        messageType: isStatusUpdate ? "status_change" : "reply",
+        isVisibleToClient: user.role === "admin" ? isVisibleToClient : true,
+        isVisibleToEmployee: user.role === "admin" ? isVisibleToEmployee : true,
+        isStatusUpdate,
+        statusValue: statusChange || null,
+        createdAt: now,
+      });
+
+      if (photos && Array.isArray(photos)) {
+        for (const photo of photos) {
+          if (photo.dataUrl) {
+            await storage.createRequestAttachment({
+              requestMessageId: msg.id,
+              fileUrl: photo.dataUrl,
+              fileType: "image",
+              caption: photo.caption || null,
+              uploadedByUserId: user.id,
+              createdAt: now,
+            });
+          }
+        }
+      }
+
+      // Update request status if admin changes it
+      if (user.role === "admin" && statusChange) {
+        const resolvedAt = statusChange === "resolved" ? now : undefined;
+        await storage.updateClientRequest(req.params.id, {
+          status: statusChange,
+          updatedAt: now,
+          ...(resolvedAt ? { resolvedAt } : {}),
+        });
+      } else if (!isStatusUpdate) {
+        // Auto-update status when non-admin replies
+        if (user.role !== "admin" && (target.status === "new" || target.status === "resolved")) {
+          // Don't auto-change; keep current
+        } else if (user.role === "admin" && target.status !== "resolved") {
+          await storage.updateClientRequest(req.params.id, { status: "replied", updatedAt: now });
+        }
+      }
+
+      const attachments = await storage.getRequestAttachmentsByMessage(msg.id);
+      res.status(201).json({ ...msg, attachments });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

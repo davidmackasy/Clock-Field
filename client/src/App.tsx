@@ -25,6 +25,7 @@ import EmployeeHome from "@/pages/employee/home";
 import EmployeeSchedule from "@/pages/employee/schedule";
 import EmployeeHours from "@/pages/employee/hours";
 import EmployeeProfile from "@/pages/employee/profile";
+import EmployeeRequests from "@/pages/employee/requests";
 import SetPasswordPage from "@/pages/employee/set-password";
 import ClientDashboard from "@/pages/client/dashboard";
 import ClientRequestsPage from "@/pages/client/requests";
@@ -88,6 +89,7 @@ function EmployeeLayout() {
           <Route path="/employee" component={EmployeeHome} />
           <Route path="/employee/schedule" component={EmployeeSchedule} />
           <Route path="/employee/hours" component={EmployeeHours} />
+          <Route path="/employee/requests" component={EmployeeRequests} />
           <Route path="/employee/profile" component={EmployeeProfile} />
           <Route component={NotFound} />
         </Switch>

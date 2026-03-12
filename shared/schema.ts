@@ -141,16 +141,48 @@ export const payrollDeductions = pgTable("payroll_deductions", {
 export const clientRequests = pgTable("client_requests", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   companyId: varchar("company_id").notNull(),
-  clientId: varchar("client_id").notNull(),
+  clientId: varchar("client_id"),
   locationId: varchar("location_id"),
   requestType: text("request_type").notNull().default("service_request"),
   title: text("title").notNull(),
   description: text("description"),
   priority: text("priority").notNull().default("normal"),
   status: text("status").notNull().default("new"),
+  createdByUserId: varchar("created_by_user_id"),
+  createdByRole: text("created_by_role").default("client"),
+  employeeId: varchar("employee_id"),
+  visibilityScope: text("visibility_scope").notNull().default("admin_and_client"),
   createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at"),
   resolvedAt: text("resolved_at"),
 });
+
+export const requestMessages = pgTable("request_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  requestId: varchar("request_id").notNull(),
+  authorUserId: varchar("author_user_id").notNull(),
+  authorRole: text("author_role").notNull(),
+  body: text("body"),
+  messageType: text("message_type").notNull().default("reply"),
+  isVisibleToClient: boolean("is_visible_to_client").notNull().default(true),
+  isVisibleToEmployee: boolean("is_visible_to_employee").notNull().default(true),
+  isStatusUpdate: boolean("is_status_update").notNull().default(false),
+  statusValue: text("status_value"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const requestAttachments = pgTable("request_attachments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  requestMessageId: varchar("request_message_id").notNull(),
+  fileUrl: text("file_url").notNull(),
+  fileType: text("file_type").notNull().default("image"),
+  caption: text("caption"),
+  uploadedByUserId: varchar("uploaded_by_user_id").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertRequestMessageSchema = createInsertSchema(requestMessages).omit({ id: true });
+export const insertRequestAttachmentSchema = createInsertSchema(requestAttachments).omit({ id: true });
 
 export const insertCompanySchema = createInsertSchema(companies).omit({ id: true });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
@@ -180,6 +212,10 @@ export type ClientRequest = typeof clientRequests.$inferSelect;
 export type InsertClientRequest = z.infer<typeof insertClientRequestSchema>;
 export type PayrollDeduction = typeof payrollDeductions.$inferSelect;
 export type InsertPayrollDeduction = z.infer<typeof insertPayrollDeductionSchema>;
+export type RequestMessage = typeof requestMessages.$inferSelect;
+export type InsertRequestMessage = z.infer<typeof insertRequestMessageSchema>;
+export type RequestAttachment = typeof requestAttachments.$inferSelect;
+export type InsertRequestAttachment = z.infer<typeof insertRequestAttachmentSchema>;
 
 export const loginSchema = z.object({
   email: z.string().email(),

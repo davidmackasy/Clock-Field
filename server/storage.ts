@@ -2,6 +2,7 @@ import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import {
   companies, users, clients, locations, recurringSchedules, shifts, timeEntries, clientRequests, payrollDeductions,
+  requestMessages, requestAttachments,
   type Company, type InsertCompany,
   type User, type InsertUser,
   type Client, type InsertClient,
@@ -11,6 +12,8 @@ import {
   type TimeEntry, type InsertTimeEntry,
   type ClientRequest, type InsertClientRequest,
   type PayrollDeduction, type InsertPayrollDeduction,
+  type RequestMessage, type InsertRequestMessage,
+  type RequestAttachment, type InsertRequestAttachment,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -65,7 +68,14 @@ export interface IStorage {
   getClientRequest(id: string): Promise<ClientRequest | undefined>;
   getClientRequestsByCompany(companyId: string): Promise<ClientRequest[]>;
   getClientRequestsByClient(clientId: string): Promise<ClientRequest[]>;
+  getClientRequestsByEmployee(employeeId: string): Promise<ClientRequest[]>;
   updateClientRequest(id: string, data: Partial<InsertClientRequest>): Promise<ClientRequest | undefined>;
+
+  createRequestMessage(data: InsertRequestMessage): Promise<RequestMessage>;
+  getRequestMessages(requestId: string): Promise<RequestMessage[]>;
+  createRequestAttachment(data: InsertRequestAttachment): Promise<RequestAttachment>;
+  getRequestAttachmentsByMessage(messageId: string): Promise<RequestAttachment[]>;
+  getRequestAttachmentsByMessageIds(messageIds: string[]): Promise<RequestAttachment[]>;
 
   getPayrollDeductionsByCompany(companyId: string): Promise<PayrollDeduction[]>;
   createPayrollDeduction(data: InsertPayrollDeduction): Promise<PayrollDeduction>;
@@ -290,9 +300,39 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(clientRequests).where(eq(clientRequests.clientId, clientId));
   }
 
+  async getClientRequestsByEmployee(employeeId: string): Promise<ClientRequest[]> {
+    return db.select().from(clientRequests).where(eq(clientRequests.employeeId, employeeId));
+  }
+
   async updateClientRequest(id: string, data: Partial<InsertClientRequest>): Promise<ClientRequest | undefined> {
     const [request] = await db.update(clientRequests).set(data).where(eq(clientRequests.id, id)).returning();
     return request;
+  }
+
+  async createRequestMessage(data: InsertRequestMessage): Promise<RequestMessage> {
+    const [msg] = await db.insert(requestMessages).values(data).returning();
+    return msg;
+  }
+
+  async getRequestMessages(requestId: string): Promise<RequestMessage[]> {
+    return db.select().from(requestMessages)
+      .where(eq(requestMessages.requestId, requestId))
+      .orderBy(requestMessages.createdAt);
+  }
+
+  async createRequestAttachment(data: InsertRequestAttachment): Promise<RequestAttachment> {
+    const [att] = await db.insert(requestAttachments).values(data).returning();
+    return att;
+  }
+
+  async getRequestAttachmentsByMessage(messageId: string): Promise<RequestAttachment[]> {
+    return db.select().from(requestAttachments).where(eq(requestAttachments.requestMessageId, messageId));
+  }
+
+  async getRequestAttachmentsByMessageIds(messageIds: string[]): Promise<RequestAttachment[]> {
+    if (!messageIds.length) return [];
+    const rows = await Promise.all(messageIds.map(id => this.getRequestAttachmentsByMessage(id)));
+    return rows.flat();
   }
 
   async getPayrollDeductionsByCompany(companyId: string): Promise<PayrollDeduction[]> {
