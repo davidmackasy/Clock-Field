@@ -26,6 +26,7 @@ export default function AuthPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [empLoginError, setEmpLoginError] = useState("");
+  const [regError, setRegError] = useState("");
 
   if (user) {
     if (user.role === "admin") setLocation("/admin");
@@ -73,14 +74,26 @@ export default function AuthPage() {
     }
   };
 
+  const registerErrorMessage = (err: any): string => {
+    const msg: string = err?.message || "";
+    if (msg.toLowerCase().includes("email already exists") || msg.toLowerCase().includes("already in use") || msg.toLowerCase().includes("duplicate"))
+      return "This email is already in use. Please sign in or use a different email address.";
+    if (msg.toLowerCase().includes("required") || msg.toLowerCase().includes("invalid") || msg.includes("400"))
+      return "Please check your information and try again.";
+    if (msg.includes("fetch") || msg.toLowerCase().includes("network") || msg.toLowerCase().includes("failed to fetch"))
+      return "We couldn't create your account right now. Please try again in a moment.";
+    return "Something went wrong. Please try again.";
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    setRegError("");
     setIsLoading(true);
     try {
       await register({ email: regEmail, password: regPassword, firstName: regFirstName, lastName: regLastName, companyName: regCompany });
       toast({ title: "Account created!" });
     } catch (err: any) {
-      toast({ title: "Registration failed", description: err.message, variant: "destructive" });
+      setRegError(registerErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -220,8 +233,17 @@ export default function AuthPage() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="reg-password">Password</Label>
-                      <Input id="reg-password" data-testid="input-reg-password" type="password" placeholder="Min 6 characters" value={regPassword} onChange={e => setRegPassword(e.target.value)} required minLength={6} />
+                      <Input id="reg-password" data-testid="input-reg-password" type="password" placeholder="Min 6 characters" value={regPassword} onChange={e => { setRegPassword(e.target.value); setRegError(""); }} required minLength={6} />
                     </div>
+                    {regError && (
+                      <div className="flex items-start gap-2.5 rounded-md border border-blue-100 bg-blue-50/60 px-3 py-2.5" data-testid="error-register">
+                        <AlertCircle className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground">Unable to create account</p>
+                          <p className="text-sm text-foreground/70 mt-0.5">{regError}</p>
+                        </div>
+                      </div>
+                    )}
                     <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-register">
                       {isLoading ? "Creating account..." : "Create Account"}
                     </Button>

@@ -1,0 +1,215 @@
+Yes. This should be a small UI-only improvement, just like the login error cleanup.
+
+Use this exact dev note:
+
+DEV NOTE
+
+Task
+Improve the registration error message UI for duplicate email and make it match the app design on both desktop and mobile.
+
+Critical rule
+Do not touch anything else that is already working.
+Do not modify:
+
+registration logic
+
+auth logic
+
+backend validation rules
+
+login flow
+
+employee flow
+
+admin flow
+
+client flow
+
+redirects
+
+role handling
+
+any successful registration behavior
+
+This task is only about:
+
+improving the displayed registration error message
+
+removing raw server error formatting
+
+making the error UI feel polished and professional
+
+Goal
+When registration fails because the email already exists, the app should show a clean, friendly, professional message that matches the app UI.
+
+Current problem
+Right now the UI shows a harsh red box with raw backend formatting like:
+
+Registration failed
+400: {"message":"Email already exists"}
+
+That looks technical and unpolished.
+
+Required change
+Map that backend error to a clean user-facing message.
+
+Use this message for duplicate email:
+This email is already in use. Please sign in or use a different email address.
+
+Optional shorter version:
+This email is already registered. Please sign in or use a different one.
+
+Best recommended version:
+This email is already in use. Please sign in or use a different email address.
+
+Title recommendation
+Instead of:
+Registration failed
+
+Use:
+Unable to create account
+
+So the final UI can read:
+
+Unable to create account
+This email is already in use. Please sign in or use a different email address.
+
+Error mapping rules
+
+Duplicate email / email already exists
+Show:
+This email is already in use. Please sign in or use a different email address.
+
+Invalid input / missing required field
+Show:
+Please check your information and try again.
+
+Network/server issue
+Show:
+We couldn’t create your account right now. Please try again in a moment.
+
+Unexpected error
+Show:
+Something went wrong. Please try again.
+
+Important security / UX rule
+Do not show:
+
+raw JSON
+
+status codes
+
+stack traces
+
+backend payloads
+
+Do not render:
+400: {"message":"Email already exists"}
+
+Frontend should intercept backend errors and map them to clean copy.
+
+UI styling requirements
+Keep the same app-style direction as the improved login error.
+
+Use:
+
+white or very light neutral background
+
+subtle border
+
+soft shadow
+
+rounded corners matching app cards
+
+dark title text
+
+muted body text
+
+optional blue accent icon or left border
+
+Do not use:
+
+harsh solid red block
+
+raw technical alert styling
+
+oversized warning-style developer UI
+
+This is still an error state, but it should feel calm and polished.
+
+Recommended visual direction
+A premium SaaS-style notification/card:
+
+background: white
+
+border: light gray or subtle blue-tinted border
+
+shadow: soft
+
+title: dark text
+
+body: muted gray text
+
+optional small icon in blue or soft warning tone
+
+Placement
+Best options:
+
+inline error inside the registration card above the button
+or
+
+soft toast matching the app design
+
+Preferred option:
+Inline error inside the registration form card
+
+Why:
+
+feels cleaner
+
+keeps the message near the action
+
+better on mobile and desktop
+
+Mobile requirement
+Make sure the message:
+
+wraps cleanly
+
+has proper padding
+
+does not overflow
+
+does not cover the form awkwardly
+
+matches the same styling as desktop
+
+Desktop requirement
+Keep spacing balanced and aligned with the form card.
+No giant floating red block.
+
+Acceptance criteria
+
+duplicate email no longer shows raw 400 or JSON
+
+user sees clean message:
+This email is already in use. Please sign in or use a different email address.
+
+styling matches ClockField UI
+
+works cleanly on desktop
+
+works cleanly on mobile
+
+successful registration still works
+
+no backend auth behavior is changed
+
+no unrelated feature is affected
+
+Direct instruction for agent
+Improve only the registration error UI. When account creation fails because the email already exists, do not show raw status codes or JSON. Replace it with a clean, professional message that says: “This email is already in use. Please sign in or use a different email address.” Update the visual styling to match the ClockField app design on both desktop and mobile using a soft, polished notification style instead of a harsh red developer-style alert. Do not modify working registration logic, only the user-facing error presentation.
+
+Best final copy
+Unable to create account
+This email is already in use. Please sign in or use a different email address.
