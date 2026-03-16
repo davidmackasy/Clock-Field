@@ -46,7 +46,9 @@ function getPayPeriodBounds(cycleStartDate: string | null, periodType: string, r
 }
 
 function shiftPeriod(current: string, periodDays: number, direction: 1 | -1): string {
+  if (!current) return current;
   const d = new Date(current + "T12:00:00");
+  if (isNaN(d.getTime())) return current;
   d.setDate(d.getDate() + direction * periodDays);
   return d.toISOString().split("T")[0];
 }
@@ -189,6 +191,7 @@ export default function EmployeeTimesheets() {
       <div className="flex items-center gap-2">
         <Button variant="outline" size="icon" className="h-8 w-8"
           onClick={() => setPeriodStart(s => shiftPeriod(s, periodDays, -1))}
+          disabled={!periodStart}
           data-testid="button-period-prev"
         >
           <ChevronLeft className="w-4 h-4" />
@@ -201,7 +204,7 @@ export default function EmployeeTimesheets() {
         </div>
         <Button variant="outline" size="icon" className="h-8 w-8"
           onClick={() => setPeriodStart(s => shiftPeriod(s, periodDays, 1))}
-          disabled={periodStart >= currentBounds.start}
+          disabled={!periodStart || periodStart >= currentBounds.start}
           data-testid="button-period-next"
         >
           <ChevronRight className="w-4 h-4" />
