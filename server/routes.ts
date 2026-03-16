@@ -1546,6 +1546,70 @@ export async function registerRoutes(
     });
   }
 
+  app.get("/api/timesheets/current", requireRole("employee"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const company = await storage.getCompany(user.companyId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      const todayLocal = new Date().toLocaleDateString("en-CA", { timeZone: company.timezone || "UTC" });
+      const { start: periodStart, end: periodEnd } = getPayPeriodBounds(
+        company.payrollCycleStartDate, company.defaultPayPeriodType, todayLocal
+      );
+      const existing = await storage.getTimesheetByEmployeeAndPeriod(user.id, periodStart);
+      if (existing && ["submitted", "approved"].includes(existing.status)) {
+        const allEntries = await storage.getTimeEntriesByEmployee(user.id);
+        const entries = allEntries
+          .filter(e => { const d = e.clockInAt.slice(0, 10); return d >= periodStart && d <= periodEnd; })
+          .sort((a, b) => a.clockInAt.localeCompare(b.clockInAt));
+        return res.json({ ...existing, entries });
+      }
+      const allEntries = await storage.getTimeEntriesByEmployee(user.id);
+      const periodEntries = allEntries
+        .filter(e => { const d = e.clockInAt.slice(0, 10); return d >= periodStart && d <= periodEnd; })
+        .sort((a, b) => a.clockInAt.localeCompare(b.clockInAt));
+      const completedEntries = periodEntries.filter(e => e.status !== "active");
+      const totalWorkedMinutes = completedEntries.reduce((sum, e) => sum + (e.workedMinutes || 0), 0);
+      const totalShifts = completedEntries.filter(e => e.shiftId).length;
+      const lateCount = completedEntries.filter(e => Array.isArray(e.flags) && e.flags.includes("late_clock_in")).length;
+      const leftEarlyCount = completedEntries.filter(e => Array.isArray(e.flags) && (
+        e.flags.includes("early_clock_out") || e.flags.includes("left_early")
+      )).length;
+      const allShifts = await storage.getShiftsByEmployee(user.id);
+      const periodShifts = allShifts.filter(s => s.shiftDate >= periodStart && s.shiftDate <= periodEnd);
+      const missedShiftCount = periodShifts.filter(s => s.status === "missed" || s.status === "no_show").length;
+      const msPerDay = 24 * 60 * 60 * 1000;
+      const periodDays = Math.round(
+        (new Date(periodEnd + "T12:00:00").getTime() - new Date(periodStart + "T12:00:00").getTime()) / msPerDay
+      ) + 1;
+      const periodWeeks = periodDays / 7;
+      const otThresholdMins = (company.overtimeThresholdWeekly || 40) * 60 * periodWeeks;
+      const overtimeMinutes = company.overtimeEnabled ? Math.max(0, totalWorkedMinutes - otThresholdMins) : 0;
+      const regularMinutes = totalWorkedMinutes - overtimeMinutes;
+      const isPeriodClosed = todayLocal > periodEnd;
+      res.json({
+        id: existing?.id || null,
+        companyId: user.companyId,
+        employeeId: user.id,
+        payPeriodStart: periodStart,
+        payPeriodEnd: periodEnd,
+        payPeriodType: company.defaultPayPeriodType,
+        status: isPeriodClosed ? "draft" : "in_progress",
+        totalWorkedMinutes,
+        regularMinutes: Math.round(regularMinutes),
+        overtimeMinutes: Math.round(overtimeMinutes),
+        totalShifts,
+        lateCount,
+        leftEarlyCount,
+        missedShiftCount,
+        generatedAt: existing?.generatedAt || null,
+        submittedAt: existing?.submittedAt || null,
+        approvedAt: existing?.approvedAt || null,
+        approvedByUserId: existing?.approvedByUserId || null,
+        entries: periodEntries,
+      });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   app.get("/api/timesheets", requireAuth, async (req, res) => {
     try {
       const user = req.user as any;

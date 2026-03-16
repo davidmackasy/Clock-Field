@@ -1,0 +1,387 @@
+Yes. This should be fixed by making timesheets read directly from attendance/clock-in data for the active pay period and refresh immediately after clock-out.
+
+Do not make timesheets a separate delayed system.
+Do not wait for manual regeneration.
+Do not create a second source of truth.
+
+Attendance remains the source of truth.
+Timesheets must mirror it.
+
+Use this exact dev note.
+
+DEV NOTE
+
+Task
+Fix employee timesheet accuracy and live updating so timesheets immediately reflect attendance hours from clock-in and clock-out within the current pay period.
+
+Critical instruction
+Do not break or affect anything else that is already working.
+Do not change or delete existing production data.
+Do not modify:
+
+* auth
+* login
+* employee creation
+* admin creation
+* client creation
+* clock-in start flow
+* clock-out end flow
+* attendance recording structure unless absolutely required for read consistency
+* payroll logic
+* schedule creation
+* requests
+* work log
+* public links
+* current mobile bottom nav
+* existing Hours page behavior except safe linking/consistency if needed
+
+This task is only about making Timesheets accurately and immediately reflect existing attendance data.
+
+Main goal
+When an employee clocks out, their timesheet for the current pay period should update right away using the actual attendance data already recorded by the system.
+
+The timesheet should:
+
+* show correct hours for the active pay period
+* stay in sync with attendance
+* update quickly after clock-out
+* show Submit only when the pay period is complete or closed
+* not require repeated manual refreshes to eventually become correct
+
+Core rule
+Attendance is the source of truth.
+Timesheets are a period summary built from attendance.
+
+If attendance has the hours, timesheets must display those same hours.
+
+Problem
+Right now, My Timesheets is not reliably showing the attendance hours for the current pay period.
+It may lag, show empty state, or require repeated refreshes.
+
+This creates mismatch and confusion.
+
+Required final behavior
+
+1. Live current-period timesheet display
+   If employee is in an active pay period and has attendance entries in that period:
+
+* My Timesheets should show the current period summary immediately
+* worked hours must match attendance
+* day rows must match attendance
+* totals must match attendance
+
+2. Immediate update after clock-out
+   As soon as the employee clocks out and the attendance entry is saved:
+
+* current pay period timesheet should reflect the new worked hours
+* employee should not need to wait for a delayed background process
+* employee should not need repeated reload attempts
+
+3. Submit button only when period is ready
+   Do not show Submit Timesheet too early.
+
+Recommended rule:
+Show Submit button only when the pay period has ended.
+
+Example:
+If pay period is biweekly and current period is still ongoing:
+
+* show current timesheet summary
+* no submit button yet
+* maybe show status: In Progress
+
+Once the pay period end date passes:
+
+* show Submit button if status is Draft
+* employee can submit it
+
+This matches your request.
+
+4. Current period state
+   Timesheet states should behave like this:
+
+If current pay period is ongoing:
+
+* status can be In Progress or Draft
+* summary visible
+* daily rows visible
+* no submit button yet
+
+If pay period has ended and timesheet not yet submitted:
+
+* status = Draft
+* show Submit button
+
+If employee submitted:
+
+* status = Submitted
+* hide submit
+* admin can approve
+
+If admin approved:
+
+* status = Approved
+
+Best recommendation
+Use these UI-visible states:
+
+* In Progress
+* Ready to Submit
+* Submitted
+* Approved
+
+Required source-of-truth fix
+
+1. Timesheet generation must read from attendance directly
+   Do not rely on a stale cached timesheet snapshot for the active period unless it is refreshed automatically.
+
+For active/current period:
+
+* compute from attendance in real time
+  or
+* auto-refresh cached draft immediately after attendance updates
+
+Do not leave current-period timesheet stale.
+
+2. Hook timesheet refresh to attendance update
+   When employee clocks out and attendance entry is finalized:
+
+* trigger current pay period timesheet recompute/update for that employee
+  or
+* ensure next timesheet read pulls fresh attendance data instead of stale empty snapshot
+
+Best safe approach
+For current pay period only:
+derive directly from attendance query on read
+
+For closed/submitted/approved periods:
+use saved snapshot
+
+This is the safest hybrid model.
+
+Recommended generation model
+
+A. Current/open pay period
+Do not depend on frozen snapshot.
+Build timesheet summary dynamically from attendance rows in that pay period.
+
+Why
+This gives immediate accuracy after clock-in/clock-out.
+
+B. Closed/submitted/approved pay periods
+Use stored snapshot for stability.
+
+Why
+Approved periods should not silently change.
+
+Best rule
+
+* open period = live attendance-backed
+* submitted/approved closed periods = snapshot-backed
+
+This solves both:
+
+* accuracy now
+* stability later
+
+Pay period logic
+
+Use the existing company payroll settings:
+
+* pay period type
+* payroll cycle start date
+* company timezone
+
+Do not invent a separate timesheet period system.
+
+The current timesheet must always resolve to:
+current employee + current pay period boundaries
+
+If company uses biweekly:
+
+* current pay period must match payroll biweekly boundaries
+
+If company uses weekly:
+
+* match weekly boundaries
+
+Date and timezone rule
+Use the company timezone from settings for:
+
+* pay period start/end boundaries
+* “today”
+* date grouping
+* when a pay period is considered closed
+
+Do not mix:
+
+* browser local time
+* server UTC
+* company timezone
+
+All timesheet grouping must use company timezone.
+
+Employee UI behavior
+
+My Timesheets page should show:
+
+* current pay period title
+* period start and end
+* status badge
+* total hours
+* regular hours
+* overtime if applicable
+* daily rows
+* submit button only when ready
+
+If there is attendance in the current period, do not show:
+No timesheet for this period
+
+Instead, show the live current-period timesheet based on attendance.
+
+If there is truly no attendance in that pay period, then empty state is okay.
+
+Recommended empty-state rule
+Only show:
+No timesheet for this period
+if there are truly zero attendance records for that employee in the resolved pay period.
+
+Do not show empty state because of stale generation lag.
+
+Admin-side rule
+Admin Timesheets should follow the same source-of-truth logic:
+
+* active/open period should reflect current attendance accurately
+* closed/submitted/approved periods should reflect the proper snapshot
+
+This keeps employee and admin aligned.
+
+Recommended backend approach
+
+1. Create one shared timesheet resolver
+   One helper/service should resolve a timesheet for:
+
+* employee
+* company
+* pay period
+
+This resolver should:
+
+* determine pay period boundaries from payroll settings
+* pull attendance entries in that range
+* compute totals
+* determine status/state
+* return either live current-period summary or stored closed-period snapshot
+
+2. Current period path
+   If requested period is current open pay period:
+
+* compute from attendance directly
+
+3. Historical period path
+   If requested period is past and snapshot exists:
+
+* return snapshot
+
+If snapshot does not exist yet and period is closed:
+
+* generate it safely from attendance and persist it
+
+4. Refresh trigger
+   On successful clock-out completion:
+
+* invalidate/recompute employee current timesheet cache if cache exists
+  or
+* trigger lightweight refresh event
+  or
+* make current timesheet endpoint always fresh and uncached
+
+Safest production behavior
+Do not rely on delayed background syncing for current period.
+
+Frontend behavior
+
+Employee My Timesheets page should:
+
+* fetch current pay period timesheet on open
+* refresh after clock-out flow returns successfully
+* optionally refetch on screen focus or pull-to-refresh
+* not require multiple manual reloads to see updated hours
+
+If employee has just clocked out:
+
+* timesheet should reflect the new entry immediately or within the next direct refetch
+
+Do not use stale query cache too long.
+If using frontend query caching, invalidate current-period timesheet query after:
+
+* successful clock-in
+* successful clock-out
+* attendance entry update
+
+Submit button rules
+
+Show Submit button only if:
+
+* pay period has ended
+* timesheet status is Draft or Ready to Submit
+* employee owns that timesheet
+
+Do not show Submit while current pay period is still ongoing.
+
+Optional helper text
+Current pay period is still in progress. Your timesheet will be ready to submit when this pay period ends.
+
+Download behavior
+Keep download available if already safe to implement.
+But download must use the same current resolved timesheet data.
+Do not let download show different totals from the visible timesheet.
+
+Strict do-not-break rules
+Do not modify:
+
+* recorded attendance rows
+* historical production attendance
+* payroll calculations
+* schedule assignments
+* login behavior
+* mobile navigation
+
+Do not run destructive migrations.
+Do not rewrite clock-in/out.
+Just fix timesheet read/update logic.
+
+Acceptance criteria
+
+Employee side
+
+* employee clocks in and out normally
+* current pay period timesheet shows attendance-based hours
+* after clock-out, current timesheet updates right away
+* totals match attendance
+* daily rows match attendance
+* empty state only appears when no attendance exists
+* submit button appears only after pay period ends
+
+Admin side
+
+* admin sees matching timesheet totals for same employee and period
+* current/open period reflects attendance accurately
+* submitted/approved periods remain stable
+
+System
+
+* company timezone is respected
+* payroll cycle boundaries are respected
+* no production data is altered incorrectly
+* no unrelated module is broken
+
+Direct instruction for agent
+Fix only the timesheet synchronization and generation logic. Timesheets must reflect attendance hours from clock-in and clock-out immediately for the active pay period. Use attendance as the source of truth, determine pay period boundaries from the existing payroll settings and company timezone, and make the current/open pay period timesheet resolve live from attendance data so employees see updated hours right after clock-out. Only show the Submit button once the pay period has ended. Keep closed, submitted, or approved periods stable as snapshots if needed. Do not change any unrelated working system or modify existing production data.
+
+Best implementation model
+
+* current period = live attendance-backed timesheet
+* closed period = snapshot-backed timesheet
+
+That is the safest way to make it accurate and smooth in production.

@@ -10,10 +10,18 @@ import { useToast } from "@/hooks/use-toast";
 import { ChevronLeft, ChevronRight, RefreshCw, CheckCircle, Clock, Send, Printer, FileText } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = {
-  draft: "Draft", submitted: "Submitted", approved: "Approved", needs_review: "Needs Review",
+  in_progress: "In Progress",
+  draft: "Ready to Submit",
+  submitted: "Submitted",
+  approved: "Approved",
+  needs_review: "Needs Review",
 };
 const STATUS_VARIANT: Record<string, "secondary" | "default" | "outline" | "destructive"> = {
-  draft: "secondary", submitted: "default", approved: "outline", needs_review: "destructive",
+  in_progress: "secondary",
+  draft: "secondary",
+  submitted: "default",
+  approved: "outline",
+  needs_review: "destructive",
 };
 
 function fmtMins(mins: number): string {
@@ -112,11 +120,11 @@ export default function EmployeeTimesheets() {
 
   const { data: company } = useQuery<any>({ queryKey: ["/api/company"] });
 
-  const today = new Date().toISOString().split("T")[0];
+  const todayStr = new Date().toISOString().split("T")[0];
   const periodDays = company?.defaultPayPeriodType === "weekly" ? 7 : 14;
   const currentBounds = company
-    ? getPayPeriodBounds(company.payrollCycleStartDate, company.defaultPayPeriodType, today)
-    : { start: today, end: today };
+    ? getPayPeriodBounds(company.payrollCycleStartDate, company.defaultPayPeriodType, todayStr)
+    : { start: todayStr, end: todayStr };
 
   const [periodStart, setPeriodStart] = useState<string>("");
 
@@ -132,21 +140,32 @@ export default function EmployeeTimesheets() {
       })()
     : "";
 
-  const { data: allTimesheets, isLoading: listLoading } = useQuery<any[]>({
-    queryKey: ["/api/timesheets"],
-    staleTime: 30 * 1000,
+  const isCurrentPeriod = periodStart === currentBounds.start;
+  const isPeriodOpen = periodEnd >= todayStr;
+
+  const { data: currentPeriodTs, isLoading: currentLoading, refetch: refetchCurrent } = useQuery<any>({
+    queryKey: ["/api/timesheets/current"],
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    enabled: !!company && isCurrentPeriod,
   });
 
-  const currentTs = allTimesheets?.find(t => t.payPeriodStart === periodStart);
+  const { data: allTimesheets, isLoading: listLoading } = useQuery<any[]>({
+    queryKey: ["/api/timesheets"],
+    staleTime: 60 * 1000,
+    enabled: !!company && !isCurrentPeriod,
+  });
 
-  const { data: detail, isLoading: detailLoading } = useQuery<any>({
-    queryKey: ["/api/timesheets", currentTs?.id],
+  const pastTs = !isCurrentPeriod ? allTimesheets?.find(t => t.payPeriodStart === periodStart) : undefined;
+
+  const { data: pastDetail, isLoading: pastDetailLoading } = useQuery<any>({
+    queryKey: ["/api/timesheets", pastTs?.id],
     queryFn: async () => {
-      const res = await fetch(`/api/timesheets/${currentTs!.id}`, { credentials: "include" });
+      const res = await fetch(`/api/timesheets/${pastTs!.id}`, { credentials: "include" });
       return res.json();
     },
-    enabled: !!currentTs?.id,
-    staleTime: 0,
+    enabled: !!pastTs?.id,
+    staleTime: 60 * 1000,
   });
 
   const generateMut = useMutation({
@@ -157,37 +176,44 @@ export default function EmployeeTimesheets() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/timesheets"] });
-      toast({ title: "Timesheet generated" });
+      toast({ title: "Timesheet refreshed" });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const submitMut = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", `/api/timesheets/${currentTs!.id}/submit`);
+      let tsId = isCurrentPeriod ? currentPeriodTs?.id : pastTs?.id;
+      if (!tsId) {
+        const genRes = await apiRequest("POST", "/api/timesheets/generate", { periodStart, periodEnd });
+        if (!genRes.ok) { const e = await genRes.json(); throw new Error(e.message); }
+        const generated = await genRes.json();
+        tsId = Array.isArray(generated) ? generated[0]?.id : generated?.id;
+      }
+      if (!tsId) throw new Error("Could not create timesheet record");
+      const res = await apiRequest("POST", `/api/timesheets/${tsId}/submit`);
       if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/timesheets"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/timesheets", currentTs?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/timesheets/current"] });
       toast({ title: "Timesheet submitted to admin" });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const ts = detail || currentTs;
-  const isCurrentPeriod = periodStart === currentBounds.start;
+  const ts = isCurrentPeriod ? currentPeriodTs : (pastDetail || pastTs);
+  const isLoading = isCurrentPeriod ? (!company || currentLoading) : (listLoading || pastDetailLoading);
+  const entries: any[] = (isCurrentPeriod ? currentPeriodTs?.entries : pastDetail?.entries) || [];
 
   return (
     <div className="p-4 pb-24 space-y-5">
-      {/* Header */}
       <div>
         <h1 className="text-xl font-bold" data-testid="text-emp-timesheets-title">My Timesheets</h1>
         <p className="text-sm text-muted-foreground">Review and submit your pay period timesheets</p>
       </div>
 
-      {/* Period navigation */}
       <div className="flex items-center gap-2">
         <Button variant="outline" size="icon" className="h-8 w-8"
           onClick={() => setPeriodStart(s => shiftPeriod(s, periodDays, -1))}
@@ -211,53 +237,57 @@ export default function EmployeeTimesheets() {
         </Button>
       </div>
 
-      {/* Loading */}
-      {(listLoading || detailLoading) ? (
+      {isLoading ? (
         <div className="space-y-3">
           <Skeleton className="h-24 w-full" />
           <Skeleton className="h-40 w-full" />
         </div>
-      ) : !ts ? (
-        /* No timesheet yet */
+      ) : !ts && !isCurrentPeriod ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <FileText className="w-12 h-12 text-muted-foreground/20 mb-3" />
             <p className="text-muted-foreground font-medium text-sm">No timesheet for this period</p>
-            <p className="text-muted-foreground text-xs mt-1 mb-4">
-              {isCurrentPeriod ? "Generate your timesheet from your attendance records" : "No attendance data for this period"}
-            </p>
-            {isCurrentPeriod && (
-              <Button size="sm" onClick={() => generateMut.mutate()} disabled={generateMut.isPending} data-testid="button-generate-my-ts">
-                <RefreshCw className={`w-4 h-4 mr-1.5 ${generateMut.isPending ? "animate-spin" : ""}`} />
-                {generateMut.isPending ? "Generating…" : "Generate Timesheet"}
-              </Button>
-            )}
+            <p className="text-muted-foreground text-xs mt-1">No attendance data for this period</p>
           </CardContent>
         </Card>
-      ) : (
+      ) : ts ? (
         <>
-          {/* Status + actions bar */}
           <div className="flex items-center justify-between gap-2">
             <Badge variant={STATUS_VARIANT[ts.status] || "secondary"} className="text-xs px-2 py-0.5">
               {STATUS_LABELS[ts.status] || ts.status}
             </Badge>
             <div className="flex items-center gap-2">
-              {isCurrentPeriod && ts.status === "draft" && (
-                <Button variant="outline" size="sm" onClick={() => generateMut.mutate()} disabled={generateMut.isPending}>
+              {isCurrentPeriod && (
+                <Button variant="outline" size="sm"
+                  onClick={() => refetchCurrent()}
+                  data-testid="button-refresh-current-ts"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 mr-1" />
+                  Refresh
+                </Button>
+              )}
+              {!isCurrentPeriod && ts.status === "draft" && (
+                <Button variant="outline" size="sm"
+                  onClick={() => generateMut.mutate()}
+                  disabled={generateMut.isPending}
+                  data-testid="button-refresh-past-ts"
+                >
                   <RefreshCw className={`w-3.5 h-3.5 mr-1 ${generateMut.isPending ? "animate-spin" : ""}`} />
                   Refresh
                 </Button>
               )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => printTimesheet(ts, user, company?.name || "Company")}
-                data-testid="button-print-my-ts"
-              >
-                <Printer className="w-3.5 h-3.5 mr-1" />
-                Print
-              </Button>
-              {ts.status === "draft" && (
+              {ts.totalWorkedMinutes > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => printTimesheet({ ...ts, entries }, user, company?.name || "Company")}
+                  data-testid="button-print-my-ts"
+                >
+                  <Printer className="w-3.5 h-3.5 mr-1" />
+                  Print
+                </Button>
+              )}
+              {ts.status === "draft" && !isPeriodOpen && (
                 <Button size="sm" onClick={() => submitMut.mutate()} disabled={submitMut.isPending} data-testid="button-submit-my-ts">
                   <Send className="w-3.5 h-3.5 mr-1" />
                   {submitMut.isPending ? "Submitting…" : "Submit"}
@@ -271,7 +301,12 @@ export default function EmployeeTimesheets() {
             </div>
           </div>
 
-          {/* Summary */}
+          {ts.status === "in_progress" && (
+            <p className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
+              This pay period is still in progress. Your timesheet will be ready to submit once the period ends on {fmtDate(periodEnd)}.
+            </p>
+          )}
+
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
               { label: "Total Hours", value: fmtMins(ts.totalWorkedMinutes), icon: <Clock className="w-4 h-4 text-primary" /> },
@@ -298,10 +333,9 @@ export default function EmployeeTimesheets() {
             <p className="text-xs text-green-600">✓ Approved {fmtDateTime(ts.approvedAt)}</p>
           )}
 
-          {/* Daily breakdown */}
           <div>
             <p className="text-sm font-medium mb-2">Daily Breakdown</p>
-            {!(detail?.entries?.length) ? (
+            {entries.length === 0 ? (
               <Card>
                 <CardContent className="py-8 text-center">
                   <p className="text-xs text-muted-foreground">No time entries recorded this period</p>
@@ -309,7 +343,7 @@ export default function EmployeeTimesheets() {
               </Card>
             ) : (
               <div className="space-y-1.5">
-                {detail.entries.map((e: any) => (
+                {entries.map((e: any) => (
                   <Card key={e.id} className="overflow-hidden" data-testid={`row-ts-entry-${e.id}`}>
                     <CardContent className="p-3">
                       <div className="flex items-center justify-between gap-2">
@@ -337,7 +371,7 @@ export default function EmployeeTimesheets() {
             )}
           </div>
         </>
-      )}
+      ) : null}
     </div>
   );
 }
