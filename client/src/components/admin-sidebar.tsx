@@ -17,7 +17,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   LayoutDashboard, Users, Calendar, ClipboardList,
   DollarSign, FileText, Building2, MessageSquare,
-  Settings, LogOut, Clock, ShieldCheck, BookOpen
+  Settings, LogOut, Clock, ShieldCheck, BookOpen, ScrollText
 } from "lucide-react";
 
 const navItems = [
@@ -26,6 +26,7 @@ const navItems = [
   { title: "Schedule", url: "/admin/schedule", icon: Calendar },
   { title: "Attendance", url: "/admin/attendance", icon: ClipboardList },
   { title: "Payroll", url: "/admin/payroll", icon: DollarSign },
+  { title: "Timesheets", url: "/admin/timesheets", icon: ScrollText },
   { title: "Clients", url: "/admin/clients", icon: Building2 },
   { title: "Admins", url: "/admin/admins", icon: ShieldCheck },
   { title: "Requests", url: "/admin/requests", icon: MessageSquare },

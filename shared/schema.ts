@@ -185,6 +185,34 @@ export const requestAttachments = pgTable("request_attachments", {
 export const insertRequestMessageSchema = createInsertSchema(requestMessages).omit({ id: true });
 export const insertRequestAttachmentSchema = createInsertSchema(requestAttachments).omit({ id: true });
 
+// ── Timesheets ────────────────────────────────────────────────────────────────
+export const timesheets = pgTable("timesheets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  employeeId: varchar("employee_id").notNull(),
+  payPeriodStart: text("pay_period_start").notNull(),
+  payPeriodEnd: text("pay_period_end").notNull(),
+  payPeriodType: text("pay_period_type").notNull().default("biweekly"),
+  status: text("status").notNull().default("draft"),
+  totalWorkedMinutes: integer("total_worked_minutes").notNull().default(0),
+  regularMinutes: integer("regular_minutes").notNull().default(0),
+  overtimeMinutes: integer("overtime_minutes").notNull().default(0),
+  totalShifts: integer("total_shifts").notNull().default(0),
+  lateCount: integer("late_count").notNull().default(0),
+  leftEarlyCount: integer("left_early_count").notNull().default(0),
+  missedShiftCount: integer("missed_shift_count").notNull().default(0),
+  submittedAt: text("submitted_at"),
+  approvedAt: text("approved_at"),
+  approvedByUserId: varchar("approved_by_user_id"),
+  generatedAt: text("generated_at").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const insertTimesheetSchema = createInsertSchema(timesheets).omit({ id: true });
+export type Timesheet = typeof timesheets.$inferSelect;
+export type InsertTimesheet = z.infer<typeof insertTimesheetSchema>;
+
 // ── Work Submissions ─────────────────────────────────────────────────────────
 export const workSubmissions = pgTable("work_submissions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

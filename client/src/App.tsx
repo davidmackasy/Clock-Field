@@ -22,11 +22,13 @@ import AdminRequests from "@/pages/admin/requests";
 import AdminSettings from "@/pages/admin/settings";
 import AdminAdmins from "@/pages/admin/admins";
 import AdminWorkLog from "@/pages/admin/work-log";
+import AdminTimesheets from "@/pages/admin/timesheets";
 import EmployeeHome from "@/pages/employee/home";
 import EmployeeSchedule from "@/pages/employee/schedule";
 import EmployeeHours from "@/pages/employee/hours";
 import EmployeeProfile from "@/pages/employee/profile";
 import EmployeeRequests from "@/pages/employee/requests";
+import EmployeeTimesheets from "@/pages/employee/timesheets";
 import EmployeeWorkLog from "@/pages/employee/work-log";
 import SetPasswordPage from "@/pages/employee/set-password";
 import ClientDashboard from "@/pages/client/dashboard";
@@ -73,6 +75,7 @@ function AdminLayout() {
               <Route path="/admin/admins" component={AdminAdmins} />
               <Route path="/admin/requests" component={AdminRequests} />
               <Route path="/admin/work-log" component={AdminWorkLog} />
+              <Route path="/admin/timesheets" component={AdminTimesheets} />
               <Route path="/admin/settings" component={AdminSettings} />
               <Route component={NotFound} />
             </Switch>
@@ -94,6 +97,7 @@ function EmployeeLayout() {
           <Route path="/employee/schedule" component={EmployeeSchedule} />
           <Route path="/employee/hours" component={EmployeeHours} />
           <Route path="/employee/requests" component={EmployeeRequests} />
+          <Route path="/employee/timesheets" component={EmployeeTimesheets} />
           <Route path="/employee/work-log" component={EmployeeWorkLog} />
           <Route path="/employee/profile" component={EmployeeProfile} />
           <Route component={NotFound} />

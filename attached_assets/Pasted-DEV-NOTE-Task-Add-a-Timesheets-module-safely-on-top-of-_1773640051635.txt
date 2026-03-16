@@ -1,0 +1,994 @@
+DEV NOTE
+
+Task
+Add a Timesheets module safely on top of the existing attendance and hours system.
+
+Critical rule
+Do not break, affect, remove, refactor, or change anything that is already working in production.
+
+Repeat this rule through the whole implementation:
+
+do not break clock-in
+
+do not break clock-out
+
+do not break attendance
+
+do not break payroll
+
+do not break schedule
+
+do not break employee login
+
+do not break admin login
+
+do not break client login
+
+do not break current employee mobile nav
+
+do not break existing Hours page
+
+do not break existing Profile page
+
+do not break existing dashboard stats
+
+do not break existing requests
+
+do not break work log
+
+do not change anything unrelated
+
+This feature must be additive only.
+
+Main goal
+Add an automatic timesheet system that summarizes already-recorded attendance hours for each pay period.
+
+Important rule
+Timesheets must not replace attendance.
+Attendance remains the source of truth.
+Timesheets are only a summary, review, approval, and download layer built from attendance data already in the system.
+
+What this means
+
+employee clock-in and clock-out stays exactly the same
+
+attendance records stay exactly the same
+
+hours calculations stay exactly the same
+
+timesheets are generated from those existing records
+
+employees do not manually type hours
+
+admins can review and approve
+
+employees can review and submit or acknowledge
+
+both sides can download if possible
+
+Product definition
+Attendance captures hours.
+Timesheets summarize hours.
+
+System behavior summary
+At the end of a pay period, or whenever a pay period is viewed:
+
+the system automatically builds a timesheet from attendance records
+
+employee can review it
+
+employee can submit or acknowledge it
+
+admin can review and approve it
+
+both can download it as a simple report
+
+Scope
+This feature must appear:
+
+on admin side
+
+on employee side
+
+Employee placement
+Do not add a new bottom tab.
+The cleaner/employee native mobile nav must remain exactly the same.
+
+Timesheets should be accessible from:
+
+Profile page
+or
+
+Hours page
+or both
+
+Best recommendation
+Primary placement:
+
+Profile -> My Timesheets
+
+Optional secondary shortcut:
+
+Hours page -> View Timesheets
+
+Admin placement
+Add a dedicated Timesheets page in admin sidebar.
+
+Recommended admin route
+
+/admin/timesheets
+
+Recommended employee routes
+
+/employee/timesheets
+
+/employee/timesheets/:id
+
+If route structure differs, keep current system style.
+
+==================================
+
+STRICT DO NOT TOUCH LIST
+==================================
+
+Do not change:
+
+existing attendance record creation
+
+existing attendance flags
+
+clock-in start flow
+
+clock-out end flow
+
+break tracking if already present
+
+current payroll formulas
+
+existing employee hours page logic
+
+existing employee profile structure except adding a safe navigation link
+
+current mobile bottom nav
+
+auth/session logic
+
+existing time filters unless safely reused
+
+request system
+
+work log
+
+client functionality
+
+This feature must read from current attendance, not rewrite it.
+
+==================================
+2. TIMESHEET PRODUCT RULES
+
+Timesheets must be:
+
+auto-generated
+
+pay-period based
+
+read-only for hours data
+
+based on actual attendance records
+
+submit/approve based
+
+downloadable
+
+Timesheets must not be:
+
+manual hour-entry forms
+
+replacements for attendance
+
+editable hour entry screens by default
+
+Employees should not type in hours.
+The hours already exist in attendance.
+That remains the truth source.
+
+==================================
+3. PAY PERIOD LOGIC
+
+Use the company’s existing payroll period settings.
+
+The timesheet period must follow:
+
+pay period type
+
+payroll cycle start date
+
+Use what already exists in Settings -> Payroll:
+
+Pay Period
+
+Payroll Cycle Start Date
+
+Supported periods
+At minimum:
+
+Weekly
+
+Biweekly
+
+Monthly if already supported
+
+Best initial default
+
+Biweekly
+
+Examples
+If payroll cycle start date is March 13 and pay period is biweekly:
+
+Mar 13 to Mar 26
+
+Mar 27 to Apr 9
+
+Apr 10 to Apr 23
+
+The timesheet must summarize attendance records only inside the selected pay period.
+
+Important
+Do not invent a second pay period system.
+Reuse the current payroll period source of truth.
+
+==================================
+4. DATA SOURCE RULE
+
+All timesheet values must come from actual attendance/time-entry data already stored in the system.
+
+Use:
+
+completed time entries
+
+worked minutes/hours already calculated
+
+overtime if current system already calculates it
+
+attendance flags if useful for summary
+
+Do not use:
+
+scheduled hours only
+
+estimated hours
+
+manual employee input as the main source
+
+payroll totals as the source of attendance hours
+
+If a shift was scheduled but never worked, it should not count as worked time in the timesheet.
+
+==================================
+5. TIMESHEET DATA TO SHOW
+
+For each timesheet, show:
+
+Header
+
+employee name
+
+employee id
+
+company name
+
+pay period start
+
+pay period end
+
+generated date
+
+timesheet status
+
+Summary
+
+total worked hours
+
+total shifts worked
+
+regular hours
+
+overtime hours if applicable
+
+late arrivals count
+
+left early count
+
+missed shifts count if relevant and already supported
+
+estimated gross pay optional on admin side only
+
+Detailed daily rows
+Each row should show:
+
+date
+
+day
+
+scheduled start optional
+
+actual clock-in
+
+actual clock-out
+
+worked hours
+
+flags
+
+notes if current system already supports notes
+
+Recommended employee-visible columns
+
+date
+
+clock-in
+
+clock-out
+
+hours
+
+flags
+
+Recommended admin-visible columns
+
+date
+
+scheduled
+
+actual
+
+hours
+
+overtime
+
+flags
+
+attendance status
+
+==================================
+6. TIMESHEET STATUSES
+
+Recommended statuses:
+
+Draft
+
+Submitted
+
+Approved
+
+Needs Review
+
+Status meanings
+
+Draft
+Auto-generated but not yet submitted by employee
+
+Submitted
+Employee has reviewed and submitted/acknowledged it
+
+Approved
+Admin has reviewed and approved it
+
+Needs Review
+Admin or employee flagged something that may need correction
+
+Safest v1 behavior
+
+auto-generate as Draft
+
+employee can Submit
+
+admin can Approve
+
+Optional later
+
+reject
+
+resubmit
+
+correction request workflow
+
+==================================
+7. EMPLOYEE EXPERIENCE
+
+Goal
+Employee can review their timesheet without changing attendance data.
+
+Placement
+Add under Profile:
+
+My Timesheets
+
+Optional secondary shortcut
+Add on Hours page:
+
+View Timesheets
+
+Do not add a new bottom nav tab.
+
+Employee Timesheets page should show
+
+Current pay period timesheet
+
+Previous timesheets list
+
+status badges
+
+tap to open detail
+
+download option
+
+Employee timesheet detail should show
+
+period range
+
+summary cards
+
+daily breakdown table/list
+
+submit button if draft
+
+download button
+
+Submit behavior
+When employee taps Submit Timesheet:
+
+status changes from Draft to Submitted
+
+timestamp saved
+
+admin can now review it as submitted
+
+Do not let employee edit hours directly.
+If later needed, they can request correction through a separate flow.
+Not part of this task unless easy and already exists.
+
+==================================
+8. ADMIN EXPERIENCE
+
+Goal
+Admin can review timesheets for all employees.
+
+Add new sidebar item:
+
+Timesheets
+
+Admin Timesheets page should support:
+
+current period list
+
+previous periods
+
+filter by employee
+
+filter by status
+
+filter by pay period
+
+open timesheet detail
+
+approve timesheet
+
+download timesheet
+
+Recommended top filters
+
+period selector
+
+employee selector
+
+status selector
+
+Admin list columns
+
+employee
+
+period
+
+total hours
+
+overtime hours
+
+status
+
+submitted at
+
+approved at
+
+Admin timesheet detail should show
+
+employee info
+
+pay period
+
+summary
+
+daily rows
+
+attendance-based breakdown
+
+approve button
+
+download button
+
+Approval behavior
+When admin clicks Approve:
+
+status changes to Approved
+
+approved_at saved
+
+approved_by saved
+
+==================================
+9. DOWNLOAD FEATURE
+
+Goal
+Allow employee and admin to download timesheets.
+
+Best v1 format
+
+downloadable printable HTML page
+or
+
+PDF export
+or
+
+CSV for admin
+
+Safest recommendation
+Build downloadable printable timesheet view first.
+Then add PDF if easy.
+
+Minimum acceptable feature
+
+Download as PDF or Print-friendly page for both admin and employee
+
+Admin download options
+
+single employee timesheet PDF
+
+optional CSV later
+
+Employee download options
+
+only own timesheet PDF/print view
+
+Downloaded timesheet should include
+
+company name
+
+employee name
+
+employee id
+
+pay period
+
+summary totals
+
+daily rows
+
+status
+
+generated date
+
+Do not include
+
+payroll deductions on employee timesheet unless intentionally desired
+
+other employees’ data
+
+admin-only internal notes
+
+==================================
+10. DATABASE / MODEL RECOMMENDATION
+
+Safest structure
+
+A. timesheets
+
+id
+
+company_id
+
+employee_id
+
+pay_period_start
+
+pay_period_end
+
+pay_period_type
+
+status
+
+total_worked_minutes
+
+regular_minutes
+
+overtime_minutes
+
+total_shifts
+
+late_count
+
+left_early_count
+
+missed_shift_count
+
+submitted_at nullable
+
+approved_at nullable
+
+approved_by_user_id nullable
+
+generated_at
+
+created_at
+
+updated_at
+
+B. timesheet_entries
+
+id
+
+timesheet_id
+
+attendance_entry_id
+
+work_date
+
+scheduled_start nullable
+
+scheduled_end nullable
+
+actual_clock_in
+
+actual_clock_out
+
+worked_minutes
+
+overtime_minutes nullable
+
+flags_json nullable
+
+created_at
+
+Important
+Do not duplicate too much logic.
+These can be generated from attendance data.
+
+Safest v1 option
+Create timesheet rows when needed and cache them.
+Or generate on view and persist snapshots for approval history.
+
+Best recommendation
+Use snapshot-style timesheets per pay period so:
+
+approval history stays stable
+
+downloaded timesheets remain consistent
+
+later attendance changes do not silently rewrite already-approved timesheets unless intentionally regenerated
+
+==================================
+11. GENERATION STRATEGY
+
+Recommended safe strategy
+
+When a timesheet is first opened or when a pay period closes:
+
+generate a timesheet snapshot from attendance data for that employee and pay period
+
+If Draft and not yet approved:
+
+optionally allow refresh from attendance if attendance changed
+
+If Approved:
+
+lock snapshot unless admin explicitly regenerates later
+
+Safest MVP
+
+auto-generate timesheet snapshot when viewed
+
+employee submits
+
+admin approves
+
+approved snapshot remains stable
+
+Do not constantly recalculate approved timesheets in the background.
+
+==================================
+12. EMPLOYEE MOBILE UI
+
+Do not touch the cleaner mobile native nav.
+
+Keep current nav exactly the same.
+
+Add entry point inside Profile page:
+Section:
+Work
+
+My Hours
+
+My Timesheets
+
+Or if Hours already exists elsewhere:
+Section:
+Records
+
+My Timesheets
+
+Best Profile sections
+Account
+
+Change Password
+
+Work
+
+My Hours
+
+My Timesheets
+
+Session
+
+Sign Out
+
+This is the cleanest placement.
+
+Optional
+On Hours page, add a small button:
+
+View Timesheets
+
+That is fine, but main access should be from Profile.
+
+==================================
+13. UI REQUIREMENTS
+
+Admin side
+
+clean SaaS table/list
+
+status badges
+
+period filters
+
+approve button
+
+download button
+
+Employee side
+
+simple list of pay periods
+
+status badge
+
+total hours
+
+open detail
+
+submit button
+
+download button
+
+Desktop and mobile
+
+must be responsive
+
+do not clutter existing screens
+
+do not introduce new nav complexity
+
+==================================
+14. TIMEZONE AND DATE RULES
+
+Use the company timezone setting as source of truth for:
+
+pay period boundaries
+
+displayed dates
+
+daily grouping
+
+timesheet date rows
+
+Do not use random browser local dates if company timezone is already configured.
+
+This is important for accuracy.
+
+==================================
+15. RELATION TO PAYROLL
+
+Timesheets and payroll are related but not the same.
+
+Timesheets
+
+summarize worked hours
+
+support employee submission
+
+support admin approval
+
+Payroll
+
+estimates pay from those hours
+
+Admin side can optionally show:
+
+estimated gross pay on timesheet detail
+
+But do not merge timesheets into payroll page in a confusing way.
+Keep them as a separate module that links to the same attendance/pay period data.
+
+==================================
+16. RELATION TO HOURS PAGE
+
+Hours page stays as is.
+Do not break it.
+
+Hours page remains:
+
+a flexible view for worked hours by filters/date range
+
+Timesheets page becomes:
+
+pay-period summary and approval view
+
+So:
+Hours = live/worked-hours explorer
+Timesheets = official period summary
+
+That is the correct structure.
+
+==================================
+17. PERMISSIONS
+
+Employee
+Can:
+
+view own timesheets
+
+submit own timesheets
+
+download own timesheets
+
+Cannot:
+
+view other employees’ timesheets
+
+approve timesheets
+
+edit hours
+
+Admin
+Can:
+
+view all employee timesheets for their company
+
+filter timesheets
+
+approve timesheets
+
+download timesheets
+
+Cannot:
+
+see other companies’ timesheets
+
+==================================
+18. STRICT DO NOT BREAK RULES
+
+Do not break:
+
+current attendance summaries
+
+current payroll filters
+
+current employee hours page
+
+current employee profile page
+
+mobile nav
+
+current data already in production
+
+current schedule logic
+
+current request system
+
+work log
+
+public links
+
+uploads/images
+
+login flows
+
+No destructive migrations.
+No refactor of existing attendance recording.
+No replacing existing pages.
+Only add new safe linked functionality.
+
+==================================
+19. ACCEPTANCE CRITERIA
+
+Employee side
+
+employee can open Profile
+
+employee can access My Timesheets
+
+employee can view current pay period timesheet
+
+employee can view previous timesheets
+
+employee can submit a timesheet
+
+employee can download a timesheet
+
+bottom nav remains unchanged
+
+Admin side
+
+admin can open Timesheets page
+
+admin can filter by employee, period, and status
+
+admin can open timesheet detail
+
+admin can approve a timesheet
+
+admin can download a timesheet
+
+System
+
+timesheet is generated from attendance data
+
+timesheet uses payroll cycle settings
+
+approved timesheet remains stable
+
+no existing attendance or payroll features break
+
+no existing production user flow breaks
+
+==================================
+20. DIRECT BUILD INSTRUCTION FOR AGENT
+
+Add a Timesheets module on top of the existing attendance system without changing any current working logic. Attendance remains the source of truth. Generate timesheets automatically by pay period using the company’s existing payroll settings, including pay period type and payroll cycle start date. Add a new admin Timesheets page where admins can view, filter, approve, and download employee timesheets. Add employee access to timesheets through the existing Profile page, not by adding a new mobile nav tab. Employees should be able to view, submit, and download their own timesheets, but not edit worked hours manually. Keep the current Hours page intact and unchanged, and make sure this new feature links properly to attendance and existing period logic without breaking anything already in production.
+
+==================================
+21. RECOMMENDED BUILD ORDER
+
+Add timesheet schema/models
+
+Add pay-period timesheet generation helper using attendance data
+
+Add admin Timesheets page
+
+Add employee My Timesheets page
+
+Add submit and approve actions
+
+Add download/print support
+
+Run regression testing on attendance, payroll, hours, profile, and mobile nav
+
+==================================
+22. FINAL SAFETY NOTE
+
+This feature must be added like a layer on top of the current system.
+
+Do not move existing features.
+Do not rewrite current features.
+Do not “clean up” unrelated code.
+Do not adjust existing working attendance logic unless the timesheet generator needs to read it.
+
+Just add Timesheets safely and connect it to what already works.

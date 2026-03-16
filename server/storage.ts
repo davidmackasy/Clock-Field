@@ -3,6 +3,7 @@ import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import {
   companies, users, clients, locations, recurringSchedules, shifts, timeEntries, clientRequests, payrollDeductions,
   requestMessages, requestAttachments,
+  timesheets,
   workSubmissions, workSubmissionItems, workSubmissionPhotos,
   type Company, type InsertCompany,
   type User, type InsertUser,
@@ -15,6 +16,7 @@ import {
   type PayrollDeduction, type InsertPayrollDeduction,
   type RequestMessage, type InsertRequestMessage,
   type RequestAttachment, type InsertRequestAttachment,
+  type Timesheet, type InsertTimesheet,
   type WorkSubmission, type InsertWorkSubmission,
   type WorkSubmissionItem, type InsertWorkSubmissionItem,
   type WorkSubmissionPhoto, type InsertWorkSubmissionPhoto,
@@ -82,6 +84,13 @@ export interface IStorage {
   getRequestAttachment(id: string): Promise<RequestAttachment | undefined>;
   getRequestAttachmentsByMessage(messageId: string): Promise<RequestAttachment[]>;
   getRequestAttachmentsByMessageIds(messageIds: string[]): Promise<RequestAttachment[]>;
+
+  createTimesheet(data: InsertTimesheet): Promise<Timesheet>;
+  getTimesheet(id: string): Promise<Timesheet | undefined>;
+  getTimesheetByEmployeeAndPeriod(employeeId: string, periodStart: string): Promise<Timesheet | undefined>;
+  getTimesheetsByCompany(companyId: string): Promise<Timesheet[]>;
+  getTimesheetsByEmployee(employeeId: string): Promise<Timesheet[]>;
+  updateTimesheet(id: string, data: Partial<InsertTimesheet>): Promise<Timesheet | undefined>;
 
   getPayrollDeductionsByCompany(companyId: string): Promise<PayrollDeduction[]>;
   createPayrollDeduction(data: InsertPayrollDeduction): Promise<PayrollDeduction>;
@@ -371,6 +380,31 @@ export class DatabaseStorage implements IStorage {
   async getRequestAttachment(id: string): Promise<RequestAttachment | undefined> {
     const [att] = await db.select().from(requestAttachments).where(eq(requestAttachments.id, id));
     return att;
+  }
+
+  async createTimesheet(data: InsertTimesheet): Promise<Timesheet> {
+    const [row] = await db.insert(timesheets).values(data).returning();
+    return row;
+  }
+  async getTimesheet(id: string): Promise<Timesheet | undefined> {
+    const [row] = await db.select().from(timesheets).where(eq(timesheets.id, id));
+    return row;
+  }
+  async getTimesheetByEmployeeAndPeriod(employeeId: string, periodStart: string): Promise<Timesheet | undefined> {
+    const [row] = await db.select().from(timesheets).where(
+      and(eq(timesheets.employeeId, employeeId), eq(timesheets.payPeriodStart, periodStart))
+    );
+    return row;
+  }
+  async getTimesheetsByCompany(companyId: string): Promise<Timesheet[]> {
+    return db.select().from(timesheets).where(eq(timesheets.companyId, companyId)).orderBy(desc(timesheets.payPeriodStart));
+  }
+  async getTimesheetsByEmployee(employeeId: string): Promise<Timesheet[]> {
+    return db.select().from(timesheets).where(eq(timesheets.employeeId, employeeId)).orderBy(desc(timesheets.payPeriodStart));
+  }
+  async updateTimesheet(id: string, data: Partial<InsertTimesheet>): Promise<Timesheet | undefined> {
+    const [row] = await db.update(timesheets).set(data).where(eq(timesheets.id, id)).returning();
+    return row;
   }
 
   async getPayrollDeductionsByCompany(companyId: string): Promise<PayrollDeduction[]> {

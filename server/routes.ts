@@ -1417,6 +1417,142 @@ export async function registerRoutes(
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  // ── Timesheets ────────────────────────────────────────────────────────────
+  function getPayPeriodBounds(cycleStartDate: string | null, periodType: string, referenceDate: string) {
+    const periodDays = periodType === "weekly" ? 7 : 14;
+    const anchor = cycleStartDate || referenceDate;
+    const startDate = new Date(anchor + "T12:00:00");
+    const ref = new Date(referenceDate + "T12:00:00");
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const diffDays = Math.round((ref.getTime() - startDate.getTime()) / msPerDay);
+    const periodIndex = Math.floor(diffDays / periodDays);
+    const periodStartMs = startDate.getTime() + periodIndex * periodDays * msPerDay;
+    const ps = new Date(periodStartMs);
+    const pe = new Date(periodStartMs + (periodDays - 1) * msPerDay);
+    return { start: ps.toISOString().split("T")[0], end: pe.toISOString().split("T")[0] };
+  }
+
+  async function buildTimesheetForEmployee(
+    companyId: string, employeeId: string, periodStart: string, periodEnd: string,
+    periodType: string, company: any
+  ) {
+    const now = new Date().toISOString();
+    const allEntries = await storage.getTimeEntriesByEmployee(employeeId);
+    const periodEntries = allEntries.filter(e => {
+      const d = e.clockInAt.slice(0, 10);
+      return d >= periodStart && d <= periodEnd && e.status !== "active";
+    });
+    const totalWorkedMinutes = periodEntries.reduce((sum, e) => sum + (e.workedMinutes || 0), 0);
+    const totalShifts = periodEntries.filter(e => e.shiftId).length;
+    const lateCount = periodEntries.filter(e => Array.isArray(e.flags) && e.flags.includes("late_clock_in")).length;
+    const leftEarlyCount = periodEntries.filter(e => Array.isArray(e.flags) && e.flags.includes("left_early")).length;
+    const allShifts = await storage.getShiftsByEmployee(employeeId);
+    const periodShifts = allShifts.filter(s => s.shiftDate >= periodStart && s.shiftDate <= periodEnd);
+    const missedShiftCount = periodShifts.filter(s => s.status === "missed" || s.status === "no_show").length;
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const periodDays = Math.round((new Date(periodEnd + "T12:00:00").getTime() - new Date(periodStart + "T12:00:00").getTime()) / msPerDay) + 1;
+    const periodWeeks = periodDays / 7;
+    const otEnabled = company.overtimeEnabled;
+    const otThresholdMins = (company.overtimeThresholdWeekly || 40) * 60 * periodWeeks;
+    const overtimeMinutes = otEnabled ? Math.max(0, totalWorkedMinutes - otThresholdMins) : 0;
+    const regularMinutes = totalWorkedMinutes - overtimeMinutes;
+    const existing = await storage.getTimesheetByEmployeeAndPeriod(employeeId, periodStart);
+    if (existing) {
+      const keepStatus = ["submitted", "approved"].includes(existing.status) ? existing.status : "draft";
+      return await storage.updateTimesheet(existing.id, {
+        totalWorkedMinutes, regularMinutes: Math.round(regularMinutes), overtimeMinutes: Math.round(overtimeMinutes),
+        totalShifts, lateCount, leftEarlyCount, missedShiftCount,
+        payPeriodEnd: periodEnd, payPeriodType: periodType,
+        status: keepStatus, generatedAt: now, updatedAt: now,
+      });
+    }
+    return await storage.createTimesheet({
+      companyId, employeeId, payPeriodStart: periodStart, payPeriodEnd: periodEnd, payPeriodType: periodType,
+      status: "draft", totalWorkedMinutes, regularMinutes: Math.round(regularMinutes),
+      overtimeMinutes: Math.round(overtimeMinutes), totalShifts, lateCount, leftEarlyCount, missedShiftCount,
+      generatedAt: now, createdAt: now, updatedAt: now,
+    });
+  }
+
+  app.get("/api/timesheets", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      let list = user.role === "admin"
+        ? await storage.getTimesheetsByCompany(user.companyId)
+        : await storage.getTimesheetsByEmployee(user.id);
+      if (req.query.periodStart) list = list.filter(t => t.payPeriodStart === req.query.periodStart);
+      res.json(list);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/timesheets/generate", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const company = await storage.getCompany(user.companyId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      const today = new Date().toISOString().split("T")[0];
+      let { employeeId, periodStart, periodEnd } = req.body;
+      if (!periodStart || !periodEnd) {
+        const p = getPayPeriodBounds(company.payrollCycleStartDate, company.defaultPayPeriodType, today);
+        periodStart = p.start; periodEnd = p.end;
+      }
+      if (user.role === "employee") {
+        const ts = await buildTimesheetForEmployee(user.companyId, user.id, periodStart, periodEnd, company.defaultPayPeriodType, company);
+        return res.json([ts]);
+      }
+      if (employeeId) {
+        const ts = await buildTimesheetForEmployee(user.companyId, employeeId, periodStart, periodEnd, company.defaultPayPeriodType, company);
+        return res.json([ts]);
+      }
+      const employees = await storage.getEmployeesByCompany(user.companyId);
+      const active = employees.filter(e => e.isActive && e.accountStatus !== "profile_only" && e.loginEnabled);
+      const results = await Promise.all(active.map(emp =>
+        buildTimesheetForEmployee(user.companyId, emp.id, periodStart, periodEnd, company.defaultPayPeriodType, company)
+      ));
+      res.json(results.filter(Boolean));
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/timesheets/:id", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const ts = await storage.getTimesheet(req.params.id);
+      if (!ts) return res.status(404).json({ message: "Not found" });
+      if (ts.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
+      if (user.role === "employee" && ts.employeeId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      const allEntries = await storage.getTimeEntriesByEmployee(ts.employeeId);
+      const entries = allEntries
+        .filter(e => { const d = e.clockInAt.slice(0, 10); return d >= ts.payPeriodStart && d <= ts.payPeriodEnd; })
+        .sort((a, b) => a.clockInAt.localeCompare(b.clockInAt));
+      res.json({ ...ts, entries });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/timesheets/:id/submit", requireRole("employee"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const ts = await storage.getTimesheet(req.params.id);
+      if (!ts) return res.status(404).json({ message: "Not found" });
+      if (ts.employeeId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      if (ts.status !== "draft") return res.status(400).json({ message: "Only draft timesheets can be submitted" });
+      const now = new Date().toISOString();
+      const updated = await storage.updateTimesheet(ts.id, { status: "submitted", submittedAt: now, updatedAt: now });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/timesheets/:id/approve", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const ts = await storage.getTimesheet(req.params.id);
+      if (!ts) return res.status(404).json({ message: "Not found" });
+      if (ts.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
+      const now = new Date().toISOString();
+      const updated = await storage.updateTimesheet(ts.id, { status: "approved", approvedAt: now, approvedByUserId: user.id, updatedAt: now });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   // ── Work Submissions ──────────────────────────────────────────────────────
   app.get("/api/work-submissions", requireAuth, async (req, res) => {
     try {

@@ -56,6 +56,7 @@ A workforce operations platform for service businesses with 3 user roles: Admin,
 - **Payroll Deductions estimator** - Admin-configurable Canadian payroll deductions (federal/provincial tax, CPP, EI, custom deductions). Toggle per-company, configurable modes (off/manual%), per-period breakdown in payroll table and history modal
 - Payroll estimation based on hourly rates with overtime calculation (per-period history modal, 6 period filter options)
 - Client request management (service requests, complaints, issues)
+- **Timesheets module** - Pay-period timesheets generated from attendance records. Admin: generate all-employee timesheets, per-period drill-down with daily breakdown + approve action + print/download. Employee: view own timesheets via Profile → My Timesheets, submit for review, print. Status flow: draft → submitted → approved.
 - Company settings configuration (grace period, overtime, report requirements, payroll deductions)
 - Ownership/tenant authorization on all mutating endpoints
 
@@ -64,6 +65,7 @@ A workforce operations platform for service businesses with 3 user roles: Admin,
 - **recurring_schedules** - Recurring shift rules (days, frequency, start/end dates, continuous toggle)
 - shifts (with shiftType, shiftLabel, recurringScheduleId), time_entries, client_requests
 - **payroll_deductions** - Custom per-company deductions (label, type: percent|fixed, value, isActive)
+- **timesheets** - Pay-period summaries (employee_id, company_id, pay_period_start/end, status, worked/regular/overtime minutes, shift counts, late/left_early/missed counts, submitted_at, approved_at)
 
 ## API Routes (server/routes.ts)
 - Auth: POST /api/auth/login, /api/auth/employee-login, /api/auth/change-password, /api/auth/logout, GET /api/auth/me
@@ -78,6 +80,7 @@ A workforce operations platform for service businesses with 3 user roles: Admin,
 - Time Entries: GET /api/time-entries, GET /api/time-entries/active, POST /api/time-entries/clock-in|clock-out
 - Client Requests: GET/POST /api/client-requests, PATCH /api/client-requests/:id
 - Payroll Deductions: GET/POST /api/payroll-deductions, PATCH/DELETE /api/payroll-deductions/:id
+- Timesheets: GET /api/timesheets, POST /api/timesheets/generate, GET /api/timesheets/:id, POST /api/timesheets/:id/submit|approve
 
 ## Project Structure
 ```
@@ -88,8 +91,8 @@ client/src/
   components/admin-sidebar.tsx - Admin sidebar navigation
   components/mobile-nav.tsx - Mobile bottom navigation for employee/client
   pages/auth-page.tsx - Login/Register with split layout
-  pages/admin/ - dashboard, employees, schedule, attendance, payroll, clients, requests, settings
-  pages/employee/ - home (clock in/out + timer), schedule, hours, profile
+  pages/admin/ - dashboard, employees, schedule, attendance, payroll, timesheets, clients, requests, settings
+  pages/employee/ - home (clock in/out + timer), schedule, hours, timesheets, profile
   pages/client/ - dashboard, requests, profile
 server/
   index.ts - Express server entry with seed on startup
