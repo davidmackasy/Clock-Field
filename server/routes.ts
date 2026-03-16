@@ -14,6 +14,91 @@ import { clientRequests } from "@shared/schema";
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
+/**
+ * Convert a local-time string (no TZ suffix, e.g. "2026-03-15T08:00:00") that represents
+ * a wall-clock time in the given IANA timezone into a UTC epoch millisecond value.
+ *
+ * Shift scheduled times are stored without timezone info (local calendar time), while
+ * clockInAt/clockOutAt are stored as UTC ISO strings. This helper aligns them for accurate
+ * before/after comparisons on the server.
+ */
+function localTimeToUtcMs(localNoTzStr: string, timezone: string): number {
+  const [datePart, timePart = "00:00:00"] = localNoTzStr.split("T");
+  const [year, month, day] = datePart.split("-").map(Number);
+  const parts = timePart.split(":");
+  const hour = Number(parts[0]) || 0;
+  const minute = Number(parts[1]) || 0;
+  const second = Number(parts[2]) || 0;
+
+  // Start with the naive UTC representation of the local time string
+  const approxUtcMs = Date.UTC(year, month - 1, day, hour, minute, second);
+
+  // Ask Intl what "local time in timezone" this UTC maps to
+  const localStr = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  }).format(new Date(approxUtcMs)); // → "2026-03-15, 03:00:00" (UTC+0 → UTC-5 shift)
+
+  // Parse that locale string back to a UTC epoch (treating the local time as UTC for arithmetic)
+  const localAsUtcMs = new Date(
+    localStr.replace(", ", "T").replace(/(\d{2}:\d{2}:\d{2})$/, "$1") + "Z"
+  ).getTime();
+
+  // Offset = naive_utc - (what_local_time_maps_to_in_utc)
+  const offsetMs = approxUtcMs - localAsUtcMs;
+
+  // Actual UTC = naive UTC adjusted by the timezone offset
+  return approxUtcMs + offsetMs;
+}
+
+/**
+ * Build accurate attendance flags by comparing actual clock-in/out times (UTC) against
+ * scheduled times (local-no-TZ) using the company's IANA timezone.
+ */
+function buildAttendanceFlags(opts: {
+  clockInAtUtc: string;
+  clockOutAtUtc?: string | null;
+  scheduledStartLocal: string;
+  scheduledEndLocal?: string | null;
+  timezone: string;
+  existingFlags?: string[];
+}): string[] {
+  const { clockInAtUtc, clockOutAtUtc, scheduledStartLocal, scheduledEndLocal, timezone, existingFlags = [] } = opts;
+
+  // Keep non-timing flags (e.g. unscheduled_clock_in, no_show)
+  const nonTimingFlags = existingFlags.filter(f =>
+    !["early_clock_in", "late_clock_in", "left_early", "early_clock_out", "late_clock_out"].includes(f)
+  );
+  const flags = [...nonTimingFlags];
+
+  // ── Clock-in comparison ───────────────────────────────────────────────────
+  const scheduledStartMs = localTimeToUtcMs(scheduledStartLocal, timezone);
+  const clockInMs = new Date(clockInAtUtc).getTime();
+
+  if (clockInMs < scheduledStartMs) {
+    flags.push("early_clock_in");
+  } else if (clockInMs > scheduledStartMs) {
+    flags.push("late_clock_in");
+  }
+  // Exactly on time → no clock-in flag
+
+  // ── Clock-out comparison ──────────────────────────────────────────────────
+  if (clockOutAtUtc && scheduledEndLocal) {
+    const scheduledEndMs = localTimeToUtcMs(scheduledEndLocal, timezone);
+    const clockOutMs = new Date(clockOutAtUtc).getTime();
+
+    if (clockOutMs < scheduledEndMs) {
+      flags.push("left_early");
+    } else if (clockOutMs > scheduledEndMs) {
+      flags.push("late_clock_out");
+    }
+    // Exactly on time → no clock-out flag
+  }
+
+  return flags;
+}
+
 const upload = multer({
   dest: UPLOADS_DIR,
   limits: { fileSize: 10 * 1024 * 1024, files: 3 },
@@ -821,12 +906,15 @@ export async function registerRoutes(
       const { shiftId } = req.body;
       let shift = shiftId ? await storage.getShift(shiftId) : null;
       const now = new Date().toISOString();
-      const flags: string[] = [];
+      let flags: string[] = [];
       if (shift) {
-        const scheduledStart = new Date(shift.scheduledStartAt).getTime();
-        const grace = (shift.gracePeriodMinutes || 15) * 60000;
-        if (Date.now() > scheduledStart + grace) flags.push("late_clock_in");
-        if (Date.now() < scheduledStart - 5 * 60000) flags.push("early_clock_in");
+        const company = await storage.getCompany(user.companyId);
+        const tz = company?.timezone || "UTC";
+        flags = buildAttendanceFlags({
+          clockInAtUtc: now,
+          scheduledStartLocal: shift.scheduledStartAt,
+          timezone: tz,
+        });
         await storage.updateShift(shiftId!, { status: "in_progress" });
       } else {
         flags.push("unscheduled_clock_in");
@@ -852,12 +940,21 @@ export async function registerRoutes(
       if (!entry) return res.status(400).json({ message: "Not clocked in" });
       const now = new Date().toISOString();
       const workedMinutes = Math.round((new Date(now).getTime() - new Date(entry.clockInAt).getTime()) / 60000);
-      const flags = [...(entry.flags || [])];
+      let flags = [...(entry.flags || [])];
       if (entry.shiftId) {
         const shift = await storage.getShift(entry.shiftId);
         if (shift) {
-          const scheduledEnd = new Date(shift.scheduledEndAt).getTime();
-          if (new Date(now).getTime() < scheduledEnd - 5 * 60000) flags.push("left_early");
+          const company = await storage.getCompany(user.companyId);
+          const tz = company?.timezone || "UTC";
+          // Rebuild full flags using both clock-in and clock-out now available
+          flags = buildAttendanceFlags({
+            clockInAtUtc: entry.clockInAt,
+            clockOutAtUtc: now,
+            scheduledStartLocal: shift.scheduledStartAt,
+            scheduledEndLocal: shift.scheduledEndAt,
+            timezone: tz,
+            existingFlags: entry.flags || [],
+          });
           const expectedMins = parseFloat(shift.expectedHours || "0") * 60;
           if (workedMinutes > expectedMins + 30) flags.push("overtime");
           await storage.updateShift(entry.shiftId, { status: "completed" });
@@ -1087,7 +1184,7 @@ export async function registerRoutes(
       const { body, photos, statusChange, isVisibleToClient = true, isVisibleToEmployee = true } = req.body;
 
       if (photos && Array.isArray(photos)) {
-        if (photos.length > 3) return res.status(400).json({ message: "Maximum 3 photos allowed per message" });
+        if (photos.length > 10) return res.status(400).json({ message: "Maximum 10 photos allowed per message" });
         for (const photo of photos) {
           if (!photo.dataUrl) continue;
           const mimeMatch = photo.dataUrl.match(/^data:(image\/(?:jpeg|png|jpg));base64,/);

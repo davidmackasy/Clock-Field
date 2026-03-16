@@ -1,0 +1,374 @@
+Yes. This is a flag-classification accuracy issue, not a clock-in/out issue.
+
+Your attendance record itself is mostly right.
+The variance is showing the truth.
+The problem is the flag label logic is wrong or too broad.
+
+Example from your screenshot:
+
+scheduled: 08:00 - 14:00
+
+actual: 07:07 - 13:29
+
+variance: 53 min early
+
+That should never show:
+
+late clock in
+
+It should show:
+
+early clock in
+and also
+
+early clock out
+
+Use this exact dev note for your agent.
+
+DEV NOTE
+
+Task
+Fix attendance flag accuracy so the displayed flags match the real clock-in and clock-out timing, without changing any working clock-in/out behavior.
+
+Critical rule
+Do not break or affect anything else that is already working.
+
+Do not modify:
+
+employee clock-in logic
+
+employee clock-out logic
+
+attendance creation flow
+
+schedule creation
+
+payroll
+
+dashboard layout
+
+auth
+
+employee login
+
+admin login
+
+client login
+
+requests
+
+work log
+
+any unrelated page
+
+This task is only about correcting attendance flag labeling and matching dashboard counts to the true flag classification.
+
+Main goal
+Make attendance flags accurately reflect what actually happened:
+
+If employee clocked in before scheduled start:
+
+show early clock in
+
+If employee clocked in after scheduled start:
+
+show late clock in
+
+If employee clocked out before scheduled end:
+
+show early clock out or left early
+
+If employee clocked out after scheduled end:
+
+show late clock out or stayed late
+
+If employee clocked in exactly on time:
+
+show on time or no flag depending on current design choice
+
+Important
+Do not change the actual worked time.
+Do not change the variance calculation if it is already correct.
+Only fix the flag classification logic so the labels match the real timing.
+
+Problem observed
+Current issue:
+An employee clocks in early, but the system still flags:
+late clock in
+
+This creates false dashboard counts and false attendance analysis.
+
+Example from screenshot:
+
+scheduled start: 08:00
+
+actual clock-in: 07:07
+
+variance: 53 min early
+
+current flag: late clock in
+
+That is incorrect.
+
+Required logic
+
+Clock-in flag rules
+
+Let:
+scheduled_start = shift scheduled start
+actual_clock_in = employee clock-in time
+
+Classification must be:
+
+If actual_clock_in < scheduled_start
+flag = early_clock_in
+
+If actual_clock_in == scheduled_start
+flag = on_time_clock_in or no special flag
+
+If actual_clock_in > scheduled_start
+flag = late_clock_in
+
+Important
+You specifically said:
+even 1 minute after scheduled time = late
+
+So use exact comparison with no extra grace window unless a company grace setting is intentionally applied.
+If grace period is currently used elsewhere and must remain, only use it if that is already system truth.
+Otherwise use exact scheduled time.
+
+Clock-out flag rules
+
+Let:
+scheduled_end = shift scheduled end
+actual_clock_out = employee clock-out time
+
+Classification must be:
+
+If actual_clock_out < scheduled_end
+flag = early_clock_out or left_early
+
+If actual_clock_out == scheduled_end
+flag = on_time_clock_out or no special flag
+
+If actual_clock_out > scheduled_end
+flag = late_clock_out or stayed_late
+
+Recommended naming
+To match your current UI style, use whichever naming convention the app already uses consistently.
+
+Best consistent option:
+
+early clock in
+
+late clock in
+
+early clock out
+
+late clock out
+
+Alternative if already used:
+
+left early
+
+stayed late
+
+But be consistent.
+
+Multiple flags can exist
+One attendance record may validly have more than one flag.
+
+Example:
+Employee clocked in early and clocked out early.
+
+Then flags should be:
+
+early clock in
+
+early clock out
+
+Another example:
+Employee clocked in late and clocked out late.
+
+Then flags should be:
+
+late clock in
+
+late clock out
+
+Do not overwrite one flag with another.
+Support multiple flags per attendance record if the current UI already supports multiple badges.
+
+Variance must match flags
+The variance text is currently closer to correct.
+Keep it aligned with the flag logic.
+
+Examples:
+actual start before schedule:
+
+variance shows “53 min early”
+
+flag must include “early clock in”
+
+actual start after schedule:
+
+variance shows “5 min late”
+
+flag must include “late clock in”
+
+actual end before schedule:
+
+variance or status should reflect early clock out
+
+actual end after schedule:
+
+variance or status should reflect late clock out
+
+Dashboard Late Today must only count actual late clock-ins
+This is very important because bad flags are likely causing dashboard card inaccuracy.
+
+Late Today dashboard count should only include attendance entries where:
+
+actual clock-in > scheduled start
+
+and the date is today in company timezone
+
+It must not count:
+
+early clock in
+
+on time clock in
+
+early clock out only
+
+late clock out only
+
+Because right now the wrong late flag may be polluting that dashboard number.
+
+Dashboard Missed / Late behavior must use corrected flags
+Once flags are fixed, make sure dashboard cards read from the corrected flag classification.
+
+At minimum:
+
+Late Today = count of true late clock in records for today
+
+not records that are simply off-schedule in any direction
+
+Do not classify early as late
+This is the key bug to remove.
+
+Agent should inspect the current flag builder logic and check for bad conditions like:
+actual_clock_in !== scheduled_start
+-> late clock in
+
+That would be wrong because it treats both early and late as late.
+
+Correct logic must compare direction:
+
+before
+
+equal
+
+after
+
+Suggested implementation pattern
+
+For each attendance record:
+build flags separately for start and end comparisons
+
+Pseudo logic:
+
+startFlags:
+
+if actual_clock_in < scheduled_start => early_clock_in
+
+if actual_clock_in > scheduled_start => late_clock_in
+
+endFlags:
+
+if actual_clock_out < scheduled_end => early_clock_out
+
+if actual_clock_out > scheduled_end => late_clock_out
+
+finalFlags = combine both
+
+If no flags:
+
+optionally show on time
+or
+
+leave flag area empty depending on design
+
+Scope boundaries
+Allowed changes:
+
+attendance flag classification logic
+
+dashboard late-today counting if it depends on those flags
+
+attendance badge rendering if needed to show corrected multiple flags
+
+Do not change:
+
+attendance record structure unless absolutely required
+
+time capture
+
+schedule times
+
+hours totals
+
+payroll calculations
+
+other dashboards or modules
+
+Acceptance criteria
+
+A. Early clock-in accuracy
+If employee clocks in before scheduled start:
+
+flag shows early clock in
+
+does not show late clock in
+
+B. Late clock-in accuracy
+If employee clocks in after scheduled start:
+
+flag shows late clock in
+
+C. Early clock-out accuracy
+If employee clocks out before scheduled end:
+
+flag shows early clock out or left early consistently
+
+D. Late clock-out accuracy
+If employee clocks out after scheduled end:
+
+flag shows late clock out or stayed late consistently
+
+E. Combined cases
+If employee clocks in early and clocks out early:
+
+both flags show correctly
+
+If employee clocks in late and clocks out early:
+
+both flags show correctly
+
+F. Dashboard accuracy
+Late Today dashboard count only counts true late clock-ins for today
+
+G. No regressions
+Clock-in/out still works
+Attendance still records
+Hours still calculate
+Payroll still works
+Nothing else changes
+
+Direct instruction for agent
+Fix only the attendance flag classification logic. The system is currently labeling some early clock-ins as late clock-ins, which makes the flags inaccurate and pollutes dashboard late counts. Keep the existing attendance records and variance calculations intact, but update the flag logic so it correctly distinguishes early clock in, late clock in, early clock out, and late clock out based on whether the actual time is before or after the scheduled time. Support multiple flags on the same record when appropriate, and make sure the dashboard “Late Today” metric only counts true late clock-ins. Do not touch any unrelated working system.
+
+Most likely exact bug
+Most likely the current flag logic treats any difference from scheduled start as “late clock in” instead of checking whether the difference is before or after.
+
+That is the first place to fix.
