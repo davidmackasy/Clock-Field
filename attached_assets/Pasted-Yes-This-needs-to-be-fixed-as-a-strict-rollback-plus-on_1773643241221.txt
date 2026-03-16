@@ -1,0 +1,215 @@
+Yes. This needs to be fixed as a strict rollback plus one small UI polish, and nothing else.
+
+You are right:
+
+admin reply photos must stay max 3
+
+the UI must not show 10 if backend allows 3
+
+the agent should not touch unrelated parts
+
+only the requested issue should be fixed
+
+Use this exact dev note.
+
+DEV NOTE
+
+Task
+Fix only the admin request reply attachment limit mismatch and improve the error message styling so it matches the app UI.
+
+Critical instruction
+Do not touch anything else.
+Do not change anything else.
+Do not refactor anything else.
+Do not improve anything else.
+Do not revisit client limits.
+Do not revisit employee limits.
+Do not revisit public links.
+Do not revisit request logic.
+Do not revisit upload logic beyond restoring the correct admin reply max.
+Do not touch any unrelated working page, flow, component, backend route, or validation.
+
+This is a targeted fix only.
+
+Main goal
+Restore admin request reply attachments to:
+maximum 3 photos
+
+And make the error message UI look professional and match the app design.
+
+Problem
+Right now the admin request reply composer is showing:
+Attach Photos (5/10)
+
+But when sending, the backend correctly rejects it with:
+Maximum 3 photos allowed per message
+
+So the frontend and backend are out of sync.
+
+That is wrong.
+
+Required final behavior
+On the admin request reply modal only:
+
+max attachments must be 3
+
+UI counter must show /3
+
+frontend validation must block more than 3 before submit
+
+backend validation must still remain max 3
+
+error message styling must match app UI and not look like a harsh red developer box
+
+What to fix
+
+Admin reply photo limit
+Restore the admin reply composer max photo count to 3.
+
+That means:
+
+uploader component limit = 3
+
+counter text = (0/3), (1/3), (2/3), (3/3)
+
+do not allow adding a 4th image
+
+do not show /10 anywhere in admin reply composer
+
+Important
+This fix is for admin request replies only.
+Do not change any other limit unless explicitly told.
+
+Frontend validation
+The admin reply form must stop the user before submit if they somehow exceed 3.
+
+Use clean validation:
+Maximum 3 photos allowed per reply.
+
+Do not let the UI pretend 10 is allowed and then fail at submit.
+
+Backend validation
+Keep backend at max 3 for admin reply messages.
+If it is already 3, do not change it.
+
+If backend was accidentally changed, restore it to 3 for admin replies.
+
+UI counter sync
+Any admin request reply UI labels must match 3 exactly.
+
+Examples:
+
+Attach Photos (0/3)
+
+Attach Photos (2/3)
+
+No /10 anywhere in admin reply flow.
+
+Error UI styling improvement
+The current error popup is too harsh and looks unprofessional.
+
+Keep the message correct, but restyle it to match the app UI.
+
+Use:
+
+white or very light neutral background
+
+soft border
+
+subtle shadow
+
+rounded corners
+
+dark title text
+
+muted body text
+
+optional soft warning/accent icon
+
+no solid bright red background block
+
+Recommended message
+Unable to send reply
+Maximum 3 photos allowed per reply.
+
+Or
+You can attach up to 3 photos per reply.
+
+Best recommendation
+Unable to send reply
+You can attach up to 3 photos per reply.
+
+Do not show raw:
+400: {"message":"Maximum 3 photos allowed per message"}
+
+Placement
+Best options:
+
+inline error above the send button
+or
+
+soft toast matching app style
+
+Either is okay.
+Main requirement:
+it must match the app design and not look like a developer alert.
+
+Scope boundaries
+Allowed changes:
+
+admin request reply attachment limit
+
+admin request reply counter text
+
+admin request reply frontend validation
+
+admin request reply error styling/message mapping
+
+Do not change:
+
+client request flow
+
+cleaner request flow
+
+request detail thread logic
+
+public link feature
+
+work log
+
+attendance
+
+payroll
+
+schedule
+
+auth
+
+any unrelated module
+
+Acceptance criteria
+
+admin reply modal shows max 3, not 10
+
+admin cannot attach more than 3 reply photos
+
+frontend blocks before submit when over limit
+
+backend still enforces max 3
+
+error message is polished and app-matching
+
+no raw JSON/status code shown
+
+no unrelated feature is changed
+
+Direct instruction for agent
+Fix only the admin request reply attachment limit mismatch. Restore the admin reply photo limit to a maximum of 3, make sure the frontend uploader, counter text, and validation all match that limit, and keep backend validation at 3 as well. Also restyle the error message so it matches the app UI and no longer appears as a harsh red developer-style alert. Do not touch any other feature or any other request flow.
+
+Strong reminder
+Do exactly this task only.
+Do not expand scope.
+Do not “improve” nearby limits.
+Do not touch client or cleaner flows unless explicitly asked.
+Do not touch public link work.
+Do not touch anything unrelated

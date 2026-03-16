@@ -235,7 +235,16 @@ export default function AdminRequests() {
         toast({ title: "Reply sent" });
       }
     },
-    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: any) => {
+      const raw = err.message || "";
+      const isPhotoLimit = raw.toLowerCase().includes("photo") || raw.toLowerCase().includes("maximum 3");
+      toast({
+        title: "Unable to send reply",
+        description: isPhotoLimit
+          ? "You can attach up to 3 photos per reply."
+          : raw || "Something went wrong. Please try again.",
+      });
+    },
   });
 
   const statusMut = useMutation({
@@ -482,7 +491,7 @@ export default function AdminRequests() {
                 className="resize-none text-sm"
                 data-testid="input-admin-reply"
               />
-              <PhotoUploader photos={replyPhotos} onChange={setReplyPhotos} maxPhotos={10} maxSizeMB={10} label="Attach Photos" />
+              <PhotoUploader photos={replyPhotos} onChange={setReplyPhotos} maxPhotos={3} maxSizeMB={10} label="Attach Photos" />
               <div className="flex items-center justify-end gap-2">
                 <Button
                   onClick={sendReply}

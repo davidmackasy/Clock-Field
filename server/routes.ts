@@ -1184,7 +1184,7 @@ export async function registerRoutes(
       const { body, photos, statusChange, isVisibleToClient = true, isVisibleToEmployee = true } = req.body;
 
       if (photos && Array.isArray(photos)) {
-        if (photos.length > 10) return res.status(400).json({ message: "Maximum 10 photos allowed per message" });
+        if (photos.length > 3) return res.status(400).json({ message: "Maximum 3 photos allowed per reply" });
         for (const photo of photos) {
           if (!photo.dataUrl) continue;
           const mimeMatch = photo.dataUrl.match(/^data:(image\/(?:jpeg|png|jpg));base64,/);
