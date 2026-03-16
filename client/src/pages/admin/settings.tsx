@@ -12,6 +12,41 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
+const TIMEZONES = [
+  { group: "Canada", options: [
+    { value: "America/St_Johns",   label: "St. John's (Newfoundland Time)" },
+    { value: "America/Halifax",    label: "Halifax (Atlantic Time)" },
+    { value: "America/Moncton",    label: "Moncton (Atlantic Time)" },
+    { value: "America/Toronto",    label: "Toronto (Eastern Time)" },
+    { value: "America/Winnipeg",   label: "Winnipeg (Central Time)" },
+    { value: "America/Regina",     label: "Regina (Central Standard)" },
+    { value: "America/Edmonton",   label: "Edmonton (Mountain Time)" },
+    { value: "America/Vancouver",  label: "Vancouver (Pacific Time)" },
+    { value: "America/Whitehorse", label: "Whitehorse (Yukon Time)" },
+  ]},
+  { group: "United States", options: [
+    { value: "America/New_York",   label: "New York (Eastern Time)" },
+    { value: "America/Chicago",    label: "Chicago (Central Time)" },
+    { value: "America/Denver",     label: "Denver (Mountain Time)" },
+    { value: "America/Phoenix",    label: "Phoenix (Mountain Standard)" },
+    { value: "America/Los_Angeles",label: "Los Angeles (Pacific Time)" },
+    { value: "America/Anchorage",  label: "Anchorage (Alaska Time)" },
+    { value: "Pacific/Honolulu",   label: "Honolulu (Hawaii Time)" },
+  ]},
+  { group: "United Kingdom", options: [
+    { value: "Europe/London",      label: "London (GMT / BST)" },
+  ]},
+  { group: "Other", options: [
+    { value: "Europe/Dublin",      label: "Dublin (IST)" },
+    { value: "Europe/Paris",       label: "Paris (CET / CEST)" },
+    { value: "Europe/Berlin",      label: "Berlin (CET / CEST)" },
+    { value: "Australia/Sydney",   label: "Sydney (AEST / AEDT)" },
+    { value: "Australia/Melbourne",label: "Melbourne (AEST / AEDT)" },
+    { value: "Pacific/Auckland",   label: "Auckland (NZST / NZDT)" },
+    { value: "UTC",                label: "UTC (Universal Coordinated Time)" },
+  ]},
+];
+
 const PROVINCES = [
   { code: "AB", name: "Alberta" },
   { code: "BC", name: "British Columbia" },
@@ -112,7 +147,25 @@ export default function AdminSettings() {
             </div>
             <div className="space-y-2">
               <Label>Timezone</Label>
-              <Input data-testid="input-timezone" value={form.timezone} onChange={e => setForm((p: any) => ({ ...p, timezone: e.target.value }))} />
+              <p className="text-xs text-muted-foreground">Used for schedules, attendance, and payroll calculations</p>
+              <Select
+                value={form.timezone || "America/New_York"}
+                onValueChange={v => setForm((p: any) => ({ ...p, timezone: v }))}
+              >
+                <SelectTrigger data-testid="select-timezone">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {TIMEZONES.map(group => (
+                    <div key={group.group}>
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group.group}</div>
+                      {group.options.map(tz => (
+                        <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
+                      ))}
+                    </div>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>

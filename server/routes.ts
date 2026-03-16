@@ -574,6 +574,13 @@ export async function registerRoutes(
   app.patch("/api/company", requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
+      if (req.body.timezone) {
+        try {
+          Intl.DateTimeFormat(undefined, { timeZone: req.body.timezone });
+        } catch {
+          return res.status(400).json({ message: "Invalid timezone value" });
+        }
+      }
       const updated = await storage.updateCompany(user.companyId, req.body);
       if (!updated) return res.status(404).json({ message: "Company not found" });
       res.json(updated);

@@ -1,0 +1,421 @@
+Yes. This should be done as a controlled timezone setting, not a free-text field.
+
+That is the right fix.
+
+If the company can type anything they want, the system can end up with:
+
+invalid timezone values
+
+inconsistent date math
+
+wrong attendance times
+
+wrong payroll periods
+
+wrong schedule display
+
+So the safest solution is:
+replace the timezone text input with a timezone dropdown selector using valid IANA timezone values.
+
+Use this dev note for your agent.
+
+DEV NOTE
+
+Task
+Replace the free-text timezone field in Settings with a proper timezone dropdown selector and make sure the selected timezone is used consistently across the system.
+
+Critical rule
+Do not break or affect anything else that is already working.
+
+Do not modify:
+
+auth
+
+login
+
+employee creation
+
+admin creation
+
+client creation
+
+request system
+
+work log
+
+clock in / clock out logic
+
+attendance creation
+
+payroll calculation logic except to ensure it reads the saved timezone correctly
+
+schedule creation logic except to ensure it reads the saved timezone correctly
+
+This task is only about:
+
+replacing the timezone text field with a dropdown
+
+ensuring the selected timezone is valid
+
+ensuring the system uses that saved timezone consistently
+
+Main goal
+The company should select a valid timezone from a dropdown, not type arbitrary text.
+
+Why
+A typed field like:
+America/New_York
+
+is too risky because:
+
+user can type invalid values
+
+user may not know the correct format
+
+one typo can break time calculations
+
+system trust goes down if times are wrong
+
+Required final behavior
+In Settings → Company Info:
+
+timezone must be a dropdown
+
+user selects from valid timezone options
+
+system saves the selected valid timezone
+
+all system time displays and date calculations use that saved timezone
+
+UI change
+
+Current
+
+free text input for timezone
+
+Required
+
+searchable dropdown or select component
+
+Recommended label
+Timezone
+
+Optional helper text
+Choose the timezone used for schedules, attendance, and payroll calculations.
+
+Dropdown behavior
+Use valid timezone options only.
+
+Recommended implementation approach
+Use IANA timezone values as stored values.
+Use friendly labels for display.
+
+Example display label
+
+Winnipeg (America/Winnipeg)
+
+Toronto (America/Toronto)
+
+Vancouver (America/Vancouver)
+
+New York (America/New_York)
+
+Chicago (America/Chicago)
+
+Los Angeles (America/Los_Angeles)
+
+London (Europe/London)
+
+Stored value
+Always store the IANA timezone string, for example:
+
+America/Winnipeg
+
+America/Toronto
+
+Europe/London
+
+Do not store custom text labels as the source of truth.
+
+Recommended dropdown list structure
+
+Best safe MVP
+Provide a curated list of common business timezones first, especially:
+Canada
+United States
+United Kingdom
+
+Recommended starter list
+
+Canada
+
+America/St_Johns
+
+America/Halifax
+
+America/Moncton
+
+America/Toronto
+
+America/Winnipeg
+
+America/Regina
+
+America/Edmonton
+
+America/Vancouver
+
+America/Whitehorse
+
+United States
+
+America/New_York
+
+America/Chicago
+
+America/Denver
+
+America/Phoenix
+
+America/Los_Angeles
+
+America/Anchorage
+
+Pacific/Honolulu
+
+United Kingdom
+
+Europe/London
+
+Optional later
+Expand to full timezone list if needed.
+
+Best UX
+Use grouped dropdown sections:
+
+Canada
+
+United States
+
+United Kingdom
+
+Other
+
+Searchable dropdown recommended
+Because timezone lists can get long.
+
+If not searchable yet, grouped select is okay for v1.
+
+System behavior requirement
+
+This is the important part:
+The saved timezone must be the system timezone for that company.
+
+That means it should be used wherever “today”, “this week”, “late today”, pay period boundaries, and similar time logic are calculated.
+
+At minimum, timezone must be applied consistently to:
+
+dashboard metrics
+
+attendance daily filters
+
+late today counts
+
+missed shift counts
+
+schedule display
+
+work date display
+
+payroll period date boundaries
+
+request timestamps if they are company-facing
+
+cleaner hours date ranges
+
+Do not let one page use browser local time and another page use server UTC if the company timezone is set.
+
+Source of truth rule
+The company timezone setting must become the main timezone source for that company.
+
+Do not keep using freeform fallback strings after the dropdown is added.
+
+Validation rules
+
+Backend
+
+accept only valid timezone values from allowed list or valid IANA values if using full support
+
+reject invalid strings
+
+do not save malformed values
+
+Frontend
+
+dropdown only allows valid selection
+
+no manual typing unless using searchable controlled select with valid options only
+
+Migration / backward compatibility
+
+Important because app is live.
+
+If existing companies already have a timezone text value saved:
+
+preserve valid existing values
+
+if saved value matches a valid timezone, preselect it in the new dropdown
+
+if saved value is invalid or empty, default carefully
+
+Recommended default fallback
+
+America/Winnipeg if your current main market is Winnipeg
+or
+
+company’s current saved valid timezone if present
+
+Do not wipe existing settings.
+
+Save behavior
+When admin changes timezone and clicks Save Settings:
+
+save valid timezone value
+
+use it on next reads/calculations
+
+show success confirmation
+
+no unrelated settings should be changed
+
+Display formatting
+You can show labels like:
+
+Winnipeg (Central Time)
+
+Toronto (Eastern Time)
+
+Vancouver (Pacific Time)
+
+London (GMT/BST)
+
+But store only the IANA value.
+
+Recommended example options
+
+Winnipeg (America/Winnipeg)
+
+Toronto (America/Toronto)
+
+Vancouver (America/Vancouver)
+
+New York (America/New_York)
+
+Chicago (America/Chicago)
+
+Los Angeles (America/Los_Angeles)
+
+London (Europe/London)
+
+Technical implementation guidance
+
+Frontend
+
+replace timezone text input with Select/SearchableSelect
+
+prefill from saved company timezone
+
+show human-friendly labels
+
+submit stored IANA value only
+
+Backend
+
+validate timezone value
+
+store timezone string
+
+use stored timezone in time-sensitive calculations
+
+Time calculation guidance
+Wherever the app calculates:
+
+today
+
+now
+
+shift lateness
+
+missed shifts
+
+pay period start/end
+
+filtered hours by date
+
+attendance daily summaries
+
+make sure it uses the saved company timezone instead of random local/server fallback.
+
+Important
+Do not try to rewrite all time logic in one risky change unless needed.
+Safest approach:
+
+centralize timezone retrieval
+
+centralize date boundary helper
+
+make existing calculations call that helper
+
+That is the safe way to avoid breaking live production behavior.
+
+Acceptance criteria
+
+UI
+
+timezone field is now a dropdown, not free text
+
+company can select valid timezone easily
+
+saved timezone reloads correctly in settings
+
+Data
+
+only valid timezone values are saved
+
+old valid saved timezone still works
+
+invalid freeform input is no longer possible
+
+System
+
+selected timezone is used for company time-sensitive displays and calculations
+
+no obvious mismatch between settings timezone and system times
+
+Regression
+
+no auth break
+
+no attendance break
+
+no payroll break
+
+no schedule break
+
+no request break
+
+no work log break
+
+Direct instruction for agent
+Replace the free-text timezone field in Settings with a proper dropdown selector using valid IANA timezone values and friendly labels such as Winnipeg, Toronto, Vancouver, New York, and London. Save only the valid IANA timezone string, preserve existing valid saved values, and make sure the company’s selected timezone is the source of truth for time-sensitive system behavior like attendance, schedule display, dashboard daily counts, and payroll date boundaries. Keep this change additive and do not modify unrelated working systems.
+
+Best final recommendation
+Start with a curated searchable list for:
+
+Canada
+
+United States
+
+United Kingdom
+
+That gives the cleanest UX and avoids risky free-text timezone errors.
