@@ -66,8 +66,17 @@ export default function EmployeeHours() {
     [sorted, rangeFrom, rangeTo]
   );
 
-  const totalMinutes = filtered.reduce((sum, e) => sum + (e.workedMinutes || 0), 0);
-  const totalShifts = filtered.filter(e => e.status === "completed").length;
+  const completedFiltered = useMemo(() =>
+    filtered.filter(e => e.clockInAt && e.clockOutAt),
+    [filtered]
+  );
+
+  const totalMinutes = completedFiltered.reduce((sum, e) => {
+    if (e.workedMinutes != null) return sum + e.workedMinutes;
+    const diff = (new Date(e.clockOutAt).getTime() - new Date(e.clockInAt).getTime()) / 60000;
+    return sum + Math.max(0, diff);
+  }, 0);
+  const totalShifts = completedFiltered.length;
 
   const presets: { key: FilterPreset; label: string }[] = [
     { key: "this_week", label: "This Week" },

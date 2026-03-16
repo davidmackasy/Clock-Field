@@ -1,0 +1,276 @@
+Yes. This is a data-consistency issue between Employee Hours and Attendance/Timesheets.
+
+The source of truth must be the same everywhere.
+Right now, Employee Hours is calculating differently from Attendance and Timesheets.
+
+That should not happen.
+
+Use this exact dev note.
+
+DEV NOTE
+
+Task
+Fix the Employee Hours custom-range totals so they exactly match Attendance and Timesheets for the same employee and the same selected date range.
+
+Critical instruction
+Do not touch anything else.
+Do not break anything else.
+Do not refactor unrelated logic.
+Do not modify:
+
+clock-in flow
+
+clock-out flow
+
+attendance recording
+
+payroll formulas
+
+schedule creation
+
+auth
+
+employee login
+
+admin login
+
+client login
+
+request system
+
+work log
+
+public links
+
+mobile nav
+
+anything else already working
+
+This is a targeted accuracy fix only.
+
+Main goal
+When an employee selects a custom date range in My Hours, the total hours shown there must exactly match:
+
+Admin Attendance totals for the same employee and same date range
+
+Timesheet totals for the same pay period or same date range if applicable
+
+No more mismatch.
+
+Problem observed
+Employee Hours shows:
+1h 57m
+
+But for the same employee and same date period:
+
+Attendance shows 1h 53m
+
+Timesheet shows 1h 53m
+
+That means Employee Hours is calculating from a different dataset or different logic.
+
+Required rule
+Attendance must remain the source of truth.
+
+Employee Hours must not calculate hours using a separate inconsistent method.
+
+Most likely causes
+The agent should inspect these first:
+
+Different included records
+Employee Hours may be counting entries that Attendance/Timesheet excludes.
+
+Examples:
+
+zero-minute entries
+
+unscheduled partial records
+
+open/in-progress entries
+
+duplicate clock-in/out rows
+
+incomplete entries
+
+entries outside exact date boundaries
+
+Different date boundary logic
+Employee Hours may be using:
+
+inclusive end date differently
+
+browser timezone instead of company timezone
+
+UTC conversion differently
+
+Different duration calculation
+Employee Hours may be summing raw time differences while Attendance/Timesheet use normalized worked_minutes.
+
+Duplicate entries
+The employee view may be counting duplicate unscheduled entries or temporary records that Attendance/Timesheet do not count.
+
+Open or invalid entries
+Employee Hours may be counting in-progress or zero-duration records incorrectly.
+
+Main fix
+Make Employee Hours use the same attendance-backed calculation source as Attendance and Timesheets.
+
+Do not let Employee Hours have its own custom hours math if Attendance already has the correct one.
+
+Required final behavior
+
+Same source of truth
+For Employee Hours page:
+
+use the same filtered attendance records
+or
+
+use the same shared hours-calculation helper
+that Attendance and Timesheets use
+
+The total hours must come from the same worked_minutes logic.
+
+Same date range logic
+If employee selects:
+From: Mar 12, 2026
+To: Mar 25, 2026
+
+Then Employee Hours must use the exact same:
+
+start boundary
+
+end boundary
+
+timezone
+as admin Attendance and Timesheets.
+
+Recommended rule
+Use company timezone from settings.
+Do not use browser-local-only date math.
+
+Same valid-entry rules
+Employee Hours should only count the same attendance entries that count as valid worked time in Attendance.
+
+Recommended safe rule
+Only count entries that:
+
+belong to that employee
+
+fall inside selected range
+
+are completed or otherwise valid according to current attendance truth
+
+have valid worked minutes
+
+Do not count:
+
+broken duplicates
+
+invalid zero records unless Attendance also counts them
+
+unrelated unscheduled ghost records
+
+draft/temp rows
+
+Keep history list and total consistent
+The top summary in Employee Hours and the visible history rows must come from the same filtered dataset.
+
+Do not let:
+
+history show one set of rows
+
+summary count another set
+
+If the list includes 5 valid rows, total must be the sum of those 5 rows only.
+
+Timesheet consistency
+If the selected custom range equals the current timesheet/pay-period range, then:
+Employee Hours total = Timesheet total = Attendance total
+
+That must be true.
+
+If it is not true, the calculation source is still wrong.
+
+Specific implementation guidance
+
+A. Shared helper
+Create or reuse one shared helper like:
+resolveWorkedMinutesForEmployee(employeeId, startDate, endDate, timezone)
+
+This helper should be used by:
+
+Employee Hours
+
+Admin Attendance summary
+
+Timesheet generator
+
+Do not keep three separate hour calculation paths.
+
+B. Use worked_minutes if already stored
+If attendance records already store normalized worked_minutes, use that.
+Do not recompute from raw clock timestamps differently in each screen.
+
+C. Exclude invalid duplicates
+If multiple zero/duplicate unscheduled records are being counted in Employee Hours but not Attendance, align the filter rules so both sides count the same records.
+
+D. Date range inclusivity
+Use one shared date-range helper:
+
+start = selected start day at 00:00:00 in company timezone
+
+end = selected end day at 23:59:59 in company timezone
+or equivalent inclusive logic
+
+Do not mix UTC-only day slicing with local calendar dates.
+
+UI requirement
+Do not redesign the page.
+Keep Employee Hours page layout the same.
+Only fix the underlying totals and history matching.
+
+Do not change:
+
+quick filter buttons
+
+custom range UI
+
+page structure
+unless absolutely necessary for data sync
+
+Acceptance criteria
+
+Employee Hours custom range total matches Admin Attendance total for same employee and same range
+
+Employee Hours total matches Timesheet total when range equals the timesheet period
+
+Employee Hours history rows sum exactly to the displayed total
+
+No extra ghost minutes
+
+No missing valid minutes
+
+Company timezone is applied consistently
+
+No unrelated feature is changed
+
+Concrete test case
+For David Zulu:
+Range: Mar 12, 2026 to Mar 25, 2026
+
+If Attendance total = 1h 53m
+and Timesheet total = 1h 53m
+
+Then Employee Hours must also show:
+1h 53m
+
+Not 1h 57m.
+
+Direct instruction for agent
+Fix only the Employee Hours calculation so it matches Attendance and Timesheets exactly for the same employee and selected date range. Use Attendance as the source of truth, reuse the same shared worked-minutes calculation and the same company-timezone date boundaries, and make sure the top total and the visible history rows are calculated from the exact same filtered attendance dataset. Do not modify unrelated working systems.
+
+Strong reminder
+Do not change anything else.
+Do not expand scope.
+Do not “improve” nearby logic.
+Fix only the mismatch between Employee Hours and Attendance/Timesheets.
