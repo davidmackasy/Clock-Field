@@ -15,46 +15,28 @@ const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 /**
- * Convert a local-time string (no TZ suffix, e.g. "2026-03-15T08:00:00") that represents
- * a wall-clock time in the given IANA timezone into a UTC epoch millisecond value.
- *
- * Shift scheduled times are stored without timezone info (local calendar time), while
- * clockInAt/clockOutAt are stored as UTC ISO strings. This helper aligns them for accurate
- * before/after comparisons on the server.
+ * Convert a UTC datetime string to a local ISO datetime string (no TZ suffix)
+ * in the given IANA timezone, using formatToParts for reliable parsing.
+ * Example: ("2026-03-16T06:52:00Z", "America/Winnipeg") → "2026-03-16T01:52:00"
  */
-function localTimeToUtcMs(localNoTzStr: string, timezone: string): number {
-  const [datePart, timePart = "00:00:00"] = localNoTzStr.split("T");
-  const [year, month, day] = datePart.split("-").map(Number);
-  const parts = timePart.split(":");
-  const hour = Number(parts[0]) || 0;
-  const minute = Number(parts[1]) || 0;
-  const second = Number(parts[2]) || 0;
-
-  // Start with the naive UTC representation of the local time string
-  const approxUtcMs = Date.UTC(year, month - 1, day, hour, minute, second);
-
-  // Ask Intl what "local time in timezone" this UTC maps to
-  const localStr = new Intl.DateTimeFormat("en-CA", {
+function utcToLocalIso(utcStr: string, timezone: string): string {
+  const d = new Date(utcStr);
+  const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,
     year: "numeric", month: "2-digit", day: "2-digit",
     hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-  }).format(new Date(approxUtcMs)); // → "2026-03-15, 03:00:00" (UTC+0 → UTC-5 shift)
-
-  // Parse that locale string back to a UTC epoch (treating the local time as UTC for arithmetic)
-  const localAsUtcMs = new Date(
-    localStr.replace(", ", "T").replace(/(\d{2}:\d{2}:\d{2})$/, "$1") + "Z"
-  ).getTime();
-
-  // Offset = naive_utc - (what_local_time_maps_to_in_utc)
-  const offsetMs = approxUtcMs - localAsUtcMs;
-
-  // Actual UTC = naive UTC adjusted by the timezone offset
-  return approxUtcMs + offsetMs;
+  }).formatToParts(d);
+  const p: Record<string, string> = {};
+  for (const part of parts) p[part.type] = part.value;
+  // hour12:false with hour:"2-digit" can return "24" at midnight — normalise to "00"
+  const hh = p.hour === "24" ? "00" : p.hour;
+  return `${p.year}-${p.month}-${p.day}T${hh}:${p.minute}:${p.second}`;
 }
 
 /**
- * Build accurate attendance flags by comparing actual clock-in/out times (UTC) against
- * scheduled times (local-no-TZ) using the company's IANA timezone.
+ * Build attendance flags by comparing actual clock-in/out times against scheduled
+ * times. Both sides are compared in the company's local timezone so the direction
+ * (early vs late) is always correct regardless of the UTC offset.
  */
 function buildAttendanceFlags(opts: {
   clockInAtUtc: string;
@@ -67,33 +49,26 @@ function buildAttendanceFlags(opts: {
   const { clockInAtUtc, clockOutAtUtc, scheduledStartLocal, scheduledEndLocal, timezone, existingFlags = [] } = opts;
 
   // Keep non-timing flags (e.g. unscheduled_clock_in, no_show)
-  const nonTimingFlags = existingFlags.filter(f =>
+  const flags = existingFlags.filter(f =>
     !["early_clock_in", "late_clock_in", "left_early", "early_clock_out", "late_clock_out"].includes(f)
   );
-  const flags = [...nonTimingFlags];
 
-  // ── Clock-in comparison ───────────────────────────────────────────────────
-  const scheduledStartMs = localTimeToUtcMs(scheduledStartLocal, timezone);
-  const clockInMs = new Date(clockInAtUtc).getTime();
-
-  if (clockInMs < scheduledStartMs) {
+  // ── Clock-in: convert UTC → local, compare against scheduledStartLocal ────
+  const clockInLocal = utcToLocalIso(clockInAtUtc, timezone);
+  if (clockInLocal < scheduledStartLocal) {
     flags.push("early_clock_in");
-  } else if (clockInMs > scheduledStartMs) {
+  } else if (clockInLocal > scheduledStartLocal) {
     flags.push("late_clock_in");
   }
-  // Exactly on time → no clock-in flag
 
-  // ── Clock-out comparison ──────────────────────────────────────────────────
+  // ── Clock-out: convert UTC → local, compare against scheduledEndLocal ─────
   if (clockOutAtUtc && scheduledEndLocal) {
-    const scheduledEndMs = localTimeToUtcMs(scheduledEndLocal, timezone);
-    const clockOutMs = new Date(clockOutAtUtc).getTime();
-
-    if (clockOutMs < scheduledEndMs) {
-      flags.push("left_early");
-    } else if (clockOutMs > scheduledEndMs) {
+    const clockOutLocal = utcToLocalIso(clockOutAtUtc, timezone);
+    if (clockOutLocal < scheduledEndLocal) {
+      flags.push("early_clock_out");
+    } else if (clockOutLocal > scheduledEndLocal) {
       flags.push("late_clock_out");
     }
-    // Exactly on time → no clock-out flag
   }
 
   return flags;
