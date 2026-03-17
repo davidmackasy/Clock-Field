@@ -9,10 +9,13 @@ import { AdminSidebar } from "@/components/admin-sidebar";
 import { AdminMobileNav } from "@/components/admin-mobile-nav";
 import { SuperAdminSidebar } from "@/components/super-admin-sidebar";
 import { MobileNav, employeeNavItems, employeeCenterAction, clientNavItems } from "@/components/mobile-nav";
+import { FeatureGate } from "@/components/feature-gate";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import AuthPage from "@/pages/auth-page";
 import NotFound from "@/pages/not-found";
+import SubscribePage from "@/pages/subscribe";
+import BillingBlockedPage from "@/pages/billing-blocked";
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminEmployees from "@/pages/admin/employees";
 import AdminSchedule from "@/pages/admin/schedule";
@@ -73,12 +76,20 @@ function AdminLayout() {
               <Route path="/admin/employees" component={AdminEmployees} />
               <Route path="/admin/schedule" component={AdminSchedule} />
               <Route path="/admin/attendance" component={AdminAttendance} />
-              <Route path="/admin/payroll" component={AdminPayroll} />
+              <Route path="/admin/payroll">
+                <FeatureGate feature="payroll"><AdminPayroll /></FeatureGate>
+              </Route>
               <Route path="/admin/clients" component={AdminClients} />
               <Route path="/admin/admins" component={AdminAdmins} />
-              <Route path="/admin/requests" component={AdminRequests} />
-              <Route path="/admin/work-log" component={AdminWorkLog} />
-              <Route path="/admin/timesheets" component={AdminTimesheets} />
+              <Route path="/admin/requests">
+                <FeatureGate feature="requests"><AdminRequests /></FeatureGate>
+              </Route>
+              <Route path="/admin/work-log">
+                <FeatureGate feature="worklog"><AdminWorkLog /></FeatureGate>
+              </Route>
+              <Route path="/admin/timesheets">
+                <FeatureGate feature="timesheets"><AdminTimesheets /></FeatureGate>
+              </Route>
               <Route path="/admin/settings" component={AdminSettings} />
               <Route path="/admin/subscription" component={AdminSubscription} />
               <Route path="/admin/platform-messages" component={AdminPlatformMessages} />
@@ -156,9 +167,10 @@ function ClientLayout() {
 }
 
 function AppRouter() {
-  const { user, isLoading, isSuperAdmin } = useAuth();
+  const { user, isLoading, isSuperAdmin, companyStatus, companyStatusLoading, canAccessPlatform } = useAuth();
   const [location] = useLocation();
 
+  // Public routes that bypass all guards
   if (location.startsWith("/public/work-report/")) {
     return (
       <Switch>
@@ -178,22 +190,56 @@ function AppRouter() {
     return <SetPasswordPage />;
   }
 
+  // ── Admin subscription gating ─────────────────────────────────────────────
+  if (user.role === "admin") {
+    // Wait for company status before enforcing — prevents flash
+    if (companyStatusLoading && !companyStatus) {
+      return <LoadingScreen />;
+    }
+
+    // Super admin routes — always accessible for super admins
+    if (location.startsWith("/super-admin")) {
+      if (isSuperAdmin) return <SuperAdminLayout />;
+      return <Redirect to="/admin" />;
+    }
+
+    // Subscription/billing pages — always accessible (needed to complete checkout)
+    const bypassRoutes = ["/subscribe", "/billing-blocked", "/admin/subscription"];
+    const isBypassRoute = bypassRoutes.some(r => location.startsWith(r));
+
+    if (!isBypassRoute && !canAccessPlatform) {
+      const acctStatus = companyStatus?.accountStatus;
+      if (acctStatus === "pending_subscription") {
+        return <Switch>
+          <Route path="/subscribe" component={SubscribePage} />
+          <Route><Redirect to="/subscribe" /></Route>
+        </Switch>;
+      }
+      // Billing blocked (past_due, canceled, etc.)
+      return <Switch>
+        <Route path="/billing-blocked" component={BillingBlockedPage} />
+        <Route><Redirect to="/billing-blocked" /></Route>
+      </Switch>;
+    }
+
+    // Subscribe/billing-blocked routes for admin (accessible even if valid subscription)
+    if (location === "/subscribe") return <SubscribePage />;
+    if (location === "/billing-blocked") return <BillingBlockedPage />;
+
+    // Admin app
+    if (location === "/") return <Redirect to="/admin" />;
+    return <AdminLayout />;
+  }
+
+  // ── Non-admin routing ─────────────────────────────────────────────────────
   if (location === "/") {
-    if (user.role === "admin") return <Redirect to="/admin" />;
     if (user.role === "client") return <Redirect to="/client" />;
     return <Redirect to="/employee" />;
   }
 
-  if (location.startsWith("/super-admin")) {
-    if (user.role === "admin" && isSuperAdmin) return <SuperAdminLayout />;
-    return <Redirect to="/admin" />;
-  }
-
-  if (location.startsWith("/admin") && user.role === "admin") return <AdminLayout />;
   if (location.startsWith("/employee") && user.role === "employee") return <EmployeeLayout />;
   if (location.startsWith("/client") && user.role === "client") return <ClientLayout />;
 
-  if (user.role === "admin") return <Redirect to="/admin" />;
   if (user.role === "client") return <Redirect to="/client" />;
   return <Redirect to="/employee" />;
 }

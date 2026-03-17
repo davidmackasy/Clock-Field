@@ -190,7 +190,13 @@ export async function registerRoutes(
       const existing = await storage.getUserByEmail(email);
       if (existing) return res.status(400).json({ message: "Email already exists" });
 
-      const company = await storage.createCompany({ name: companyName });
+      // New businesses start as pending_subscription — must subscribe before accessing the platform
+      const company = await storage.createCompany({
+        name: companyName,
+        accountStatus: "pending_subscription",
+        subscriptionStatus: "pending",
+        planCode: "starter",
+      });
       const hashedPassword = await hashPassword(password);
       const user = await storage.createUser({
         companyId: company.id,
@@ -211,6 +217,27 @@ export async function registerRoutes(
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
+  });
+
+  // Company subscription status — used by frontend to determine paywall state
+  app.get("/api/auth/company", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const company = await storage.getCompany(user.companyId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      res.json({
+        id: company.id,
+        name: company.name,
+        planCode: company.planCode,
+        billingCycle: company.billingCycle,
+        subscriptionStatus: company.subscriptionStatus,
+        accountStatus: company.accountStatus,
+        internalBypass: company.internalBypass,
+        currentPeriodEnd: company.currentPeriodEnd,
+        cancelAtPeriodEnd: company.cancelAtPeriodEnd,
+        stripeCustomerId: company.stripeCustomerId,
+      });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
   app.post("/api/auth/login", (req, res, next) => {
@@ -2077,7 +2104,7 @@ export async function registerRoutes(
 
   app.patch("/api/super-admin/businesses/:id", requireSuperAdmin, async (req, res) => {
     try {
-      const { planCode, billingCycle, accountStatus, subscriptionStatus, suspendedReason } = req.body;
+      const { planCode, billingCycle, accountStatus, subscriptionStatus, suspendedReason, internalBypass } = req.body;
       const updates: Record<string, any> = {};
       if (planCode !== undefined) updates.planCode = planCode;
       if (billingCycle !== undefined) updates.billingCycle = billingCycle;
@@ -2088,6 +2115,7 @@ export async function registerRoutes(
       }
       if (subscriptionStatus !== undefined) updates.subscriptionStatus = subscriptionStatus;
       if (suspendedReason !== undefined) updates.suspendedReason = suspendedReason;
+      if (internalBypass !== undefined) updates.internalBypass = !!internalBypass;
       const updated = await storage.updateCompany(req.params.id, updates);
       if (!updated) return res.status(404).json({ message: "Not found" });
       res.json(updated);

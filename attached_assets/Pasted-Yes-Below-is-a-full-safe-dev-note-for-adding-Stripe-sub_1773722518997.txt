@@ -1,0 +1,765 @@
+Yes. Below is a full safe dev note for adding Stripe subscriptions, paywalling new accounts, enforcing plan limits, and keeping the current live app intact.
+
+DEV NOTE
+
+Task
+
+Add Stripe subscription billing to the platform so every new business must subscribe before getting access. Enforce plan limits and feature access from the backend and frontend. Add monthly and yearly billing with 10% yearly discount. Add Stripe customer billing management so business admins can cancel/manage their subscription from their account.
+
+Critical rule
+
+Do not break or affect anything already working in production.
+
+Do not touch:
+
+* employee clock-in
+* employee clock-out
+* attendance recording
+* schedule creation
+* request system
+* work log
+* timesheets logic already working
+* employee login
+* client login
+* current attendance/payroll math
+* existing production data
+
+This feature must be additive only.
+
+Main goal
+
+Every new business account must subscribe before using the platform.
+
+Rules:
+
+* no free trial
+* super-admin-enabled accounts can bypass paywall only if explicitly marked as internal/admin-exempt
+* all normal new businesses must choose a plan and pay before they can use the platform
+* if subscription becomes inactive, unpaid, canceled, or past due beyond allowed grace handling, access must be restricted
+* if a business reaches plan limits, show upgrade prompts and enforce limits
+
+Platform billing model
+
+Plans
+
+Starter
+
+* $29/month
+* yearly = 10% off
+* up to 5 clients
+* up to 2 employees
+* unlimited schedules
+* attendance
+* hours
+* employee access
+* basic client access only if intended
+* no timesheets
+* no payroll estimator
+* no work log
+* no export/spreadsheet tools
+
+Growth
+
+* $79/month
+* yearly = 10% off
+* up to 10 clients
+* up to 5 employees
+* unlimited schedules
+* attendance
+* hours
+* requests
+* timesheets
+* spreadsheet/export tools
+* reporting access
+* no premium payroll unless intentionally included
+
+Pro
+
+* $129/month
+* yearly = 10% off
+* up to 15 clients
+* up to 10 employees
+* unlimited schedules
+* attendance
+* hours
+* requests
+* timesheets
+* work log
+* payroll estimator
+* reports
+* spreadsheet/export tools
+* everything enabled
+
+Yearly pricing
+
+Use 10% off annual billing.
+
+Example:
+
+* $29 monthly
+
+* yearly total = 29 × 12 × 0.90
+
+* $79 monthly
+
+* yearly total = 79 × 12 × 0.90
+
+* $129 monthly
+
+* yearly total = 129 × 12 × 0.90
+
+Use Stripe price IDs for:
+
+* starter_monthly
+* starter_yearly
+* growth_monthly
+* growth_yearly
+* pro_monthly
+* pro_yearly
+
+Part 1. No-access-until-subscribe flow
+
+Requirement
+
+A new business should not get platform access before subscribing.
+
+Required onboarding flow
+
+When a new business signs up:
+
+1. account is created in pending subscription state
+2. they immediately see subscription/paywall modal or page
+3. they must choose monthly or yearly
+4. they must choose a plan
+5. they complete Stripe checkout
+6. only after successful Stripe confirmation do they get active platform access
+
+No free trial.
+
+Important
+Do not let a newly registered business roam through the app before payment.
+
+Recommended states for new business
+
+* pending_subscription
+* active
+* past_due
+* canceled
+* suspended
+* disabled
+
+Best safe rule
+New businesses start as:
+
+* pending_subscription
+
+After successful Stripe checkout + webhook confirmation:
+
+* active
+
+Part 2. Paywall UI for new accounts
+
+Create a clean subscription page or modal shown right after registration/login if no active subscription exists.
+
+Suggested page:
+
+* /subscribe
+  or
+* /billing/select-plan
+
+This page should include:
+
+* monthly/yearly toggle
+* 3 plans
+* features list per plan
+* clear CTA buttons
+* “Subscribe now” / “Get started” buttons
+* sales copy
+
+Required selling message
+
+Use a clean sales section explaining why they must subscribe.
+
+Suggested headline
+Choose a plan to start managing your cleaning business
+
+Suggested support copy
+Track employee hours, schedules, attendance, requests, timesheets, work logs, and client activity in one place. Pick the plan that fits your team and unlock the tools you need to run your business smoothly.
+
+Suggested bullets
+
+* Manage cleaners, schedules, and attendance in one dashboard
+* Track hours and timesheets accurately
+* Organize client requests and work proof
+* Upgrade anytime as your team grows
+
+Part 3. Stripe integration architecture
+
+Use Stripe Checkout for initial subscription purchase.
+
+Recommended first version
+
+* Stripe Checkout for purchase
+* Stripe Billing Portal for manage/cancel subscription
+* Stripe webhooks as source of truth
+
+Do not rely on frontend success alone.
+
+Required data on company/business model
+
+* stripe_customer_id
+* stripe_subscription_id
+* stripe_price_id
+* plan_code
+* billing_cycle
+* subscription_status
+* current_period_start
+* current_period_end
+* cancel_at_period_end
+* account_status
+* internal_bypass boolean false by default
+* internal_super_admin_access boolean if needed
+
+Required webhook events
+
+* checkout.session.completed
+* customer.subscription.created
+* customer.subscription.updated
+* customer.subscription.deleted
+* invoice.paid
+* invoice.payment_failed
+
+Optional useful events
+
+* invoice.finalized
+* checkout.session.expired
+
+Stripe must be the billing source of truth.
+
+Part 4. Access control after payment
+
+If Stripe checkout succeeds and webhook confirms:
+
+* set business subscription_status = active
+* set account_status = active unless manually suspended
+* unlock app access according to selected plan
+
+If payment fails or subscription becomes invalid:
+
+* set subscription_status accordingly
+* restrict access
+* show renew/update-payment paywall
+
+Access logic priority
+
+A business can use the platform only if:
+
+* account_status = active
+  and
+* subscription_status is valid for access
+  or
+* internal_bypass = true for super-admin-controlled internal accounts
+
+Recommended access-allowed statuses
+
+* active
+* trialing only if ever added later, but not needed now
+
+Access-blocked statuses
+
+* pending_subscription
+* past_due after grace rule if used
+* unpaid
+* canceled
+* incomplete
+* suspended
+* disabled
+* banned
+
+Recommended safe UX
+If blocked:
+show billing access page explaining why access is restricted and what they must do next.
+
+Part 5. Business admin billing page
+
+Add a Subscription / Billing page for business admins.
+
+Suggested route:
+
+* /admin/billing
+  or
+* /admin/subscription
+
+Show:
+
+* current plan
+* monthly/yearly cycle
+* next renewal date
+* subscription status
+* features included
+* usage vs limits
+* upgrade/downgrade buttons
+* manage subscription button
+* cancel/manage billing button via Stripe Billing Portal
+
+Usage examples
+
+* 3 of 5 clients used
+* 2 of 2 employees used
+* requests enabled
+* payroll locked
+* timesheets enabled
+
+Part 6. Stripe Billing Portal link
+
+Requirement
+
+Admins must be able to cancel/manage directly from their account.
+
+Best implementation
+Create a backend endpoint that creates a Stripe Billing Portal session for the current business’s Stripe customer and redirects them there.
+
+This gives them ability to:
+
+* cancel subscription
+* update payment method
+* manage billing details
+* see invoices
+* renew/reactivate depending on Stripe setup
+
+Do not try to manually rebuild all billing management in-app when Stripe Billing Portal already handles it safely.
+
+Add button in Billing page:
+
+* Manage Subscription
+
+This should open Stripe Billing Portal.
+
+Part 7. Plan enforcement
+
+This is critical.
+
+Every plan limit and feature rule must be enforced:
+
+* in backend
+* in frontend
+
+Do not rely on frontend only.
+
+Backend plan enforcement must happen on:
+
+* create employee
+* create client
+* access timesheets
+* access work log
+* access payroll estimator
+* export/spreadsheet generation
+* requests if plan-limited
+* any locked premium feature page or endpoint
+
+Frontend must:
+
+* hide or disable unavailable features
+* show upgrade prompts
+* show usage warnings when near or at limit
+
+But backend is final authority.
+
+Plan rules
+
+Starter $29
+
+* maxClients = 5
+* maxEmployees = 2
+* canUseTimesheets = false
+* canUsePayroll = false
+* canUseWorkLog = false
+* canExport = false
+
+Growth $79
+
+* maxClients = 10
+* maxEmployees = 5
+* canUseTimesheets = true
+* canUseRequests = true
+* canExport = true
+* canUsePayroll = false unless intentionally enabled
+* canUseWorkLog = optional based on your final decision
+
+Pro $129
+
+* maxClients = 15
+* maxEmployees = 10
+* all advanced features = true
+
+Part 8. Upgrade prompts when nearing limits
+
+Requirement
+
+If business is about to exceed plan limits, prompt them to upgrade.
+
+Recommended states
+
+At limit reached
+
+* block new creation
+* show upgrade modal/banner
+
+Near limit warning
+
+* optional warning at 80% or when 1 slot remains
+
+Examples
+Starter plan with 2 employee max
+
+* if they have 2 employees and click Add Employee
+  show:
+  You’ve reached the employee limit for your current plan. Upgrade to add more team members.
+
+Starter plan with 5 client max
+
+* if they hit 5 clients and click Add Client
+  show:
+  You’ve reached the client limit for your current plan. Upgrade to add more clients.
+
+Part 9. What happens when subscription expires or payment fails
+
+Required behavior
+
+If subscription is canceled or payment fails:
+
+* Stripe webhook updates subscription_status
+* app restricts access accordingly
+* business sees billing-blocked screen
+* screen explains they need to renew, update payment, or resubscribe
+
+Do not silently let them continue unlimited access.
+
+Recommended billing-blocked page
+Show:
+
+* subscription status
+* message like “Your subscription is inactive”
+* button to update payment method
+* button to renew/reactivate
+
+Important
+Do not delete their data.
+Do not remove employees/clients/schedules.
+Just restrict access until billing is resolved.
+
+Part 10. Existing accounts and internal bypass
+
+You said:
+super admins and super-admin-granted access are the ones who are going to have access to the platform.
+
+Interpretation for safe implementation:
+
+* internal/super-admin-enabled business accounts can bypass subscription requirement only if intentionally marked
+* all public customer accounts must pay first
+
+Add internal bypass field
+
+* internal_bypass = true/false
+
+This should only be set by platform-level super admin controls.
+Do not expose this to normal business admins.
+
+Use this for:
+
+* your own internal test/admin business accounts
+* platform-owner access
+* exempt internal businesses if needed
+
+Important
+Do not make all super admins globally bypass every company billing by accident.
+Bypass should be explicit and tightly controlled.
+
+Part 11. Super Admin visibility into subscriptions
+
+In Super Admin mode, add subscription visibility for every business.
+
+Show:
+
+* current plan
+* monthly/yearly
+* Stripe status
+* renewal date
+* canceled or active
+* payment failed state
+* usage vs limits
+* internal bypass yes/no
+
+Quick actions
+
+* change plan
+* activate/deactivate business
+* suspend business
+* mark suspicious
+* open billing details
+* send message
+
+Part 12. Pricing page and plan breakdown
+
+Build a clean pricing breakdown page/modal.
+
+Required UI sections
+
+* monthly/yearly toggle
+* plan cards
+* feature list under each plan
+* limits clearly listed
+* CTA buttons
+
+Plan card examples
+
+Starter
+$29/month
+or yearly discounted equivalent
+
+* 5 clients
+* 2 employees
+* unlimited schedules
+* attendance tracking
+* hour tracking
+
+Growth
+$79/month
+
+* 10 clients
+* 5 employees
+* unlimited schedules
+* timesheets
+* exports
+* requests
+
+Pro
+$129/month
+
+* 15 clients
+* 10 employees
+* unlimited schedules
+* timesheets
+* work log
+* payroll estimator
+* reports
+* exports
+
+Part 13. Subscription-aware registration flow
+
+Current flow must be extended safely.
+
+Recommended safe flow
+
+1. business registers account
+2. system creates admin/business account with pending_subscription status
+3. redirect immediately to subscription page
+4. no access to dashboard until Stripe checkout succeeds
+5. webhook confirms and unlocks access
+
+Do not let them bypass by manually typing dashboard URL.
+
+Backend middleware must protect admin app access based on:
+
+* account_status
+* subscription_status
+* internal_bypass
+
+Part 14. Recommended database additions
+
+Companies/businesses table
+
+* plan_code
+* billing_cycle
+* subscription_status
+* account_status
+* stripe_customer_id
+* stripe_subscription_id
+* stripe_price_id
+* current_period_start
+* current_period_end
+* cancel_at_period_end
+* internal_bypass boolean default false
+* activated_at nullable
+* suspended_reason nullable
+
+Users/admins table
+
+* is_super_admin boolean if already planned
+
+Optional audit fields
+
+* last_billing_check_at
+* last_payment_failed_at
+
+Part 15. Webhook sync rules
+
+On checkout.session.completed
+
+* identify business/account
+* save Stripe customer/subscription info if available
+* set provisional active state only after required subscription confirmation path
+
+On customer.subscription.updated
+
+* sync plan
+* sync cycle
+* sync current period start/end
+* sync cancel_at_period_end
+* sync subscription status
+
+On customer.subscription.deleted
+
+* set canceled / access restricted
+
+On invoice.payment_failed
+
+* set status to past_due or unpaid as appropriate
+* show billing warning / restrict if your rule requires
+
+On invoice.paid
+
+* restore active status if valid
+
+Part 16. Safety rules for live production
+
+Do not break existing production businesses.
+
+For existing active businesses:
+
+* backfill plan/billing status safely
+* do not instantly lock out existing customers by mistake
+* map them to correct plan or temporary legacy/internal state
+* test carefully before enforcing hard paywall globally
+
+Rollout recommendation
+For existing businesses:
+
+* assign plan/status first
+* confirm mapping
+* then enforce
+
+Do not turn on hard enforcement for old businesses until their data is properly set.
+
+For new signups:
+
+* enforce payment-first immediately
+
+Part 17. Admin upgrade/downgrade flow
+
+Business admins should be able to:
+
+* upgrade plan
+* change monthly/yearly
+* manage billing through Stripe
+
+When downgrading:
+
+* do not delete over-limit data
+* just block further additions and show over-limit warning
+
+Example
+Business on Pro downgrades to Starter but has 8 clients:
+
+* keep all 8 existing clients
+* block adding new ones
+* show over-limit warning until they upgrade again or reduce manually
+
+Part 18. Required backend enforcement points
+
+Enforce subscription and limits in backend for:
+
+* all admin app entry routes/middleware
+* create employee
+* create client
+* timesheets access
+* payroll access
+* work log access
+* export/download endpoints
+* any gated premium feature
+
+Enforce active subscription for dashboard access itself, unless internal_bypass = true.
+
+Part 19. Required frontend UX
+
+Business admin blocked state
+If no valid subscription:
+show clean billing lock screen with:
+
+* current issue
+* selected plan if any
+* subscribe button
+* manage billing button
+* contact support optional
+
+Feature-locked pages
+If plan does not include feature:
+
+* show locked feature page/card
+* show upgrade CTA
+* do not just fail silently
+
+Near-limit notice
+Optional but recommended:
+
+* banner in admin dashboard or billing page when near limit
+
+Part 20. Acceptance criteria
+
+New business signup
+
+* cannot access platform before subscribing
+* must select monthly or yearly
+* must complete Stripe checkout
+* gets access only after successful subscription
+
+Billing page
+
+* shows current plan
+* shows monthly/yearly
+* shows renewal date
+* shows manage subscription button
+* opens Stripe Billing Portal
+
+Plan enforcement
+
+* Starter limited to 5 clients, 2 employees
+* Growth limited to 10 clients, 5 employees
+* Pro limited to 15 clients, 10 employees
+* locked features are correctly hidden/blocked
+* backend enforces limits
+
+Subscription status sync
+
+* payment failure updates access behavior
+* cancellation updates access behavior
+* renewal restores valid access when paid
+* no data deleted on cancellation
+
+Super Admin
+
+* sees all business plans and billing states
+* can inspect subscription status
+* can manage account status
+* can mark internal bypass where appropriate
+
+Safety
+
+* no break to clock-in/out
+* no break to attendance
+* no break to schedules
+* no break to requests
+* no break to work log
+* no break to timesheets already working
+* no break to employee/client flows
+
+Part 21. Direct instruction for agent
+
+Add Stripe subscription billing so every new business must subscribe before using the platform. There is no free trial. After registration, new businesses must immediately choose a monthly or yearly plan and complete Stripe checkout before accessing the admin dashboard. Add three plans at $29, $79, and $129 with yearly billing at 10% off, enforce plan limits and feature gating in both backend and frontend, and add a Billing page where business admins can see their current subscription and open Stripe Billing Portal to manage or cancel it. Stripe webhooks must be the source of truth for subscription status, renewals, and payment failures. Super-admin-enabled accounts may have explicit internal bypass only when intentionally marked. Keep all existing production attendance, schedules, requests, work log, and employee/client flows intact and do not break any current working functionality.
+
+Part 22. Strong reminder
+
+Do exactly this billing/subscription layer only.
+Do not refactor unrelated parts.
+Do not touch working attendance or clocking.
+Do not change existing live business operations except for safe subscription enforcement and billing integration.

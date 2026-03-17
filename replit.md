@@ -82,8 +82,23 @@ A workforce operations platform for service businesses with 3 user roles: Admin,
 - **payroll_deductions** - Custom per-company deductions (label, type: percent|fixed, value, isActive)
 - **timesheets** - Pay-period summaries (employee_id, company_id, pay_period_start/end, status, worked/regular/overtime minutes, shift counts, late/left_early/missed counts, submitted_at, approved_at)
 
+## SaaS Subscription Layer
+- **Plans**: `legacy` (unlimited, grandfathered), `starter` ($29), `growth` ($79), `pro` ($129) — defined in `server/plans.ts`
+- **Billing**: Stripe checkout + portal, monthly & yearly (10% off), webhook handler for `invoice.payment_failed`, `customer.subscription.updated/deleted`
+- **Company fields**: `plan_code`, `billing_cycle`, `subscription_status`, `account_status`, `stripe_customer_id`, `stripe_subscription_id`, `current_period_end`, `cancel_at_period_end`, `internal_bypass`
+- **Paywall flow**: New companies start as `account_status='pending_subscription'` → redirected to `/subscribe` (pricing page) → after Stripe checkout → `active`
+- **Access logic**: `internal_bypass=true` OR `plan_code='legacy'` OR (`account_status='active'` AND `subscription_status='active'`)
+- **Feature gating**: `FeatureGate` component wraps payroll/requests/work-log/timesheets — shows locked UI for plans that don't include the feature
+- **Billing blocked page**: `/billing-blocked` — for `past_due`, `canceled`, `unpaid`, `suspended` states
+- **Super admin**: `/super-admin` dashboard — manage all businesses, toggle `internalBypass`, change plans, send messages, broadcast announcements
+- **Plan enforcement**: POST /api/employees returns 403 PLAN_LIMIT_EMPLOYEES; POST /api/clients returns 403 PLAN_LIMIT_CLIENTS
+- **Legacy/bypass accounts**: All 4 existing companies (MackasyInc, Sparkle, Masterpiece, Icon) have `plan_code='legacy'` and `internal_bypass=true` for uninterrupted access
+
 ## API Routes (server/routes.ts)
-- Auth: POST /api/auth/login, /api/auth/employee-login, /api/auth/change-password, /api/auth/logout, GET /api/auth/me
+- Auth: POST /api/auth/login, /api/auth/employee-login, /api/auth/change-password, /api/auth/logout, GET /api/auth/me, GET /api/auth/company
+- Billing: POST /api/billing/checkout, /api/billing/portal, /api/billing/webhook
+- Admin Plan: GET /api/admin/plan
+- Super Admin: GET /api/super-admin/stats|businesses, GET/PATCH /api/super-admin/businesses/:id, POST /api/super-admin/businesses/:id/message, POST /api/super-admin/messages/broadcast
 - Employees: GET/POST /api/employees, PATCH /api/employees/:id, POST /api/employees/:id/enable-access|reset-pin|disable-access
 - Admins: GET /api/admins, POST /api/admins/invite, POST /api/admins/:id/reset-pin, PATCH /api/admins/:id
 - Company: GET/PATCH /api/company

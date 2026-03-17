@@ -5,10 +5,26 @@ import type { User } from "@shared/schema";
 
 type AuthUser = Omit<User, "password">;
 
+export type CompanyStatus = {
+  id: string;
+  name: string;
+  planCode: string;
+  billingCycle: string;
+  subscriptionStatus: string;
+  accountStatus: string;
+  internalBypass: boolean;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  stripeCustomerId: string | null;
+};
+
 interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
   isSuperAdmin: boolean;
+  companyStatus: CompanyStatus | null;
+  companyStatusLoading: boolean;
+  canAccessPlatform: boolean;
   login: (email: string, password: string) => Promise<void>;
   employeeLogin: (employeeId: string, pin: string) => Promise<void>;
   register: (data: { email: string; password: string; firstName: string; lastName: string; companyName: string }) => Promise<void>;
@@ -25,14 +41,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     staleTime: Infinity,
   });
 
+  const { data: companyStatus, isLoading: companyStatusLoading } = useQuery<CompanyStatus>({
+    queryKey: ["/api/auth/company"],
+    enabled: !!user && user.role === "admin",
+    staleTime: 30_000,
+    retry: false,
+  });
+
   const loginMutation = useMutation({
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
       const res = await apiRequest("POST", "/api/auth/login", { email, password });
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.clear();
-    },
+    onSuccess: () => { queryClient.clear(); },
   });
 
   const employeeLoginMutation = useMutation({
@@ -40,9 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiRequest("POST", "/api/auth/employee-login", { employeeId, pin });
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.clear();
-    },
+    onSuccess: () => { queryClient.clear(); },
   });
 
   const registerMutation = useMutation({
@@ -50,21 +69,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiRequest("POST", "/api/auth/register", data);
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.clear();
-    },
+    onSuccess: () => { queryClient.clear(); },
   });
 
   const logoutMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", "/api/auth/logout");
-    },
-    onSuccess: () => {
-      queryClient.clear();
-    },
+    mutationFn: async () => { await apiRequest("POST", "/api/auth/logout"); },
+    onSuccess: () => { queryClient.clear(); },
   });
 
   const isSuperAdmin = !!(user && (user as any).isSuperAdmin === true && user.role === "admin");
+
+  // A company can access the platform if:
+  // 1. They have internal_bypass (super-admin-granted) OR
+  // 2. They have the legacy plan (existing grandfathered accounts) OR
+  // 3. They have active account_status AND active subscription_status
+  const canAccessPlatform = (() => {
+    if (!companyStatus) return true; // loading state — don't block yet
+    if (companyStatus.internalBypass) return true;
+    if (companyStatus.planCode === "legacy") return true;
+    if (companyStatus.accountStatus === "active" && companyStatus.subscriptionStatus === "active") return true;
+    return false;
+  })();
 
   return (
     <AuthContext.Provider
@@ -72,6 +97,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user: user ?? null,
         isLoading,
         isSuperAdmin,
+        companyStatus: companyStatus ?? null,
+        companyStatusLoading,
+        canAccessPlatform,
         login: async (email, password) => { await loginMutation.mutateAsync({ email, password }); },
         employeeLogin: async (employeeId, pin) => { await employeeLoginMutation.mutateAsync({ employeeId, pin }); },
         register: async (data) => { await registerMutation.mutateAsync(data); },

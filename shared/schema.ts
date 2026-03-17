@@ -42,6 +42,7 @@ export const companies = pgTable("companies", {
   suspendedReason: text("suspended_reason"),
   activatedAt: text("activated_at"),
   suspendedAt: text("suspended_at"),
+  internalBypass: boolean("internal_bypass").notNull().default(false),
 });
 
 export const users = pgTable("users", {

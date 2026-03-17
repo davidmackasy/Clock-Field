@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Building2, Users, DollarSign, TrendingUp, AlertTriangle, Clock,
   Eye, Ban, CheckCircle, ShieldAlert, MessageSquare, ChevronRight,
-  ArrowLeft, Send, Globe, RefreshCw
+  ArrowLeft, Send, Globe, RefreshCw, ShieldCheck, ShieldOff
 } from "lucide-react";
 
 type Business = {
@@ -34,6 +34,7 @@ type Business = {
   adminEmail: string;
   currentPeriodEnd: string | null;
   stripeCustomerId: string | null;
+  internalBypass: boolean;
 };
 
 type Stats = {
@@ -302,6 +303,14 @@ export default function SuperAdminDashboard() {
                         <Badge className={`${accountStatusColors[b.accountStatus] || "bg-gray-100"} border-0 text-xs`}>
                           {b.accountStatus.replace("_", " ")}
                         </Badge>
+                        {b.internalBypass && (
+                          <div className="mt-1">
+                            <Badge className="bg-purple-100 text-purple-800 border-0 text-[10px] flex items-center gap-0.5 w-fit">
+                              <ShieldCheck className="w-2.5 h-2.5" />
+                              bypass
+                            </Badge>
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
@@ -452,7 +461,26 @@ export default function SuperAdminDashboard() {
                   data-testid="button-detail-message">
                   <MessageSquare className="w-3.5 h-3.5 mr-1.5" /> Send Message
                 </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={detailData.internalBypass ? "text-purple-700 border-purple-300 bg-purple-50" : "text-muted-foreground"}
+                  onClick={() => patchBiz.mutate({ id: detailData.id, internalBypass: !detailData.internalBypass })}
+                  data-testid="button-detail-bypass-toggle"
+                >
+                  {detailData.internalBypass
+                    ? <><ShieldCheck className="w-3.5 h-3.5 mr-1.5" /> Remove Bypass</>
+                    : <><ShieldOff className="w-3.5 h-3.5 mr-1.5" /> Grant Bypass</>
+                  }
+                </Button>
               </div>
+
+              {detailData.internalBypass && (
+                <div className="mt-2 p-2.5 bg-purple-50 rounded-lg text-xs text-purple-700 flex items-center gap-2">
+                  <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                  Internal bypass is active — this business has full platform access regardless of subscription status.
+                </div>
+              )}
             </div>
           ) : null}
         </DialogContent>
