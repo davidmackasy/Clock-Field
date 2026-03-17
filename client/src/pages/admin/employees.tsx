@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { UpgradeModal, parsePlanLimitError, type UpgradeReason } from "@/components/upgrade-modal";
 import { EmployeeAttendanceModal } from "@/components/employee-attendance-modal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -85,6 +86,7 @@ export default function AdminEmployees() {
   const [formData, setFormData] = useState({ firstName: "", lastName: "", email: "", phone: "", hourlyRate: "", position: "" });
   const [editData, setEditData] = useState<Partial<Employee>>({});
   const [attendanceModalEmployee, setAttendanceModalEmployee] = useState<Employee | null>(null);
+  const [upgradeReason, setUpgradeReason] = useState<UpgradeReason>(null);
 
   const { data: employees, isLoading } = useQuery<Employee[]>({ queryKey: ["/api/employees"] });
 
@@ -145,7 +147,13 @@ export default function AdminEmployees() {
       setFormData({ firstName: "", lastName: "", email: "", phone: "", hourlyRate: "", position: "" });
     },
     onError: (err: any) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      const limitReason = parsePlanLimitError(err);
+      if (limitReason) {
+        setOpen(false);
+        setUpgradeReason(limitReason);
+      } else {
+        toast({ title: "Error", description: err.message, variant: "destructive" });
+      }
     },
   });
 
@@ -723,6 +731,8 @@ export default function AdminEmployees() {
           onClose={() => setAttendanceModalEmployee(null)}
         />
       )}
+
+      <UpgradeModal reason={upgradeReason} onClose={() => setUpgradeReason(null)} />
     </div>
   );
 }

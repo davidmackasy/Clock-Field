@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { UpgradeModal, parsePlanLimitError, type UpgradeReason } from "@/components/upgrade-modal";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,7 @@ export default function AdminClients() {
   const [locForm, setLocForm] = useState({ name: "", address: "", clientId: "", notes: "" });
   const [editForm, setEditForm] = useState({ name: "", contactName: "", contactEmail: "", contactPhone: "", isActive: true });
   const [credDialog, setCredDialog] = useState<{ email: string; tempPin: string } | null>(null);
+  const [upgradeReason, setUpgradeReason] = useState<UpgradeReason>(null);
 
   const { data: clientsList, isLoading } = useQuery<any[]>({ queryKey: ["/api/clients"] });
   const { data: locationsList } = useQuery<any[]>({ queryKey: ["/api/locations"] });
@@ -33,7 +35,11 @@ export default function AdminClients() {
   const createClientMut = useMutation({
     mutationFn: async (data: any) => { const res = await apiRequest("POST", "/api/clients", data); return res.json(); },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/clients"] }); toast({ title: "Client created" }); setOpen(false); setForm({ name: "", contactName: "", contactEmail: "", contactPhone: "" }); },
-    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: any) => {
+      const limitReason = parsePlanLimitError(err);
+      if (limitReason) { setOpen(false); setUpgradeReason(limitReason); }
+      else toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
   });
 
   const createLocMut = useMutation({
@@ -437,6 +443,8 @@ export default function AdminClients() {
           )}
         </DialogContent>
       </Dialog>
+
+      <UpgradeModal reason={upgradeReason} onClose={() => setUpgradeReason(null)} />
     </div>
   );
 }

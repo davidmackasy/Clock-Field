@@ -2,11 +2,12 @@ import { useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { AlertTriangle, CreditCard, RefreshCw, LogOut, Clock, ArrowRight } from "lucide-react";
+import { AlertTriangle, CreditCard, RefreshCw, LogOut, Clock, ArrowRight, CheckCircle } from "lucide-react";
 
 const statusMessages: Record<string, { title: string; body: string; severity: "warning" | "error" }> = {
   past_due: {
@@ -79,7 +80,31 @@ export default function BillingBlockedPage() {
     onError: (e: any) => toast({ title: "Checkout failed", description: e.message, variant: "destructive" }),
   });
 
+  // Sync directly from Stripe — for users who paid but status didn't update
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/billing/sync", {});
+      return res.json();
+    },
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/company"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/plan"] });
+      if (result.updated && result.subscriptionStatus === "active") {
+        toast({ title: "Subscription confirmed!", description: "Your account is now active." });
+        setTimeout(() => navigate("/admin"), 800);
+      } else {
+        toast({
+          title: "Subscription status checked",
+          description: result.message || "No active subscription found. Please subscribe to continue.",
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (e: any) => toast({ title: "Could not check subscription", description: e.message, variant: "destructive" }),
+  });
+
   const isResubscribeFlow = status === "canceled" || status === "pending_subscription";
+  const hasBillingLink = !!companyStatus?.stripeCustomerId;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -149,16 +174,18 @@ export default function BillingBlockedPage() {
               </Button>
             ) : (
               <>
-                <Button
-                  className="w-full"
-                  size="lg"
-                  onClick={() => portalMutation.mutate()}
-                  disabled={portalMutation.isPending}
-                  data-testid="button-manage-billing"
-                >
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  {portalMutation.isPending ? "Opening billing portal..." : "Update payment method"}
-                </Button>
+                {hasBillingLink && (
+                  <Button
+                    className="w-full"
+                    size="lg"
+                    onClick={() => portalMutation.mutate()}
+                    disabled={portalMutation.isPending}
+                    data-testid="button-manage-billing"
+                  >
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    {portalMutation.isPending ? "Opening billing portal..." : "Update payment method"}
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   className="w-full"
@@ -172,6 +199,19 @@ export default function BillingBlockedPage() {
                 </Button>
               </>
             )}
+
+            {/* Already paid? Check subscription status */}
+            <Button
+              variant="ghost"
+              className="w-full text-muted-foreground"
+              size="sm"
+              onClick={() => syncMutation.mutate()}
+              disabled={syncMutation.isPending}
+              data-testid="button-check-subscription"
+            >
+              <CheckCircle className={`w-3.5 h-3.5 mr-1.5 ${syncMutation.isPending ? "animate-spin" : ""}`} />
+              {syncMutation.isPending ? "Checking…" : "Already paid? Check my subscription"}
+            </Button>
           </div>
 
           <p className="text-center text-xs text-muted-foreground">

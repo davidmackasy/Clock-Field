@@ -1,0 +1,539 @@
+Yes. The main issue is not Stripe checkout itself. The issue is the post-payment subscription state and feature-gating flow.
+
+Right now the app is doing two wrong things:
+
+after successful payment, it is not activating the business cleanly, so status stays pending
+
+when a user taps a locked feature, the app is treating it like a billing block and kicking them out instead of showing an upgrade prompt inside the app
+
+That needs to be fixed without touching anything else.
+
+Use this exact dev note.
+
+DEV NOTE
+
+Task
+Fix the subscription activation and feature-gating flow so paid businesses get active access immediately after successful Stripe subscription, and locked features show upgrade prompts without signing the user out or sending them back to the plan page.
+
+Critical instruction
+Do not break anything else.
+Do not change Stripe checkout if it is already working.
+Do not change current working payment capture logic unless required for subscription activation status.
+Do not touch:
+
+clock-in
+
+clock-out
+
+attendance
+
+schedules
+
+requests
+
+work log
+
+timesheets
+
+employee login
+
+client login
+
+existing business data
+
+super admin structure
+
+current subscription plans and plan limits
+
+This is a targeted subscription-state and upgrade-flow fix only.
+
+Main goals
+
+If a business successfully subscribes through Stripe, its subscription must become active right away after confirmation.
+
+The business must keep access to the platform according to its subscribed plan.
+
+If the business clicks a feature not included in its plan, do not sign them out and do not send them to the full paywall page.
+
+Instead, show an in-app upgrade prompt/modal explaining that the feature requires a higher plan.
+
+If they cancel the prompt, they stay inside their account and keep using the features included in their current plan.
+
+Current bugs to fix
+
+Bug 1. Successful payment but subscription remains pending
+From the screenshots:
+
+Stripe shows paid
+
+business account status is active
+
+but subscription status stays pending
+
+app then treats the business as blocked
+
+This is wrong.
+
+After successful Stripe confirmation, the business subscription status must be updated to active.
+
+Bug 2. Locked features send user out of the app
+When a paid user on Starter taps a Growth/Pro feature:
+
+app kicks them out
+
+sends them back to billing/paywall page
+
+sometimes behaves like a new customer again
+
+This is bad UX.
+
+Correct behavior:
+
+keep them inside the app
+
+show upgrade modal/banner
+
+let them close it and continue using the rest of their plan
+
+Root causes to inspect first
+
+Webhook state mapping bug
+Most likely checkout.session.completed or invoice.paid is not updating:
+
+subscription_status = active
+
+current period dates
+
+plan code
+
+billing cycle
+for that company properly
+
+Wrong source of truth after checkout redirect
+The app may be redirecting correctly once, but later access middleware still sees:
+
+subscription_status = pending
+because backend state never got updated correctly
+
+Too-strict global billing gate
+The app is likely using one broad middleware like:
+if subscription not premium enough, block entire account access
+
+That is wrong.
+
+The full account should only be blocked if:
+
+no valid active subscription at all
+or
+
+pending_subscription / unpaid / canceled / suspended
+
+Not because one specific feature is not included.
+
+Plan feature gating is mixed with account billing lock
+Two concepts must be separated:
+
+A. Billing access state
+Can this business use the platform at all?
+
+B. Plan feature access
+Which features inside the platform can this active business use?
+
+Right now these seem mixed together.
+
+Required final behavior
+
+Part 1. Subscription activation after successful payment
+When Stripe confirms the subscription/payment, update the company/business immediately to:
+
+subscription_status = active
+
+account access allowed
+
+correct plan_code set
+
+correct billing_cycle set
+
+correct stripe_customer_id stored
+
+correct stripe_subscription_id stored
+
+current_period_start set
+
+current_period_end set
+
+Do not leave it at pending once payment is successful.
+
+Recommended source of truth
+Use Stripe webhook as final truth.
+
+At minimum handle correctly:
+
+checkout.session.completed
+
+customer.subscription.created
+
+customer.subscription.updated
+
+invoice.paid
+
+Best safe access rule
+If there is a valid paid subscription confirmed by Stripe, mark business active for billing access immediately.
+
+Part 2. Define correct account access states
+Account/platform access should only be blocked when business is truly not allowed to use the app.
+
+Allowed platform access:
+
+subscription_status = active
+
+or internal bypass/grandfathered if applicable
+
+Blocked platform access:
+
+pending_subscription
+
+unpaid
+
+canceled
+
+incomplete
+
+suspended
+
+disabled
+
+banned
+
+Important
+A Starter customer is still an active paying customer.
+They must be allowed into the platform.
+They are not blocked just because they do not have Growth or Pro features.
+
+Part 3. Separate feature gating from billing lock
+This is the core fix.
+
+Billing lock page should appear only when:
+
+no valid active subscription exists
+
+Feature upgrade prompt should appear when:
+
+business has an active subscription
+
+but selected feature is not included in current plan
+
+Do not route active subscribers to account access restricted page for locked features.
+
+Correct behavior examples
+
+Example A
+Starter customer logs in
+
+should access dashboard normally
+
+should use Starter features normally
+
+Example B
+Starter customer clicks Payroll
+
+do not sign out
+
+do not redirect to full paywall
+
+show upgrade modal:
+Upgrade to Pro to access Payroll Estimator
+
+Buttons:
+
+Upgrade Plan
+
+Maybe Later
+
+If Maybe Later:
+
+close modal
+
+remain inside app
+
+Example C
+Starter customer hits employee limit
+
+on Add Employee click, show upgrade prompt
+
+do not lock whole account
+
+do not sign out
+
+Part 4. Upgrade modal / in-app prompt
+Build a reusable upgrade modal/banner for locked features and limit overages.
+
+Use cases:
+
+trying to access locked feature
+
+trying to add client beyond plan limit
+
+trying to add employee beyond plan limit
+
+Modal content example
+Title:
+Upgrade required
+
+Body:
+Your current plan does not include this feature.
+Upgrade to Growth or Pro to unlock it.
+
+Buttons:
+
+Upgrade Plan
+
+Cancel
+
+For limit overages:
+Title:
+You’ve reached your plan limit
+
+Body:
+Your Starter plan allows up to 2 employees.
+Upgrade to Growth or Pro to add more employees.
+
+Buttons:
+
+Upgrade Plan
+
+Cancel
+
+Cancel must keep user inside the app.
+
+Part 5. Billing page vs upgrade modal
+Use full billing/paywall page only for:
+
+new businesses before first subscription
+
+expired/unpaid/canceled accounts with no valid access
+
+payment method update when billing access is blocked
+
+Use upgrade modal only for:
+
+active subscribers hitting feature restrictions or plan limits
+
+This distinction is required.
+
+Part 6. Backend enforcement model
+Enforcement must happen in backend, but response type must distinguish between:
+
+account blocked
+
+feature locked
+
+limit reached
+
+Recommended response categories
+
+billing_required
+Use when no active subscription exists
+Frontend should redirect to billing lock page
+
+feature_upgrade_required
+Use when feature is not included in current plan
+Frontend should show upgrade modal, not log out
+
+limit_upgrade_required
+Use when customer exceeds employee/client plan limit
+Frontend should show upgrade modal, not log out
+
+Do not use one generic forbidden response for all billing scenarios.
+
+Part 7. Current screenshot issue to fix in super admin
+In super admin modal, business shows:
+
+Account Status: active
+
+Subscription: pending
+
+That is inconsistent after successful payment.
+
+Fix required:
+Once Stripe confirms payment/subscription, super admin should see:
+
+Account Status: active
+
+Subscription: active
+
+Do not keep pending after paid invoice/check out succeeded.
+
+Part 8. Stripe webhook mapping rules
+Fix webhook logic so these state transitions are correct.
+
+Recommended mapping
+
+checkout.session.completed
+
+store checkout linkage
+
+do not leave business stranded in pending if subscription already exists in session payload
+
+mark as pending_confirmation only briefly if needed until subscription object arrives, but final state must move to active quickly
+
+customer.subscription.created
+
+set plan_code
+
+set billing_cycle
+
+set stripe_subscription_id
+
+set current period dates
+
+set subscription_status from Stripe
+
+customer.subscription.updated
+
+keep plan, cycle, status, renewal, cancel_at_period_end in sync
+
+invoice.paid
+
+mark subscription_status = active
+
+restore access if previously blocked for payment issue
+
+invoice.payment_failed
+
+set past_due/unpaid logic
+
+show billing warning or restricted state according to your business rule
+
+customer.subscription.deleted
+
+mark canceled
+
+restrict full access
+
+Important
+If invoice.paid is received for a valid subscription, do not leave business in pending.
+
+Part 9. Frontend session behavior after successful subscribe
+After successful checkout return:
+
+fetch fresh company subscription state
+
+refresh user/company session context
+
+invalidate cached subscription/business queries
+
+do not continue using stale pending status from before payment
+
+This is likely another issue.
+The app may be holding stale company state in cache.
+
+After Stripe return:
+
+invalidate business/account query
+
+refetch current subscription
+
+update UI immediately
+
+Part 10. Manage subscription remains working
+Do not break Stripe Billing Portal.
+The user should still be able to:
+
+cancel
+
+update payment method
+
+manage billing
+
+But if they are active on Starter, they must still use the platform after returning from billing portal.
+
+Part 11. Safety rules
+Do not touch:
+
+Stripe prices
+
+plan definitions
+
+current working checkout screen
+unless needed for the fix
+
+Do not alter:
+
+current live attendance
+
+current employees
+
+current schedules
+
+current requests
+
+current work logs
+
+Only fix:
+
+subscription state update
+
+billing lock vs feature lock separation
+
+upgrade prompt UX
+
+stale subscription cache after payment
+
+Part 12. Acceptance criteria
+
+Successful subscription
+
+business pays via Stripe
+
+business returns to app
+
+subscription status becomes active
+
+super admin sees active, not pending
+
+business can use platform immediately according to plan
+
+Starter business behavior
+
+can use allowed Starter features normally
+
+is not signed out
+
+is not kicked to billing page
+
+Locked feature behavior
+
+clicking a locked feature shows in-app upgrade modal
+
+cancel closes modal
+
+user stays in account
+
+upgrade takes them to billing/plan upgrade flow
+
+Limit behavior
+
+trying to add more employees/clients than allowed shows upgrade modal
+
+user is not signed out
+
+user can cancel and keep using current account
+
+Billing lock behavior
+
+only truly unpaid/canceled/no-subscription accounts see full billing restriction page
+
+Part 13. Direct instruction for agent
+Fix only the subscription activation and feature-gating flow. After successful Stripe payment, the business subscription must become active immediately and the user must keep access to the platform according to their plan. Do not leave paid accounts in pending status. Separate full billing access restriction from plan-based feature locking: active subscribers who click locked features or hit plan limits should see an in-app upgrade modal, not be signed out or redirected to the full billing restriction page. Refresh company subscription state after returning from Stripe so stale pending status is cleared. Do not modify unrelated working systems.
+
+Part 14. Strong reminder
+Do exactly this only.
+Do not expand scope.
+Do not change unrelated app behavior.
+Do not break live business usage.
+Fix only:
+
+paid account staying pending
+
+locked features causing logout/full billing redirect instead of upgrade prompt

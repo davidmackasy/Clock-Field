@@ -82,12 +82,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // A company can access the platform if:
   // 1. They have internal_bypass (super-admin-granted) OR
   // 2. They have the legacy plan (existing grandfathered accounts) OR
-  // 3. They have active account_status AND active subscription_status
+  // 3. They have active account_status AND a valid paid subscription status
+  //    (active, trialing, or past_due — past_due gets a grace period, not immediate lockout)
   const canAccessPlatform = (() => {
     if (!companyStatus) return true; // loading state — don't block yet
     if (companyStatus.internalBypass) return true;
     if (companyStatus.planCode === "legacy") return true;
-    if (companyStatus.accountStatus === "active" && companyStatus.subscriptionStatus === "active") return true;
+    const validSubStatuses = ["active", "trialing", "past_due"];
+    if (companyStatus.accountStatus === "active" && validSubStatuses.includes(companyStatus.subscriptionStatus)) return true;
     return false;
   })();
 

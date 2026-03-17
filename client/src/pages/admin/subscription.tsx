@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,10 +10,11 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 import {
   CheckCircle, Lock, CreditCard, ArrowUpRight, Users, Building2,
   Calendar, Zap, FileText, ClipboardList, BookOpen, DollarSign,
-  BarChart2, TrendingUp
+  BarChart2, TrendingUp, RefreshCw, PartyPopper, AlertTriangle
 } from "lucide-react";
 
 type PlanData = {
@@ -106,16 +108,62 @@ const statusColors: Record<string, string> = {
   past_due: "bg-orange-100 text-orange-800",
   canceled: "bg-gray-100 text-gray-600",
   unpaid: "bg-red-100 text-red-800",
+  pending: "bg-yellow-100 text-yellow-800",
 };
 
 export default function AdminSubscription() {
-  const { user } = useAuth();
   const { toast } = useToast();
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
+  const [, navigate] = useLocation();
 
-  const { data, isLoading } = useQuery<PlanData>({
+  // Detect return from Stripe checkout
+  const params = new URLSearchParams(window.location.search);
+  const returnedSuccess = params.get("success") === "true";
+  const returnedCanceled = params.get("canceled") === "true";
+  const [syncDone, setSyncDone] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  const { data, isLoading, refetch } = useQuery<PlanData>({
     queryKey: ["/api/admin/plan"],
   });
+
+  // Sync subscription state directly from Stripe after returning from checkout
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/billing/sync", {});
+      return res.json();
+    },
+    onSuccess: async (result) => {
+      // Invalidate all billing-related caches
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/company"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/plan"] });
+      await refetch();
+      setSyncDone(true);
+      setSyncing(false);
+      if (result.updated) {
+        toast({
+          title: "Subscription activated!",
+          description: `Your ${result.planCode} plan is now active.`,
+        });
+        // Remove success param from URL without reload
+        window.history.replaceState({}, "", "/admin/subscription");
+        // Redirect to dashboard after a moment
+        setTimeout(() => navigate("/admin"), 1500);
+      }
+    },
+    onError: () => {
+      setSyncing(false);
+      setSyncDone(true);
+    },
+  });
+
+  // Auto-sync on return from Stripe checkout
+  useEffect(() => {
+    if (returnedSuccess && !syncDone) {
+      setSyncing(true);
+      syncMutation.mutate();
+    }
+  }, [returnedSuccess]);
 
   const checkoutMutation = useMutation({
     mutationFn: async ({ planCode, billingCycle: cycle }: { planCode: string; billingCycle: string }) => {
@@ -138,6 +186,25 @@ export default function AdminSubscription() {
     },
     onError: (e: any) => toast({ title: "Failed to open billing portal", description: e.message, variant: "destructive" }),
   });
+
+  // Show loading while syncing after checkout
+  if (returnedSuccess && syncing) {
+    return (
+      <div className="p-4 md:p-6 max-w-5xl mx-auto">
+        <Card>
+          <CardContent className="pt-10 pb-10 flex flex-col items-center gap-4 text-center">
+            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center animate-spin">
+              <RefreshCw className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-lg">Confirming your payment…</h2>
+              <p className="text-sm text-muted-foreground mt-1">Syncing your subscription from Stripe. This takes just a moment.</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -166,6 +233,46 @@ export default function AdminSubscription() {
         <p className="text-sm text-muted-foreground mt-0.5">Manage your plan and billing</p>
       </div>
 
+      {/* Success banner after return from checkout */}
+      {returnedSuccess && syncDone && (
+        <Card className="border-green-300 bg-green-50">
+          <CardContent className="pt-4 pb-4 flex items-center gap-3">
+            <PartyPopper className="w-5 h-5 text-green-600 shrink-0" />
+            <div>
+              <p className="font-semibold text-green-800 text-sm">Payment confirmed — welcome aboard!</p>
+              <p className="text-xs text-green-700">Your account is now active. Redirecting to your dashboard…</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Canceled banner */}
+      {returnedCanceled && (
+        <Card className="border-yellow-300 bg-yellow-50">
+          <CardContent className="pt-4 pb-4 flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0" />
+            <p className="text-sm text-yellow-800">Checkout was canceled. Your plan has not changed. Choose a plan below to subscribe.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Past-due warning */}
+      {company?.subscriptionStatus === "past_due" && (
+        <Card className="border-orange-300 bg-orange-50">
+          <CardContent className="pt-4 pb-4 flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-orange-600 shrink-0" />
+            <div className="flex-1">
+              <p className="font-semibold text-orange-800 text-sm">Payment past due</p>
+              <p className="text-xs text-orange-700">Your last payment failed. Update your payment method to avoid service interruption.</p>
+            </div>
+            <Button size="sm" variant="outline" className="border-orange-400 text-orange-800" onClick={() => portalMutation.mutate()} disabled={portalMutation.isPending}>
+              <CreditCard className="w-3.5 h-3.5 mr-1.5" />
+              Update payment
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Current Plan */}
       <Card>
         <CardHeader className="pb-3">
@@ -183,7 +290,7 @@ export default function AdminSubscription() {
                     : `$${plan?.monthlyPrice}/month — billed monthly`}
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {company?.subscriptionStatus && (
                 <Badge className={`${statusColors[company.subscriptionStatus] || "bg-gray-100"} border-0`}>
                   {company.subscriptionStatus}
@@ -199,6 +306,18 @@ export default function AdminSubscription() {
                 >
                   <CreditCard className="w-3.5 h-3.5 mr-1.5" />
                   Manage Billing
+                </Button>
+              )}
+              {!isLegacy && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => { setSyncing(true); syncMutation.mutate(); }}
+                  disabled={syncMutation.isPending}
+                  data-testid="button-sync-subscription"
+                  title="Refresh subscription status from Stripe"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${syncMutation.isPending ? "animate-spin" : ""}`} />
                 </Button>
               )}
             </div>

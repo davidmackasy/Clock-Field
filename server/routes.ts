@@ -2234,6 +2234,81 @@ export async function registerRoutes(
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  // Stripe Subscription Sync — called by frontend on return from Stripe checkout
+  // Fetches live subscription state directly from Stripe and updates the DB immediately.
+  // This is the most reliable way to handle post-payment state without relying solely on webhooks.
+  app.post("/api/billing/sync", requireRole("admin"), async (req, res) => {
+    try {
+      const stripeKey = process.env.STRIPE_SECRET_KEY;
+      if (!stripeKey) return res.status(503).json({ message: "Stripe not configured" });
+
+      const user = req.user as any;
+      const company = await storage.getCompany(user.companyId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+
+      if (!company.stripeCustomerId) {
+        return res.json({ updated: false, message: "No Stripe customer linked yet" });
+      }
+
+      const Stripe = (await import("stripe")).default;
+      const stripe = new Stripe(stripeKey, { apiVersion: "2025-02-24.acacia" });
+
+      // Fetch the most recent subscription for this customer
+      const subscriptions = await stripe.subscriptions.list({
+        customer: company.stripeCustomerId,
+        limit: 1,
+        expand: ["data.items.data.price"],
+      });
+
+      const sub = subscriptions.data[0];
+      if (!sub) {
+        return res.json({ updated: false, message: "No subscription found for this customer" });
+      }
+
+      // Map price ID → plan code
+      const priceToCode: Record<string, string> = {
+        [process.env.STRIPE_PRICE_STARTER_MONTHLY || "__"]: "starter",
+        [process.env.STRIPE_PRICE_STARTER_YEARLY || "__"]: "starter",
+        [process.env.STRIPE_PRICE_GROWTH_MONTHLY || "__"]: "growth",
+        [process.env.STRIPE_PRICE_GROWTH_YEARLY || "__"]: "growth",
+        [process.env.STRIPE_PRICE_PRO_MONTHLY || "__"]: "pro",
+        [process.env.STRIPE_PRICE_PRO_YEARLY || "__"]: "pro",
+      };
+
+      const priceId = sub.items.data[0]?.price?.id;
+      const planCode = (priceId && priceToCode[priceId]) || company.planCode || "starter";
+      const interval = sub.items.data[0]?.price?.recurring?.interval;
+      const billingCycle = interval === "year" ? "yearly" : "monthly";
+
+      // Treat active + trialing + past_due (grace period) as allowed; map incomplete → pending
+      const normalizedStatus = ["active", "trialing"].includes(sub.status) ? "active"
+        : sub.status === "past_due" ? "past_due"
+        : sub.status;
+
+      const updates: Record<string, any> = {
+        stripeSubscriptionId: sub.id,
+        stripePriceId: priceId,
+        planCode,
+        billingCycle,
+        subscriptionStatus: normalizedStatus,
+        currentPeriodStart: new Date(sub.current_period_start * 1000).toISOString(),
+        currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString(),
+        cancelAtPeriodEnd: sub.cancel_at_period_end,
+      };
+
+      if (["active", "trialing"].includes(sub.status)) {
+        updates.accountStatus = "active";
+        updates.activatedAt = company.activatedAt || new Date().toISOString();
+      }
+
+      await storage.updateCompany(company.id, updates);
+
+      res.json({ updated: true, subscriptionStatus: normalizedStatus, planCode, billingCycle });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // Stripe Customer Portal
   app.post("/api/billing/portal", requireRole("admin"), async (req, res) => {
     try {
@@ -2275,16 +2350,47 @@ export async function registerRoutes(
       const data = event.data?.object as any;
       const companyId = data?.metadata?.companyId;
 
+      const allCompanies = await storage.getAllCompanies();
+
+      const findByCustomer = (customerId: string) =>
+        allCompanies.find(c => c.stripeCustomerId === customerId);
+      const findBySubscription = (subId: string) =>
+        allCompanies.find(c => c.stripeSubscriptionId === subId);
+
       switch (event.type) {
         case "checkout.session.completed": {
           if (companyId && data.subscription) {
             const sub = await stripe.subscriptions.retrieve(data.subscription);
+            const subStatus = ["active", "trialing"].includes(sub.status) ? sub.status : "active";
             await storage.updateCompany(companyId, {
+              stripeCustomerId: data.customer || undefined,
               stripeSubscriptionId: sub.id,
               stripePriceId: sub.items.data[0]?.price?.id,
               planCode: data.metadata?.planCode || "starter",
               billingCycle: data.metadata?.billingCycle || "monthly",
-              subscriptionStatus: sub.status,
+              subscriptionStatus: subStatus,
+              accountStatus: "active",
+              currentPeriodStart: new Date(sub.current_period_start * 1000).toISOString(),
+              currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString(),
+              cancelAtPeriodEnd: sub.cancel_at_period_end,
+              activatedAt: new Date().toISOString(),
+            });
+          }
+          break;
+        }
+        case "customer.subscription.created": {
+          const sub = data;
+          // Try to find by companyId in metadata, then by customer
+          const metaCompanyId = sub.metadata?.companyId;
+          const company = metaCompanyId
+            ? allCompanies.find(c => c.id === metaCompanyId)
+            : findByCustomer(sub.customer);
+          if (company) {
+            const subStatus = ["active", "trialing"].includes(sub.status) ? sub.status : "active";
+            await storage.updateCompany(company.id, {
+              stripeSubscriptionId: sub.id,
+              stripePriceId: sub.items.data[0]?.price?.id,
+              subscriptionStatus: subStatus,
               accountStatus: "active",
               currentPeriodStart: new Date(sub.current_period_start * 1000).toISOString(),
               currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString(),
@@ -2296,10 +2402,11 @@ export async function registerRoutes(
         }
         case "customer.subscription.updated": {
           const sub = data;
-          const company = (await storage.getAllCompanies()).find(c => c.stripeSubscriptionId === sub.id);
+          const company = findBySubscription(sub.id) || findByCustomer(sub.customer);
           if (company) {
             await storage.updateCompany(company.id, {
               subscriptionStatus: sub.status,
+              stripePriceId: sub.items.data[0]?.price?.id,
               currentPeriodStart: new Date(sub.current_period_start * 1000).toISOString(),
               currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString(),
               cancelAtPeriodEnd: sub.cancel_at_period_end,
@@ -2309,7 +2416,7 @@ export async function registerRoutes(
         }
         case "customer.subscription.deleted": {
           const sub = data;
-          const company = (await storage.getAllCompanies()).find(c => c.stripeSubscriptionId === sub.id);
+          const company = findBySubscription(sub.id) || findByCustomer(sub.customer);
           if (company) {
             await storage.updateCompany(company.id, {
               subscriptionStatus: "canceled",
@@ -2319,18 +2426,21 @@ export async function registerRoutes(
           break;
         }
         case "invoice.payment_failed": {
-          const customerId = data.customer;
-          const company = (await storage.getAllCompanies()).find(c => c.stripeCustomerId === customerId);
+          const company = findByCustomer(data.customer)
+            || (data.subscription ? findBySubscription(data.subscription) : undefined);
           if (company) {
             await storage.updateCompany(company.id, { subscriptionStatus: "past_due" });
           }
           break;
         }
         case "invoice.paid": {
-          const customerId = data.customer;
-          const company = (await storage.getAllCompanies()).find(c => c.stripeCustomerId === customerId);
+          const company = findByCustomer(data.customer)
+            || (data.subscription ? findBySubscription(data.subscription) : undefined);
           if (company) {
-            await storage.updateCompany(company.id, { subscriptionStatus: "active" });
+            await storage.updateCompany(company.id, {
+              subscriptionStatus: "active",
+              accountStatus: "active",
+            });
           }
           break;
         }
