@@ -1,0 +1,126 @@
+DEV NOTE
+
+Task
+Activate Stripe on the app and make it fully ready for live subscription payments.
+
+Critical rule
+Do not break or affect anything else that is already working.
+Do not touch:
+
+clock-in
+
+clock-out
+
+attendance
+
+schedules
+
+payroll logic
+
+requests
+
+work log
+
+timesheets
+
+employee login
+
+client login
+
+existing business data
+
+This is a Stripe activation task only.
+
+Main goal
+Turn on Stripe properly so the platform can start accepting live subscription payments for new business accounts.
+
+What must be done
+
+Connect Stripe environment keys
+Set up the correct Stripe environment variables for the app.
+
+Required:
+
+Stripe secret key
+
+Stripe publishable key
+
+Stripe webhook secret
+
+Stripe price IDs for all plans
+
+Use live keys only when you are ready for production.
+Do not hardcode keys in the app.
+
+Add the plan price IDs
+Map Stripe prices for:
+
+Starter monthly
+
+Starter yearly
+
+Growth monthly
+
+Growth yearly
+
+Pro monthly
+
+Pro yearly
+
+Enable Stripe checkout
+Make sure new business signup can go into Stripe Checkout and subscribe before platform access is granted.
+
+Enable Stripe webhooks
+Stripe webhooks must be active and working.
+They must update:
+
+subscription status
+
+current plan
+
+billing cycle
+
+renewal dates
+
+payment failure state
+
+cancellation state
+
+Activate billing portal
+Enable Stripe Billing Portal so business admins can:
+
+manage subscription
+
+cancel subscription
+
+update payment method
+
+Enforce paid access for new businesses
+No free trial.
+New business accounts must subscribe first before getting platform access.
+
+Respect internal bypass
+Only super-admin-authorized internal accounts should bypass the paywall if explicitly marked.
+Do not let all accounts bypass billing.
+
+Test these flows
+Before going live, confirm:
+
+new signup → checkout works
+
+successful payment → account activates
+
+canceled subscription → access is restricted correctly
+
+failed payment → status updates correctly
+
+billing portal opens correctly
+
+monthly and yearly pricing both work
+
+Do not change unrelated systems
+Do not refactor anything else.
+Only activate and connect Stripe correctly.
+
+Direct instruction for agent
+Activate Stripe properly for live subscription billing. Configure the Stripe keys, price IDs, checkout flow, webhook handling, and billing portal so new business accounts must subscribe before getting access. Keep the rest of the platform unchanged and do not break any existing working production features.
