@@ -1,0 +1,121 @@
+Yes. You are right.
+
+Do not create a new account.
+Do not reset the password.
+Do not change that business account.
+Do not relink it.
+Do not touch its employees, company, login, or anything else.
+
+Only add Super Admin access to the existing account tied to:
+
+gift.delvin@mastercleaning.ca
+
+Use this exact note for the agent:
+
+DEV NOTE
+
+Task
+Grant Super Admin access to the existing production account gift.delvin@mastercleaning.ca without changing anything else on that account.
+
+Critical instruction
+Do not create a new account.
+Do not reset the password.
+Do not generate a temporary password.
+Do not relink the account to a different company.
+Do not duplicate the user.
+Do not touch employee records.
+Do not touch company records.
+Do not touch login credentials.
+Do not touch existing business access.
+Do not touch any active production data.
+
+This is a permission update only.
+
+Main goal
+The existing account with email:
+
+gift.delvin@mastercleaning.ca
+
+already exists and is already actively used as a business/admin account.
+
+Only add:
+
+Super Admin capability
+
+Do not modify anything else.
+
+Required behavior
+The existing account must:
+
+continue logging in with its current password
+
+continue accessing its current business/admin account exactly as before
+
+gain the ability to switch into Super Admin mode
+
+switch back to Business Admin mode using the same login
+
+Required change
+Only update the existing user record for:
+gift.delvin@mastercleaning.ca
+
+Set:
+
+is_super_admin = true
+
+If a mode switch field or permission mapping exists, update only that permission layer.
+
+Do not change:
+
+password
+
+email
+
+company_id
+
+role if role is already needed for business admin
+
+account status
+
+subscription state
+
+employee/client/company data
+
+Important
+This account must remain the same business account it already is.
+It should simply gain extra platform access.
+
+Do not do any of these
+
+do not create a second admin account
+
+do not create a second super admin account
+
+do not assign a temporary password
+
+do not force password reset
+
+do not re-onboard the user
+
+do not mark it as a new account
+
+do not alter the business linkage
+
+Acceptance criteria
+
+gift.delvin@mastercleaning.ca can still log in using the existing current password
+
+existing business/admin dashboard access still works exactly the same
+
+same account now has Super Admin mode available
+
+no business data is changed
+
+no employees are affected
+
+no current sessions/workflows are broken
+
+Direct instruction for agent
+Do not create or recreate the account gift.delvin@mastercleaning.ca. It already exists and is actively used in production. Do not change its password or any other existing account data. Only update that existing account to grant Super Admin capability, so it keeps its normal Business Admin access and gains the ability to switch into Super Admin mode from the same login.
+
+This is the only safe change
