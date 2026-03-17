@@ -1,0 +1,314 @@
+Yes. Below is a safe deploy note you can give the agent.
+
+DEV NOTE
+
+Task
+Deploy Stripe and Super Admin safely without affecting any current production businesses, employees, clients, schedules, attendance, hours, or existing access.
+
+Critical instruction
+Do not break anything.
+Do not lock out any current production business.
+Do not delete anything.
+Do not reset anything.
+Do not downgrade anything.
+Do not apply paywall rules to businesses that already exist in production.
+
+This must be a safe grandfathering rollout.
+
+Main goal
+When Stripe subscriptions go live:
+
+all already-existing production businesses must keep full access
+
+only brand-new businesses signing up after this rollout should be required to subscribe before access
+
+gift.delvin@mastercleaning.ca must be granted Super Admin access in production
+
+that same account must also be able to keep its existing business access and switch into Super Admin mode
+
+Do not affect current live businesses
+This is the most important rule.
+
+All businesses already registered in production before Stripe enforcement goes live must be grandfathered in.
+
+That means:
+
+no forced subscription prompt for existing businesses
+
+no feature lock on existing businesses
+
+no client limit enforcement on existing businesses
+
+no employee limit enforcement on existing businesses
+
+no billing restriction for existing businesses right now
+
+no disruption to employees currently clocking in/out
+
+no disruption to active schedules, attendance, requests, payroll, timesheets, work log, or client access
+
+Safe rollout rule
+Only new businesses created after the Stripe launch should be required to subscribe.
+
+Required implementation approach
+
+Add grandfathered access flag for existing production businesses
+Add a safe business-level field such as:
+
+is_legacy_grandfathered = true/false
+or
+
+billing_exempt = true/false
+or
+
+subscription_enforcement_exempt = true/false
+
+Recommended name
+subscription_enforcement_exempt
+
+Behavior
+If subscription_enforcement_exempt = true:
+
+business bypasses the new subscription paywall
+
+business keeps current full access
+
+no Stripe gating is applied
+
+no plan limit enforcement is applied for now
+
+This is for existing production businesses only.
+
+Backfill all current production businesses
+Before enabling the new Stripe gate:
+
+mark all currently existing production businesses as exempt/grandfathered
+
+Important
+Do this one time before launch.
+
+Rule
+Any company/business record that already exists in production before the Stripe launch date should be marked:
+
+subscription_enforcement_exempt = true
+
+Do not do this for future signups.
+
+New businesses only
+Any business created after the Stripe launch should default to:
+
+subscription_enforcement_exempt = false
+
+That means:
+
+new signup
+
+must choose a plan
+
+must complete Stripe checkout
+
+must not access the platform until subscription is active
+
+Existing business login behavior
+For already-existing businesses:
+
+they log in normally
+
+they go straight into the app
+
+they are not prompted to subscribe
+
+they retain current features and access
+
+Do not show them the paywall.
+
+New business login behavior
+For newly created businesses after launch:
+
+after sign-up, they are redirected to choose a plan
+
+no free access
+
+no free trial
+
+access is locked until successful Stripe subscription
+
+Super Admin grant
+
+Email to grant:
+gift.delvin@mastercleaning.ca
+
+Required behavior
+This account must be granted:
+
+is_super_admin = true
+
+Important
+Do not create a separate login.
+Do not create a second account.
+Do not remove existing business access for this account.
+
+This existing account should:
+
+keep normal business admin access
+
+gain Super Admin mode switch
+
+be able to switch between Business Admin and Super Admin
+
+If this email already belongs to an existing production business admin account:
+
+update that existing account only
+
+do not duplicate it
+
+do not break existing company linkage
+
+Recommended account update
+For the existing user with email:
+gift.delvin@mastercleaning.ca
+
+Set:
+
+is_super_admin = true
+
+If needed also ensure:
+
+account remains active
+
+existing business/company access remains intact
+
+no subscription prompt blocks this user if their business is grandfathered or internal-exempt
+
+Important safety rule
+Do not accidentally convert the account into only a platform account.
+It must still retain its business admin role and company association if already present.
+
+Optional internal bypass
+If needed for this specific account/business, also allow:
+
+internal_bypass = true
+or
+
+subscription_enforcement_exempt = true
+
+Only if necessary for platform-owner access.
+
+Recommended rollout order
+
+Phase 1
+Before enabling Stripe enforcement:
+
+add subscription_enforcement_exempt field
+
+mark all current production businesses as true
+
+verify they can still log in normally
+
+set gift.delvin@mastercleaning.ca as is_super_admin = true
+
+Phase 2
+Deploy Stripe subscription gating logic
+
+new businesses default to subscription_enforcement_exempt = false
+
+existing businesses remain exempt
+
+Phase 3
+Verify production behavior
+
+existing businesses log in with no paywall
+
+new signups are forced into subscription selection
+
+super admin account can switch into Super Admin mode
+
+Backend enforcement rules
+When checking platform access after Stripe deploy, use logic like:
+
+Access allowed if:
+
+business is grandfathered/exempt
+or
+
+business has active valid subscription
+or
+
+account has approved internal bypass if intended
+
+Access blocked only if:
+
+business is not exempt
+and
+
+business has no active valid subscription
+and
+
+not internally bypassed
+
+This is the key safe condition.
+
+Do not block current businesses.
+
+What not to do
+Do not:
+
+mass-assign current businesses to starter/growth/pro plans unless you are sure
+
+force current businesses to choose a plan now
+
+lock current businesses out of payroll, attendance, schedules, timesheets, requests, or work log
+
+delete anything
+
+reset login sessions
+
+modify employee data
+
+modify attendance data
+
+modify schedules
+
+touch clock-in/out
+
+Acceptance criteria
+
+Existing production businesses
+
+can still log in normally
+
+are not prompted to subscribe
+
+keep full access
+
+employees continue using the app normally
+
+no disruption to current operations
+
+New businesses
+
+must subscribe before accessing the platform
+
+monthly/yearly plan selection appears
+
+Stripe checkout works
+
+no free trial
+
+Super Admin
+
+gift.delvin@mastercleaning.ca can log in with the existing account
+
+sees switch into Super Admin mode
+
+can still switch back to Business Admin mode
+
+does not lose current business access
+
+Direct instruction for agent
+When activating Stripe subscription enforcement, do not apply it to any business that already exists in production. Add a grandfathered/exempt business flag and mark all current production businesses as exempt before launch so they keep full access with no paywall or plan limits. Only new businesses created after the launch should be required to subscribe before accessing the platform. Also update the existing production account gift.delvin@mastercleaning.ca to is_super_admin = true so it can switch between Business Admin and Super Admin mode using the same login. Do not create a separate login, do not duplicate the account, and do not break any current production business behavior.
+
+Strong reminder
+Do exactly this only.
+Protect current production businesses first.
+Then enforce Stripe only for future signups.
