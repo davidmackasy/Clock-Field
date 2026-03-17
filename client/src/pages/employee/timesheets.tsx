@@ -148,16 +148,26 @@ export default function EmployeeTimesheets() {
   const isPeriodOpen = periodEnd >= todayStr;
 
   const { data: currentPeriodTs, isLoading: currentLoading, refetch: refetchCurrent } = useQuery<any>({
-    queryKey: ["/api/timesheets/current"],
+    queryKey: ["/api/timesheets/current", user?.id],
+    queryFn: async () => {
+      const res = await fetch("/api/timesheets/current", { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    },
     staleTime: 0,
     refetchOnWindowFocus: true,
-    enabled: !!company && isCurrentPeriod,
+    enabled: !!user?.id && !!company && isCurrentPeriod,
   });
 
   const { data: allTimesheets, isLoading: listLoading } = useQuery<any[]>({
-    queryKey: ["/api/timesheets"],
+    queryKey: ["/api/timesheets", user?.id],
+    queryFn: async () => {
+      const res = await fetch("/api/timesheets", { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    },
     staleTime: 60 * 1000,
-    enabled: !!company && !isCurrentPeriod,
+    enabled: !!user?.id && !!company && !isCurrentPeriod,
   });
 
   const pastTs = !isCurrentPeriod ? allTimesheets?.find(t => t.payPeriodStart === periodStart) : undefined;

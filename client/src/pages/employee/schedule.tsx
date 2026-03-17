@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/lib/auth";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +9,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar, Clock, MapPin, ChevronRight } from "lucide-react";
 
 export default function EmployeeSchedule() {
-  const { data: shifts, isLoading } = useQuery<any[]>({ queryKey: ["/api/shifts"] });
+  const { user } = useAuth();
+  const { data: shifts, isLoading } = useQuery<any[]>({
+    queryKey: ["/api/shifts", user?.id],
+    queryFn: async () => {
+      const res = await fetch("/api/shifts", { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    },
+    enabled: !!user?.id,
+  });
 
   const today = new Date().toISOString().split("T")[0];
   const todayShifts = (shifts || []).filter(s => s.shiftDate === today);

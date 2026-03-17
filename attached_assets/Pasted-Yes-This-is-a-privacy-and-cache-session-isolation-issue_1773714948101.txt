@@ -1,0 +1,272 @@
+Yes. This is a privacy and cache/session isolation issue, and it must be fixed at the source.
+
+What you described means the employee pages are sometimes rendering stale data from a previous user, previous query, or shared cache before the correct employee-specific data finishes loading. That is a serious privacy bug.
+
+The fact that it disappears after refresh strongly suggests:
+
+* cached frontend query data is leaking between sessions
+* employee-specific API responses are being reused incorrectly
+* some pages render old state before the logged-in employee context is fully resolved
+* request/schedule/hours queries are not scoped tightly enough by current employee id at all times
+
+Use this exact dev note.
+
+DEV NOTE
+
+Task
+Fix employee privacy leakage so an employee only ever sees their own schedules, hours, requests, and related data, even briefly, without needing a refresh.
+
+Critical instruction
+Do not touch anything else that is already working.
+Do not modify:
+
+* clock-in flow
+* clock-out flow
+* attendance recording
+* payroll calculations
+* schedule creation logic
+* request creation logic
+* work log logic
+* auth login mechanics unless needed for safe cache/session clearing
+* any existing production data
+* any unrelated UI or business logic
+
+This is a targeted privacy and data-isolation fix only.
+
+Main goal
+When an employee logs in, they must only see their own data.
+They must never briefly see:
+
+* another employee’s schedules
+* another employee’s hours
+* another employee’s requests
+* client conversations not meant for them
+* stale data from a previous session
+
+This must be fixed fully, not cosmetically.
+
+Problem
+Right now, on employee pages like:
+
+* Hours
+* Schedule
+* Requests / chats
+
+the wrong data sometimes appears temporarily, and then disappears after refresh.
+
+That means the app is likely showing cached or stale query data from another session or another employee before the correct employee-specific fetch completes.
+
+That is a privacy bug and must be treated as high priority.
+
+Most likely root causes to inspect first
+
+1. Frontend query cache leakage
+   If the app uses query caching, it may be reusing data under generic keys like:
+
+* ["hours"]
+* ["schedule"]
+* ["requests"]
+
+instead of employee-specific keys like:
+
+* ["employee-hours", employeeId]
+* ["employee-schedule", employeeId]
+* ["employee-requests", employeeId]
+
+If query keys are not user-specific, one employee can briefly see another employee’s cached data.
+
+2. Session change not clearing cache
+   When logging out and logging into another employee account, the app may not be clearing previous query cache/store state.
+
+That causes old data to render until a refetch finishes.
+
+3. API responses not tightly scoped
+   Some employee endpoints may return broader company data and rely on frontend filtering.
+   That is unsafe.
+
+Employee APIs must return only the logged-in employee’s data from the backend.
+
+4. UI renders old data before auth context resolves
+   Pages may mount and render from stale state before the current employee identity is fully known.
+
+5. Local state persistence leakage
+   If some pages store last-loaded data in component/global state or local storage, it may survive login transitions and show the wrong records until refresh.
+
+Required final behavior
+
+1. Employee pages must be hard-scoped to current employee
+   At all times, employee pages must only render data for:
+   the currently authenticated employee
+
+This applies to:
+
+* Hours
+* Schedule
+* Requests
+* Timesheets
+* any employee-only lists
+
+2. No stale previous-user flash
+   When switching sessions or loading employee pages:
+
+* do not render previous employee’s cached data
+* show loading/skeleton if needed until current employee data is resolved
+
+Better to show a loading state than the wrong person’s data.
+
+3. Backend must enforce privacy
+   Employee-facing endpoints must not return broader company records for frontend filtering.
+
+They must enforce:
+
+* current company
+* current employee id
+* current role permissions
+
+Employee should only receive their own records from the server.
+
+Required fix plan
+
+A. Fix query keys
+All employee-facing queries must include employee identity in the cache key.
+
+Examples:
+
+* employee hours query key must include employee id
+* employee schedule query key must include employee id
+* employee requests query key must include employee id
+* employee timesheet query key must include employee id and selected period
+
+Do not use generic keys shared across users.
+
+B. Clear query/store cache on logout and login transition
+When session changes:
+
+* clear employee-specific cached data
+* invalidate all employee query keys
+* reset in-memory page state
+
+If using a query client, clear or invalidate on auth/session change.
+
+Important
+This is likely one of the main fixes.
+
+C. Backend employee endpoints must self-scope
+Review all employee-side endpoints for:
+
+* schedule
+* hours
+* requests
+* timesheets
+
+Make sure each endpoint derives employee identity from the logged-in session, not from a loose frontend parameter alone.
+
+Best rule
+Employee endpoints should use the authenticated session employee id as source of truth.
+
+Do not trust the frontend to filter correctly.
+
+D. Do not render old data while refetching
+Employee pages should not show previous cached records while new records are loading.
+
+Use one of these safe approaches:
+
+* clear data when employee id changes
+* render skeleton/loading until current employee query returns
+* disable keep-previous-data behavior for employee-sensitive pages
+
+Privacy is more important than avoiding a loading state.
+
+E. Review local storage / persisted state
+If schedule, requests, or hours are being persisted locally:
+
+* remove cross-user persistence
+* namespace by employee id if persistence is truly needed
+* clear on logout/login transition
+
+F. Requests/chat visibility
+Employee requests page must only show:
+
+* requests created by that employee
+* admin replies visible to that employee
+* threads explicitly owned by that employee
+
+It must never briefly show client or other employee request threads.
+
+G. Schedule visibility
+Employee schedule page must only show:
+
+* shifts assigned to that employee
+
+No shared schedule payloads.
+No company-wide schedule list filtered on frontend only.
+
+H. Hours visibility
+Employee hours page must only show:
+
+* attendance entries belonging to that employee
+
+No shared attendance result set.
+
+Implementation priority order
+
+1. Audit employee frontend query keys
+2. Audit auth/session change cache clearing
+3. Audit employee API scoping
+4. Remove any keep-previous-data behavior for employee-sensitive pages
+5. Add safe loading state until correct employee-specific response arrives
+6. Retest login/logout across multiple employee accounts
+
+Recommended safe rendering rule
+For employee-sensitive pages:
+If authenticated employee id is not resolved yet, or if a query is refetching after identity change:
+
+* show loading placeholder
+* do not render previous data
+
+This is the safest privacy behavior.
+
+Acceptance criteria
+
+Hours
+
+* employee logs in and only sees their own hours
+* no other employee hours ever flash on screen
+* refresh not required to correct it
+
+Schedule
+
+* employee logs in and only sees their own schedule
+* no other employee shifts ever flash on screen
+* refresh not required to correct it
+
+Requests
+
+* employee logs in and only sees their own request threads and allowed replies
+* no client or other employee requests ever flash on screen
+* refresh not required to correct it
+
+Session switching
+
+* log out employee A
+* log in employee B
+* employee B never sees employee A’s cached data even briefly
+
+No regressions
+
+* clock-in/out still works
+* attendance still records
+* payroll still works
+* schedule assignment still works
+* requests still work
+* no unrelated production behavior changes
+
+Direct instruction for agent
+Fix only the employee privacy leakage issue where stale schedules, hours, and request data from other users briefly appears until refresh. Audit and correct employee-side query keys, cache invalidation on session change, employee API scoping, and any stale state reuse so employee pages only ever render data for the currently authenticated employee. For sensitive employee pages, prefer showing a loading state over rendering previous cached data. Do not modify unrelated working systems.
+
+Strong reminder
+Do exactly this fix only.
+Do not expand scope.
+Do not touch working attendance or clocking logic.
+Do not change unrelated features.
+Fix only the cross-user stale data/privacy leakage so employee accounts never show another person’s data, even for a second.

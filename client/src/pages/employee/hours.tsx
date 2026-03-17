@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,7 +37,16 @@ const flagColors: Record<string, string> = {
 const formatDuration = (min: number) => `${Math.floor(min / 60)}h ${min % 60}m`;
 
 export default function EmployeeHours() {
-  const { data: entries, isLoading } = useQuery<any[]>({ queryKey: ["/api/time-entries"] });
+  const { user } = useAuth();
+  const { data: entries, isLoading } = useQuery<any[]>({
+    queryKey: ["/api/time-entries", user?.id],
+    queryFn: async () => {
+      const res = await fetch("/api/time-entries", { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    },
+    enabled: !!user?.id,
+  });
 
   const [preset, setPreset] = useState<FilterPreset>("last_2_weeks");
   const [customFrom, setCustomFrom] = useState<string>(() => format(subDays(new Date(), 13), "yyyy-MM-dd"));

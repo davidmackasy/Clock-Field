@@ -88,7 +88,15 @@ export default function EmployeeRequests() {
   const [replyText, setReplyText] = useState("");
   const [replyPhotos, setReplyPhotos] = useState<PhotoItem[]>([]);
 
-  const { data: requests, isLoading } = useQuery<any[]>({ queryKey: ["/api/client-requests"] });
+  const { data: requests, isLoading } = useQuery<any[]>({
+    queryKey: ["/api/client-requests", user?.id],
+    queryFn: async () => {
+      const res = await fetch("/api/client-requests", { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    },
+    enabled: !!user?.id,
+  });
   const { data: messages, isLoading: msgsLoading, isError: msgsError } = useQuery<any[]>({
     queryKey: ["/api/client-requests", detailReq?.id, "messages"],
     enabled: !!detailReq?.id,

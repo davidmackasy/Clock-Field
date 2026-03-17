@@ -107,9 +107,33 @@ export default function EmployeeWorkLog() {
     section: "", subArea: "", notes: "", beforePhotos: [], afterPhotos: [],
   });
 
-  const { data: activeEntry } = useQuery<any>({ queryKey: ["/api/time-entries/active"] });
-  const { data: locations } = useQuery<any[]>({ queryKey: ["/api/employee/locations"], enabled: startOpen });
-  const { data: submissions, isLoading: subsLoading } = useQuery<any[]>({ queryKey: ["/api/work-submissions"] });
+  const { data: activeEntry } = useQuery<any>({
+    queryKey: ["/api/time-entries/active", user?.id],
+    queryFn: async () => {
+      const res = await fetch("/api/time-entries/active", { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    },
+    enabled: !!user?.id,
+  });
+  const { data: locations } = useQuery<any[]>({
+    queryKey: ["/api/employee/locations", user?.id],
+    queryFn: async () => {
+      const res = await fetch("/api/employee/locations", { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    },
+    enabled: !!user?.id && startOpen,
+  });
+  const { data: submissions, isLoading: subsLoading } = useQuery<any[]>({
+    queryKey: ["/api/work-submissions", user?.id],
+    queryFn: async () => {
+      const res = await fetch("/api/work-submissions", { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    },
+    enabled: !!user?.id,
+  });
   const { data: subDetail, isLoading: detailLoading } = useQuery<any>({
     queryKey: ["/api/work-submissions", activeSub?.id],
     enabled: !!activeSub?.id,
