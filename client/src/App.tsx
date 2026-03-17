@@ -7,6 +7,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { AdminSidebar } from "@/components/admin-sidebar";
 import { AdminMobileNav } from "@/components/admin-mobile-nav";
+import { SuperAdminSidebar } from "@/components/super-admin-sidebar";
 import { MobileNav, employeeNavItems, employeeCenterAction, clientNavItems } from "@/components/mobile-nav";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -23,6 +24,10 @@ import AdminSettings from "@/pages/admin/settings";
 import AdminAdmins from "@/pages/admin/admins";
 import AdminWorkLog from "@/pages/admin/work-log";
 import AdminTimesheets from "@/pages/admin/timesheets";
+import AdminSubscription from "@/pages/admin/subscription";
+import AdminPlatformMessages from "@/pages/admin/platform-messages";
+import SuperAdminDashboard from "@/pages/super-admin/dashboard";
+import SuperAdminMessages from "@/pages/super-admin/messages";
 import EmployeeHome from "@/pages/employee/home";
 import EmployeeSchedule from "@/pages/employee/schedule";
 import EmployeeHours from "@/pages/employee/hours";
@@ -59,11 +64,9 @@ function AdminLayout() {
       <div className="flex h-screen w-full">
         <AdminSidebar />
         <div className="flex flex-col flex-1 min-w-0">
-          {/* Sidebar trigger visible only on md screens where sidebar may collapse */}
           <header className="hidden md:flex lg:hidden items-center p-2 border-b">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
           </header>
-          {/* pt-14 pb-16 on mobile for top header + bottom nav; reset on md+ */}
           <main className="flex-1 overflow-y-auto pt-14 pb-16 md:pt-0 md:pb-0">
             <Switch>
               <Route path="/admin" component={AdminDashboard} />
@@ -77,13 +80,41 @@ function AdminLayout() {
               <Route path="/admin/work-log" component={AdminWorkLog} />
               <Route path="/admin/timesheets" component={AdminTimesheets} />
               <Route path="/admin/settings" component={AdminSettings} />
+              <Route path="/admin/subscription" component={AdminSubscription} />
+              <Route path="/admin/platform-messages" component={AdminPlatformMessages} />
               <Route component={NotFound} />
             </Switch>
           </main>
         </div>
       </div>
-      {/* Mobile-only navigation shell (hidden on md+) */}
       <AdminMobileNav />
+    </SidebarProvider>
+  );
+}
+
+function SuperAdminLayout() {
+  const style = {
+    "--sidebar-width": "16rem",
+    "--sidebar-width-icon": "3rem",
+  };
+
+  return (
+    <SidebarProvider style={style as React.CSSProperties}>
+      <div className="flex h-screen w-full">
+        <SuperAdminSidebar />
+        <div className="flex flex-col flex-1 min-w-0">
+          <header className="hidden md:flex lg:hidden items-center p-2 border-b">
+            <SidebarTrigger data-testid="button-sidebar-toggle-sa" />
+          </header>
+          <main className="flex-1 overflow-y-auto">
+            <Switch>
+              <Route path="/super-admin" component={SuperAdminDashboard} />
+              <Route path="/super-admin/messages" component={SuperAdminMessages} />
+              <Route component={NotFound} />
+            </Switch>
+          </main>
+        </div>
+      </div>
     </SidebarProvider>
   );
 }
@@ -125,10 +156,9 @@ function ClientLayout() {
 }
 
 function AppRouter() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isSuperAdmin } = useAuth();
   const [location] = useLocation();
 
-  // Public routes — no auth required
   if (location.startsWith("/public/work-report/")) {
     return (
       <Switch>
@@ -152,6 +182,11 @@ function AppRouter() {
     if (user.role === "admin") return <Redirect to="/admin" />;
     if (user.role === "client") return <Redirect to="/client" />;
     return <Redirect to="/employee" />;
+  }
+
+  if (location.startsWith("/super-admin")) {
+    if (user.role === "admin" && isSuperAdmin) return <SuperAdminLayout />;
+    return <Redirect to="/admin" />;
   }
 
   if (location.startsWith("/admin") && user.role === "admin") return <AdminLayout />;

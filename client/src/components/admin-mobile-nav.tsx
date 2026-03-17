@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/lib/auth";
+import { useQuery } from "@tanstack/react-query";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -10,6 +12,7 @@ import {
   LayoutDashboard, Users, Calendar, ClipboardList,
   DollarSign, Building2, MessageSquare, Settings,
   LogOut, MoreHorizontal, Clock, ChevronRight, ShieldCheck, BookOpen, ScrollText,
+  CreditCard, Bell, ShieldAlert,
 } from "lucide-react";
 
 const primaryTabs = [
@@ -27,6 +30,8 @@ const moreItems = [
   { label: "Requests", href: "/admin/requests", icon: MessageSquare },
   { label: "Work Log", href: "/admin/work-log", icon: BookOpen },
   { label: "Settings", href: "/admin/settings", icon: Settings },
+  { label: "Subscription", href: "/admin/subscription", icon: CreditCard },
+  { label: "Messages", href: "/admin/platform-messages", icon: Bell },
 ];
 
 const pageTitles: Record<string, string> = {
@@ -41,13 +46,22 @@ const pageTitles: Record<string, string> = {
   "/admin/requests": "Requests",
   "/admin/work-log": "Work Log",
   "/admin/settings": "Settings",
+  "/admin/subscription": "Subscription",
+  "/admin/platform-messages": "Messages",
 };
 
 export function AdminMobileNav() {
   const [location, navigate] = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, isSuperAdmin } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+
+  const { data: messages = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/platform-messages"],
+    enabled: !!user,
+    staleTime: 60_000,
+  });
+  const unreadMessages = (messages as any[]).filter(m => !m.isRead).length;
 
   const initials = user ? `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}`.toUpperCase() : "A";
   const pageTitle = pageTitles[location] ?? "ClockField";
@@ -132,7 +146,12 @@ export function AdminMobileNav() {
             )}
             data-testid="mobile-nav-more"
           >
-            <MoreHorizontal className={cn("w-5 h-5", isMoreActive && "stroke-[2.2]")} />
+            <div className="relative">
+              <MoreHorizontal className={cn("w-5 h-5", isMoreActive && "stroke-[2.2]")} />
+              {unreadMessages > 0 && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-primary rounded-full" />
+              )}
+            </div>
             <span className="text-[10px] font-medium leading-tight">More</span>
           </button>
         </div>
@@ -164,6 +183,19 @@ export function AdminMobileNav() {
 
             <Separator />
 
+            {isSuperAdmin && (
+              <Link href="/super-admin">
+                <button
+                  className="w-full flex items-center gap-3 px-3 py-3 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors"
+                  onClick={() => setProfileOpen(false)}
+                  data-testid="button-mobile-super-admin"
+                >
+                  <ShieldAlert className="w-4 h-4" />
+                  <span className="font-medium text-sm">Switch to Super Admin</span>
+                </button>
+              </Link>
+            )}
+
             <Button
               variant="outline"
               className="w-full justify-start gap-2 text-destructive border-destructive/30 hover:bg-destructive/5"
@@ -189,6 +221,7 @@ export function AdminMobileNav() {
           <div className="space-y-1">
             {moreItems.map((item) => {
               const isActive = location === item.href || location.startsWith(item.href + "/");
+              const isMessages = item.href === "/admin/platform-messages";
               return (
                 <button
                   key={item.href}
@@ -202,8 +235,18 @@ export function AdminMobileNav() {
                   data-testid={`mobile-more-${item.label.toLowerCase()}`}
                 >
                   <div className="flex items-center gap-3">
-                    <item.icon className="w-5 h-5" />
+                    <div className="relative">
+                      <item.icon className="w-5 h-5" />
+                      {isMessages && unreadMessages > 0 && (
+                        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-primary rounded-full" />
+                      )}
+                    </div>
                     <span className="font-medium text-sm">{item.label}</span>
+                    {isMessages && unreadMessages > 0 && (
+                      <Badge className="bg-primary text-primary-foreground text-[10px] h-4 px-1 rounded-full">
+                        {unreadMessages}
+                      </Badge>
+                    )}
                   </div>
                   <ChevronRight className="w-4 h-4 text-muted-foreground" />
                 </button>

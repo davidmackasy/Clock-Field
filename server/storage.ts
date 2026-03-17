@@ -1,10 +1,11 @@
 import { db } from "./db";
-import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, or, isNull } from "drizzle-orm";
 import {
   companies, users, clients, locations, recurringSchedules, shifts, timeEntries, clientRequests, payrollDeductions,
   requestMessages, requestAttachments,
   timesheets,
   workSubmissions, workSubmissionItems, workSubmissionPhotos,
+  platformMessages,
   type Company, type InsertCompany,
   type User, type InsertUser,
   type Client, type InsertClient,
@@ -20,6 +21,7 @@ import {
   type WorkSubmission, type InsertWorkSubmission,
   type WorkSubmissionItem, type InsertWorkSubmissionItem,
   type WorkSubmissionPhoto, type InsertWorkSubmissionPhoto,
+  type PlatformMessage, type InsertPlatformMessage,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -118,6 +120,26 @@ export interface IStorage {
   getWorkSubmissionPhotosByItem(submissionItemId: string): Promise<WorkSubmissionPhoto[]>;
   getWorkSubmissionPhotosByItemIds(itemIds: string[]): Promise<WorkSubmissionPhoto[]>;
   deleteWorkSubmissionPhoto(id: string): Promise<void>;
+
+  // Super Admin
+  getAllCompanies(): Promise<Company[]>;
+  getPlatformStats(): Promise<{
+    totalBusinesses: number;
+    activeBusinesses: number;
+    suspendedBusinesses: number;
+    pendingBusinesses: number;
+    mrr: number;
+    arr: number;
+  }>;
+
+  // Platform Messages
+  createPlatformMessage(data: InsertPlatformMessage): Promise<PlatformMessage>;
+  getPlatformMessagesByCompany(companyId: string): Promise<PlatformMessage[]>;
+  getBroadcastMessages(): Promise<PlatformMessage[]>;
+  getMessagesForCompany(companyId: string): Promise<PlatformMessage[]>;
+  markPlatformMessageRead(id: string): Promise<void>;
+  getAllPlatformMessages(): Promise<PlatformMessage[]>;
+  getPlatformMessage(id: string): Promise<PlatformMessage | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -498,6 +520,92 @@ export class DatabaseStorage implements IStorage {
   }
   async deleteWorkSubmissionPhoto(id: string): Promise<void> {
     await db.delete(workSubmissionPhotos).where(eq(workSubmissionPhotos.id, id));
+  }
+
+  // ── Super Admin ──────────────────────────────────────────────────────────────
+  async getAllCompanies(): Promise<Company[]> {
+    return db.select().from(companies).orderBy(companies.name);
+  }
+
+  async getPlatformStats(): Promise<{
+    totalBusinesses: number;
+    activeBusinesses: number;
+    suspendedBusinesses: number;
+    pendingBusinesses: number;
+    mrr: number;
+    arr: number;
+  }> {
+    const allCompanies = await db.select().from(companies);
+    const totalBusinesses = allCompanies.length;
+    const activeBusinesses = allCompanies.filter(c => c.accountStatus === "active").length;
+    const suspendedBusinesses = allCompanies.filter(c => c.accountStatus === "suspended").length;
+    const pendingBusinesses = allCompanies.filter(c => c.accountStatus === "pending_activation").length;
+
+    const planPrices: Record<string, number> = {
+      starter: 29,
+      growth: 79,
+      pro: 129,
+      legacy: 0,
+    };
+
+    let mrr = 0;
+    for (const c of allCompanies) {
+      if (c.subscriptionStatus === "active" && c.planCode !== "legacy") {
+        const monthly = planPrices[c.planCode] ?? 0;
+        mrr += c.billingCycle === "yearly" ? Math.round(monthly * 12 * 0.9) / 12 : monthly;
+      }
+    }
+
+    return {
+      totalBusinesses,
+      activeBusinesses,
+      suspendedBusinesses,
+      pendingBusinesses,
+      mrr: Math.round(mrr),
+      arr: Math.round(mrr * 12),
+    };
+  }
+
+  // ── Platform Messages ────────────────────────────────────────────────────────
+  async createPlatformMessage(data: InsertPlatformMessage): Promise<PlatformMessage> {
+    const [msg] = await db.insert(platformMessages).values(data).returning();
+    return msg;
+  }
+
+  async getPlatformMessagesByCompany(companyId: string): Promise<PlatformMessage[]> {
+    return db.select().from(platformMessages)
+      .where(eq(platformMessages.companyId, companyId))
+      .orderBy(desc(platformMessages.createdAt));
+  }
+
+  async getBroadcastMessages(): Promise<PlatformMessage[]> {
+    return db.select().from(platformMessages)
+      .where(eq(platformMessages.isBroadcast, true))
+      .orderBy(desc(platformMessages.createdAt));
+  }
+
+  async getMessagesForCompany(companyId: string): Promise<PlatformMessage[]> {
+    return db.select().from(platformMessages)
+      .where(
+        or(
+          eq(platformMessages.companyId, companyId),
+          eq(platformMessages.isBroadcast, true)
+        )
+      )
+      .orderBy(desc(platformMessages.createdAt));
+  }
+
+  async markPlatformMessageRead(id: string): Promise<void> {
+    await db.update(platformMessages).set({ isRead: true }).where(eq(platformMessages.id, id));
+  }
+
+  async getAllPlatformMessages(): Promise<PlatformMessage[]> {
+    return db.select().from(platformMessages).orderBy(desc(platformMessages.createdAt));
+  }
+
+  async getPlatformMessage(id: string): Promise<PlatformMessage | undefined> {
+    const [msg] = await db.select().from(platformMessages).where(eq(platformMessages.id, id));
+    return msg;
   }
 }
 

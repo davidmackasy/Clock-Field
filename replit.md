@@ -38,6 +38,21 @@ A workforce operations platform for service businesses with 3 user roles: Admin,
 4. Employee logs in via Employee tab → forced to set a new password
 5. Employee reaches their dashboard
 
+## Super Admin / SaaS Layer (additive)
+- **is_super_admin** boolean on users table — grants access to Platform Admin mode
+- **Subscription columns on companies**: plan_code (starter/growth/pro/legacy), billing_cycle, subscription_status, account_status, stripe_customer_id, stripe_subscription_id, stripe_price_id, current_period_start/end, cancel_at_period_end, activated_at, suspended_at, suspended_reason
+- **platform_messages table**: super admin → business messaging, broadcast support
+- **server/plans.ts**: 4 plan configs (legacy/starter/growth/pro) with maxEmployees, maxClients, feature flags
+- **Super Admin routes**: /api/super-admin/stats, /api/super-admin/businesses, /api/super-admin/businesses/:id (PATCH, POST message), /api/super-admin/messages (GET, broadcast)
+- **Admin routes**: /api/admin/plan (plan+usage), /api/admin/platform-messages (read/mark-read)
+- **Billing routes**: /api/billing/checkout (Stripe checkout), /api/billing/portal (customer portal), /api/billing/webhook (event sync)
+- **Plan enforcement**: POST /api/employees and POST /api/clients return 403 PLAN_LIMIT_* when over limit
+- **Super Admin UI**: /super-admin route + SuperAdminLayout with purple sidebar, business table, detail modal, plan change, messaging
+- **Admin Subscription page**: /admin/subscription — current plan, usage bars, feature access grid, plan cards with Stripe checkout
+- **Admin Platform Messages page**: /admin/platform-messages — inbox with mark-read
+- **Mode switcher**: super admins see "Platform" section in sidebar + profile sheet shortcut on mobile
+- **Stripe**: Dynamic import (`await import("stripe")`), configured via STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET + STRIPE_PRICE_* env vars
+
 ## Key Features
 - Role-based authentication with secure session management
 - Employee CRUD management with hourly rate tracking

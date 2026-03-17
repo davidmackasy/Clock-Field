@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
@@ -10,6 +10,14 @@ import path from "path";
 import fs from "fs";
 import { isNotNull, eq } from "drizzle-orm";
 import { clientRequests } from "@shared/schema";
+import { getPlan } from "./plans";
+
+function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
+  const user = req.user as any;
+  if (!user) return res.status(401).json({ message: "Unauthorized" });
+  if (user.role !== "admin" || !user.isSuperAdmin) return res.status(403).json({ message: "Super admin access required" });
+  next();
+}
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -283,6 +291,21 @@ export async function registerRoutes(
     try {
       const user = req.user as any;
       const { firstName, lastName, email, phone, hourlyRate, overtimeRate, position } = req.body;
+
+      // Plan limit enforcement
+      const company = await storage.getCompany(user.companyId);
+      if (company) {
+        const plan = getPlan(company.planCode);
+        const existingEmployees = await storage.getEmployeesByCompany(user.companyId);
+        if (existingEmployees.length >= plan.maxEmployees) {
+          return res.status(403).json({
+            message: `Your ${plan.name} plan allows up to ${plan.maxEmployees} employee${plan.maxEmployees === 1 ? "" : "s"}. Upgrade your plan to add more.`,
+            code: "PLAN_LIMIT_EMPLOYEES",
+            limit: plan.maxEmployees,
+            current: existingEmployees.length,
+          });
+        }
+      }
 
       const employee = await storage.createUser({
         companyId: user.companyId,
@@ -711,6 +734,22 @@ export async function registerRoutes(
       const user = req.user as any;
       const { name, contactName, contactEmail, contactPhone } = req.body;
       if (!name?.trim()) return res.status(400).json({ message: "Company name is required" });
+
+      // Plan limit enforcement
+      const company = await storage.getCompany(user.companyId);
+      if (company) {
+        const plan = getPlan(company.planCode);
+        const existingClients = await storage.getClientsByCompany(user.companyId);
+        if (existingClients.length >= plan.maxClients) {
+          return res.status(403).json({
+            message: `Your ${plan.name} plan allows up to ${plan.maxClients} client${plan.maxClients === 1 ? "" : "s"}. Upgrade your plan to add more.`,
+            code: "PLAN_LIMIT_CLIENTS",
+            limit: plan.maxClients,
+            current: existingClients.length,
+          });
+        }
+      }
+
       const client = await storage.createClient({
         companyId: user.companyId,
         name: name.trim(),
@@ -1930,6 +1969,347 @@ export async function registerRoutes(
       res.set("Cache-Control", "public, max-age=86400");
       res.send(buffer);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ── Admin Plan / Subscription routes ──────────────────────────────────────
+  app.get("/api/admin/plan", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const company = await storage.getCompany(user.companyId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      const plan = getPlan(company.planCode);
+      const [employees, clientsList] = await Promise.all([
+        storage.getEmployeesByCompany(user.companyId),
+        storage.getClientsByCompany(user.companyId),
+      ]);
+      res.json({
+        plan,
+        company: {
+          planCode: company.planCode,
+          billingCycle: company.billingCycle,
+          subscriptionStatus: company.subscriptionStatus,
+          accountStatus: company.accountStatus,
+          currentPeriodEnd: company.currentPeriodEnd,
+          cancelAtPeriodEnd: company.cancelAtPeriodEnd,
+          stripeCustomerId: company.stripeCustomerId,
+        },
+        usage: {
+          employees: employees.length,
+          clients: clientsList.length,
+        },
+      });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/admin/platform-messages", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const messages = await storage.getMessagesForCompany(user.companyId);
+      res.json(messages);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/admin/platform-messages/:id/read", requireRole("admin"), async (req, res) => {
+    try {
+      await storage.markPlatformMessageRead(req.params.id);
+      res.json({ success: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ── Super Admin routes ─────────────────────────────────────────────────────
+  app.get("/api/super-admin/stats", requireSuperAdmin, async (req, res) => {
+    try {
+      const stats = await storage.getPlatformStats();
+      res.json(stats);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/super-admin/businesses", requireSuperAdmin, async (req, res) => {
+    try {
+      const allCompanies = await storage.getAllCompanies();
+      const results = await Promise.all(allCompanies.map(async (company) => {
+        const [employees, clientsList, admins] = await Promise.all([
+          storage.getEmployeesByCompany(company.id),
+          storage.getClientsByCompany(company.id),
+          storage.getAdminsByCompany(company.id),
+        ]);
+        const plan = getPlan(company.planCode);
+        const primaryAdmin = admins[0];
+        return {
+          ...company,
+          planName: plan.name,
+          employeeCount: employees.length,
+          clientCount: clientsList.length,
+          adminName: primaryAdmin ? `${primaryAdmin.firstName} ${primaryAdmin.lastName}` : "—",
+          adminEmail: primaryAdmin?.email ?? "—",
+        };
+      }));
+      res.json(results);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/super-admin/businesses/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const company = await storage.getCompany(req.params.id);
+      if (!company) return res.status(404).json({ message: "Not found" });
+      const [employees, clientsList, admins] = await Promise.all([
+        storage.getEmployeesByCompany(company.id),
+        storage.getClientsByCompany(company.id),
+        storage.getAdminsByCompany(company.id),
+      ]);
+      const plan = getPlan(company.planCode);
+      res.json({
+        ...company,
+        planName: plan.name,
+        planConfig: plan,
+        employees: employees.map(({ password: _, tempPin: __, ...e }) => e),
+        clients: clientsList,
+        admins: admins.map(({ password: _, tempPin: __, ...a }) => a),
+        usage: {
+          employees: employees.length,
+          clients: clientsList.length,
+          maxEmployees: plan.maxEmployees,
+          maxClients: plan.maxClients,
+        },
+      });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/super-admin/businesses/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const { planCode, billingCycle, accountStatus, subscriptionStatus, suspendedReason } = req.body;
+      const updates: Record<string, any> = {};
+      if (planCode !== undefined) updates.planCode = planCode;
+      if (billingCycle !== undefined) updates.billingCycle = billingCycle;
+      if (accountStatus !== undefined) {
+        updates.accountStatus = accountStatus;
+        if (accountStatus === "suspended") updates.suspendedAt = new Date().toISOString();
+        if (accountStatus === "active") { updates.activatedAt = new Date().toISOString(); updates.suspendedAt = null; }
+      }
+      if (subscriptionStatus !== undefined) updates.subscriptionStatus = subscriptionStatus;
+      if (suspendedReason !== undefined) updates.suspendedReason = suspendedReason;
+      const updated = await storage.updateCompany(req.params.id, updates);
+      if (!updated) return res.status(404).json({ message: "Not found" });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/super-admin/businesses/:id/message", requireSuperAdmin, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { subject, body, messageType, isBroadcast } = req.body;
+      if (!subject?.trim() || !body?.trim()) return res.status(400).json({ message: "Subject and body are required" });
+      const company = await storage.getCompany(req.params.id);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      const msg = await storage.createPlatformMessage({
+        companyId: isBroadcast ? null : req.params.id,
+        senderUserId: user.id,
+        senderRole: "super_admin",
+        subject: subject.trim(),
+        body: body.trim(),
+        messageType: messageType || "announcement",
+        isRead: false,
+        isBroadcast: isBroadcast ?? false,
+        parentMessageId: null,
+        createdAt: new Date().toISOString(),
+      });
+      res.status(201).json(msg);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/super-admin/messages/broadcast", requireSuperAdmin, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { subject, body, messageType } = req.body;
+      if (!subject?.trim() || !body?.trim()) return res.status(400).json({ message: "Subject and body are required" });
+      const msg = await storage.createPlatformMessage({
+        companyId: null,
+        senderUserId: user.id,
+        senderRole: "super_admin",
+        subject: subject.trim(),
+        body: body.trim(),
+        messageType: messageType || "announcement",
+        isRead: false,
+        isBroadcast: true,
+        parentMessageId: null,
+        createdAt: new Date().toISOString(),
+      });
+      res.status(201).json(msg);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/super-admin/messages", requireSuperAdmin, async (req, res) => {
+    try {
+      const messages = await storage.getAllPlatformMessages();
+      res.json(messages);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Grant/revoke super admin
+  app.patch("/api/super-admin/users/:id/super-admin", requireSuperAdmin, async (req, res) => {
+    try {
+      const { isSuperAdmin } = req.body;
+      const updated = await storage.updateUser(req.params.id, { isSuperAdmin: !!isSuperAdmin });
+      if (!updated) return res.status(404).json({ message: "Not found" });
+      const { password: _, tempPin: __, ...safe } = updated;
+      res.json(safe);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Stripe Checkout (Phase 2 - creates checkout session)
+  app.post("/api/billing/checkout", requireRole("admin"), async (req, res) => {
+    try {
+      const stripeKey = process.env.STRIPE_SECRET_KEY;
+      if (!stripeKey) return res.status(503).json({ message: "Stripe not configured" });
+      const { planCode, billingCycle } = req.body;
+      const plan = getPlan(planCode);
+      if (plan.code === "legacy") return res.status(400).json({ message: "Cannot checkout legacy plan" });
+
+      const Stripe = (await import("stripe")).default;
+      const stripe = new Stripe(stripeKey, { apiVersion: "2025-02-24.acacia" });
+
+      const user = req.user as any;
+      const company = await storage.getCompany(user.companyId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+
+      const priceMap: Record<string, Record<string, string>> = {
+        starter: { monthly: process.env.STRIPE_PRICE_STARTER_MONTHLY || "", yearly: process.env.STRIPE_PRICE_STARTER_YEARLY || "" },
+        growth: { monthly: process.env.STRIPE_PRICE_GROWTH_MONTHLY || "", yearly: process.env.STRIPE_PRICE_GROWTH_YEARLY || "" },
+        pro: { monthly: process.env.STRIPE_PRICE_PRO_MONTHLY || "", yearly: process.env.STRIPE_PRICE_PRO_YEARLY || "" },
+      };
+
+      const priceId = priceMap[planCode]?.[billingCycle];
+      if (!priceId) return res.status(400).json({ message: "Price not configured for this plan/cycle" });
+
+      let customerId = company.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email,
+          name: company.name,
+          metadata: { companyId: company.id },
+        });
+        customerId = customer.id;
+        await storage.updateCompany(company.id, { stripeCustomerId: customerId });
+      }
+
+      const origin = req.headers.origin || `https://${req.headers.host}`;
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        mode: "subscription",
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url: `${origin}/admin/subscription?success=true`,
+        cancel_url: `${origin}/admin/subscription?canceled=true`,
+        metadata: { companyId: company.id, planCode, billingCycle },
+      });
+
+      res.json({ url: session.url });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Stripe Customer Portal
+  app.post("/api/billing/portal", requireRole("admin"), async (req, res) => {
+    try {
+      const stripeKey = process.env.STRIPE_SECRET_KEY;
+      if (!stripeKey) return res.status(503).json({ message: "Stripe not configured" });
+      const user = req.user as any;
+      const company = await storage.getCompany(user.companyId);
+      if (!company?.stripeCustomerId) return res.status(400).json({ message: "No Stripe customer linked" });
+
+      const Stripe = (await import("stripe")).default;
+      const stripe = new Stripe(stripeKey, { apiVersion: "2025-02-24.acacia" });
+      const origin = req.headers.origin || `https://${req.headers.host}`;
+      const portalSession = await stripe.billingPortal.sessions.create({
+        customer: company.stripeCustomerId,
+        return_url: `${origin}/admin/subscription`,
+      });
+      res.json({ url: portalSession.url });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Stripe Webhook
+  app.post("/api/billing/webhook", async (req, res) => {
+    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!stripeKey) return res.status(503).json({ message: "Stripe not configured" });
+
+    try {
+      const Stripe = (await import("stripe")).default;
+      const stripe = new Stripe(stripeKey, { apiVersion: "2025-02-24.acacia" });
+
+      let event;
+      if (webhookSecret) {
+        const sig = req.headers["stripe-signature"] as string;
+        event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+      } else {
+        event = req.body;
+      }
+
+      const data = event.data?.object as any;
+      const companyId = data?.metadata?.companyId;
+
+      switch (event.type) {
+        case "checkout.session.completed": {
+          if (companyId && data.subscription) {
+            const sub = await stripe.subscriptions.retrieve(data.subscription);
+            await storage.updateCompany(companyId, {
+              stripeSubscriptionId: sub.id,
+              stripePriceId: sub.items.data[0]?.price?.id,
+              planCode: data.metadata?.planCode || "starter",
+              billingCycle: data.metadata?.billingCycle || "monthly",
+              subscriptionStatus: sub.status,
+              accountStatus: "active",
+              currentPeriodStart: new Date(sub.current_period_start * 1000).toISOString(),
+              currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString(),
+              cancelAtPeriodEnd: sub.cancel_at_period_end,
+              activatedAt: new Date().toISOString(),
+            });
+          }
+          break;
+        }
+        case "customer.subscription.updated": {
+          const sub = data;
+          const company = (await storage.getAllCompanies()).find(c => c.stripeSubscriptionId === sub.id);
+          if (company) {
+            await storage.updateCompany(company.id, {
+              subscriptionStatus: sub.status,
+              currentPeriodStart: new Date(sub.current_period_start * 1000).toISOString(),
+              currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString(),
+              cancelAtPeriodEnd: sub.cancel_at_period_end,
+            });
+          }
+          break;
+        }
+        case "customer.subscription.deleted": {
+          const sub = data;
+          const company = (await storage.getAllCompanies()).find(c => c.stripeSubscriptionId === sub.id);
+          if (company) {
+            await storage.updateCompany(company.id, {
+              subscriptionStatus: "canceled",
+              cancelAtPeriodEnd: false,
+            });
+          }
+          break;
+        }
+        case "invoice.payment_failed": {
+          const customerId = data.customer;
+          const company = (await storage.getAllCompanies()).find(c => c.stripeCustomerId === customerId);
+          if (company) {
+            await storage.updateCompany(company.id, { subscriptionStatus: "past_due" });
+          }
+          break;
+        }
+        case "invoice.paid": {
+          const customerId = data.customer;
+          const company = (await storage.getAllCompanies()).find(c => c.stripeCustomerId === customerId);
+          if (company) {
+            await storage.updateCompany(company.id, { subscriptionStatus: "active" });
+          }
+          break;
+        }
+      }
+
+      res.json({ received: true });
+    } catch (err: any) { res.status(400).json({ message: err.message }); }
   });
 
   // Run once at startup to migrate any /uploads/ imageUrls to base64 in DB

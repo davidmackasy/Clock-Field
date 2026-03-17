@@ -8,6 +8,7 @@ type AuthUser = Omit<User, "password">;
 interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
+  isSuperAdmin: boolean;
   login: (email: string, password: string) => Promise<void>;
   employeeLogin: (employeeId: string, pin: string) => Promise<void>;
   register: (data: { email: string; password: string; firstName: string; lastName: string; companyName: string }) => Promise<void>;
@@ -63,11 +64,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
+  const isSuperAdmin = !!(user && (user as any).isSuperAdmin === true && user.role === "admin");
+
   return (
     <AuthContext.Provider
       value={{
         user: user ?? null,
         isLoading,
+        isSuperAdmin,
         login: async (email, password) => { await loginMutation.mutateAsync({ email, password }); },
         employeeLogin: async (employeeId, pin) => { await employeeLoginMutation.mutateAsync({ employeeId, pin }); },
         register: async (data) => { await registerMutation.mutateAsync(data); },

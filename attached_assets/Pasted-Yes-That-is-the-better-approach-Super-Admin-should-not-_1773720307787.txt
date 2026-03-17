@@ -1,0 +1,891 @@
+Yes. That is the better approach.
+
+Super Admin should not be a separate login system.
+It should be an elevated mode on selected admin accounts.
+
+So a normal business admin account can be granted platform-level super admin access, and then inside that same account they can switch between:
+
+* Business Admin view
+* Super Admin view
+
+That is cleaner and easier to manage.
+
+Below is the updated full dev note with that requirement included.
+
+DEV NOTE
+
+Task
+Add a platform-level Super Admin system and SaaS subscription management layer on top of the existing multi-business app, using the existing admin login system only.
+
+Critical rule
+Do not break, remove, rewrite, or affect anything that is already working in production.
+
+Do not touch:
+
+* employee clock-in
+* employee clock-out
+* attendance recording
+* schedules
+* payroll calculations already working
+* request system already working
+* work log already working
+* timesheets already working
+* employee login flow
+* admin login flow
+* client login flow
+* company data already saved in production
+
+This feature must be additive only.
+
+Main goal
+Create a Super Admin mode that allows selected admin accounts to manage the whole SaaS platform, all subscribed businesses, their plans, access limits, Stripe billing, platform metrics, and platform-wide business messaging.
+
+Important update
+Do not create a separate Super Admin login.
+Do not create a second auth flow.
+
+Super Admin must be implemented as an elevated permission on existing admin accounts.
+
+That means:
+
+* an existing admin account can be marked as super admin
+* that same admin logs in through the normal admin/business login
+* once logged in, if they have super admin permission, they can switch between:
+
+  * Business Admin mode
+  * Super Admin mode
+
+System structure
+There are now still 4 levels of users:
+
+* Super Admin capable Admin
+* Business Admin
+* Employee
+* Client
+
+But Super Admin is not a separate account type with separate login.
+It is a platform permission attached to selected admin accounts.
+
+Product rule
+A business admin manages their own company.
+A super admin-capable admin can switch into platform management mode and manage the whole SaaS.
+
+Part 1. Super Admin access model
+
+Do not build a separate super-admin login page.
+
+Instead:
+
+* keep existing admin login
+* add a boolean or role capability such as:
+
+  * is_super_admin = true
+    or
+  * role includes super_admin capability
+
+Recommended model
+Users table or admin profile should support:
+
+* role = admin
+* is_super_admin = true/false
+
+Meaning:
+
+* all super admins are also admins
+* only selected admin accounts get super admin access
+
+After login
+If logged-in admin has is_super_admin = true:
+show a switcher/menu option like:
+
+* Switch to Super Admin
+* Switch to Business Admin
+
+Behavior
+
+* Business Admin mode shows their own company dashboard only
+* Super Admin mode shows platform-level management across all businesses
+* switching modes should not require logging out
+
+Important
+Normal admins must never see the Super Admin switch.
+
+Part 2. Super Admin mode switcher
+
+Add a clear switcher in the admin account UI for super-admin-enabled accounts.
+
+Recommended UI locations
+
+* top header account menu
+* sidebar account section
+* profile/account dropdown
+
+Recommended labels
+
+* Business Admin
+* Super Admin
+
+Behavior
+If currently in Business Admin mode:
+
+* clicking Super Admin switches to platform area
+
+If currently in Super Admin mode:
+
+* clicking Business Admin returns to the company dashboard for that admin’s own company
+
+Important
+Do not mix platform data into business dashboard screens.
+Keep the views separate.
+Only the account and login are shared.
+
+Part 3. Super Admin dashboard
+
+Create a Super Admin dashboard accessible only when:
+
+* user is logged in
+* user is admin
+* user has is_super_admin = true
+* user has switched into Super Admin mode
+
+Suggested route
+
+* /super-admin
+
+Main top metrics
+
+* total businesses
+* active businesses
+* suspended businesses
+* pending activation businesses
+* total platform revenue this month
+* MRR
+* annual revenue estimate
+* failed payments count
+* cancelled subscriptions
+* businesses added this week
+* businesses added this month
+
+Business table
+Each business row should show:
+
+* business name
+* owner/admin name
+* admin email
+* current plan
+* billing cycle monthly/yearly
+* subscription status
+* employees count
+* clients count
+* created date
+* last active date if possible
+* account status active/suspended/disabled/cancelled
+* quick actions
+
+Quick actions
+
+* View business
+* Suspend
+* Reactivate
+* Disable
+* Mark suspicious
+* View billing
+* View usage
+* Send message
+
+Part 4. Business detail view inside Super Admin
+
+Clicking one business should open a full detail page or modal.
+
+Show:
+Company info
+
+* business name
+* company id
+* owner/admin name
+* owner/admin email
+* created date
+* current subscription
+* billing cycle
+* current status
+* next renewal date
+* last payment date
+* failed payment state
+
+Usage overview
+
+* clients used vs allowed
+* employees used vs allowed
+* schedules usage if tracked
+* requests usage if needed later
+* work log usage if needed later
+
+Counts
+
+* total employees
+* active employees
+* total clients
+* total schedules
+* total attendance entries
+* total requests
+* total work submissions
+
+Actions
+
+* change plan
+* force renew
+* cancel subscription
+* pause account
+* reactivate account
+* ban/suspend
+* send platform message
+* add internal note
+
+Part 5. SaaS subscription plans
+
+Add three business subscription plans.
+
+Plan 1
+$29/month
+Features:
+
+* up to 5 clients
+* up to 2 employees
+* unlimited schedules for those employees
+* basic admin dashboard
+* attendance tracking
+* hours tracking
+* employee login
+* client login basic if needed
+* no timesheets
+* no payroll estimator
+* no work log
+* no advanced exports/spreadsheets
+
+Plan 2
+$79/month
+Features:
+
+* up to 10 clients
+* up to 5 employees
+* unlimited schedules
+* attendance
+* hours
+* spreadsheet generation / printable exports
+* timesheets
+* requests
+* basic reporting
+* no full payroll estimator unless intentionally included
+
+Plan 3
+$129/month
+Features:
+
+* up to 15 clients
+* up to 10 employees
+* unlimited schedules
+* attendance
+* timesheets
+* work log
+* requests
+* payroll estimator
+* reports
+* spreadsheet / export tools
+* everything enabled
+
+Billing cycle toggle
+Add:
+
+* Monthly
+* Yearly
+
+Yearly discount
+
+* 10% off each plan
+
+Pricing math
+
+* $29 monthly
+
+* yearly = $29 x 12 x 0.90
+
+* $79 monthly
+
+* yearly = $79 x 12 x 0.90
+
+* $129 monthly
+
+* yearly = $129 x 12 x 0.90
+
+Store both:
+
+* monthly Stripe price id
+* yearly Stripe price id
+
+Important
+Do not hardcode just display pricing.
+Connect plan access rules to backend enforcement.
+
+Part 6. Feature gating and plan limits
+
+Every plan must be enforced in the backend and reflected in the frontend.
+
+Do not rely on frontend only.
+
+Enforce limits like:
+Plan 29
+
+* maxClients = 5
+* maxEmployees = 2
+* canUseTimesheets = false
+* canUsePayrollEstimator = false
+* canUseWorkLog = false
+* canExportSpreadsheets = false
+
+Plan 79
+
+* maxClients = 10
+* maxEmployees = 5
+* canUseTimesheets = true
+* canExportSpreadsheets = true
+* canUseRequests = true
+* canUseWorkLog = optional depending on your final decision
+* canUsePayrollEstimator = optional depending on your final decision
+
+Plan 129
+
+* maxClients = 15
+* maxEmployees = 10
+* all advanced features = true
+
+Recommended backend plan config
+For each plan define:
+
+* plan_code
+* display_name
+* monthly_price
+* yearly_price
+* max_clients
+* max_employees
+* unlimited_schedules = true
+* feature flags
+
+Feature flags
+
+* attendance_enabled
+* employee_login_enabled
+* client_portal_enabled
+* requests_enabled
+* timesheets_enabled
+* worklog_enabled
+* payroll_enabled
+* exports_enabled
+* reports_enabled
+
+Part 7. Subscription enforcement behavior
+
+When a business hits a plan limit:
+
+* prevent creation of extra employees
+* prevent creation of extra clients
+* block feature page access for locked features
+* show upgrade CTA
+
+Examples
+If plan = $29 and business already has 2 employees:
+
+* Add Employee button shows upgrade prompt
+* backend rejects creating employee #3
+
+If plan does not include payroll:
+
+* Payroll page is locked or hidden
+* backend payroll endpoints reject access if called directly
+
+Important
+Do not delete existing data if a plan changes downward.
+Instead:
+
+* freeze creation of new records beyond the limit
+* show over-limit warning
+* require upgrade or cleanup
+
+Example
+If business downgrades from 10 employees to 2 but already has 6:
+
+* keep existing data
+* do not allow adding more
+* show over-limit banner
+* do not destroy data
+
+Part 8. Stripe subscription integration
+
+Use Stripe subscriptions for business billing.
+
+Each business should have:
+
+* stripe_customer_id
+* stripe_subscription_id
+* stripe_price_id
+* billing_cycle monthly/yearly
+* plan_code
+* subscription_status
+* current_period_start
+* current_period_end
+* cancel_at_period_end
+* trial_end optional later
+
+Subscription statuses to support
+
+* active
+* trialing
+* past_due
+* unpaid
+* canceled
+* incomplete
+
+Recommended Stripe flows
+
+* business signs up
+* chooses plan
+* chooses monthly or yearly
+* goes through Stripe Checkout
+* on success, webhook updates business subscription
+* plan and feature access activate automatically
+
+Super Admin must be able to see:
+
+* current Stripe plan
+* billing status
+* renewal date
+* failed payments
+* cancellations
+
+Important
+Do not let frontend alone decide subscription activation.
+Use Stripe webhook as source of truth.
+
+Required Stripe webhook events
+At minimum:
+
+* checkout.session.completed
+* customer.subscription.created
+* customer.subscription.updated
+* customer.subscription.deleted
+* invoice.paid
+* invoice.payment_failed
+
+On webhook:
+
+* update business subscription state
+* update plan
+* update active/inactive access
+* update renewal dates
+* update billing state
+
+Part 9. Super Admin subscription controls
+
+Super Admin mode must be able to:
+
+* see each business plan
+* see billing cycle
+* see renewal date
+* see if payment failed
+* see if subscription cancelled
+* manually disable access
+* manually reactivate access
+* manually move business between plans if needed
+* manually mark suspicious and suspend
+
+About auto charging cards
+Do not build a random manual charge button that charges stored cards outside normal Stripe subscription logic.
+Safer approach:
+
+* let Stripe manage automatic recurring billing
+* super admin can trigger a subscription resume/reactivate flow
+* super admin can change plan or billing cycle
+* super admin can retry failed invoices through Stripe-linked workflow
+
+Safer business rule
+Stripe auto-renews monthly/yearly by default.
+Super Admin monitors, changes, suspends, or reactivates, but Stripe handles recurring charging.
+
+Part 10. Platform account status controls
+
+Add platform-level business account status separate from Stripe status.
+
+Suggested statuses:
+
+* active
+* suspended
+* disabled
+* banned
+* pending_activation
+
+Explanation
+
+* active: business can use app normally
+* pending_activation: business signed up but waiting for approval
+* suspended: temporary block by super admin
+* disabled: access removed manually
+* banned: serious permanent block
+
+Login/access rule
+If subscription is valid but business account is suspended or disabled:
+
+* business cannot access dashboard
+* show business account status message
+
+This lets you manually control platform abuse.
+
+Part 11. Manual approval flow if desired
+
+Optional flow:
+
+* business signs up
+* after registration or after payment, status = pending_activation
+* super admin reviews and activates manually
+
+If you want instant onboarding, skip this and activate after successful subscription.
+
+If manual approval is enabled:
+Super Admin must see:
+
+* newly registered businesses awaiting activation
+
+Actions:
+
+* activate
+* reject
+* suspend
+
+Part 12. Super Admin messaging to businesses
+
+Add a platform message system from Super Admin mode to business admins.
+
+Use a separate system from requests.
+Do not mix with client/employee request threads.
+
+New module:
+Platform Messages
+
+Super Admin can:
+
+* send message to one business
+* send message to all businesses
+* send promotion
+* send upgrade notice
+* send billing warning
+* send maintenance notification
+
+Business admin can:
+
+* view platform messages
+* reply back if two-way conversation is enabled
+
+Recommended message types
+
+* announcement
+* billing
+* promotion
+* warning
+* support
+
+Recommended routes
+
+* /super-admin/messages
+* /admin/platform-messages
+
+Important
+Do not expose these messages to employees or clients.
+
+Part 13. Super Admin revenue and business analytics
+
+Super Admin dashboard should include analytics.
+
+Metrics
+
+* total MRR
+* total ARR estimate
+* revenue this week
+* revenue this month
+* new businesses this week
+* new businesses this month
+* churned businesses this month
+* failed payments this month
+* plan distribution
+* monthly vs yearly split
+
+Charts optional
+
+* revenue trend
+* signups trend
+* cancellations trend
+* plan distribution chart
+
+Part 14. Suggested database additions
+
+Companies/businesses table
+Add:
+
+* plan_code
+* billing_cycle
+* subscription_status
+* account_status
+* stripe_customer_id
+* stripe_subscription_id
+* stripe_price_id
+* current_period_start
+* current_period_end
+* cancel_at_period_end
+* suspended_reason nullable
+* activated_at
+* suspended_at nullable
+
+Users/admins table
+Add:
+
+* is_super_admin boolean
+
+Important
+Do not create a separate super-admin auth table unless absolutely necessary.
+Reuse existing admin-capable users.
+
+Platform messages tables
+
+* platform_messages
+* id
+* company_id
+* sender_user_id
+* sender_role
+* subject
+* body
+* type
+* created_at
+* is_read
+* parent_message_id nullable
+
+Plan definitions
+Recommended first version:
+backend config object, not a plans table, for safety and speed.
+
+Part 15. Admin-side upgrade and restriction UI
+
+Business admins should be able to see their current plan.
+
+Add a Subscription / Billing page on admin side.
+
+Show:
+
+* current plan
+* monthly/yearly
+* renewal date
+* plan features
+* usage vs limits
+* upgrade button
+* manage billing button
+
+Usage examples
+
+* 4 of 5 clients used
+* 2 of 2 employees used
+* feature access list
+
+Locked features
+If unavailable:
+
+* show lock icon
+* show upgrade CTA
+* explain which plan includes it
+
+Example
+Payroll page:
+
+* if locked, show “Upgrade to Pro to access Payroll Estimator”
+
+Part 16. Enforcement points to add
+
+Backend enforcement must happen in:
+
+* create employee endpoint
+* create client endpoint
+* access payroll endpoint
+* access timesheets endpoint
+* access work log endpoint
+* export/spreadsheet endpoints
+* requests if plan-limited
+* feature pages if gated
+
+Frontend should:
+
+* hide or disable locked buttons
+* show usage warnings
+* show upgrade prompts
+
+Backend remains final authority.
+
+Part 17. Super Admin pages to build
+
+Minimum pages
+
+1. Super Admin Dashboard
+2. Businesses List
+3. Business Detail
+4. Billing/Subscriptions Overview
+5. Platform Messages
+
+Possible routes
+
+* /super-admin
+* /super-admin/businesses
+* /super-admin/businesses/:id
+* /super-admin/billing
+* /super-admin/messages
+
+Part 18. Super Admin actions per business
+
+In Super Admin mode, actions per business:
+
+* activate
+* suspend
+* disable
+* ban
+* change plan
+* change billing cycle
+* mark suspicious
+* add internal note
+* view usage
+* view employees count
+* view clients count
+* send platform message
+* open Stripe-linked billing detail
+
+Optional later
+
+* impersonate read-only
+  Not required now because risky.
+
+Part 19. Monthly and yearly pricing display
+
+Pricing page or billing page should show:
+Monthly
+
+* Starter $29
+* Growth $79
+* Pro $129
+
+Yearly
+
+* Starter yearly = 10% off
+* Growth yearly = 10% off
+* Pro yearly = 10% off
+
+Toggle
+
+* Monthly
+* Yearly
+
+All plan selection must map to the correct Stripe price ids.
+
+Part 20. Safety rules for live production
+
+Do not break any existing business already using the app.
+
+Migration rules
+
+* existing businesses without plan data should be safely backfilled
+* choose a safe default plan or mark them as legacy until assigned
+* do not lock out current active customers unexpectedly
+* do not remove existing data if their current usage exceeds future plan limits
+* do not delete employees or clients on downgrade
+* just block additional creation and show warnings
+
+If there are existing paying businesses already:
+
+* map them carefully to the correct plan
+* do not force reset their access unexpectedly
+
+Part 21. Recommended rollout order
+
+Phase 1
+
+* add is_super_admin capability to admin accounts
+* add mode switcher between Business Admin and Super Admin
+* add Super Admin dashboard and business list
+* add plan config and account status fields
+* add admin subscription/billing page
+* add frontend plan gating
+* add backend limit enforcement
+
+Phase 2
+
+* integrate Stripe checkout and webhook sync
+* add subscription status syncing
+* add renewal and failed payment handling
+* add revenue dashboard metrics
+
+Phase 3
+
+* add platform messages
+* add suspicious account actions
+* add advanced analytics
+
+This is the safest rollout path.
+
+Part 22. Acceptance criteria
+
+Super Admin mode
+
+* selected admin accounts can switch into Super Admin mode
+* no separate login required
+* normal admins cannot access Super Admin mode
+* super-admin-enabled admin can switch back to Business Admin mode
+
+Platform management
+
+* Super Admin mode can see all businesses
+* can see revenue metrics
+* can open each business and see employees count, clients count, plan, and status
+* can activate, suspend, disable, or change plan
+* can send platform messages
+* can monitor Stripe subscription status
+
+Business Admin
+
+* can subscribe to monthly or yearly plans
+* can see current plan and usage
+* can upgrade/downgrade
+* gets blocked from exceeding plan limits
+* sees locked features when not included
+
+Plans
+
+* $29 plan correctly limits 5 clients, 2 employees
+* $79 plan correctly limits 10 clients, 5 employees
+* $129 plan correctly limits 15 clients, 10 employees
+* yearly mode gives 10% discount
+* all enforcement works in backend
+
+Safety
+
+* no break to clock-in/out
+* no break to attendance
+* no break to schedules
+* no break to requests
+* no break to work log
+* no break to payroll already working
+* no break to existing live business accounts
+
+Part 23. Direct instruction for agent
+
+Add a platform-level Super Admin mode and subscription management layer without changing existing working business operations. Do not create a separate Super Admin login. Instead, allow selected admin accounts to be marked with super admin capability and to switch between Business Admin mode and Super Admin mode after logging in through the normal admin login. In Super Admin mode, build platform management tools to view all businesses, employee and client counts, subscription plans, billing status, revenue metrics, usage, and account status. Add three Stripe-backed monthly plans at $29, $79, and $129, plus yearly options with 10% discount. Enforce plan limits and feature access in both backend and frontend. Add business-level billing visibility for admins, and add a platform messaging system where Super Admin can send messages to businesses. Keep all existing live attendance, schedules, requests, payroll, and employee/client workflows intact and do not break current production behavior.
+
+Part 24. Strong reminder
+
+Do exactly this system.
+Do not randomly change unrelated parts.
+Do not refactor working production modules.
+Do not touch clocking or attendance.
+Do not expand scope into unrelated cleanup.
+
+This is a platform-management and billing layer only.

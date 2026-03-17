@@ -28,6 +28,20 @@ export const companies = pgTable("companies", {
   cppPercent: decimal("cpp_percent", { precision: 5, scale: 2 }).default("0"),
   eiMode: text("ei_mode").notNull().default("off"),
   eiPercent: decimal("ei_percent", { precision: 5, scale: 2 }).default("0"),
+  // SaaS subscription fields
+  planCode: text("plan_code").notNull().default("legacy"),
+  billingCycle: text("billing_cycle").notNull().default("monthly"),
+  subscriptionStatus: text("subscription_status").notNull().default("active"),
+  accountStatus: text("account_status").notNull().default("active"),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  stripePriceId: text("stripe_price_id"),
+  currentPeriodStart: text("current_period_start"),
+  currentPeriodEnd: text("current_period_end"),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  suspendedReason: text("suspended_reason"),
+  activatedAt: text("activated_at"),
+  suspendedAt: text("suspended_at"),
 });
 
 export const users = pgTable("users", {
@@ -50,6 +64,8 @@ export const users = pgTable("users", {
   tempPin: text("temp_pin"),
   position: text("position"),
   createdAt: text("created_at"),
+  // Super Admin capability
+  isSuperAdmin: boolean("is_super_admin").notNull().default(false),
 });
 
 export const clients = pgTable("clients", {
@@ -260,6 +276,25 @@ export type WorkSubmissionItem = typeof workSubmissionItems.$inferSelect;
 export type InsertWorkSubmissionItem = z.infer<typeof insertWorkSubmissionItemSchema>;
 export type WorkSubmissionPhoto = typeof workSubmissionPhotos.$inferSelect;
 export type InsertWorkSubmissionPhoto = z.infer<typeof insertWorkSubmissionPhotoSchema>;
+
+// ── Platform Messages ─────────────────────────────────────────────────────────
+export const platformMessages = pgTable("platform_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
+  senderUserId: varchar("sender_user_id").notNull(),
+  senderRole: text("sender_role").notNull().default("super_admin"),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  messageType: text("message_type").notNull().default("announcement"),
+  isRead: boolean("is_read").notNull().default(false),
+  isBroadcast: boolean("is_broadcast").notNull().default(false),
+  parentMessageId: varchar("parent_message_id"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertPlatformMessageSchema = createInsertSchema(platformMessages).omit({ id: true });
+export type PlatformMessage = typeof platformMessages.$inferSelect;
+export type InsertPlatformMessage = z.infer<typeof insertPlatformMessageSchema>;
 
 export const insertCompanySchema = createInsertSchema(companies).omit({ id: true });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
