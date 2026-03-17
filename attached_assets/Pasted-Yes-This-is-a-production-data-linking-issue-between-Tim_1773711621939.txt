@@ -1,0 +1,291 @@
+Yes. This is a production data-linking issue between Timesheets and Attendance, and it needs to be fixed at the source only.
+
+If Attendance already has the correct hours, then Timesheets must pull from that exact same source.
+Timesheets should never show 0 when Attendance for that same employee and pay period already has data.
+
+Use this exact dev note.
+
+DEV NOTE
+
+Task
+Fix the production Timesheets module so it correctly pulls and shows real attendance data instead of showing 0 hours, 0 shifts, and empty breakdowns.
+
+Critical instruction
+Do not break anything else.
+Do not affect anything else.
+Do not refactor unrelated systems.
+Do not rewrite working attendance.
+Do not rewrite working clock-in/out.
+Do not rewrite payroll.
+Do not touch auth.
+Do not touch requests.
+Do not touch work log.
+Do not touch dashboard.
+Do not touch schedule creation.
+Do not change existing production attendance records.
+
+This is a targeted Timesheets data-linking fix only.
+
+Main goal
+Make Timesheets correctly and reliably show actual data from Attendance for the selected employee and pay period.
+
+If Attendance has worked entries for:
+
+* employee X
+* pay period Y
+
+then Timesheets for:
+
+* employee X
+* pay period Y
+
+must show the same real hours and real daily rows.
+
+Problem
+In production, Timesheets is generating records that show:
+
+* 0 total hours
+* 0 shifts
+* empty daily breakdown
+
+even though Attendance already has valid worked entries in that period.
+
+That means Timesheets is not properly linked to the attendance source of truth.
+
+Required final behavior
+For each employee and pay period:
+
+* total hours in Timesheets must equal Attendance total for that same employee and same pay period
+* shift count in Timesheets must equal valid attendance entries counted in that same pay period
+* daily breakdown must contain the same worked entries
+* late, left early, missed counts must be derived from those same attendance rows
+* employee side and admin side must both show the same totals
+
+Source of truth rule
+Attendance is the source of truth.
+Timesheets must read from Attendance.
+Do not create a second disconnected calculation path.
+
+Most likely causes to inspect first
+
+1. Wrong employee id mapping
+   Timesheets may be using the wrong key:
+
+* user id instead of employee id
+* employee code instead of employee primary id
+* profile id instead of attendance employee id
+
+If that mapping is wrong, Timesheets will find no rows and show zero.
+
+2. Wrong pay-period boundaries
+   Timesheets may be using the wrong date range:
+
+* wrong payroll cycle start date
+* wrong biweekly period math
+* wrong timezone
+* UTC shift causing records to fall outside the query
+
+If the period boundaries are wrong, Timesheets will show empty data even when Attendance has rows.
+
+3. Snapshot generation not reading attendance correctly
+   If Generate Timesheets creates a snapshot row but does not correctly query attendance, the snapshot will be saved with zeros.
+
+4. Timesheet detail page not loading linked entries
+   The parent timesheet may exist, but the detail modal may not be loading the actual attendance-linked rows.
+
+5. Production-only mismatch
+   Development may work, but production may be using:
+
+* old schema
+* stale data mapping
+* missing relation
+* wrong query filter
+* invalid company timezone/pay-period settings
+
+Main fix
+Make Timesheets resolve from the exact same filtered attendance dataset used by Attendance summaries.
+
+Required implementation rules
+
+1. Build one shared timesheet resolver
+   Create or fix one shared backend helper/service that takes:
+
+* companyId
+* employeeId
+* payPeriodStart
+* payPeriodEnd
+* timezone
+
+and returns:
+
+* valid attendance entries in that range
+* total worked minutes
+* regular minutes
+* overtime minutes if supported
+* total shifts
+* late count
+* left early count
+* missed count
+* daily breakdown rows
+
+Do not let admin Timesheets and employee My Timesheets use different data sources.
+
+2. Use employee primary id correctly
+   Verify the Timesheet query uses the exact same employee identifier used by Attendance records.
+
+This is one of the most likely bugs.
+
+Agent must verify:
+
+* how attendance rows store employee reference
+* how timesheet rows store employee reference
+* how employee profile maps to attendance
+
+Fix only the mapping if wrong.
+Do not refactor employee model broadly.
+
+3. Use exact pay-period boundaries from payroll settings
+   Timesheets must use:
+
+* company pay period type
+* company payroll cycle start date
+* company timezone
+
+The period shown on screen must be the same period used in the query.
+
+Example:
+If UI says:
+Mar 16, 2026 - Mar 29, 2026
+
+the attendance query must use exactly that same range in company timezone.
+
+Do not let the label say one range while query uses another.
+
+4. Current/open period and generated period must both work
+   If admin hits Generate Timesheets:
+
+* the generated timesheet must be built from attendance in that period
+* not saved as zeros if attendance exists
+
+If employee opens My Timesheets for current/open period:
+
+* it must show attendance-backed values
+* not blank zeros
+
+5. Daily breakdown must come from attendance rows
+   The daily breakdown must list the actual entries used to compute totals.
+
+If total hours are nonzero, the daily breakdown cannot be empty.
+If daily breakdown is empty, total hours should not be nonzero.
+
+Both must come from the same dataset.
+
+6. Timesheet snapshot rule
+   Safest model:
+
+* for current/open period, compute from live attendance or refresh the draft snapshot from attendance
+* for submitted/approved periods, use stable snapshot
+
+But right now, priority is:
+make draft/generated timesheets pull correct attendance data instead of zeros.
+
+7. Do not fabricate empty timesheets
+   If no attendance exists in that period, then zero is acceptable.
+   But if attendance exists, zero is a bug.
+
+So before generating a zero timesheet:
+
+* verify the attendance query truly returned no rows
+* verify employee id and period boundaries are correct
+
+8. Admin and employee side must match
+   For the same employee and period:
+
+* Admin Timesheet total must equal Employee Timesheet total
+* Admin Timesheet total must equal Attendance total
+* Employee Timesheet total must equal Attendance total
+
+No mismatch allowed.
+
+Recommended debugging order
+
+1. Pick one real employee from production with known attendance in that period
+2. Confirm Attendance total for that employee and period
+3. Inspect the Timesheet generation query for same employee and period
+4. Compare:
+
+* employee id used
+* company id used
+* pay-period start/end used
+* timezone used
+* valid status filter used
+
+5. Fix the query or mapping
+6. Regenerate only that timesheet safely
+7. Confirm admin and employee both show correct values
+
+Valid attendance inclusion rule
+Timesheets should include the same valid worked attendance entries that Attendance counts.
+
+Safest rule:
+Include attendance entries that:
+
+* belong to the employee
+* belong to the company
+* fall inside the pay-period boundaries
+* are valid completed or otherwise recognized worked entries by the system
+* have worked minutes or valid start/end times
+
+Do not include:
+
+* invalid temp rows
+* broken duplicates
+* unrelated unscheduled ghost rows if Attendance excludes them
+* rows outside the selected period
+
+UI rule
+Do not redesign the page.
+Do not change layout.
+Only fix the data so totals and daily rows show correctly.
+
+Do not touch:
+
+* buttons
+* mobile nav
+* status badges
+* download button
+  unless necessary for displaying the corrected data
+
+Acceptance criteria
+
+Admin side
+
+* Generate Timesheets creates real attendance-backed totals
+* employee cards no longer show 0 if attendance exists
+* timesheet detail modal shows correct totals
+* daily breakdown appears
+* approve still works
+
+Employee side
+
+* My Timesheets shows real totals for the same period
+* daily breakdown appears
+* current/open period updates from attendance
+* no fake zero state when attendance exists
+
+System
+
+* Attendance remains unchanged
+* Timesheets matches Attendance exactly for same employee and period
+* no unrelated modules are changed
+* no production data is deleted or corrupted
+
+Direct instruction for agent
+Fix only the Timesheets data-linking problem in production. Timesheets must pull real attendance data for the selected employee and pay period instead of generating zero-hour records when attendance already exists. Verify and correct the employee-id mapping, pay-period boundaries, company timezone handling, and attendance query used during timesheet generation and display. Ensure admin Timesheets, employee My Timesheets, and Attendance all match for the same employee and same period. Do not modify unrelated working systems or alter existing production attendance data.
+
+Strong reminder
+Do exactly this fix only.
+Do not expand scope.
+Do not “clean up” nearby systems.
+Do not change unrelated logic.
+Fix only the Timesheets-to-Attendance linkage so production timesheets stop showing zeros when real attendance exists.
