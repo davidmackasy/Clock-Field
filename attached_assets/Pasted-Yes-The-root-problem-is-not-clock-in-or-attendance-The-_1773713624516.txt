@@ -1,0 +1,361 @@
+Yes. The root problem is not clock-in or attendance.
+
+The root problem is this:
+Timesheets is not using the exact same source-of-truth aggregation as Hours and Attendance.
+
+That is why:
+
+* the daily rows can show 2 shifts
+* the top summary can still show 1 shift
+* hours can match or partially match
+* counts do not stay consistent
+
+You do not need clock-in/out changed.
+You do not need attendance changed.
+You need one shared timesheet aggregation path.
+
+Use this exact dev note.
+
+DEV NOTE
+
+Task
+Fix Timesheets so the summary cards, daily breakdown, employee timesheet view, and admin timesheet view all use the exact same attendance-backed dataset and the exact same selected period.
+
+Critical instruction
+Do not touch:
+
+* clock-in
+* clock-out
+* attendance recording
+* attendance storage
+* hours recording
+* payroll formulas
+* schedule creation
+* auth
+* employee login
+* admin login
+* client login
+* requests
+* work log
+* public links
+* any unrelated production flow
+
+Do not change any existing production attendance data.
+Do not rewrite working attendance logic.
+Do not refactor clocking behavior.
+Do not “improve” anything else.
+
+This is a Timesheets sync and period-selection fix only.
+
+Main goal
+Make Timesheets fully synchronized with Attendance and Hours.
+
+For the same employee and same selected period:
+
+* Timesheet total hours must match Hours total hours
+* Timesheet total shifts must match the count of daily entries shown in the timesheet breakdown
+* Admin timesheet totals must match Employee timesheet totals
+* Timesheet totals must match Attendance totals for the same employee and same period
+
+No mismatch allowed.
+
+Current production bug
+Right now:
+
+* Employee Hours shows 2 shifts
+* Timesheet daily breakdown shows 2 rows
+* But Timesheet summary card shows 1 shift
+
+That means the top summary and the daily breakdown are not being calculated from the same filtered dataset.
+
+This is the exact bug to fix.
+
+Core rule
+Attendance remains the source of truth.
+Timesheets must read from Attendance.
+Hours must read from Attendance.
+All three must use one shared aggregation helper.
+
+Root cause to fix
+The system likely has two separate calculations:
+
+1. a summary calculation for Timesheets
+2. a row/detail calculation for Timesheets
+
+Those two are not using the same filters or same included records.
+
+That must be removed.
+
+Required final architecture
+
+1. One shared resolver for timesheet data
+   Create or fix one shared backend helper/service for timesheet resolution.
+
+Example responsibility:
+resolveTimesheetData({
+companyId,
+employeeId,
+periodStart,
+periodEnd,
+timezone,
+statusFilter? optional only if truly needed
+})
+
+This resolver must return one unified dataset:
+
+* entries
+* totalWorkedMinutes
+* regularMinutes
+* overtimeMinutes
+* totalShifts
+* lateCount
+* leftEarlyCount
+* missedCount
+
+Important
+The summary cards and daily breakdown must both come from this exact same returned dataset.
+
+Do not compute summary separately elsewhere.
+
+2. One shared date-range helper
+   Create or fix one shared period resolver for Timesheets.
+
+It must support:
+
+* current pay period
+* previous pay periods
+* custom date range
+
+The exact same resolved start/end dates must be used for:
+
+* employee timesheet page
+* admin timesheet page
+* print/download
+* summary cards
+* daily rows
+
+Do not let one part use biweekly boundaries and another part use custom/local/browser dates.
+
+3. Employee and admin must use same aggregation
+   Admin timesheet view and employee timesheet view must not have separate math.
+
+They can have different actions:
+
+* employee can submit
+* admin can approve
+
+But the totals and rows must come from the same shared dataset.
+
+Required fix areas
+
+A. Summary cards
+Fix these so they are calculated from the same dataset as the visible daily rows:
+
+* Total Hours
+* Regular
+* Overtime
+* Shifts
+* Late
+* Left Early
+* Missed
+
+If daily breakdown has 2 valid rows, Shifts must be 2.
+Not 1.
+
+B. Daily breakdown
+Daily breakdown must come from the same filtered attendance entries used by the summary.
+
+C. Employee Hours consistency
+For the same employee and same period, Hours and Timesheet must match.
+If Hours says:
+
+* 2 shifts
+* 6h 19m
+
+Then Timesheet for that same period must also show:
+
+* 2 shifts
+* 6h 19m
+  unless there is an intentional business rule difference, which there should not be here.
+
+D. Admin timesheet list/detail
+Admin timesheet cards and detail modal must use the same resolver too.
+
+Period selector requirement
+Add custom period selection to both Employee Timesheets and Admin Timesheets.
+
+This is required.
+
+Employee Timesheets
+Add period controls so employee can:
+
+* view current pay period
+* view previous pay periods
+* use custom range
+* print/download selected period
+
+Admin Timesheets
+Add period controls so admin can:
+
+* view current pay period
+* view previous pay periods
+* use custom range
+* filter the timesheets by that selected period
+* download selected period
+
+Recommended employee timesheet filters
+At top of My Timesheets:
+
+* Current Period
+* Previous Period
+* Custom
+
+If Custom selected:
+
+* show From date
+* show To date
+
+Recommended admin timesheet filters
+At top of Timesheets:
+
+* Period preset selector
+* Custom date range selector when needed
+* Employee filter
+* Status filter
+
+Best preset options
+
+* Current Pay Period
+* Previous Pay Period
+* Last 2 Pay Periods
+* This Month
+* Custom
+
+Safest rule
+Even with presets, all results must be resolved through the same shared period helper.
+
+Important behavior rule
+If custom period is selected:
+
+* summary cards
+* daily breakdown
+* print/download
+  must all use that exact custom period
+
+No mixed period state.
+
+Status behavior
+Submit and approve behavior can stay as is.
+Do not rewrite that unless needed for period consistency.
+
+But:
+
+* Submit button should only work on the selected eligible period
+* Download should respect currently selected period
+* Admin approval should respect the currently selected timesheet/period
+
+Shift counting rule
+Define total shifts as:
+the count of valid attendance entries included in the current timesheet dataset.
+
+If there are 2 daily breakdown rows, shifts must be 2.
+If there are 4 valid included attendance entries, shifts must be 4.
+
+Do not compute shifts from another stale snapshot or another partial query.
+
+Recommended inclusion rule
+A timesheet shift count should be based on the same valid attendance entries already accepted by Hours/Attendance for that period.
+
+If Hours includes those entries, Timesheets must include the same entries.
+
+Do not count from:
+
+* stale snapshot summary only
+* mismatched employee id
+* mismatched time zone range
+* different status filter
+
+Timezone rule
+Use the company timezone as source of truth for:
+
+* pay period boundaries
+* custom date boundaries
+* grouping rows by day
+* determining which attendance records belong in range
+
+Do not use browser-only local date math for Timesheets if Attendance is using company timezone.
+
+Most likely exact bug
+Most likely one or more of these is happening:
+
+* Timesheet summary query uses different employee id mapping than row query
+* Timesheet summary query uses different period boundaries than row query
+* Shifts count is coming from an old snapshot record while daily rows are live
+* Employee page and Admin page are not sharing the same resolver
+* Custom/biweekly period state is not flowing to the summary calculation
+
+Fix strategy
+
+1. Identify one real employee and one real period with known data
+   Example:
+   Mar 3, 2026 - Mar 16, 2026
+
+2. Compare:
+
+* Employee Hours dataset
+* Admin Attendance dataset
+* Employee Timesheet summary dataset
+* Employee Timesheet daily rows dataset
+* Admin Timesheet summary dataset
+
+3. Confirm where they diverge:
+
+* employee id
+* company id
+* start/end dates
+* timezone
+* included attendance rows
+* shift count calculation
+
+4. Replace all Timesheet calculations with one shared resolver
+5. Make Hours and Timesheets both rely on that same attendance-backed aggregation helper
+6. Retest current period, previous period, and custom range
+
+Print / Download requirement
+Print / Download must use the exact currently selected period and exact same resolved dataset.
+Do not let print download another period or another stale snapshot.
+
+Acceptance criteria
+
+Employee side
+
+* My Timesheets summary matches daily breakdown
+* My Timesheets matches Hours for same period
+* employee can select current, previous, or custom period
+* download/print uses selected period
+* submit works on correct eligible period only
+
+Admin side
+
+* Admin Timesheets summary matches detail rows
+* Admin Timesheets matches Attendance for same employee and period
+* admin can select current, previous, or custom period
+* download uses selected period
+* approve works on correct selected period
+
+System
+
+* no changes to attendance recording
+* no changes to clock-in/out
+* no changes to production attendance data
+* no unrelated module changes
+* no more mismatch like “2 rows but 1 shift”
+
+Direct instruction for agent
+Fix only the Timesheets synchronization and period-selection logic. Make the Timesheet summary cards, daily breakdown, employee timesheet view, admin timesheet view, and print/download all use the exact same attendance-backed dataset and the exact same selected period. Add custom period selection for both employee and admin timesheets. Do not touch clock-in, clock-out, attendance recording, or any unrelated working production system. The summary totals must always match the visible breakdown rows and must also match Hours and Attendance for the same employee and period.
+
+Strong reminder
+Do exactly this only.
+Do not expand scope.
+Do not touch working attendance or clocking.
+Fix only the Timesheets aggregation and period selection so everything finally stays in sync.

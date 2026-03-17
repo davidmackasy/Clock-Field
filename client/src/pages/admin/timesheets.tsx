@@ -121,6 +121,15 @@ export default function AdminTimesheets() {
     ? getPayPeriodBounds(company.payrollCycleStartDate, company.defaultPayPeriodType, today)
     : { start: today, end: today };
 
+  const prevBounds = company
+    ? getPayPeriodBounds(company.payrollCycleStartDate, company.defaultPayPeriodType,
+        shiftPeriod(currentBounds.start, periodDays, -1))
+    : null;
+  const prev2Bounds = company && prevBounds
+    ? getPayPeriodBounds(company.payrollCycleStartDate, company.defaultPayPeriodType,
+        shiftPeriod(prevBounds.start, periodDays, -1))
+    : null;
+
   const [periodStart, setPeriodStart] = useState<string>("");
   const [empFilter, setEmpFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -206,28 +215,58 @@ export default function AdminTimesheets() {
         </Button>
       </div>
 
-      {/* Period nav */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <Button variant="outline" size="icon" className="h-8 w-8"
-          onClick={() => setPeriodStart(s => shiftPeriod(s, periodDays, -1))}
-          data-testid="button-period-prev"
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </Button>
-        <div className="px-3 py-1.5 rounded-md bg-muted text-sm font-medium min-w-[200px] text-center">
-          {periodStart && periodEnd ? `${fmtDate(periodStart)} – ${fmtDate(periodEnd)}` : "Loading…"}
-        </div>
-        <Button variant="outline" size="icon" className="h-8 w-8"
-          onClick={() => setPeriodStart(s => shiftPeriod(s, periodDays, 1))}
-          data-testid="button-period-next"
-        >
-          <ChevronRight className="w-4 h-4" />
-        </Button>
-        {periodStart !== currentBounds.start && (
-          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setPeriodStart(currentBounds.start)}>
-            Current Period
-          </Button>
+      {/* Period presets + nav */}
+      <div className="space-y-2">
+        {company && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant={periodStart === currentBounds.start ? "default" : "outline"}
+              size="sm" className="h-7 text-xs"
+              onClick={() => setPeriodStart(currentBounds.start)}
+              data-testid="button-preset-current"
+            >
+              Current Period
+            </Button>
+            {prevBounds && (
+              <Button
+                variant={periodStart === prevBounds.start ? "default" : "outline"}
+                size="sm" className="h-7 text-xs"
+                onClick={() => setPeriodStart(prevBounds.start)}
+                data-testid="button-preset-previous"
+              >
+                Previous Period
+              </Button>
+            )}
+            {prev2Bounds && (
+              <Button
+                variant={periodStart === prev2Bounds.start ? "default" : "outline"}
+                size="sm" className="h-7 text-xs"
+                onClick={() => setPeriodStart(prev2Bounds.start)}
+                data-testid="button-preset-2ago"
+              >
+                2 Periods Ago
+              </Button>
+            )}
+          </div>
         )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" size="icon" className="h-8 w-8"
+            onClick={() => setPeriodStart(s => shiftPeriod(s, periodDays, -1))}
+            data-testid="button-period-prev"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <div className="px-3 py-1.5 rounded-md bg-muted text-sm font-medium min-w-[200px] text-center">
+            {periodStart && periodEnd ? `${fmtDate(periodStart)} – ${fmtDate(periodEnd)}` : "Loading…"}
+          </div>
+          <Button variant="outline" size="icon" className="h-8 w-8"
+            onClick={() => setPeriodStart(s => shiftPeriod(s, periodDays, 1))}
+            disabled={!periodStart || periodStart >= currentBounds.start}
+            data-testid="button-period-next"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

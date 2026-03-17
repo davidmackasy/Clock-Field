@@ -1514,10 +1514,15 @@ export async function registerRoutes(
       const d = e.clockInAt.slice(0, 10);
       return d >= periodStart && d <= periodEnd && e.status !== "active";
     });
-    const totalWorkedMinutes = periodEntries.reduce((sum, e) => sum + (e.workedMinutes || 0), 0);
-    const totalShifts = periodEntries.filter(e => e.shiftId).length;
-    const lateCount = periodEntries.filter(e => Array.isArray(e.flags) && e.flags.includes("late_clock_in")).length;
-    const leftEarlyCount = periodEntries.filter(e => Array.isArray(e.flags) && e.flags.includes("left_early")).length;
+    const completedPeriodEntries = periodEntries.filter(e => e.clockInAt && e.clockOutAt);
+    const totalWorkedMinutes = completedPeriodEntries.reduce((sum, e) => {
+      if (e.workedMinutes != null) return sum + e.workedMinutes;
+      const diff = (new Date(e.clockOutAt!).getTime() - new Date(e.clockInAt).getTime()) / 60000;
+      return sum + Math.max(0, diff);
+    }, 0);
+    const totalShifts = completedPeriodEntries.length;
+    const lateCount = completedPeriodEntries.filter(e => Array.isArray(e.flags) && e.flags.includes("late_clock_in")).length;
+    const leftEarlyCount = completedPeriodEntries.filter(e => Array.isArray(e.flags) && (e.flags.includes("left_early") || e.flags.includes("early_clock_out"))).length;
     const allShifts = await storage.getShiftsByEmployee(employeeId);
     const periodShifts = allShifts.filter(s => s.shiftDate >= periodStart && s.shiftDate <= periodEnd);
     const missedShiftCount = periodShifts.filter(s => s.status === "missed" || s.status === "no_show").length;
@@ -1567,9 +1572,13 @@ export async function registerRoutes(
       const periodEntries = allEntries
         .filter(e => { const d = e.clockInAt.slice(0, 10); return d >= periodStart && d <= periodEnd; })
         .sort((a, b) => a.clockInAt.localeCompare(b.clockInAt));
-      const completedEntries = periodEntries.filter(e => e.status !== "active");
-      const totalWorkedMinutes = completedEntries.reduce((sum, e) => sum + (e.workedMinutes || 0), 0);
-      const totalShifts = completedEntries.filter(e => e.shiftId).length;
+      const completedEntries = periodEntries.filter(e => e.clockInAt && e.clockOutAt);
+      const totalWorkedMinutes = completedEntries.reduce((sum, e) => {
+        if (e.workedMinutes != null) return sum + e.workedMinutes;
+        const diff = (new Date(e.clockOutAt!).getTime() - new Date(e.clockInAt).getTime()) / 60000;
+        return sum + Math.max(0, diff);
+      }, 0);
+      const totalShifts = completedEntries.length;
       const lateCount = completedEntries.filter(e => Array.isArray(e.flags) && e.flags.includes("late_clock_in")).length;
       const leftEarlyCount = completedEntries.filter(e => Array.isArray(e.flags) && (
         e.flags.includes("early_clock_out") || e.flags.includes("left_early")

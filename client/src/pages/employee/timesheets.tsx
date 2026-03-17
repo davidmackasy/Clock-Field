@@ -125,6 +125,10 @@ export default function EmployeeTimesheets() {
   const currentBounds = company
     ? getPayPeriodBounds(company.payrollCycleStartDate, company.defaultPayPeriodType, todayStr)
     : { start: todayStr, end: todayStr };
+  const prevBounds = company
+    ? getPayPeriodBounds(company.payrollCycleStartDate, company.defaultPayPeriodType,
+        shiftPeriod(currentBounds.start, periodDays, -1))
+    : null;
 
   const [periodStart, setPeriodStart] = useState<string>("");
 
@@ -213,6 +217,30 @@ export default function EmployeeTimesheets() {
         <h1 className="text-xl font-bold" data-testid="text-emp-timesheets-title">My Timesheets</h1>
         <p className="text-sm text-muted-foreground">Review and submit your pay period timesheets</p>
       </div>
+
+      {/* Period preset pills */}
+      {company && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant={periodStart === currentBounds.start ? "default" : "outline"}
+            size="sm" className="h-7 text-xs"
+            onClick={() => setPeriodStart(currentBounds.start)}
+            data-testid="button-preset-current"
+          >
+            Current Period
+          </Button>
+          {prevBounds && (
+            <Button
+              variant={periodStart === prevBounds.start ? "default" : "outline"}
+              size="sm" className="h-7 text-xs"
+              onClick={() => setPeriodStart(prevBounds.start)}
+              data-testid="button-preset-previous"
+            >
+              Previous Period
+            </Button>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center gap-2">
         <Button variant="outline" size="icon" className="h-8 w-8"
