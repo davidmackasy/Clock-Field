@@ -69,6 +69,10 @@ app.use((req, res, next) => {
 (async () => {
   await registerRoutes(httpServer, app);
 
+  // Run idempotent startup migrations (grandfathering, super admin grants, etc.)
+  const { runStartupMigrations } = await import("./migrations");
+  await runStartupMigrations();
+
   const { seedDatabase } = await import("./seed");
   await seedDatabase();
 
