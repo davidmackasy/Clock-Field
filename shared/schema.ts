@@ -144,6 +144,10 @@ export const timeEntries = pgTable("time_entries", {
   status: text("status").notNull().default("active"),
   flags: text("flags").array(),
   notes: text("notes"),
+  manuallyClosedByAdmin: boolean("manually_closed_by_admin").notNull().default(false),
+  manualClockOutByUserId: varchar("manual_clock_out_by_user_id"),
+  manualClockOutAt: text("manual_clock_out_at"),
+  manualClockOutReason: text("manual_clock_out_reason"),
 });
 
 export const payrollDeductions = pgTable("payroll_deductions", {

@@ -1011,6 +1011,63 @@ export async function registerRoutes(
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  // ── Admin Manual Clock-Out ─────────────────────────────────────────────────
+  app.post("/api/time-entries/:id/admin-clock-out", requireRole("admin"), async (req, res) => {
+    try {
+      const admin = req.user as any;
+      const { id } = req.params;
+      const { clockOutAt, reason } = req.body;
+
+      if (!clockOutAt) return res.status(400).json({ message: "clockOutAt is required" });
+
+      const entry = await storage.getTimeEntry(id);
+      if (!entry) return res.status(404).json({ message: "Time entry not found" });
+      if (entry.companyId !== admin.companyId) return res.status(403).json({ message: "Access denied" });
+      if (entry.status !== "active") return res.status(400).json({ message: "Shift is already closed" });
+
+      const clockOutTime = new Date(clockOutAt).toISOString();
+      const clockInTime = new Date(entry.clockInAt);
+      if (new Date(clockOutTime) <= clockInTime) {
+        return res.status(400).json({ message: "Clock-out time cannot be before clock-in time" });
+      }
+
+      const workedMinutes = Math.round((new Date(clockOutTime).getTime() - clockInTime.getTime()) / 60000);
+
+      let flags = [...(entry.flags || [])];
+      if (entry.shiftId) {
+        const shift = await storage.getShift(entry.shiftId);
+        if (shift) {
+          const company = await storage.getCompany(admin.companyId);
+          const tz = company?.timezone || "UTC";
+          flags = buildAttendanceFlags({
+            clockInAtUtc: entry.clockInAt,
+            clockOutAtUtc: clockOutTime,
+            scheduledStartLocal: shift.scheduledStartAt,
+            scheduledEndLocal: shift.scheduledEndAt,
+            timezone: tz,
+            existingFlags: entry.flags || [],
+          });
+          const expectedMins = parseFloat(shift.expectedHours || "0") * 60;
+          if (workedMinutes > expectedMins + 30) flags.push("overtime");
+          await storage.updateShift(entry.shiftId, { status: "completed" });
+        }
+      }
+
+      const now = new Date().toISOString();
+      const updated = await storage.updateTimeEntry(entry.id, {
+        clockOutAt: clockOutTime,
+        workedMinutes,
+        status: "completed",
+        flags: flags.length ? flags : null,
+        manuallyClosedByAdmin: true,
+        manualClockOutByUserId: admin.id,
+        manualClockOutAt: now,
+        manualClockOutReason: reason || "Admin clocked out employee after forgotten clock-out",
+      });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   // ── Client Requests ───────────────────────────────────────────────────────
   app.get("/api/client-requests", requireAuth, async (req, res) => {
     try {

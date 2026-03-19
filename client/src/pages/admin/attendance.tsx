@@ -1,31 +1,190 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
-import { ClipboardList, Search, CalendarIcon, Filter, X, User, Clock, BarChart2, Users2, TrendingUp } from "lucide-react";
-import { format, subDays, startOfWeek, startOfMonth, isWithinInterval, parseISO } from "date-fns";
+import { ClipboardList, Search, CalendarIcon, Filter, X, User, Clock, BarChart2, Users2, TrendingUp, AlertCircle, LogOut } from "lucide-react";
+import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
 import { cn } from "@/lib/utils";
 import { EmployeeAttendanceModal } from "@/components/employee-attendance-modal";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 const flagColors: Record<string, string> = {
   late_clock_in: "destructive",
   early_clock_in: "secondary",
   left_early: "destructive",
+  early_clock_out: "destructive",
+  late_clock_out: "secondary",
   overtime: "default",
   no_show: "destructive",
   unscheduled_clock_in: "secondary",
   stayed_late: "secondary",
 };
 
+function formatMinutes(mins: number) {
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  return `${h}h ${m}m`;
+}
+
+function formatRunningTime(clockInAt: string) {
+  const diffMs = Date.now() - new Date(clockInAt).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${h}h ${m}m`;
+}
+
+// ── Manual Clock-Out Modal ─────────────────────────────────────────────────────
+function ManualClockOutModal({
+  entry,
+  emp,
+  shift,
+  onClose,
+}: {
+  entry: any;
+  emp: any;
+  shift: any;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+
+  // Pre-fill with scheduled end time or current time
+  const defaultClockOut = useMemo(() => {
+    if (shift?.scheduledEndAt) {
+      const d = new Date(shift.scheduledEndAt);
+      return format(d, "yyyy-MM-dd'T'HH:mm");
+    }
+    return format(new Date(), "yyyy-MM-dd'T'HH:mm");
+  }, [shift]);
+
+  const [clockOutValue, setClockOutValue] = useState(defaultClockOut);
+  const [reason, setReason] = useState("");
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/time-entries/${entry.id}/admin-clock-out`, {
+        clockOutAt: new Date(clockOutValue).toISOString(),
+        reason: reason.trim() || undefined,
+      });
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.message || "Failed to clock out");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
+      toast({ title: "Shift closed", description: `${emp?.firstName} ${emp?.lastName} has been clocked out.` });
+      onClose();
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const clockInDate = new Date(entry.clockInAt);
+  const clockOutDate = clockOutValue ? new Date(clockOutValue) : null;
+  const isValidTime = clockOutDate && clockOutDate > clockInDate;
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Manual Clock-Out</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-1">
+          {/* Employee info */}
+          <div className="rounded-lg border bg-muted/40 p-3 space-y-1.5 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Employee</span>
+              <span className="font-medium">{emp ? `${emp.firstName} ${emp.lastName}` : "Unknown"}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Date</span>
+              <span className="font-medium">{format(clockInDate, "MMM d, yyyy")}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Clocked in at</span>
+              <span className="font-medium">{format(clockInDate, "HH:mm")}</span>
+            </div>
+            {shift && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Scheduled shift</span>
+                <span className="font-medium">
+                  {format(new Date(shift.scheduledStartAt), "HH:mm")} – {format(new Date(shift.scheduledEndAt), "HH:mm")}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Running for</span>
+              <span className="font-medium text-orange-500">{formatRunningTime(entry.clockInAt)}</span>
+            </div>
+          </div>
+
+          {/* Clock-out time picker */}
+          <div className="space-y-1.5">
+            <Label htmlFor="clockout-time">Clock-out time</Label>
+            <Input
+              id="clockout-time"
+              type="datetime-local"
+              value={clockOutValue}
+              onChange={(e) => setClockOutValue(e.target.value)}
+              data-testid="input-manual-clockout-time"
+            />
+            {clockOutValue && !isValidTime && (
+              <p className="text-xs text-destructive flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                Clock-out time cannot be before clock-in time.
+              </p>
+            )}
+          </div>
+
+          {/* Optional reason */}
+          <div className="space-y-1.5">
+            <Label htmlFor="clockout-reason">Reason / note <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Textarea
+              id="clockout-reason"
+              placeholder="e.g. Employee forgot to clock out"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={2}
+              data-testid="input-manual-clockout-reason"
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose} data-testid="button-cancel-manual-clockout">Cancel</Button>
+          <Button
+            onClick={() => mutation.mutate()}
+            disabled={!isValidTime || mutation.isPending}
+            data-testid="button-save-manual-clockout"
+          >
+            <LogOut className="w-4 h-4 mr-1.5" />
+            {mutation.isPending ? "Saving…" : "Save Clock-Out"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Main Page ──────────────────────────────────────────────────────────────────
 export default function AdminAttendance() {
+  const { toast } = useToast();
   const search_ = useSearch();
   const initParams = new URLSearchParams(search_);
 
@@ -42,15 +201,18 @@ export default function AdminAttendance() {
   const [statusFilter, setStatusFilter] = useState<string>(initParams.get("status") || "all");
   const [employeeFilter, setEmployeeFilter] = useState<string>("all");
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
+  const [manualClockOutEntry, setManualClockOutEntry] = useState<any>(null);
 
   const empMap = useMemo(() => new Map((employees || []).map(e => [e.id, e])), [employees]);
   const shiftMap = useMemo(() => new Map((shifts || []).map(s => [s.id, s])), [shifts]);
 
-  function formatMinutes(mins: number) {
-    const h = Math.floor(mins / 60);
-    const m = Math.round(mins % 60);
-    return `${h}h ${m}m`;
-  }
+  // Open (active) shifts — always shown regardless of date/search filters
+  const activeEntries = useMemo(() => {
+    if (!entries) return [];
+    return entries
+      .filter((e: any) => e.status === "active")
+      .sort((a, b) => new Date(a.clockInAt).getTime() - new Date(b.clockInAt).getTime());
+  }, [entries]);
 
   const filtered = useMemo(() => {
     if (!entries) return [];
@@ -60,18 +222,13 @@ export default function AdminAttendance() {
         const emp = empMap.get(entry.employeeId);
         if (!emp) return false;
 
-        // Search filter
         const fullName = `${emp.firstName} ${emp.lastName}`.toLowerCase();
         if (search && !fullName.includes(search.toLowerCase()) && !(emp.employeeId || "").toLowerCase().includes(search.toLowerCase())) {
           return false;
         }
 
-        // Employee filter
-        if (employeeFilter !== "all" && entry.employeeId !== employeeFilter) {
-          return false;
-        }
+        if (employeeFilter !== "all" && entry.employeeId !== employeeFilter) return false;
 
-        // Status filter
         if (statusFilter !== "all") {
           if (statusFilter === "completed" && entry.status !== "completed") return false;
           if (statusFilter === "active" && entry.status !== "active") return false;
@@ -80,20 +237,16 @@ export default function AdminAttendance() {
           }
         }
 
-        // Date range filter
         const clockIn = new Date(entry.clockInAt);
         const now = new Date();
         if (dateRange === "today") {
           if (format(clockIn, "yyyy-MM-dd") !== format(now, "yyyy-MM-dd")) return false;
         } else if (dateRange === "this_week") {
-          const weekStart = startOfWeek(now);
-          if (clockIn < weekStart) return false;
+          if (clockIn < startOfWeek(now)) return false;
         } else if (dateRange === "last_2_weeks") {
-          const twoWeeksAgo = subDays(now, 14);
-          if (clockIn < twoWeeksAgo) return false;
+          if (clockIn < subDays(now, 14)) return false;
         } else if (dateRange === "this_month") {
-          const monthStart = startOfMonth(now);
-          if (clockIn < monthStart) return false;
+          if (clockIn < startOfMonth(now)) return false;
         } else if (dateRange === "custom") {
           if (customRange.from && clockIn < customRange.from) return false;
           if (customRange.to && clockIn > customRange.to) return false;
@@ -132,6 +285,71 @@ export default function AdminAttendance() {
         </div>
       </div>
 
+      {/* ── Currently Clocked In ── */}
+      {!isLoading && activeEntries.length > 0 && (
+        <Card className="border-orange-200 dark:border-orange-900 bg-orange-50/50 dark:bg-orange-950/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2 text-orange-700 dark:text-orange-400">
+              <Clock className="w-4 h-4" />
+              Currently Clocked In
+              <Badge variant="secondary" className="ml-1 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 border-0">
+                {activeEntries.length}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Employee</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Clocked In</TableHead>
+                    <TableHead>Running Time</TableHead>
+                    <TableHead>Scheduled End</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {activeEntries.map((entry: any) => {
+                    const emp = empMap.get(entry.employeeId);
+                    const shift = entry.shiftId ? shiftMap.get(entry.shiftId) : null;
+                    return (
+                      <TableRow key={entry.id} data-testid={`row-active-${entry.id}`}>
+                        <TableCell className="font-medium text-sm">
+                          {emp ? `${emp.firstName} ${emp.lastName}` : "Unknown"}
+                        </TableCell>
+                        <TableCell className="text-sm">{format(new Date(entry.clockInAt), "MM/dd/yyyy")}</TableCell>
+                        <TableCell className="text-sm">{format(new Date(entry.clockInAt), "HH:mm")}</TableCell>
+                        <TableCell className="text-sm font-medium text-orange-600 dark:text-orange-400">
+                          {formatRunningTime(entry.clockInAt)}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {shift ? format(new Date(shift.scheduledEndAt), "HH:mm") : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs border-orange-300 hover:bg-orange-100 dark:hover:bg-orange-900 dark:border-orange-700"
+                            onClick={() => setManualClockOutEntry(entry)}
+                            data-testid={`button-manual-clockout-${entry.id}`}
+                          >
+                            <LogOut className="w-3 h-3 mr-1" />
+                            Manual Clock-Out
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Filters ── */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="relative md:col-span-1">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -222,7 +440,7 @@ export default function AdminAttendance() {
         </Select>
       </div>
 
-      {/* Attendance Summary */}
+      {/* ── Summary Cards ── */}
       {!isLoading && (
         <div className="space-y-2">
           {selectedEmployeeName && (
@@ -279,6 +497,7 @@ export default function AdminAttendance() {
         </div>
       )}
 
+      {/* ── All Entries Table ── */}
       {isLoading ? (
         <div className="space-y-3">{[1,2,3,4].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
       ) : !filtered.length ? (
@@ -316,7 +535,7 @@ export default function AdminAttendance() {
                     const shift = entry.shiftId ? shiftMap.get(entry.shiftId) : null;
                     const clockIn = new Date(entry.clockInAt);
                     const clockOut = entry.clockOutAt ? new Date(entry.clockOutAt) : null;
-                    
+
                     let variance = "-";
                     if (shift) {
                       const scheduledStart = new Date(shift.scheduledStartAt);
@@ -329,7 +548,7 @@ export default function AdminAttendance() {
                     return (
                       <TableRow key={entry.id} data-testid={`row-attendance-${entry.id}`}>
                         <TableCell className="font-medium">
-                          <button 
+                          <button
                             onClick={() => setSelectedEmployee(emp)}
                             className="text-primary hover:underline font-medium text-sm text-left"
                             data-testid={`button-employee-detail-${entry.id}`}
@@ -344,15 +563,22 @@ export default function AdminAttendance() {
                         <TableCell className="text-sm">
                           {format(clockIn, "HH:mm")} - {clockOut ? format(clockOut, "HH:mm") : "In progress"}
                         </TableCell>
-                        <TableCell className={cn("text-sm font-medium", 
+                        <TableCell className={cn("text-sm font-medium",
                           variance.includes("late") ? "text-destructive" : variance.includes("early") ? "text-orange-500" : "text-green-600"
                         )}>
                           {variance}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={entry.status === "active" ? "default" : "secondary"} className="text-[10px] h-4">
-                            {entry.status}
-                          </Badge>
+                          <div className="flex items-center gap-1">
+                            <Badge variant={entry.status === "active" ? "default" : "secondary"} className="text-[10px] h-4">
+                              {entry.status}
+                            </Badge>
+                            {entry.manuallyClosedByAdmin && (
+                              <Badge variant="outline" className="text-[10px] h-4 text-muted-foreground">
+                                Admin corrected
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1 flex-wrap">
@@ -374,11 +600,20 @@ export default function AdminAttendance() {
       )}
 
       {selectedEmployee && (
-        <EmployeeAttendanceModal 
+        <EmployeeAttendanceModal
           employee={selectedEmployee}
           entries={entries || []}
           shifts={shifts || []}
           onClose={() => setSelectedEmployee(null)}
+        />
+      )}
+
+      {manualClockOutEntry && (
+        <ManualClockOutModal
+          entry={manualClockOutEntry}
+          emp={empMap.get(manualClockOutEntry.employeeId)}
+          shift={manualClockOutEntry.shiftId ? shiftMap.get(manualClockOutEntry.shiftId) : null}
+          onClose={() => setManualClockOutEntry(null)}
         />
       )}
     </div>

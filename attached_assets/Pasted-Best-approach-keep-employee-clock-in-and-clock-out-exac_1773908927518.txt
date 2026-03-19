@@ -1,0 +1,434 @@
+Best approach:
+keep employee clock-in and clock-out exactly as they are
+add an admin-only manual clock-out action for open shifts only
+
+Use this exact dev note.
+
+DEV NOTE
+
+Task
+Add an admin-only manual clock-out tool so business admins can clock out employees who forgot to clock out, without affecting any other working system.
+
+Critical instruction
+Do not touch anything else.
+Do not break anything else.
+Do not refactor unrelated logic.
+Do not modify:
+
+employee clock-in flow
+
+normal employee clock-out flow
+
+attendance creation flow
+
+payroll formulas
+
+timesheet logic
+
+schedule creation logic
+
+requests
+
+work log
+
+super admin
+
+subscriptions
+
+Stripe
+
+any unrelated page, query, or backend route
+
+Repeat this rule through implementation:
+Do not touch anything not directly required for this feature.
+Do not change any working logic outside this fix.
+Do not “improve” nearby systems.
+Do not rewrite attendance.
+Do not rewrite hours.
+Do not rewrite payroll.
+Do not rewrite timesheets.
+
+This is an additive admin correction feature only.
+
+Main goal
+Allow a business admin to manually clock out an employee if the employee forgot to clock out.
+
+This must let the admin:
+
+find employees who are still clocked in
+
+manually end the open shift
+
+set the correct clock-out time
+
+save that correction safely
+
+keep hours, attendance, timesheets, and payroll consistent
+
+Core product rule
+This is not a replacement for employee clock-out.
+This is an admin correction action for forgotten clock-outs only.
+
+Main use case
+Employee forgets to clock out.
+Hours keep running.
+Payroll and timesheets become wrong.
+
+Business admin should be able to:
+
+open attendance or active shifts
+
+find that employee’s still-open shift
+
+click Manual Clock Out
+
+choose the correct end time
+
+save it
+
+system recalculates the attendance entry from that corrected end time
+
+Required final behavior
+
+Admin can see currently open employee shifts
+Add a clear section in admin attendance view for employees still clocked in.
+
+Best options:
+
+top card/section: Currently Clocked In
+or
+
+filter: Active / Open Shifts
+or
+
+action button on active attendance rows
+
+Recommended safest placement
+Inside Attendance page, for rows with:
+
+status = active
+
+no clock_out_time yet
+
+show an action:
+
+Manual Clock Out
+
+Manual clock-out modal
+When admin clicks Manual Clock Out, open a modal.
+
+Modal should show:
+
+employee name
+
+shift date
+
+clock-in time
+
+scheduled shift time if any
+
+current running duration
+
+input for clock-out time
+
+optional note field for audit trail
+
+Suggested fields
+
+Clock-out date/time
+
+Reason or note optional
+Default note:
+Admin clocked out employee after forgotten clock-out
+
+Recommended CTA
+
+Save Clock-Out
+
+Cancel
+
+Admin sets correct clock-out time
+Admin must be able to set the actual time the employee should have been clocked out.
+
+Important
+Do not just set clock-out to “now” automatically.
+That would keep bad payroll data.
+
+Admin must choose the correct time.
+
+Best UX
+Pre-fill clock-out input with:
+
+scheduled end time if available
+or
+
+current time if unscheduled
+
+But let admin edit it.
+
+Validation rules
+Manual clock-out time must be valid.
+
+Rules:
+
+cannot be before clock-in time
+
+cannot be absurdly far in future
+
+should be on or after clock-in
+
+if same day/next day is supported, respect existing attendance rules
+
+Recommended validation messages
+
+Clock-out time cannot be earlier than clock-in time.
+
+Please enter a valid clock-out time.
+
+Recalculate worked hours correctly
+When admin saves manual clock-out:
+
+close the active attendance entry
+
+calculate worked duration from existing clock-in to the entered clock-out time
+
+update any derived hours fields exactly the same way a normal employee clock-out would
+
+Important
+Do not create a second separate calculation path.
+Reuse the same hours-finalization logic used by normal clock-out, with only the clock-out source changed to admin-entered time.
+
+This is the safest way to keep consistency.
+
+Timesheet and payroll consistency
+After admin manual clock-out is saved:
+
+attendance totals must update
+
+employee hours must update
+
+timesheets must reflect corrected hours
+
+payroll estimator must reflect corrected hours
+
+Important
+Do not add separate timesheet edits or payroll edits.
+Just make them read the corrected attendance entry as source of truth.
+
+Audit trail
+This is very important.
+
+Store that the shift was manually closed by admin.
+
+Recommended fields on attendance entry or audit log:
+
+manually_closed_by_admin = true
+
+manual_clock_out_by_user_id
+
+manual_clock_out_at
+
+manual_clock_out_reason nullable
+
+original_open_state flag optional if needed
+
+If existing audit log system exists, use it.
+If not, add lightweight metadata.
+
+Admin and future audits should be able to see:
+
+this shift was manually clocked out by admin
+
+who did it
+
+when
+
+optional note
+
+UI indicator on corrected entry
+In attendance history, corrected entries should show a subtle badge like:
+
+Admin corrected
+or
+
+Manual clock-out
+
+Do not make it noisy.
+Just enough for transparency.
+
+Recommended admin page placement
+
+Primary place
+Attendance page
+
+Add either:
+
+filter: Active
+
+section: Currently Clocked In
+
+action button on each open row
+
+Best safe layout
+For open active rows:
+show:
+
+employee
+
+clock-in time
+
+running time
+
+scheduled end if available
+
+Manual Clock Out button
+
+Optional later
+Dashboard card:
+
+Employees still clocked in
+
+But not required now.
+
+Permissions
+Only business admins for that company can use this action.
+
+Do not allow:
+
+employees
+
+clients
+
+other companies
+
+super admin only unless already allowed by broader platform tools
+
+Admin must only be able to manually clock out employees in their own business.
+
+Data scope
+Admin manual clock-out must only affect:
+
+the single active/open attendance record selected
+
+Do not modify:
+
+past completed shifts
+
+multiple records at once
+
+schedules themselves
+
+other employees
+
+This must be a single-record correction action.
+
+Edge cases to support
+
+Case A
+Employee has one open shift and forgot to clock out
+
+admin clocks them out manually
+
+works normally
+
+Case B
+Employee has scheduled end time
+
+modal can prefill that end time
+
+admin can keep or edit it
+
+Case C
+Employee unscheduled open shift
+
+modal prefill can use current time
+
+admin edits if needed
+
+Case D
+Employee was clocked in many hours ago
+
+admin sets real end time
+
+payroll stops inflating
+
+Case E
+Employee already clocked out
+
+do not show manual clock-out action
+
+no double close
+
+Important do-not-break rule
+Do not change the normal employee workflow.
+
+Employees should still:
+
+clock in normally
+
+clock out normally
+
+This feature is only for exceptions.
+
+Do not touch:
+
+geofencing
+
+attendance flags
+
+timesheet generation logic
+
+payroll formulas
+unless they naturally consume the corrected attendance record afterward
+
+Acceptance criteria
+
+Admin side
+
+admin can identify active/open shifts
+
+admin can manually clock out a selected employee
+
+admin can choose the correct end time
+
+admin can save successfully
+
+closed shift no longer appears as active
+
+Data
+
+worked hours are recalculated correctly
+
+attendance totals update
+
+employee hours update
+
+timesheets update
+
+payroll estimator updates
+
+Audit
+
+record shows that admin manually clocked out the shift
+
+who did it is stored
+
+optional note is stored
+
+Safety
+
+normal employee clock-in/out still works
+
+no unrelated modules are changed
+
+no existing production data is broken
+
+Direct instruction for agent
+Add only an admin manual clock-out correction tool for open attendance entries. Business admins must be able to find employees who are still clocked in, open a modal, set the correct clock-out time, and save it so the attendance entry closes properly and all downstream hours, timesheets, and payroll values stay consistent. Reuse the existing attendance finalization logic wherever possible, add an audit marker that the shift was manually closed by admin, and do not modify any unrelated working system.
+
+Strong reminder
+Do exactly this only.
+Do not expand scope.
+Do not touch anything else.
+Do not break anything already working.
+Only add a safe admin manual clock-out correction flow for forgotten employee clock-outs.
