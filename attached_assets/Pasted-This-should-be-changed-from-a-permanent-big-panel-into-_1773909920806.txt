@@ -1,0 +1,264 @@
+This should be changed from a permanent big panel into a delayed admin-assist reminder for forgotten clock-outs only.
+
+You are right:
+it should not sit there all the time for every active shift.
+That makes the page noisy and confusing.
+
+Best behavior:
+only surface the admin manual clock-out action when the employee is overdue past expected clock-out time.
+
+Use this exact dev note.
+
+DEV NOTE
+
+Task
+Refine the admin manual clock-out helper so it only appears for forgotten clock-outs and does not clutter the Attendance page.
+
+Critical instruction
+Do not touch anything else.
+Do not break anything else.
+Do not refactor unrelated logic.
+Do not modify:
+
+employee clock-in flow
+
+normal employee clock-out flow
+
+attendance recording logic
+
+hours calculation
+
+timesheets
+
+payroll
+
+schedule creation
+
+requests
+
+work log
+
+subscriptions
+
+super admin
+
+any unrelated UI or backend route
+
+This is a UI and visibility refinement only for the admin manual clock-out assist feature.
+
+Main goal
+The admin manual clock-out assist should only appear when an employee appears to have forgotten to clock out.
+
+It should not show for every currently active shift.
+It should not feel like a second attendance table.
+It should not clutter the page.
+
+Required final behavior
+
+Only show forgotten clock-out assist after overdue threshold
+Do not show the manual clock-out assist immediately when an employee clocks in.
+
+Show it only when:
+
+employee is still clocked in
+
+employee has a scheduled end time
+
+current time is at least 5 minutes past scheduled end time
+
+employee still has no clock-out recorded
+
+Recommended threshold
+
+5 minutes after scheduled end
+
+You mentioned 5 minutes.
+Use 5 minutes as the default threshold.
+
+Formula
+Show admin manual clock-out assist only if:
+now > scheduled_end + 5 minutes
+AND status is still active/open
+AND no clock_out exists
+
+If employee clocks out, the assist disappears immediately
+As soon as employee clocks out normally:
+
+remove the reminder/assist
+
+do not keep it visible
+
+do not leave stale open-state UI
+
+Do not show for normal in-progress shifts
+If employee is still working and has not yet reached scheduled end + threshold:
+
+do not show the admin assist panel/button
+
+Example
+If scheduled end is 4:00 PM:
+
+at 3:50 PM → no assist
+
+at 4:01 PM → no assist
+
+at 4:04 PM → no assist
+
+at 4:06 PM → show assist
+
+Unscheduled shifts
+For unscheduled shifts, do not show the forgot-to-clock-out reminder by default in this first version unless you already have a safe rule.
+
+Because there is no scheduled end time, the system cannot reliably know when “forgot to clock out” begins.
+
+Recommended safe behavior for now
+
+only auto-show forgot-to-clock-out assist for scheduled shifts
+
+do not auto-show for unscheduled shifts
+
+If later needed, unscheduled shifts can be handled separately with a different rule.
+
+Improve UI so it is smaller and less intrusive
+Current issue:
+the section looks too large and feels like another full attendance table.
+
+Change it so it feels like a compact alert/assistant strip, not a second page block.
+
+Recommended UI
+Use a compact card/banner above the attendance filters or inside the page header area.
+
+Example style
+Title:
+Forgotten clock-outs
+
+Compact row contents:
+
+employee name
+
+scheduled end time
+
+overdue time
+
+small action button: Manual Clock-Out
+
+Do not show a large full-width table unless multiple overdue employees exist.
+
+If only one overdue employee exists
+Show one compact card like:
+1 employee may have forgotten to clock out
+
+Inside:
+
+David Zulu
+
+Scheduled end: 4:00 PM
+
+Overdue by: 18 min
+
+Manual Clock-Out button
+
+If multiple overdue employees exist
+Show a compact stacked list or accordion, not a full heavy table.
+
+Example:
+Forgotten clock-outs (3)
+
+Rows:
+
+Employee
+
+Scheduled end
+
+Overdue by
+
+Manual Clock-Out
+
+Keep it compact.
+
+Suggested UI wording
+Instead of:
+Currently Clocked In
+
+Use wording closer to the purpose:
+
+Forgot to clock out
+
+Needs clock-out review
+
+Overdue clock-outs
+
+Best recommendation:
+Forgotten clock-outs
+
+Because this is specifically for admin intervention, not a live active-shift monitor.
+
+Keep manual clock-out action exactly as it is
+Do not change the correction logic itself if it is already working.
+Only refine when it appears and how it looks.
+
+The actual action can still:
+
+open modal
+
+let admin choose clock-out time
+
+save correction
+
+close shift properly
+
+Do not duplicate attendance information
+The compact assist should not try to repeat the whole attendance table.
+
+Only show the minimum:
+
+employee
+
+date
+
+scheduled end
+
+overdue amount
+
+manual clock-out action
+
+Safe visibility rules summary
+Show compact admin assist only when all are true:
+
+attendance entry is active/open
+
+employee has no clock-out yet
+
+shift has scheduled end time
+
+current time is more than 5 minutes past scheduled end
+
+Hide in all other cases.
+
+Acceptance criteria
+
+employee clocks in normally and no admin assist appears right away
+
+employee remains active before scheduled end and no assist appears
+
+employee passes scheduled end by less than 5 minutes and no assist appears
+
+employee passes scheduled end by more than 5 minutes and compact assist appears
+
+employee clocks out normally and assist disappears immediately
+
+assist UI is compact and no longer looks like a second attendance table
+
+manual clock-out button still works
+
+no unrelated attendance logic is changed
+
+Direct instruction for agent
+Refine only the admin manual clock-out assist so it appears only for forgotten clock-outs, not for all active shifts. Show it only when an employee is still clocked in more than 5 minutes past their scheduled end time and has no clock-out recorded. Do not show it during normal in-progress shifts. Redesign the section into a compact reminder/assist card so it does not look like a second attendance table. Keep the existing manual clock-out correction action intact and do not modify unrelated attendance, hours, payroll, or schedule logic.
+
+Strong reminder
+Do exactly this only.
+Do not expand scope.
+Do not touch anything else.
+Do not change working attendance behavior.
+Only refine the visibility and UI of the admin forgotten clock-out assist.

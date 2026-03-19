@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
-import { ClipboardList, Search, CalendarIcon, Filter, X, User, Clock, BarChart2, Users2, TrendingUp, AlertCircle, LogOut } from "lucide-react";
+import { ClipboardList, Search, CalendarIcon, Filter, User, Clock, BarChart2, Users2, TrendingUp, AlertCircle, LogOut } from "lucide-react";
 import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
 import { cn } from "@/lib/utils";
 import { EmployeeAttendanceModal } from "@/components/employee-attendance-modal";
@@ -206,13 +206,27 @@ export default function AdminAttendance() {
   const empMap = useMemo(() => new Map((employees || []).map(e => [e.id, e])), [employees]);
   const shiftMap = useMemo(() => new Map((shifts || []).map(s => [s.id, s])), [shifts]);
 
-  // Open (active) shifts — always shown regardless of date/search filters
-  const activeEntries = useMemo(() => {
-    if (!entries) return [];
+  // Forgotten clock-out assist — only entries that are scheduled, still active,
+  // and more than 5 minutes past their scheduled end time.
+  const overdueEntries = useMemo(() => {
+    if (!entries || !shifts) return [];
+    const THRESHOLD_MS = 5 * 60 * 1000;
+    const now = Date.now();
     return entries
-      .filter((e: any) => e.status === "active")
-      .sort((a, b) => new Date(a.clockInAt).getTime() - new Date(b.clockInAt).getTime());
-  }, [entries]);
+      .filter((e: any) => {
+        if (e.status !== "active" || e.clockOutAt || !e.shiftId) return false;
+        const shift = shiftMap.get(e.shiftId);
+        if (!shift?.scheduledEndAt) return false;
+        return now > new Date(shift.scheduledEndAt).getTime() + THRESHOLD_MS;
+      })
+      .map((e: any) => {
+        const shift = shiftMap.get(e.shiftId);
+        const overdueMs = now - new Date(shift.scheduledEndAt).getTime();
+        const overdueMin = Math.floor(overdueMs / 60000);
+        return { ...e, _shift: shift, _overdueMin: overdueMin };
+      })
+      .sort((a, b) => b._overdueMin - a._overdueMin);
+  }, [entries, shifts, shiftMap]);
 
   const filtered = useMemo(() => {
     if (!entries) return [];
@@ -285,68 +299,59 @@ export default function AdminAttendance() {
         </div>
       </div>
 
-      {/* ── Currently Clocked In ── */}
-      {!isLoading && activeEntries.length > 0 && (
-        <Card className="border-orange-200 dark:border-orange-900 bg-orange-50/50 dark:bg-orange-950/20">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2 text-orange-700 dark:text-orange-400">
-              <Clock className="w-4 h-4" />
-              Currently Clocked In
-              <Badge variant="secondary" className="ml-1 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 border-0">
-                {activeEntries.length}
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Clocked In</TableHead>
-                    <TableHead>Running Time</TableHead>
-                    <TableHead>Scheduled End</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {activeEntries.map((entry: any) => {
-                    const emp = empMap.get(entry.employeeId);
-                    const shift = entry.shiftId ? shiftMap.get(entry.shiftId) : null;
-                    return (
-                      <TableRow key={entry.id} data-testid={`row-active-${entry.id}`}>
-                        <TableCell className="font-medium text-sm">
-                          {emp ? `${emp.firstName} ${emp.lastName}` : "Unknown"}
-                        </TableCell>
-                        <TableCell className="text-sm">{format(new Date(entry.clockInAt), "MM/dd/yyyy")}</TableCell>
-                        <TableCell className="text-sm">{format(new Date(entry.clockInAt), "HH:mm")}</TableCell>
-                        <TableCell className="text-sm font-medium text-orange-600 dark:text-orange-400">
-                          {formatRunningTime(entry.clockInAt)}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {shift ? format(new Date(shift.scheduledEndAt), "HH:mm") : "—"}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-xs border-orange-300 hover:bg-orange-100 dark:hover:bg-orange-900 dark:border-orange-700"
-                            onClick={() => setManualClockOutEntry(entry)}
-                            data-testid={`button-manual-clockout-${entry.id}`}
-                          >
-                            <LogOut className="w-3 h-3 mr-1" />
-                            Manual Clock-Out
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
+      {/* ── Forgotten Clock-Outs Assist ── only shown when >5 min past scheduled end */}
+      {!isLoading && overdueEntries.length > 0 && (
+        <div
+          className="rounded-lg border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30 px-4 py-3 space-y-2"
+          data-testid="section-forgotten-clockouts"
+        >
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-orange-500 flex-shrink-0" />
+            <span className="text-sm font-semibold text-orange-700 dark:text-orange-400">
+              Forgotten clock-outs
+            </span>
+            <Badge variant="secondary" className="text-[10px] h-4 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 border-0">
+              {overdueEntries.length}
+            </Badge>
+          </div>
+          <div className="space-y-1.5">
+            {overdueEntries.map((entry: any) => {
+              const emp = empMap.get(entry.employeeId);
+              const overdueH = Math.floor(entry._overdueMin / 60);
+              const overdueM = entry._overdueMin % 60;
+              const overdueLabel = overdueH > 0 ? `${overdueH}h ${overdueM}m` : `${overdueM} min`;
+              return (
+                <div
+                  key={entry.id}
+                  className="flex items-center justify-between gap-3 rounded-md bg-white dark:bg-orange-950/40 border border-orange-100 dark:border-orange-800 px-3 py-2"
+                  data-testid={`row-overdue-${entry.id}`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-sm font-medium truncate">
+                      {emp ? `${emp.firstName} ${emp.lastName}` : "Unknown"}
+                    </span>
+                    <span className="text-xs text-muted-foreground hidden sm:inline">
+                      Scheduled end: {format(new Date(entry._shift.scheduledEndAt), "h:mm a")}
+                    </span>
+                    <span className="text-xs font-medium text-orange-600 dark:text-orange-400">
+                      Overdue by {overdueLabel}
+                    </span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs flex-shrink-0 border-orange-300 hover:bg-orange-100 dark:hover:bg-orange-900 dark:border-orange-700"
+                    onClick={() => setManualClockOutEntry(entry)}
+                    data-testid={`button-manual-clockout-${entry.id}`}
+                  >
+                    <LogOut className="w-3 h-3 mr-1" />
+                    Manual Clock-Out
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {/* ── Filters ── */}
