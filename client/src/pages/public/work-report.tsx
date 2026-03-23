@@ -158,7 +158,7 @@ function ReviewSection({ token, companyName, existingReview }: { token: string; 
             </div>
             <div>
               <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide">Verified Client Review</p>
-              <p className="text-[10px] text-gray-400">Submitted through completed service report · Verified by ClockField</p>
+              <p className="text-[10px] text-gray-400">Submitted through completed service report · Verified by ClockField.com</p>
             </div>
           </div>
           {review.rating && (

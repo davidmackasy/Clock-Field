@@ -1,0 +1,380 @@
+Yes. I understand exactly what you want.
+
+This is only about the review share link preview on social platforms.
+Do not touch anything else.
+Do not change report flow.
+Do not change Work Log.
+Do not change review saving.
+Do not change schedule, settings, or any unrelated page.
+
+DEV NOTE FOR AGENT
+
+Task
+Fix the public review share link so that when the review URL is pasted on social platforms like Facebook, X, Reddit, LinkedIn, and similar platforms, it generates a rich preview card with an image instead of showing only a plain link box.
+
+Also update branding text:
+
+* “Verified by ClockField” → “Verified by ClockField.com”
+* “Powered by ClockField” → “Powered by ClockField.com”
+
+Important scope
+Only focus on:
+
+1. social share preview for the public review page
+2. review share image/card generation for link previews
+3. branding text updates from ClockField to ClockField.com where specified
+
+Do not touch anything else.
+
+WHAT NEEDS TO HAPPEN
+
+Current problem
+When the review link is pasted into Facebook or another platform, it shows a raw link preview box instead of a proper clickable image card for the review.
+
+Correct behavior
+When the review share URL is pasted into a social post:
+
+* the platform should fetch preview metadata
+* the preview should display a card image
+* that image should look like the review/testimonial card
+* when clicked, it should open the existing public review page
+
+This is a metadata/social preview problem.
+The review page itself can stay as the destination page.
+The missing piece is proper Open Graph and Twitter/X metadata plus a real preview image URL.
+
+REQUIRED IMPLEMENTATION
+
+1. Add social preview meta tags to the public review page
+   On the public review share page only, inject proper meta tags in the document head.
+
+Required tags
+
+* og:title
+* og:description
+* og:image
+* og:image:width
+* og:image:height
+* og:url
+* og:type
+* og:site_name
+* twitter:card
+* twitter:title
+* twitter:description
+* twitter:image
+
+Recommended values
+
+og:type
+
+* website
+
+og:site_name
+
+* ClockField.com
+
+og:title example
+
+* David from DMI reviewed MackasyInc
+  or
+* Verified client review for MackasyInc
+
+og:description example
+
+* “I love the service please come again” · Verified by ClockField.com
+
+twitter:card
+
+* summary_large_image
+
+Important
+Use real review data for each review page.
+Do not hardcode generic metadata.
+
+2. Generate a dedicated preview image for each review share page
+   The social platforms need an actual image URL.
+   Do not rely on the HTML card rendering alone.
+
+Build a real share image endpoint or generated asset for each review.
+Example concept:
+
+* /api/reviews/:reviewShareToken/og-image
+  or
+* /public/reviews/:reviewShareToken/preview-image.png
+
+This image should visually match the review card style.
+
+The preview image should include
+
+* business name
+* star rating
+* review text
+* reviewer name
+* company name
+* optional service date
+* “Verified by ClockField.com”
+
+Do not include
+
+* admin controls
+* buttons
+* page footer clutter
+* unrelated report layout
+* anything private
+
+Important
+This image is for social preview only.
+It must be stable and publicly accessible by URL.
+
+3. The preview image should be the actual card, not a screenshot of the page
+   Do not let the platform scrape a random screenshot.
+   Generate or render a purpose-built image that looks like the testimonial card.
+
+Best approach
+Render a server-side OG image using the review data.
+That way:
+
+* every review link has a proper preview image
+* Facebook/X/LinkedIn can fetch it reliably
+* the preview looks clean and branded
+
+Recommended aspect ratio
+Use a social-friendly size such as:
+
+* 1200 x 630
+
+That works well for Facebook, X, LinkedIn, and many other platforms.
+
+4. Keep click destination as the existing public review page
+   The preview image is only for the social link card.
+   When the user clicks the preview, it should still open:
+
+* the already existing public review page
+
+Do not create a new destination page just for this.
+Only add preview metadata and preview image generation.
+
+5. Update visible branding text
+   Change the wording exactly where applicable:
+
+Replace
+
+* Verified by ClockField
+
+With
+
+* Verified by ClockField.com
+
+Replace
+
+* Powered by ClockField
+
+With
+
+* Powered by ClockField.com
+
+Apply this on:
+
+* public review page
+* share card image
+* social preview image
+* any review-specific footer or review badge related to this feature
+
+Do not make unrelated branding changes elsewhere unless they are part of the review share experience.
+
+6. Metadata content should come from the actual saved review
+   The social preview must match the real review data.
+
+Use actual saved values:
+
+* review text
+* rating
+* client name
+* company name
+* business name
+* service date if desired
+
+No placeholders.
+No demo text.
+No fake company names.
+No default generic content.
+
+If the saved review says:
+
+* David
+* DMI
+* “I love the service please come again”
+* 5 stars
+
+Then the preview image and social metadata should reflect that exact review.
+
+7. Handle platform crawler compatibility
+   Important for Facebook, X, LinkedIn, Reddit, etc.
+
+Make sure:
+
+* the meta tags are present in the initial HTML response
+* do not rely on client-side-only rendering for crawlers
+* the og:image URL is absolute, not relative
+* the page returns public 200 access for crawlers
+* the og:image itself returns publicly with correct content type
+* avoid auth requirements
+* avoid redirects that break crawler fetches
+
+If using a frontend framework with client-side hydration, make sure the meta tags are available server-side for the review share page.
+
+This is important.
+Many social platforms will not wait for client-side JavaScript.
+
+8. Preview image design direction
+   Make the OG image look very close to the testimonial card you already built.
+
+Suggested structure
+Top
+
+* business name
+* small badge: Verified by ClockField.com
+
+Main card
+
+* star rating
+* review quote
+* reviewer name
+* company name
+* optional service date
+* optional completed by
+
+Bottom
+
+* ClockField.com
+* clean premium footer
+
+Keep it simple and readable.
+High contrast.
+Avoid tiny text.
+Make the review quote the focus.
+
+9. Review page visible footer text update
+   On the review page, wherever it currently says:
+
+* Powered by ClockField
+
+Change to:
+
+* Powered by ClockField.com
+
+Wherever it currently says:
+
+* Verified by ClockField
+
+Change to:
+
+* Verified by ClockField.com
+
+This includes:
+
+* review badges
+* review card footer
+* testimonial verification label
+* footer branding on the public review page
+
+10. Do not promise Instagram link previews
+    Important implementation note for the agent:
+    Instagram feed captions do not reliably render normal Open Graph previews like Facebook, LinkedIn, or X.
+    Still implement standard OG/Twitter tags correctly because they are required for the web and most social link surfaces.
+
+What we should support properly:
+
+* Facebook
+* X
+* LinkedIn
+* Reddit
+* iMessage
+* Discord
+* Slack
+* WhatsApp if available
+
+Instagram may not show it the same way in all places, but the metadata should still be correct.
+
+ACCEPTANCE CRITERIA
+
+Test 1
+Paste a public review share link into Facebook post composer
+Expected:
+
+* preview image appears
+* not just raw URL text box
+* clicking preview opens the public review page
+
+Test 2
+Paste same link into X
+Expected:
+
+* large preview card appears
+* uses correct review image/title/description
+* clicking opens review page
+
+Test 3
+Paste same link into Reddit or LinkedIn
+Expected:
+
+* card preview appears with image and review summary
+* clicking opens review page
+
+Test 4
+Open the public review page directly
+Expected:
+
+* visible labels say “Verified by ClockField.com”
+* visible footer says “Powered by ClockField.com”
+
+Test 5
+Review data integrity
+Expected:
+
+* preview image matches actual saved review content
+* no placeholders
+* no wrong reviewer/company/review text
+
+TECHNICAL GUIDANCE FOR AGENT
+
+Best implementation path
+
+Step 1
+Create a review preview image generator for each review share token.
+
+Step 2
+Expose a public URL for that image.
+
+Step 3
+Inject Open Graph and Twitter meta tags into the public review page using absolute URLs.
+
+Step 4
+Update review-specific branding text to ClockField.com.
+
+Step 5
+Validate with social card testers and platform debuggers.
+
+Important
+If a platform caches old previews, force refresh by:
+
+* updating og:image URL with a version param if needed
+* using platform scraper refresh tools during testing
+
+DO NOT DO THESE
+
+* Do not change the review page route
+* Do not break existing review share links
+* Do not change any other report pages
+* Do not touch unrelated admin pages
+* Do not replace the entire review page design
+* Do not use a screenshot of the whole browser page
+* Do not depend on JavaScript-only meta tags
+
+Final rule
+The review share link should stay the destination.
+The social platform preview should show a clickable image card for that link.
+The card must look like the testimonial card.
+The branding must say ClockField.com.
+
+If you want, I can turn this into a stricter build note with exact meta tag examples and exact OG image layout content.
