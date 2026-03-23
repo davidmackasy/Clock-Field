@@ -1,0 +1,385 @@
+DEV NOTE
+
+Task:
+Make employee draft work logs resumable so employees can reopen a draft and continue working from where they left off.
+
+Main instruction:
+Do not break, remove, refactor, or affect anything else that is currently working.
+Do not change admin workflow, completed submission flow, report delivery, history rendering, or any unrelated employee pages.
+This is only for employee-side draft continuation behavior.
+Focus only on making draft mean work in progress, resumable, editable, and submittable.
+
+Goal
+
+Right now, when an employee leaves the Work page and comes back later, the saved job shows under History as Draft.
+But when they open that draft, it behaves like a read-only submission preview popup instead of letting them continue the work.
+
+That is the wrong behavior.
+
+Required behavior:
+A Draft must behave like an unfinished work session.
+When an employee opens a draft, they must be able to:
+
+* resume where they left off
+* see all saved work items
+* continue editing existing items
+* add more areas
+* add more before/after photos
+* continue notes
+* submit the work when done
+
+In simple terms:
+Draft = work in progress
+Submitted = finished and locked
+
+1. Current problem
+
+Current behavior:
+
+* Employee starts work
+* Adds one or more work items
+* Leaves the page or goes to Home
+* System saves it as Draft
+* Employee returns later
+* Opens that Draft from History
+* Sees a popup labeled like a final submission preview
+* Cannot properly continue the job from that draft
+
+Why this is a problem:
+
+* Draft should not behave like a final submitted work log
+* Employees need to continue unfinished jobs
+* Draft should reopen the live editable session, not a read-only preview
+* Employees must be able to add more sections and keep working before final submit
+
+2. Required behavior
+
+When an employee taps a draft entry from History:
+
+* do not open read-only “Work Submission” preview mode
+* do not treat it like a submitted session
+* instead reopen that draft as the active editable work session
+
+That reopened draft must allow the employee to:
+
+* continue the session
+* view current saved items
+* tap saved items and edit them
+* add more areas
+* add more before photos
+* add more after photos
+* update notes
+* submit work when ready
+
+This must feel exactly like they are resuming unfinished work.
+
+3. Required workflow
+
+Correct employee workflow must now be:
+
+* Employee starts session
+* Adds one or more work areas
+* Saves areas as they go
+* Leaves page or app
+* Session remains Draft
+* Employee comes back later
+* Opens Draft
+* Draft reloads into editable Active Session mode
+* Employee continues adding/editing items
+* Employee taps Submit Work only when the full job is done
+* Then session becomes Submitted and locked
+
+That is the required behavior.
+
+4. UI behavior change for Draft entries
+
+History section currently shows entries like:
+
+* Draft
+* Submitted
+
+Required rule:
+Submitted entries can keep current preview/read-only behavior
+Draft entries must not open the same read-only submission modal
+
+Instead:
+Draft entries must reopen the editable working session
+
+Recommended interaction:
+If status === draft:
+
+* load session into Active Session area
+* switch employee into edit/resume mode
+* show Add Area button
+* show editable existing items
+* show Submit Work button
+
+If status === submitted:
+
+* keep current submission preview modal or read-only details view
+
+5. Active session restoration behavior
+
+When employee opens a draft:
+The system must restore that draft into the active working state.
+
+That means the employee should see:
+
+* location/building
+* all saved work items
+* photo counts
+* edit controls
+* delete controls if already supported
+* Add Area button
+* Submit Work button
+
+Important:
+Do not make the employee start from scratch.
+Do not create a new duplicate session.
+Do not copy the draft into a new record.
+Resume the same draft session by ID.
+
+6. Add Area support inside resumed draft
+
+This is one of the most important parts.
+
+When a draft is reopened, the employee must still be able to tap Add Area and create more work items under that same draft session.
+
+Required behavior:
+
+* reopened draft behaves like an active live session
+* Add Area still works
+* new areas are saved under the same draft session
+* employee can keep building the job until they are finished
+
+Do not block Add Area just because the session came from History/Draft.
+
+7. Edit existing items inside resumed draft
+
+When a resumed draft is loaded:
+All saved items inside that draft must still be editable the same way as current active session items.
+
+That means:
+
+* tap item to edit
+* add more before photos
+* add more after photos
+* update notes
+* save changes to same item
+
+This must reuse the existing “editable saved work item before submission” behavior you already fixed.
+
+Important:
+Draft resume and editable saved items must work together.
+They should not be separate inconsistent flows.
+
+8. Submit button behavior inside resumed draft
+
+The employee must be able to submit from the resumed draft.
+
+Required:
+Once the draft is reopened, the Submit Work button must appear and function exactly as it does in a normal active session.
+
+Rules:
+
+* employee can keep editing until they hit Submit Work
+* once submitted, session becomes submitted
+* once submitted, editing locks as usual
+* workflow to admin remains unchanged
+
+Important:
+Draft should not say “Work Submission” unless the user is actually previewing a submitted or ready-to-submit session in the correct context.
+
+9. Labeling / wording cleanup
+
+Current issue:
+Draft opens into a popup called “Work Submission,” which is confusing because nothing was submitted yet.
+
+Required fix:
+Do not label an unfinished draft as “Work Submission” in a way that suggests it is already complete.
+
+Recommended behavior:
+For draft sessions:
+
+* do not show the read-only “Work Submission” modal by default
+* instead reopen the editable session screen
+
+If you need any title for draft mode, use something like:
+
+* Resume Work
+* Draft Work Session
+* Continue Work
+
+Best recommendation:
+Do not even open a separate modal for draft.
+Just load it back into the Active Session interface.
+
+10. Data/state rules
+
+Status meaning must be clear:
+
+draft
+
+* unfinished
+* editable
+* resumable
+* can add more items
+* can submit
+
+submitted
+
+* finished
+* read-only
+* visible in history as completed
+* follows existing admin workflow
+
+Important:
+Do not mix draft with submitted preview logic.
+
+11. Safe implementation recommendation
+
+Best safe approach:
+Use one active session state loader that can do one of two things:
+
+* create a new session
+* load an existing draft session
+
+So when user taps a draft:
+
+* fetch draft session by ID
+* set it as current active session
+* populate active session UI with its items
+* enable all normal active-session actions
+
+Do not create a new page flow if current active session page can already support this.
+
+12. Routing / state behavior
+
+If employee taps a draft from History:
+
+* navigate them into the Work page active-session state
+  or
+* replace current active-session state in place
+
+Best recommendation:
+If they are already on Work page, simply load that draft into the Active Session area.
+Do not force unnecessary route changes unless architecture requires it.
+
+If they are on another page and navigate back to Work:
+
+* if there is an open draft session, system may auto-restore it
+  or
+* allow them to tap draft explicitly from history to resume it
+
+Optional nice improvement:
+If only one open draft exists for that employee, auto-restore it into Active Session when Work page opens.
+But only do this if it is safe and does not conflict with current behavior.
+
+13. Scope protection
+
+Do not change:
+
+* admin side
+* submitted session preview behavior
+* completed history behavior
+* report sending workflow
+* payroll
+* profile
+* navigation
+* bottom tabs
+* attendance
+* timesheets
+
+Only change:
+
+* employee draft opening behavior
+* employee ability to resume/edit/add/submit from draft
+
+14. UI expectations
+
+Once draft is resumed, the top of the Work page should behave like normal Active Session:
+
+* session card visible
+* location visible
+* item count visible
+* existing saved work items visible
+* Add Area visible
+* Submit Work visible
+
+Draft should no longer feel stuck in history.
+It should feel like an unfinished live job.
+
+15. Edge cases to handle
+
+* employee opens draft with 1 item
+* employee opens draft with many items
+* employee adds new area after reopening draft
+* employee edits existing area after reopening draft
+* employee submits reopened draft
+* employee leaves again and comes back again
+* same draft resumes correctly multiple times
+* submitted sessions remain read-only
+* no duplicate session is created on resume
+* no duplicate work items are created on resume
+* current active session does not get overwritten incorrectly by another draft unless the employee explicitly opens that draft
+
+16. Testing checklist
+
+Must test all of these:
+
+Draft resume
+
+* start work session
+* add one area
+* leave Work page
+* return later
+* draft appears in History
+* tapping draft reopens editable session, not read-only preview
+
+Draft editing
+
+* reopened draft shows existing items
+* reopened draft allows item edit
+* reopened draft allows more before photos
+* reopened draft allows more after photos
+* reopened draft allows note updates
+
+Draft expansion
+
+* reopened draft allows Add Area
+* newly added area saves under same draft session
+* item count updates correctly
+
+Submission
+
+* reopened draft shows Submit Work button
+* submit works from resumed draft
+* session changes to submitted
+* submitted session becomes read-only
+* admin receives same workflow output as before
+
+Regression
+
+* submitted history entries still open correctly
+* active session still works for brand new sessions
+* no duplicate sessions created
+* no unrelated employee pages affected
+* no admin pages affected
+
+17. Final instruction for agent
+
+Focus only on this exact issue.
+
+Make Draft mean unfinished work in progress.
+
+When an employee opens a draft:
+
+* resume the same session
+* restore it into editable Active Session mode
+* allow editing saved items
+* allow adding more areas
+* allow submitting when done
+
+Do not open draft in read-only “Work Submission” mode.
+Do not break anything else.
+Do not touch anything unrelated.

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
@@ -272,6 +272,24 @@ export default function EmployeeWorkLog() {
     });
   }
 
+  // Auto-restore a single open draft when the page loads and no active session is set
+  useEffect(() => {
+    if (!submissions) return;
+    // Only auto-restore if no active session at all yet
+    setActiveSub((prev: any) => {
+      if (prev) return prev;
+      const drafts = submissions.filter((s: any) => s.status === "draft");
+      if (drafts.length === 1) return drafts[0];
+      return prev;
+    });
+  }, [submissions]);
+
+  function resumeDraft(sub: any) {
+    setActiveSub(sub);
+    // Scroll to top so the active session card is visible
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   const pastSubs = (submissions || []).filter(s => !activeSub || s.id !== activeSub.id);
 
   return (
@@ -403,32 +421,35 @@ export default function EmployeeWorkLog() {
           {subsLoading ? (
             <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
           ) : (
-            pastSubs.map((sub: any) => (
-              <Card
-                key={sub.id}
-                className="cursor-pointer hover:border-primary/50 transition-colors"
-                onClick={() => openDetail(sub)}
-                data-testid={`card-submission-${sub.id}`}
-              >
-                <CardContent className="p-4 flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium">{sub.workDate}</p>
-                      <Badge
-                        variant={sub.status === "submitted" ? "default" : "secondary"}
-                        className="text-[10px] capitalize"
-                      >
-                        {sub.status}
-                      </Badge>
+            pastSubs.map((sub: any) => {
+              const isDraft = sub.status === "draft";
+              return (
+                <Card
+                  key={sub.id}
+                  className={`cursor-pointer transition-colors ${isDraft ? "border-amber-300 hover:border-amber-400 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-700" : "hover:border-primary/50"}`}
+                  onClick={() => isDraft ? resumeDraft(sub) : openDetail(sub)}
+                  data-testid={`card-submission-${sub.id}`}
+                >
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium">{sub.workDate}</p>
+                        <Badge
+                          variant={sub.status === "submitted" ? "default" : "secondary"}
+                          className={`text-[10px] capitalize ${isDraft ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400" : ""}`}
+                        >
+                          {isDraft ? "Draft — tap to resume" : sub.status}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />{sub.locationName || "No location"}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                      <MapPin className="w-3 h-3" />{sub.locationName || "No location"}
-                    </p>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                </CardContent>
-              </Card>
-            ))
+                    <ChevronRight className={`w-4 h-4 ${isDraft ? "text-amber-400" : "text-muted-foreground"}`} />
+                  </CardContent>
+                </Card>
+              );
+            })
           )}
         </div>
       )}
