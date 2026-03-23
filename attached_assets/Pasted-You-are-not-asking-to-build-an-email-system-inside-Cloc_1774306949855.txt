@@ -1,0 +1,240 @@
+You are not asking to build an email system inside Clockfield.
+
+You are asking for this:
+when you copy a public report link from Clockfield and paste it into Gmail, Outlook, or another email app, the link itself should generate a preview thumbnail/card automatically, similar to how links sometimes show a preview when pasted on social platforms.
+
+That means the fix is on the public report page metadata, not on an email compose feature.
+
+Use this corrected dev note for the agent.
+
+Dev Note: Add link preview metadata for public report links only
+
+Critical instruction
+
+Do not change, remove, refactor, or affect anything else in the app.
+Do not build an email sending system.
+Do not change Gmail, Outlook, or any third-party email app.
+Do not touch report generation logic.
+Do not touch stored photos.
+Do not touch reviews, pay stubs, timesheets, subscriptions, or any unrelated feature.
+Only improve the public report link so that when the link is pasted into supported email apps or messaging apps, it has a better chance of showing a preview thumbnail/card.
+
+Actual goal
+
+When a public Clockfield report link is copied and pasted into Gmail, Outlook, or similar places, the link should have proper preview metadata so supported apps can show:
+
+thumbnail image
+title
+short description
+
+This is similar to link preview behavior or unfurl behavior.
+
+Important clarification
+
+Clockfield cannot force every email client to show a preview.
+Gmail, Outlook, and other apps decide whether they render a preview card or not.
+
+What Clockfield can do is prepare the public report page correctly by adding proper metadata:
+
+Open Graph tags
+Twitter card tags
+preview image URL
+title
+description
+
+This is the correct implementation.
+
+What needs to be implemented
+
+For every public report page, add proper SEO / social preview metadata in the page head.
+
+Required metadata
+Add dynamic tags for each public report link:
+
+og:title
+og:description
+og:image
+og:url
+og:type
+twitter:card
+twitter:title
+twitter:description
+twitter:image
+
+Recommended values
+
+og:title
+Cleaning Service Report | [Business Name]
+
+Example:
+Cleaning Service Report | Master Commercial Cleaning Services
+
+og:description
+Completed cleaning report for [Location or Service Date]. View before and after photos and service details.
+
+Example:
+Completed cleaning report for Anchor Construction. View before and after photos and service details.
+
+og:image
+Use one strong preview image from the report.
+
+Best choice:
+
+first after photo from the report
+
+Fallback order:
+
+first after photo
+first report photo
+default Clockfield report preview image
+
+og:url
+The short public report URL
+
+Example:
+https://clockfield.com/r/BE5WBMJ
+
+og:type
+website
+
+twitter:card
+summary_large_image
+
+Important image requirements
+
+The og:image must be a publicly accessible absolute URL.
+Not a relative path.
+Not a protected/private URL.
+Not a temporary local blob URL.
+
+Recommended preview image behavior
+
+Use the first after image as the main preview image because it looks more professional and shows finished work.
+
+If possible, generate or use an optimized preview-sized image for metadata so the preview loads faster.
+But do not alter or overwrite original stored photos.
+Do not migrate old data.
+Only use existing stored image URLs or safe derived thumbnail URLs if already supported.
+
+Recommended dimensions
+Try to make the preview image at least around:
+1200 x 630
+or another social-preview-friendly size if your system can provide it.
+
+If not possible, use the existing first after image and let platforms crop it.
+
+Important implementation detail
+
+Because this is a dynamic public report page, the metadata must be server-rendered or rendered in a way crawlers can actually read.
+
+Agent must check this carefully.
+
+If the app is SPA-only and the meta tags are injected only after client-side JavaScript runs, many preview crawlers may fail to read them.
+
+So the public report route should return actual metadata in the initial HTML response for that specific report.
+
+This is critical.
+
+Agent must verify:
+
+whether the public report route is server-rendered
+whether the metadata is present in page source before hydration
+whether link preview bots can access it
+
+If not, implement a safe server-side metadata response for public report routes only.
+
+Preview content suggestion
+
+For each public report:
+Title:
+Cleaning Service Report | [Business Name]
+
+Description:
+Prepared by [Employee Name] on [Service Date]. View completed work and before-and-after photos.
+
+Image:
+First after photo
+
+Optional improvement
+
+If possible, create a dedicated preview image composition for the report link using 2 or 3 small photos in one merged image.
+Example:
+
+combine first 3 after photos into one preview collage
+use that as og:image
+
+This would look much better than one single image.
+
+But only do this if it can be done safely and simply.
+If there is any risk, use the first after image only.
+Do not over-engineer this.
+
+Safest implementation order
+
+Phase 1
+Add proper OG and Twitter metadata using the first after photo
+
+Phase 2 optional
+If easy and safe, add generated collage preview image later
+
+What not to do
+
+do not build a custom email feature
+do not try to modify Gmail or Outlook behavior
+do not break the current public report page
+do not change link generation
+do not change report layout
+do not touch unrelated routes
+do not require users to send emails through Clockfield
+do not assume every email client will show previews
+
+Important expectation setting
+
+Even after this is implemented properly:
+
+some apps will show a rich preview
+some apps may only show the raw link
+some email clients are inconsistent
+
+That is normal.
+The goal is to make Clockfield links preview-ready, not to guarantee every email app will render a card.
+
+Testing requirements
+
+The agent must test carefully without touching anything else.
+
+Test 1
+Open public report page source
+
+confirm og:title exists
+confirm og:description exists
+confirm og:image exists
+confirm og:url exists
+
+Test 2
+Use a public report with after photos
+
+confirm first after photo is used as preview image
+
+Test 3
+Use a report without after photos
+
+confirm fallback image is used
+
+Test 4
+Paste the public report link into supported apps
+
+test Gmail draft
+test Outlook draft
+test iMessage or WhatsApp if available
+test social apps if needed
+
+Test 5
+Confirm the report page itself still works exactly the same
+
+Test 6
+Confirm old public report links still open normally
+
+Suggested summary for the agent
+
+Do not build an email system. The actual request is to make public Clockfield report links preview-ready when pasted into Gmail, Outlook, or similar apps. Implement proper dynamic Open Graph and Twitter card metadata on public report pages, using the first after photo as the preview image, with safe fallbacks. Ensure the metadata is available in the initial server-rendered HTML so crawlers can read it. Do not change anything else in the app.

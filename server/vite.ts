@@ -6,6 +6,7 @@ import fs from "fs";
 import path from "path";
 import { nanoid } from "nanoid";
 import { buildReviewMetaTags, extractReviewToken } from "./review-meta";
+import { buildReportMetaTags, extractReportToken } from "./report-meta";
 
 const viteLogger = createLogger();
 
@@ -50,11 +51,23 @@ export async function setupVite(server: Server, app: Express) {
         `src="/src/main.tsx?v=${nanoid()}"`,
       );
 
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+
       // Inject OG/Twitter meta tags for review share pages
       const reviewToken = extractReviewToken(url);
       if (reviewToken) {
-        const baseUrl = `${req.protocol}://${req.get("host")}`;
         const metaTags = await buildReviewMetaTags(reviewToken, baseUrl);
+        if (metaTags) {
+          template = template
+            .replace("<head>", `<head>\n    ${metaTags}`)
+            .replace(`<title>ClockField</title>`, "");
+        }
+      }
+
+      // Inject OG/Twitter meta tags for public work-report pages (/public/work-report/:token and /r/:code)
+      const reportToken = extractReportToken(url);
+      if (reportToken) {
+        const metaTags = await buildReportMetaTags(reportToken, baseUrl);
         if (metaTags) {
           template = template
             .replace("<head>", `<head>\n    ${metaTags}`)
