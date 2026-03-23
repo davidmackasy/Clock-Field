@@ -2507,6 +2507,448 @@ export async function registerRoutes(
     } catch (err: any) { res.status(400).json({ message: err.message }); }
   });
 
+  // ────────────────────────────────────────────────────────────────────────────
+  // PAY RUNS
+  // ────────────────────────────────────────────────────────────────────────────
+  app.get("/api/payroll/pay-runs", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const runs = await storage.getPayRunsByCompany(user.companyId);
+      res.json(runs);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/payroll/pay-runs", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const now = new Date().toISOString();
+      const run = await storage.createPayRun({
+        ...req.body,
+        companyId: user.companyId,
+        createdBy: user.id,
+        createdAt: now,
+        updatedAt: now,
+      });
+      res.json(run);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/payroll/pay-runs/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const run = await storage.getPayRun(req.params.id);
+      if (!run || run.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      res.json(run);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/payroll/pay-runs/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const run = await storage.getPayRun(req.params.id);
+      if (!run || run.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const updated = await storage.updatePayRun(req.params.id, { ...req.body, updatedAt: new Date().toISOString() });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/payroll/pay-runs/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const run = await storage.getPayRun(req.params.id);
+      if (!run || run.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (run.status !== "draft") return res.status(400).json({ message: "Only draft pay runs can be deleted" });
+      await storage.deletePayRun(req.params.id);
+      res.json({ ok: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // PAY STUBS — ADMIN
+  // ────────────────────────────────────────────────────────────────────────────
+  app.get("/api/payroll/pay-stubs", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const stubs = await storage.getPayStubsByCompany(user.companyId);
+      res.json(stubs);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Generate a draft pay stub for a specific employee in a pay run
+  app.post("/api/payroll/pay-stubs/generate", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { payRunId, employeeId } = req.body;
+      if (!payRunId || !employeeId) return res.status(400).json({ message: "payRunId and employeeId required" });
+
+      const payRun = await storage.getPayRun(payRunId);
+      if (!payRun || payRun.companyId !== user.companyId) return res.status(404).json({ message: "Pay run not found" });
+
+      const employee = await storage.getUser(employeeId);
+      if (!employee || employee.companyId !== user.companyId) return res.status(404).json({ message: "Employee not found" });
+
+      const company = await storage.getCompany(user.companyId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+
+      // Check for existing stub in this pay run for this employee
+      const existingStubs = await storage.getPayStubsByPayRun(payRunId);
+      const duplicate = existingStubs.find(s => s.employeeId === employeeId && s.status !== "voided");
+      if (duplicate) return res.status(400).json({ message: "A pay stub already exists for this employee in this pay run" });
+
+      // Find approved timesheet for this period
+      const timesheets = await storage.getTimesheetsByEmployee(employeeId);
+      const matchingTimesheet = timesheets.find(t =>
+        t.status === "approved" &&
+        t.payPeriodStart === payRun.periodStart &&
+        t.payPeriodEnd === payRun.periodEnd
+      );
+
+      const rate = parseFloat(employee.hourlyRate || "0");
+      const overtimeRate = parseFloat(employee.overtimeRate || "0") || rate * 1.5;
+      const overtimeThresholdHours = (company.overtimeThresholdWeekly || 40);
+
+      let regularMinutes = 0;
+      let overtimeMinutes = 0;
+
+      if (matchingTimesheet) {
+        regularMinutes = matchingTimesheet.regularMinutes;
+        overtimeMinutes = matchingTimesheet.overtimeMinutes;
+      } else {
+        // Fall back to raw time entries in range
+        const allEntries = await storage.getTimeEntriesByCompany(user.companyId);
+        const periodEntries = allEntries.filter(e =>
+          e.employeeId === employeeId &&
+          e.status === "completed" &&
+          e.clockInAt.substring(0, 10) >= payRun.periodStart &&
+          e.clockInAt.substring(0, 10) <= payRun.periodEnd
+        );
+        const totalMins = periodEntries.reduce((s, e) => s + (e.workedMinutes || 0), 0);
+        const totalHours = totalMins / 60;
+        const regHours = Math.min(totalHours, overtimeThresholdHours);
+        const otHours = Math.max(0, totalHours - overtimeThresholdHours);
+        regularMinutes = Math.round(regHours * 60);
+        overtimeMinutes = Math.round(otHours * 60);
+      }
+
+      const regularHours = regularMinutes / 60;
+      const overtimeHours = overtimeMinutes / 60;
+      const totalHours = regularHours + overtimeHours;
+      const regularPay = regularHours * rate;
+      const overtimePay = overtimeHours * overtimeRate;
+      const grossPay = regularPay + overtimePay;
+
+      // Calculate deductions from company settings
+      const customDeductions = await storage.getPayrollDeductionsByCompany(user.companyId);
+
+      const deductionItems: Array<{ type: string; description: string; amount: number }> = [];
+
+      if (company.deductionsEnabled) {
+        if (company.federalTaxMode === "percent" && parseFloat(company.federalTaxPercent || "0") > 0) {
+          deductionItems.push({ type: "tax", description: "Federal Tax", amount: grossPay * parseFloat(company.federalTaxPercent || "0") / 100 });
+        }
+        if (company.provincialTaxMode === "percent" && parseFloat(company.provincialTaxPercent || "0") > 0) {
+          deductionItems.push({ type: "provincial_tax", description: "Provincial Tax", amount: grossPay * parseFloat(company.provincialTaxPercent || "0") / 100 });
+        }
+        if (company.cppMode === "percent" && parseFloat(company.cppPercent || "0") > 0) {
+          deductionItems.push({ type: "cpp", description: "CPP", amount: grossPay * parseFloat(company.cppPercent || "0") / 100 });
+        }
+        if (company.eiMode === "percent" && parseFloat(company.eiPercent || "0") > 0) {
+          deductionItems.push({ type: "ei", description: "EI", amount: grossPay * parseFloat(company.eiPercent || "0") / 100 });
+        }
+        for (const d of customDeductions.filter(d => d.isActive)) {
+          const amt = d.type === "percent" ? grossPay * parseFloat(d.value || "0") / 100 : parseFloat(d.value || "0");
+          deductionItems.push({ type: "other", description: d.label, amount: amt });
+        }
+      }
+
+      const totalDeductions = deductionItems.reduce((s, d) => s + d.amount, 0);
+      const netPay = grossPay - totalDeductions;
+      const now = new Date().toISOString();
+
+      const stub = await storage.createPayStub({
+        companyId: user.companyId,
+        payRunId,
+        employeeId,
+        timesheetId: matchingTimesheet?.id || null,
+        status: "draft",
+        employeeNameSnapshot: `${employee.firstName} ${employee.lastName}`,
+        employeeIdSnapshot: employee.employeeId || null,
+        employeePositionSnapshot: employee.position || null,
+        employeePayTypeSnapshot: "hourly",
+        employeeRateSnapshot: employee.hourlyRate || null,
+        companyNameSnapshot: company.name,
+        regularHours: regularHours.toFixed(2),
+        overtimeHours: overtimeHours.toFixed(2),
+        totalHours: totalHours.toFixed(2),
+        grossPay: grossPay.toFixed(2),
+        totalDeductions: totalDeductions.toFixed(2),
+        netPay: netPay.toFixed(2),
+        periodStart: payRun.periodStart,
+        periodEnd: payRun.periodEnd,
+        payDate: payRun.payDate,
+        createdBy: user.id,
+        updatedBy: user.id,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      // Create earning lines
+      if (regularPay > 0) {
+        await storage.createPayStubEarning({
+          payStubId: stub.id,
+          type: "regular",
+          description: "Regular Pay",
+          hours: regularHours.toFixed(2),
+          rate: rate.toFixed(2),
+          amount: regularPay.toFixed(2),
+          displayOrder: 0,
+        });
+      }
+      if (overtimePay > 0) {
+        await storage.createPayStubEarning({
+          payStubId: stub.id,
+          type: "overtime",
+          description: "Overtime Pay",
+          hours: overtimeHours.toFixed(2),
+          rate: overtimeRate.toFixed(2),
+          amount: overtimePay.toFixed(2),
+          displayOrder: 1,
+        });
+      }
+
+      // Create deduction lines
+      for (let i = 0; i < deductionItems.length; i++) {
+        await storage.createPayStubDeduction({
+          payStubId: stub.id,
+          type: deductionItems[i].type,
+          description: deductionItems[i].description,
+          amount: deductionItems[i].amount.toFixed(2),
+          employerPaid: false,
+          displayOrder: i,
+        });
+      }
+
+      // Audit log
+      await storage.createPayStubAuditLog({
+        payStubId: stub.id,
+        action: "generated",
+        actorId: user.id,
+        actorRole: user.role,
+        metadataJson: JSON.stringify({ timesheetId: matchingTimesheet?.id, grossPay, netPay }),
+        createdAt: now,
+      });
+
+      res.json(stub);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/payroll/pay-stubs/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const stub = await storage.getPayStub(req.params.id);
+      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const earnings = await storage.getPayStubEarnings(stub.id);
+      const deductions = await storage.getPayStubDeductions(stub.id);
+      const auditLog = await storage.getPayStubAuditLog(stub.id);
+      res.json({ ...stub, earnings, deductions, auditLog });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/payroll/pay-stubs/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const stub = await storage.getPayStub(req.params.id);
+      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (!["draft", "reviewed"].includes(stub.status)) return res.status(400).json({ message: "Cannot edit a finalized pay stub" });
+      const { earnings: _e, deductions: _d, ...rest } = req.body;
+      const updated = await storage.updatePayStub(req.params.id, { ...rest, updatedBy: user.id, updatedAt: new Date().toISOString() });
+      await storage.createPayStubAuditLog({
+        payStubId: stub.id,
+        action: "updated",
+        actorId: user.id,
+        actorRole: user.role,
+        metadataJson: JSON.stringify(rest),
+        createdAt: new Date().toISOString(),
+      });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Recalculate totals from current earnings/deductions lines
+  app.post("/api/payroll/pay-stubs/:id/recalculate", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const stub = await storage.getPayStub(req.params.id);
+      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (!["draft", "reviewed"].includes(stub.status)) return res.status(400).json({ message: "Cannot recalculate a finalized pay stub" });
+
+      const earnings = await storage.getPayStubEarnings(stub.id);
+      const deductions = await storage.getPayStubDeductions(stub.id);
+
+      const grossPay = earnings.reduce((s, e) => s + parseFloat(e.amount || "0"), 0);
+      const totalDeductions = deductions.reduce((s, d) => s + parseFloat(d.amount || "0"), 0);
+      const netPay = grossPay - totalDeductions;
+
+      const updated = await storage.updatePayStub(stub.id, {
+        grossPay: grossPay.toFixed(2),
+        totalDeductions: totalDeductions.toFixed(2),
+        netPay: netPay.toFixed(2),
+        updatedBy: user.id,
+        updatedAt: new Date().toISOString(),
+      });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/payroll/pay-stubs/:id/finalize", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const stub = await storage.getPayStub(req.params.id);
+      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (!["draft", "reviewed"].includes(stub.status)) return res.status(400).json({ message: "Pay stub is already finalized" });
+      const now = new Date().toISOString();
+      const updated = await storage.updatePayStub(stub.id, { status: "finalized", finalizedAt: now, updatedBy: user.id, updatedAt: now });
+      await storage.createPayStubAuditLog({ payStubId: stub.id, action: "finalized", actorId: user.id, actorRole: user.role, metadataJson: null, createdAt: now });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/payroll/pay-stubs/:id/confirm-paid", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const stub = await storage.getPayStub(req.params.id);
+      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (stub.status === "voided") return res.status(400).json({ message: "Cannot confirm a voided pay stub" });
+      const now = new Date().toISOString();
+      // Auto-finalize if not yet finalized, then confirm paid + publish
+      const updated = await storage.updatePayStub(stub.id, {
+        status: "confirmed_paid",
+        finalizedAt: stub.finalizedAt || now,
+        confirmedPaidAt: now,
+        employeeVisibleAt: now,
+        updatedBy: user.id,
+        updatedAt: now,
+      });
+      await storage.createPayStubAuditLog({ payStubId: stub.id, action: "confirmed_paid", actorId: user.id, actorRole: user.role, metadataJson: null, createdAt: now });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/payroll/pay-stubs/:id/void", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const stub = await storage.getPayStub(req.params.id);
+      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const now = new Date().toISOString();
+      const updated = await storage.updatePayStub(stub.id, { status: "voided", voidedAt: now, updatedBy: user.id, updatedAt: now });
+      await storage.createPayStubAuditLog({ payStubId: stub.id, action: "voided", actorId: user.id, actorRole: user.role, metadataJson: JSON.stringify({ reason: req.body.reason || "" }), createdAt: now });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Earning line CRUD
+  app.post("/api/payroll/pay-stubs/:id/earnings", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const stub = await storage.getPayStub(req.params.id);
+      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (!["draft", "reviewed"].includes(stub.status)) return res.status(400).json({ message: "Cannot edit finalized pay stub" });
+      const earning = await storage.createPayStubEarning({ ...req.body, payStubId: stub.id });
+      res.json(earning);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/payroll/pay-stubs/:id/earnings/:earningId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const stub = await storage.getPayStub(req.params.id);
+      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (!["draft", "reviewed"].includes(stub.status)) return res.status(400).json({ message: "Cannot edit finalized pay stub" });
+      const updated = await storage.updatePayStubEarning(req.params.earningId, req.body);
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/payroll/pay-stubs/:id/earnings/:earningId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const stub = await storage.getPayStub(req.params.id);
+      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (!["draft", "reviewed"].includes(stub.status)) return res.status(400).json({ message: "Cannot edit finalized pay stub" });
+      await storage.deletePayStubEarning(req.params.earningId);
+      res.json({ ok: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Deduction line CRUD
+  app.post("/api/payroll/pay-stubs/:id/deductions", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const stub = await storage.getPayStub(req.params.id);
+      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (!["draft", "reviewed"].includes(stub.status)) return res.status(400).json({ message: "Cannot edit finalized pay stub" });
+      const deduction = await storage.createPayStubDeduction({ ...req.body, payStubId: stub.id });
+      res.json(deduction);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/payroll/pay-stubs/:id/deductions/:deductionId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const stub = await storage.getPayStub(req.params.id);
+      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (!["draft", "reviewed"].includes(stub.status)) return res.status(400).json({ message: "Cannot edit finalized pay stub" });
+      const updated = await storage.updatePayStubDeduction(req.params.deductionId, req.body);
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/payroll/pay-stubs/:id/deductions/:deductionId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const stub = await storage.getPayStub(req.params.id);
+      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (!["draft", "reviewed"].includes(stub.status)) return res.status(400).json({ message: "Cannot edit finalized pay stub" });
+      await storage.deletePayStubDeduction(req.params.deductionId);
+      res.json({ ok: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/payroll/pay-stubs/:id/audit", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const stub = await storage.getPayStub(req.params.id);
+      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const log = await storage.getPayStubAuditLog(stub.id);
+      res.json(log);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // PAY STUBS — EMPLOYEE PORTAL
+  // ────────────────────────────────────────────────────────────────────────────
+  app.get("/api/employee/pay-stubs", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (user.role !== "employee") return res.status(403).json({ message: "Employees only" });
+      const stubs = await storage.getPublishedPayStubsByEmployee(user.id, user.companyId);
+      res.json(stubs);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/employee/pay-stubs/:id", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (user.role !== "employee") return res.status(403).json({ message: "Employees only" });
+      const stub = await storage.getPayStub(req.params.id);
+      if (!stub || stub.employeeId !== user.id || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (!["confirmed_paid", "published"].includes(stub.status) || !stub.employeeVisibleAt) return res.status(403).json({ message: "Pay stub not yet available" });
+      const earnings = await storage.getPayStubEarnings(stub.id);
+      const deductions = await storage.getPayStubDeductions(stub.id);
+      res.json({ ...stub, earnings, deductions });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   // Run once at startup to migrate any /uploads/ imageUrls to base64 in DB
   void migrateUploadsToBase64();
 

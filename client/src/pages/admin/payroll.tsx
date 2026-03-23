@@ -5,10 +5,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DollarSign, Clock, Users, TrendingDown, ChevronRight, Calendar } from "lucide-react";
+import PayRunsTab from "./pay-runs-tab";
+import PayStubsTab from "./pay-stubs-tab";
 
 // ── Period helpers ────────────────────────────────────────────────────────────
 
@@ -359,9 +362,9 @@ function PayrollHistoryModal({
   );
 }
 
-// ── Main Payroll Page ─────────────────────────────────────────────────────────
+// ── Payroll Estimator (inner component) ──────────────────────────────────────
 
-export default function AdminPayroll() {
+function PayrollEstimatorContent() {
   const [filter, setFilter] = useState<AllPeriodFilter>("this_2_weeks");
   const [empFilter, setEmpFilter] = useState<string>("all");
   const [customStart, setCustomStart] = useState<string>(toDateStr(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
@@ -430,10 +433,10 @@ export default function AdminPayroll() {
   const safePeriodForModal: PeriodFilter = filter === "custom" ? "this_2_weeks" : (filter as PeriodFilter);
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-payroll-title">Payroll Estimator</h1>
+          <h2 className="text-lg font-semibold">Payroll Estimator</h2>
           <p className="text-muted-foreground text-sm mt-1">Estimated payroll based on tracked hours</p>
         </div>
         <div className="flex flex-col items-end gap-2">
@@ -640,6 +643,34 @@ export default function AdminPayroll() {
           onClose={() => setSelectedEmployee(null)}
         />
       )}
+    </div>
+  );
+}
+
+// ── Main Payroll Page (tabbed) ─────────────────────────────────────────────────
+export default function AdminPayroll() {
+  return (
+    <div className="p-4 md:p-6">
+      <div className="mb-5">
+        <h1 className="text-2xl font-bold" data-testid="text-payroll-title">Payroll</h1>
+        <p className="text-muted-foreground text-sm mt-1">Estimator, pay runs, and official pay stubs</p>
+      </div>
+      <Tabs defaultValue="estimator" className="space-y-5">
+        <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:inline-flex" data-testid="tabs-payroll">
+          <TabsTrigger value="estimator" data-testid="tab-estimator">Estimator</TabsTrigger>
+          <TabsTrigger value="pay-runs" data-testid="tab-pay-runs">Pay Runs</TabsTrigger>
+          <TabsTrigger value="pay-stubs" data-testid="tab-pay-stubs">Pay Stubs</TabsTrigger>
+        </TabsList>
+        <TabsContent value="estimator" className="mt-0">
+          <PayrollEstimatorContent />
+        </TabsContent>
+        <TabsContent value="pay-runs" className="mt-0">
+          <PayRunsTab />
+        </TabsContent>
+        <TabsContent value="pay-stubs" className="mt-0">
+          <PayStubsTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -38,6 +38,7 @@ import EmployeeProfile from "@/pages/employee/profile";
 import EmployeeRequests from "@/pages/employee/requests";
 import EmployeeTimesheets from "@/pages/employee/timesheets";
 import EmployeeWorkLog from "@/pages/employee/work-log";
+import EmployeePayStubs from "@/pages/employee/pay-stubs";
 import SetPasswordPage from "@/pages/employee/set-password";
 import ClientDashboard from "@/pages/client/dashboard";
 import ClientRequestsPage from "@/pages/client/requests";
@@ -141,6 +142,7 @@ function EmployeeLayout() {
           <Route path="/employee/requests" component={EmployeeRequests} />
           <Route path="/employee/timesheets" component={EmployeeTimesheets} />
           <Route path="/employee/work-log" component={EmployeeWorkLog} />
+          <Route path="/employee/pay-stubs" component={EmployeePayStubs} />
           <Route path="/employee/profile" component={EmployeeProfile} />
           <Route component={NotFound} />
         </Switch>

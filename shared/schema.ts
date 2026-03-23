@@ -334,6 +334,105 @@ export type InsertRequestMessage = z.infer<typeof insertRequestMessageSchema>;
 export type RequestAttachment = typeof requestAttachments.$inferSelect;
 export type InsertRequestAttachment = z.infer<typeof insertRequestAttachmentSchema>;
 
+// ── Pay Runs ──────────────────────────────────────────────────────────────────
+export const payRuns = pgTable("pay_runs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  name: text("name").notNull(),
+  periodStart: text("period_start").notNull(),
+  periodEnd: text("period_end").notNull(),
+  payDate: text("pay_date").notNull(),
+  status: text("status").notNull().default("draft"),
+  notes: text("notes"),
+  createdBy: varchar("created_by"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+// ── Pay Stubs ─────────────────────────────────────────────────────────────────
+export const payStubs = pgTable("pay_stubs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  payRunId: varchar("pay_run_id").notNull(),
+  employeeId: varchar("employee_id").notNull(),
+  timesheetId: varchar("timesheet_id"),
+  status: text("status").notNull().default("draft"),
+  employeeNameSnapshot: text("employee_name_snapshot"),
+  employeeIdSnapshot: text("employee_id_snapshot"),
+  employeePositionSnapshot: text("employee_position_snapshot"),
+  employeePayTypeSnapshot: text("employee_pay_type_snapshot").default("hourly"),
+  employeeRateSnapshot: decimal("employee_rate_snapshot", { precision: 10, scale: 2 }),
+  companyNameSnapshot: text("company_name_snapshot"),
+  regularHours: decimal("regular_hours", { precision: 8, scale: 2 }).default("0"),
+  overtimeHours: decimal("overtime_hours", { precision: 8, scale: 2 }).default("0"),
+  totalHours: decimal("total_hours", { precision: 8, scale: 2 }).default("0"),
+  grossPay: decimal("gross_pay", { precision: 10, scale: 2 }).default("0"),
+  totalDeductions: decimal("total_deductions", { precision: 10, scale: 2 }).default("0"),
+  netPay: decimal("net_pay", { precision: 10, scale: 2 }).default("0"),
+  periodStart: text("period_start").notNull(),
+  periodEnd: text("period_end").notNull(),
+  payDate: text("pay_date"),
+  finalizedAt: text("finalized_at"),
+  confirmedPaidAt: text("confirmed_paid_at"),
+  employeeVisibleAt: text("employee_visible_at"),
+  voidedAt: text("voided_at"),
+  adminNotes: text("admin_notes"),
+  createdBy: varchar("created_by"),
+  updatedBy: varchar("updated_by"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+// ── Pay Stub Earnings ─────────────────────────────────────────────────────────
+export const payStubEarnings = pgTable("pay_stub_earnings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  payStubId: varchar("pay_stub_id").notNull(),
+  type: text("type").notNull(),
+  description: text("description").notNull(),
+  hours: decimal("hours", { precision: 8, scale: 2 }),
+  rate: decimal("rate", { precision: 10, scale: 2 }),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull().default("0"),
+  displayOrder: integer("display_order").notNull().default(0),
+});
+
+// ── Pay Stub Deductions ───────────────────────────────────────────────────────
+export const payStubDeductions = pgTable("pay_stub_deductions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  payStubId: varchar("pay_stub_id").notNull(),
+  type: text("type").notNull(),
+  description: text("description").notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull().default("0"),
+  employerPaid: boolean("employer_paid").default(false),
+  displayOrder: integer("display_order").notNull().default(0),
+});
+
+// ── Pay Stub Audit Log ────────────────────────────────────────────────────────
+export const payStubAuditLog = pgTable("pay_stub_audit_log", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  payStubId: varchar("pay_stub_id").notNull(),
+  action: text("action").notNull(),
+  actorId: varchar("actor_id"),
+  actorRole: text("actor_role"),
+  metadataJson: text("metadata_json"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertPayRunSchema = createInsertSchema(payRuns).omit({ id: true });
+export const insertPayStubSchema = createInsertSchema(payStubs).omit({ id: true });
+export const insertPayStubEarningSchema = createInsertSchema(payStubEarnings).omit({ id: true });
+export const insertPayStubDeductionSchema = createInsertSchema(payStubDeductions).omit({ id: true });
+export const insertPayStubAuditLogSchema = createInsertSchema(payStubAuditLog).omit({ id: true });
+
+export type PayRun = typeof payRuns.$inferSelect;
+export type InsertPayRun = z.infer<typeof insertPayRunSchema>;
+export type PayStub = typeof payStubs.$inferSelect;
+export type InsertPayStub = z.infer<typeof insertPayStubSchema>;
+export type PayStubEarning = typeof payStubEarnings.$inferSelect;
+export type InsertPayStubEarning = z.infer<typeof insertPayStubEarningSchema>;
+export type PayStubDeduction = typeof payStubDeductions.$inferSelect;
+export type InsertPayStubDeduction = z.infer<typeof insertPayStubDeductionSchema>;
+export type PayStubAuditLog = typeof payStubAuditLog.$inferSelect;
+
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),

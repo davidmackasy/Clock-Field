@@ -1,0 +1,1066 @@
+DEV NOTE
+
+Feature name:
+Employee Pay Stub System for Cloud Clock Field
+
+Priority:
+High
+
+Main instruction:
+Do not break, remove, refactor, or change anything else that is already working in Cloud Clock Field.
+Do not change existing attendance, timesheet, payroll, employee profile, or admin workflows unless it is strictly required for this pay stub feature.
+This must be added as a safe extension that reads from existing systems and syncs with them.
+All current working logic must stay intact.
+
+Goal
+
+Add a real pay stub system that connects attendance, timesheets, payroll, employee pay settings, deductions, and benefits into one accurate payroll record.
+
+The pay stub must:
+
+* Only become visible to an employee after admin confirms that the employee has been paid for that payroll period
+* Pull accurate values from the system
+* Let admin review and adjust pay-stub-specific payroll values before finalizing
+* Allow employee to view and download past pay stubs from their account
+* Show earnings, hours, deductions, benefits, taxes, net pay, pay period, and company details
+* Keep a locked historical record after finalization so old pay stubs cannot be accidentally changed
+
+Important business rule
+
+A pay stub is not the live timesheet.
+A pay stub is a payroll snapshot generated from the approved payroll data for a specific employee and period.
+
+That means:
+
+* Attendance feeds timesheets
+* Timesheets feed payroll calculations
+* Payroll feeds pay stub draft
+* Admin reviews pay stub draft
+* Admin confirms employee has been paid
+* System finalizes pay stub
+* Employee can then view/download it
+
+This avoids changing historical attendance or timesheet records when admin only wants to fix a pay stub number before release.
+
+1. Core system behavior
+
+New workflow
+
+Step 1:
+Attendance and clock-in/clock-out data continue working exactly as they already do.
+
+Step 2:
+Timesheets continue working exactly as they already do.
+Approved timesheets remain the base source for worked hours.
+
+Step 3:
+Payroll uses approved timesheets plus employee pay settings to calculate gross pay, deductions, benefits, taxes, and net pay.
+
+Step 4:
+Admin opens Payroll > Pay Stubs and generates a draft pay stub for a selected payroll period and employee.
+
+Step 5:
+Before finalizing, admin can adjust pay-stub-level values only, such as:
+
+* Regular hours
+* Overtime hours
+* Bonus
+* Reimbursement
+* Manual deduction
+* Vacation payout
+* Sick payout
+* Holiday pay
+* Other earnings line items
+* Other deduction line items
+
+Step 6:
+The system recalculates totals immediately after each adjustment.
+
+Step 7:
+Admin marks employee as Paid / Confirmed Paid.
+
+Step 8:
+Once confirmed paid, pay stub status changes to Finalized and becomes visible in the employee portal.
+
+Step 9:
+Employee can open, view, and download PDF pay stub.
+
+Very important:
+Admin adjustments inside pay stub draft must not rewrite original attendance records.
+Do not overwrite original timesheet data unless admin explicitly uses an existing separate payroll correction workflow.
+Pay stub adjustments should be stored as pay stub adjustment records.
+
+2. New sections to add
+
+Admin side
+
+Add under Payroll:
+
+* Payroll Overview
+* Pay Runs
+* Pay Stubs
+
+Inside Payroll > Pay Stubs:
+
+* Employee selector
+* Payroll period selector
+* Status filter
+* Pay stub list
+* Generate draft pay stub
+* Open/edit draft pay stub
+* Finalize pay stub
+* Mark as paid
+* Unfinalize only for authorized admin if not yet employee-visible or if special permission is granted
+* Download PDF
+* Resend/republish to employee portal
+
+Employee side
+
+Add under employee account, preferably under Profile or a new tab:
+
+* My Pay Stubs
+
+Inside My Pay Stubs:
+
+* List of pay stubs
+* Filter by year
+* Filter by date range
+* Search by pay period
+* View pay stub
+* Download PDF
+
+Recommended employee account structure:
+
+* Profile
+* Documents
+* Pay Stubs
+
+If profile is already crowded, use a dedicated Pay Stubs tab/page instead of stuffing it inside Profile content.
+
+3. Data sources that must sync together
+
+This feature must safely read from these existing modules:
+
+* Employee profile
+* Company profile
+* Attendance
+* Timesheets
+* Payroll settings
+* Pay rate settings
+* Overtime rules
+* Benefit settings
+* Deduction settings
+* Tax settings if available
+* Vacation/accrual settings if available
+
+Source-of-truth priority
+
+Company data:
+
+* Company legal name
+* Company address
+* Company phone/email if available
+* Company logo if available
+
+Employee data:
+
+* Employee full name
+* Employee employee ID if exists
+* Employee address
+* Position/role if available
+* Pay type: hourly or salary
+* Base pay rate or salary rate
+
+Payroll calculation data:
+
+* Approved timesheet hours
+* Overtime rules
+* Holiday hours if tracked
+* Paid time off if tracked
+* Bonuses/manual additions
+* Deductions
+* Benefits
+* Employer notes if needed
+
+Pay stub generation must not use random free text values unless manually entered by admin as an explicit adjustment line item.
+
+4. Data model changes
+
+Add new entities safely without disturbing existing schema.
+
+A. pay_runs
+Represents a payroll period batch
+
+Suggested fields:
+
+* id
+* company_id
+* name
+* period_start
+* period_end
+* pay_date
+* status
+
+  * draft
+  * under_review
+  * paid
+  * closed
+* created_by
+* created_at
+* updated_at
+
+B. pay_stubs
+Represents one employee pay stub for one pay run
+
+Suggested fields:
+
+* id
+* company_id
+* pay_run_id
+* employee_id
+* timesheet_id or linked approved timesheet references
+* status
+
+  * draft
+  * reviewed
+  * finalized
+  * paid_confirmed
+  * published
+  * voided
+* pay_type_snapshot
+* base_rate_snapshot
+* salary_snapshot
+* regular_hours
+* overtime_hours
+* doubletime_hours if your system supports it
+* total_hours
+* gross_pay
+* total_deductions
+* total_benefits
+* employer_contributions if supported
+* net_pay
+* pay_date
+* period_start
+* period_end
+* employee_visible_at
+* paid_confirmed_at
+* finalized_at
+* pdf_file_url or stored export reference
+* created_by
+* updated_by
+* created_at
+* updated_at
+
+C. pay_stub_earnings
+Itemized earning lines
+
+Suggested fields:
+
+* id
+* pay_stub_id
+* type
+
+  * regular
+  * overtime
+  * holiday
+  * vacation
+  * sick
+  * bonus
+  * reimbursement
+  * commission
+  * adjustment
+* description
+* hours
+* rate
+* amount
+* display_order
+
+D. pay_stub_deductions
+Itemized deduction lines
+
+Suggested fields:
+
+* id
+* pay_stub_id
+* type
+
+  * tax
+  * cpp
+  * ei
+  * medical
+  * dental
+  * union
+  * retirement
+  * garnishment
+  * loan
+  * adjustment
+  * other
+* description
+* amount
+* employer_paid boolean if needed
+* display_order
+
+E. pay_stub_benefits
+Benefits snapshot at pay stub time
+
+Suggested fields:
+
+* id
+* pay_stub_id
+* benefit_type
+* description
+* employee_amount
+* employer_amount
+* included_in_deductions boolean
+
+F. pay_stub_adjustments
+Audit trail for admin changes before finalization
+
+Suggested fields:
+
+* id
+* pay_stub_id
+* field_name
+* old_value
+* new_value
+* reason
+* changed_by
+* changed_at
+
+G. pay_stub_audit_logs
+For compliance and traceability
+
+Suggested fields:
+
+* id
+* pay_stub_id
+* action
+* actor_id
+* actor_role
+* metadata_json
+* created_at
+
+5. Status logic
+
+Pay stub status flow
+
+draft
+System-generated, editable by authorized admin only
+
+reviewed
+Admin reviewed but not yet finalized
+
+finalized
+Locked payroll snapshot created
+
+paid_confirmed
+Admin explicitly confirmed employee was paid
+
+published
+Visible to employee and downloadable
+
+voided
+Invalidated pay stub, only for correction workflows
+
+Visibility rule
+
+Employee must only see pay stubs when:
+
+* status is paid_confirmed or published
+* employee_visible_at is not null
+
+Recommended simplified release rule:
+Once admin clicks Confirm Paid, automatically:
+
+* finalize if not finalized
+* publish to employee
+* create PDF
+* set employee_visible_at
+
+6. Admin UI requirements
+
+Payroll > Pay Stubs list page
+
+Show:
+
+* Employee name
+* Pay period
+* Pay date
+* Status
+* Gross pay
+* Net pay
+* Last updated
+* Actions
+
+Actions:
+
+* Generate
+* Open
+* Edit draft
+* Finalize
+* Confirm paid
+* Publish
+* Download PDF
+* Void
+* Duplicate as correction draft if needed
+
+Filters:
+
+* Employee
+* Date range
+* Pay run
+* Status
+* Paid vs unpublished
+* Search by employee name
+
+Batch actions:
+
+* Generate pay stubs for all employees in pay run
+* Finalize all reviewed pay stubs
+* Confirm paid for selected employees
+* Publish selected pay stubs
+
+7. Admin pay stub editor screen
+
+This is the main screen that must feel powerful but safe.
+
+Sections
+
+A. Header
+
+* Company name
+* Pay stub title
+* Employee name
+* Pay period
+* Pay date
+* Status badge
+* Draft / Finalized / Published warning
+* Buttons: Save Draft, Finalize, Confirm Paid, Download PDF
+
+B. Employee details
+
+* Employee full name
+* Address
+* Employee ID
+* Role/title
+* Pay type
+* Base pay or salary snapshot
+
+C. Payroll source summary
+Read-only panel showing:
+
+* Source timesheet period
+* Approved hours
+* Overtime detected
+* Attendance source link
+* Last timesheet approval date
+* Payroll rules used
+
+D. Earnings section
+Editable line items before finalization:
+
+* Regular pay
+* Overtime pay
+* Holiday pay
+* Vacation payout
+* Sick pay
+* Bonus
+* Reimbursement
+* Other earning
+
+For each line item:
+
+* Description
+* Hours if relevant
+* Rate if relevant
+* Amount
+* Editable toggle based on permissions
+
+E. Deductions section
+Editable or calculated based on company rules:
+
+* Tax
+* CPP
+* EI
+* Medical
+* Dental
+* Union dues
+* Retirement
+* Other deductions
+
+Each line item:
+
+* Description
+* Amount
+* Calculated/manual indicator
+
+F. Benefits section
+
+* List active employee benefits
+* Show employee-paid amount
+* Show employer-paid amount
+* If none, show: No benefits
+
+G. Totals section
+
+* Gross pay
+* Total deductions
+* Total benefits
+* Net pay
+
+H. Admin notes
+Internal note not shown to employee unless explicitly marked visible
+
+I. Adjustment reason
+Required when editing calculated values after initial generation
+
+8. Adjustment rules
+
+This part is very important.
+
+Allowed admin edits before finalization:
+
+* Hours on pay stub lines
+* Rates on pay stub lines if authorized
+* Add/remove earning line items
+* Add/remove deduction line items
+* Add notes
+* Override calculated values with reason
+
+Not allowed:
+
+* Editing published pay stub without correction process
+* Changing original attendance silently
+* Changing approved timesheet silently through pay stub editor
+* Editing historical pay stubs without audit log
+
+Correction flow
+
+If a published pay stub is wrong:
+
+* Do not directly overwrite it
+* Create correction workflow:
+
+  * Void original if allowed by business rule
+  * Create corrected draft
+  * Finalize corrected version
+  * Republish corrected pay stub
+  * Keep audit trail
+
+9. Calculation engine requirements
+
+The calculation engine must combine:
+
+* Employee pay type
+* Regular hours
+* Overtime rules
+* Salary rules
+* Deductions
+* Benefits
+* Taxes if configured
+* Manual admin adjustments
+
+Hourly employee logic
+
+* regular_hours × hourly_rate
+* overtime_hours × overtime_rate
+* add any extra earnings
+* subtract deductions
+* net pay = gross pay - total deductions
+
+Salary employee logic
+
+* salary-based period amount
+* add extra earnings
+* subtract deductions
+* net pay = gross pay - total deductions
+
+Important:
+Create a payroll calculation service that centralizes pay stub math.
+Do not scatter pay formulas across frontend components.
+
+Recommended service methods:
+
+* generatePayStubDraft(employeeId, payRunId)
+* calculatePayStubTotals(payStubId)
+* applyPayStubAdjustment(payStubId, payload)
+* finalizePayStub(payStubId)
+* confirmPayStubPaid(payStubId)
+* publishPayStub(payStubId)
+* generatePayStubPdf(payStubId)
+
+10. Pay stub layout based on the attachment
+
+Use the attachment only as visual inspiration.
+Do not hardcode any values from the image.
+
+Required visual structure
+
+Top left:
+
+* Company logo if available
+* Company name
+
+Top right:
+
+* PAY STUB title
+
+Upper section:
+Left side:
+
+* Employer name/address
+
+Right side:
+
+* Employee name/address
+
+Middle info row:
+
+* Payroll ID or Pay Stub ID
+* Cycle / Pay period
+* Pay date
+* Pay rate
+* Accrued vacation if system supports it
+
+Income table
+Columns:
+
+* Income type
+* Current hours
+* Current amount
+* Year-to-date amount
+
+Rows examples:
+
+* Regular Pay
+* Overtime Pay
+* Holiday Pay
+* Bonus
+* Vacation Pay
+* Other
+
+Footer for section:
+
+* Gross Pay
+
+Deductions table
+Columns:
+
+* Deduction type
+* Current amount
+* Year-to-date amount
+
+Rows examples:
+
+* Tax
+* CPP
+* EI
+* Medical
+* Dental
+* Union Dues
+* Other
+
+Footer rows:
+
+* Deduction Totals
+* Net Pay
+
+Benefits block
+Show either:
+
+* Benefits list with amount
+  or
+* No benefits
+
+Year-to-date values
+If your system supports payroll history, calculate YTD totals from previous finalized pay stubs in the same year for that employee.
+If no YTD logic exists yet, build it from finalized pay stub records only.
+Do not estimate YTD from raw attendance.
+
+11. PDF export requirements
+
+Employees need downloadable pay stubs.
+
+Add:
+
+* Generate PDF from finalized/published pay stub
+* Download button on admin side
+* Download button on employee side
+
+PDF must include:
+
+* Company name and logo
+* Employee name and address
+* Pay period
+* Pay date
+* Earnings breakdown
+* Deductions breakdown
+* Benefits or no benefits
+* Gross pay
+* Net pay
+* YTD values where applicable
+* Unique pay stub ID
+
+PDF rules:
+
+* Once generated for a finalized pay stub, store immutable version or versioned snapshot
+* If corrected later, create new PDF version instead of silently replacing the old one without audit
+
+12. Employee portal requirements
+
+New page:
+Employee Account > Pay Stubs
+
+List view:
+
+* Pay period
+* Pay date
+* Gross pay
+* Net pay
+* Status
+* Download button
+* View button
+
+Filters:
+
+* Last 2 months
+* Last 6 months
+* This year
+* Last year
+* Custom range
+
+Recommended extras:
+
+* Search by year
+* Mobile-friendly card layout
+* Empty state: No pay stubs available yet
+
+Visibility:
+Employee can only see:
+
+* Their own pay stubs
+* Only published/paid confirmed pay stubs
+
+Security:
+Never allow an employee to access another employee’s pay stub via URL or ID guessing.
+Every pay stub request must verify company + employee ownership.
+
+13. Permissions and roles
+
+Admin permissions
+
+* Generate draft pay stub
+* Edit draft pay stub
+* Finalize pay stub
+* Confirm paid
+* Publish pay stub
+* Void pay stub
+* Download pay stub
+* View all employee pay stubs
+
+Manager permissions
+Optional based on your role system:
+
+* View pay stubs
+* Maybe generate draft
+* Maybe no finalize/confirm paid unless granted
+
+Employee permissions
+
+* View own published pay stubs only
+* Download own published pay stubs only
+
+14. Audit and compliance
+
+Every important pay stub action must be logged:
+
+* Created
+* Recalculated
+* Adjusted
+* Finalized
+* Confirmed paid
+* Published
+* Downloaded by admin
+* Downloaded by employee
+* Voided
+* Corrected
+
+For every adjustment, store:
+
+* What changed
+* Who changed it
+* When
+* Why
+
+15. Notifications
+
+Admin side
+After confirming paid:
+
+* Show success toast
+* Show published state
+
+Employee side
+Optional notification:
+
+* In-app notification: New pay stub available
+* Optional email: Your pay stub for [period] is available
+
+Do not send notification before pay stub is published.
+
+16. Integration details
+
+Attendance integration
+
+* Use attendance only as source feeding timesheets
+* Do not calculate pay stub directly from raw attendance unless your system currently does that safely
+
+Timesheet integration
+
+* Approved timesheet hours should be the default base
+* Show read-only source hours in pay stub editor
+* Allow pay stub-only override with audit trail
+
+Payroll integration
+
+* Pay stub should live under payroll
+* Pay run should be the organizing structure
+* Each employee pay stub belongs to a pay run
+
+Benefits integration
+
+* Pull employee benefit enrollment if available
+* Show active benefits for that pay period
+* If none, clearly display No benefits
+
+Company profile integration
+
+* Company name and address on pay stub must come from company/admin company profile
+* Do not use sample image values
+
+17. UI/UX requirements
+
+Admin UI
+
+* Clean, professional, accounting-style layout
+* Strong status badges
+* Clear lock state after finalization
+* Visible warning before editing finalized records
+* Inline recalculation after changes
+* Sticky totals panel on desktop if possible
+
+Employee UI
+
+* Very simple
+* Easy to find
+* Easy to download
+* Mobile responsive
+* Clear date labels and net pay visibility
+
+Do not clutter the current system.
+Add this in a way that feels native to Cloud Clock Field.
+
+18. Suggested API structure
+
+Examples only. Adapt to current architecture.
+
+Admin routes
+
+* GET /api/payroll/pay-runs
+* POST /api/payroll/pay-runs
+* GET /api/payroll/pay-stubs
+* POST /api/payroll/pay-stubs/generate
+* GET /api/payroll/pay-stubs/:id
+* PATCH /api/payroll/pay-stubs/:id
+* POST /api/payroll/pay-stubs/:id/recalculate
+* POST /api/payroll/pay-stubs/:id/finalize
+* POST /api/payroll/pay-stubs/:id/confirm-paid
+* POST /api/payroll/pay-stubs/:id/publish
+* POST /api/payroll/pay-stubs/:id/void
+* GET /api/payroll/pay-stubs/:id/pdf
+
+Employee routes
+
+* GET /api/employee/pay-stubs
+* GET /api/employee/pay-stubs/:id
+* GET /api/employee/pay-stubs/:id/pdf
+
+19. Suggested implementation order
+
+Phase 1
+Backend foundation
+
+* Add pay run tables
+* Add pay stub tables
+* Add earnings/deductions/benefits tables
+* Add adjustment logs
+* Add audit logs
+
+Phase 2
+Calculation engine
+
+* Build payroll calculation service
+* Connect to employee pay settings
+* Connect to approved timesheets
+* Support draft recalculation
+
+Phase 3
+Admin UI
+
+* Payroll > Pay Stubs list
+* Pay stub editor
+* Finalize and confirm paid flow
+
+Phase 4
+PDF generation
+
+* Build pay stub PDF template
+* Save final version
+* Download on admin side
+
+Phase 5
+Employee portal
+
+* Add My Pay Stubs page
+* Secure access
+* Download support
+
+Phase 6
+Audit, notifications, polishing
+
+* Action logs
+* Publish notifications
+* Empty states
+* Permission hardening
+* Mobile responsiveness
+
+20. Edge cases to handle
+
+* Employee has no approved timesheet for the period
+* Employee is salaried, not hourly
+* Employee has no benefits
+* Employee has manual bonus
+* Employee has negative adjustment
+* Employee has corrected overtime
+* Employee has multiple deductions
+* Employee is terminated but still needs historical pay stubs
+* Payroll period overlaps month/year boundary
+* YTD values reset correctly for new year
+* Admin accidentally finalizes wrong pay stub
+* Employee has multiple company roles if supported
+* Partial pay or off-cycle pay run
+
+21. Testing requirements
+
+Must test without breaking existing system.
+
+Test cases
+
+Payroll generation
+
+* Generate pay stub from approved timesheet
+* Generate pay stub for hourly employee
+* Generate pay stub for salaried employee
+
+Adjustments
+
+* Change regular hours in draft
+* Add manual bonus
+* Add deduction
+* Recalculate totals
+* Verify original timesheet remains unchanged
+
+Visibility
+
+* Draft pay stub not visible to employee
+* Finalized but not confirmed paid not visible to employee
+* Confirmed paid is visible to employee
+
+Security
+
+* Employee can only access own pay stubs
+* Admin can access all pay stubs for their company only
+
+PDF
+
+* Download PDF from admin side
+* Download PDF from employee side
+* PDF values match stored finalized pay stub
+
+History
+
+* YTD totals match previous finalized pay stubs
+* Voided/corrected pay stub keeps audit trail
+
+Mobile
+
+* Employee pay stub list works on mobile
+* PDF download button accessible on mobile
+
+22. Recommended business-safe rules
+
+To keep the system clean and prevent mistakes:
+
+Rule 1
+Do not let admin edit published pay stubs directly.
+Use correction flow.
+
+Rule 2
+Require confirmation modal for Confirm Paid action.
+
+Rule 3
+Require reason for manual overrides on calculated fields.
+
+Rule 4
+Lock pay stub totals after finalization unless correction mode is used.
+
+Rule 5
+Always keep a full snapshot of employee pay settings and company details at the time of pay stub generation, so future company profile edits do not alter old pay stubs.
+
+23. Recommended employee experience
+
+Employee sees:
+
+* Pay period
+* Pay date
+* Gross pay
+* Net pay
+* Download PDF
+* View detailed breakdown
+* Historical records by month/year
+
+This will make the system useful for:
+
+* Income verification
+* Mortgage/rental applications
+* Personal record keeping
+* Tax and payroll review
+
+24. Final product expectation
+
+When this is done properly, Cloud Clock Field will have a real payroll document flow:
+
+Attendance
+→ Timesheet
+→ Payroll
+→ Pay Stub Draft
+→ Admin Review/Adjust
+→ Confirm Paid
+→ Employee Access + PDF Download
+
+That is the correct systemized structure.
+
+Final instruction for agent
+
+Do not break anything that is already working.
+Do not rewrite unrelated payroll, attendance, or profile code.
+Add this as a carefully integrated payroll-document feature.
+Use existing data wherever possible.
+Store pay stub adjustments separately from raw attendance/timesheet data.
+Make sure all numbers are synced and accurate.
+Use company profile data for employer details.
+Use employee account data for employee details.
+Only show pay stubs to employees after admin confirms payment.
+Make the entire feature responsive on desktop and mobile.
+
+I can also turn this into an even more technical dev note with database schema, UI screen breakdown, and API payload examples.

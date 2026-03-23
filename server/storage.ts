@@ -6,6 +6,7 @@ import {
   timesheets,
   workSubmissions, workSubmissionItems, workSubmissionPhotos,
   platformMessages,
+  payRuns, payStubs, payStubEarnings, payStubDeductions, payStubAuditLog,
   type Company, type InsertCompany,
   type User, type InsertUser,
   type Client, type InsertClient,
@@ -22,6 +23,11 @@ import {
   type WorkSubmissionItem, type InsertWorkSubmissionItem,
   type WorkSubmissionPhoto, type InsertWorkSubmissionPhoto,
   type PlatformMessage, type InsertPlatformMessage,
+  type PayRun, type InsertPayRun,
+  type PayStub, type InsertPayStub,
+  type PayStubEarning, type InsertPayStubEarning,
+  type PayStubDeduction, type InsertPayStubDeduction,
+  type PayStubAuditLog,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -140,6 +146,41 @@ export interface IStorage {
   markPlatformMessageRead(id: string): Promise<void>;
   getAllPlatformMessages(): Promise<PlatformMessage[]>;
   getPlatformMessage(id: string): Promise<PlatformMessage | undefined>;
+
+  // Pay Runs
+  createPayRun(data: InsertPayRun): Promise<PayRun>;
+  getPayRun(id: string): Promise<PayRun | undefined>;
+  getPayRunsByCompany(companyId: string): Promise<PayRun[]>;
+  updatePayRun(id: string, data: Partial<InsertPayRun>): Promise<PayRun | undefined>;
+  deletePayRun(id: string): Promise<void>;
+
+  // Pay Stubs
+  createPayStub(data: InsertPayStub): Promise<PayStub>;
+  getPayStub(id: string): Promise<PayStub | undefined>;
+  getPayStubsByCompany(companyId: string): Promise<PayStub[]>;
+  getPayStubsByPayRun(payRunId: string): Promise<PayStub[]>;
+  getPayStubsByEmployee(employeeId: string, companyId: string): Promise<PayStub[]>;
+  getPublishedPayStubsByEmployee(employeeId: string, companyId: string): Promise<PayStub[]>;
+  updatePayStub(id: string, data: Partial<InsertPayStub>): Promise<PayStub | undefined>;
+  deletePayStub(id: string): Promise<void>;
+
+  // Pay Stub Earnings
+  createPayStubEarning(data: InsertPayStubEarning): Promise<PayStubEarning>;
+  getPayStubEarnings(payStubId: string): Promise<PayStubEarning[]>;
+  updatePayStubEarning(id: string, data: Partial<InsertPayStubEarning>): Promise<PayStubEarning | undefined>;
+  deletePayStubEarning(id: string): Promise<void>;
+  deletePayStubEarningsByStub(payStubId: string): Promise<void>;
+
+  // Pay Stub Deductions
+  createPayStubDeduction(data: InsertPayStubDeduction): Promise<PayStubDeduction>;
+  getPayStubDeductions(payStubId: string): Promise<PayStubDeduction[]>;
+  updatePayStubDeduction(id: string, data: Partial<InsertPayStubDeduction>): Promise<PayStubDeduction | undefined>;
+  deletePayStubDeduction(id: string): Promise<void>;
+  deletePayStubDeductionsByStub(payStubId: string): Promise<void>;
+
+  // Pay Stub Audit Log
+  createPayStubAuditLog(data: Omit<PayStubAuditLog, "id">): Promise<PayStubAuditLog>;
+  getPayStubAuditLog(payStubId: string): Promise<PayStubAuditLog[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -606,6 +647,133 @@ export class DatabaseStorage implements IStorage {
   async getPlatformMessage(id: string): Promise<PlatformMessage | undefined> {
     const [msg] = await db.select().from(platformMessages).where(eq(platformMessages.id, id));
     return msg;
+  }
+
+  // ── Pay Runs ─────────────────────────────────────────────────────────────────
+  async createPayRun(data: InsertPayRun): Promise<PayRun> {
+    const [run] = await db.insert(payRuns).values(data).returning();
+    return run;
+  }
+
+  async getPayRun(id: string): Promise<PayRun | undefined> {
+    const [run] = await db.select().from(payRuns).where(eq(payRuns.id, id));
+    return run;
+  }
+
+  async getPayRunsByCompany(companyId: string): Promise<PayRun[]> {
+    return db.select().from(payRuns).where(eq(payRuns.companyId, companyId)).orderBy(desc(payRuns.periodStart));
+  }
+
+  async updatePayRun(id: string, data: Partial<InsertPayRun>): Promise<PayRun | undefined> {
+    const [run] = await db.update(payRuns).set(data).where(eq(payRuns.id, id)).returning();
+    return run;
+  }
+
+  async deletePayRun(id: string): Promise<void> {
+    await db.delete(payRuns).where(eq(payRuns.id, id));
+  }
+
+  // ── Pay Stubs ─────────────────────────────────────────────────────────────────
+  async createPayStub(data: InsertPayStub): Promise<PayStub> {
+    const [stub] = await db.insert(payStubs).values(data).returning();
+    return stub;
+  }
+
+  async getPayStub(id: string): Promise<PayStub | undefined> {
+    const [stub] = await db.select().from(payStubs).where(eq(payStubs.id, id));
+    return stub;
+  }
+
+  async getPayStubsByCompany(companyId: string): Promise<PayStub[]> {
+    return db.select().from(payStubs).where(eq(payStubs.companyId, companyId)).orderBy(desc(payStubs.createdAt));
+  }
+
+  async getPayStubsByPayRun(payRunId: string): Promise<PayStub[]> {
+    return db.select().from(payStubs).where(eq(payStubs.payRunId, payRunId)).orderBy(desc(payStubs.createdAt));
+  }
+
+  async getPayStubsByEmployee(employeeId: string, companyId: string): Promise<PayStub[]> {
+    return db.select().from(payStubs)
+      .where(and(eq(payStubs.employeeId, employeeId), eq(payStubs.companyId, companyId)))
+      .orderBy(desc(payStubs.periodStart));
+  }
+
+  async getPublishedPayStubsByEmployee(employeeId: string, companyId: string): Promise<PayStub[]> {
+    return db.select().from(payStubs)
+      .where(and(
+        eq(payStubs.employeeId, employeeId),
+        eq(payStubs.companyId, companyId),
+        sql`${payStubs.status} IN ('confirmed_paid', 'published')`,
+        sql`${payStubs.employeeVisibleAt} IS NOT NULL`
+      ))
+      .orderBy(desc(payStubs.periodStart));
+  }
+
+  async updatePayStub(id: string, data: Partial<InsertPayStub>): Promise<PayStub | undefined> {
+    const [stub] = await db.update(payStubs).set(data).where(eq(payStubs.id, id)).returning();
+    return stub;
+  }
+
+  async deletePayStub(id: string): Promise<void> {
+    await db.delete(payStubs).where(eq(payStubs.id, id));
+  }
+
+  // ── Pay Stub Earnings ─────────────────────────────────────────────────────────
+  async createPayStubEarning(data: InsertPayStubEarning): Promise<PayStubEarning> {
+    const [earning] = await db.insert(payStubEarnings).values(data).returning();
+    return earning;
+  }
+
+  async getPayStubEarnings(payStubId: string): Promise<PayStubEarning[]> {
+    return db.select().from(payStubEarnings).where(eq(payStubEarnings.payStubId, payStubId)).orderBy(payStubEarnings.displayOrder);
+  }
+
+  async updatePayStubEarning(id: string, data: Partial<InsertPayStubEarning>): Promise<PayStubEarning | undefined> {
+    const [earning] = await db.update(payStubEarnings).set(data).where(eq(payStubEarnings.id, id)).returning();
+    return earning;
+  }
+
+  async deletePayStubEarning(id: string): Promise<void> {
+    await db.delete(payStubEarnings).where(eq(payStubEarnings.id, id));
+  }
+
+  async deletePayStubEarningsByStub(payStubId: string): Promise<void> {
+    await db.delete(payStubEarnings).where(eq(payStubEarnings.payStubId, payStubId));
+  }
+
+  // ── Pay Stub Deductions ───────────────────────────────────────────────────────
+  async createPayStubDeduction(data: InsertPayStubDeduction): Promise<PayStubDeduction> {
+    const [deduction] = await db.insert(payStubDeductions).values(data).returning();
+    return deduction;
+  }
+
+  async getPayStubDeductions(payStubId: string): Promise<PayStubDeduction[]> {
+    return db.select().from(payStubDeductions).where(eq(payStubDeductions.payStubId, payStubId)).orderBy(payStubDeductions.displayOrder);
+  }
+
+  async updatePayStubDeduction(id: string, data: Partial<InsertPayStubDeduction>): Promise<PayStubDeduction | undefined> {
+    const [deduction] = await db.update(payStubDeductions).set(data).where(eq(payStubDeductions.id, id)).returning();
+    return deduction;
+  }
+
+  async deletePayStubDeduction(id: string): Promise<void> {
+    await db.delete(payStubDeductions).where(eq(payStubDeductions.id, id));
+  }
+
+  async deletePayStubDeductionsByStub(payStubId: string): Promise<void> {
+    await db.delete(payStubDeductions).where(eq(payStubDeductions.payStubId, payStubId));
+  }
+
+  // ── Pay Stub Audit Log ────────────────────────────────────────────────────────
+  async createPayStubAuditLog(data: Omit<PayStubAuditLog, "id">): Promise<PayStubAuditLog> {
+    const [entry] = await db.insert(payStubAuditLog).values(data).returning();
+    return entry;
+  }
+
+  async getPayStubAuditLog(payStubId: string): Promise<PayStubAuditLog[]> {
+    return db.select().from(payStubAuditLog)
+      .where(eq(payStubAuditLog.payStubId, payStubId))
+      .orderBy(desc(payStubAuditLog.createdAt));
   }
 }
 
