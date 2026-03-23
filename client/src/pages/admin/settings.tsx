@@ -143,8 +143,37 @@ export default function AdminSettings() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Company Name</Label>
-              <Input data-testid="input-company-name" value={form.name} onChange={e => setForm((p: any) => ({ ...p, name: e.target.value }))} />
+              <Input data-testid="input-company-name" value={form.name || ""} onChange={e => setForm((p: any) => ({ ...p, name: e.target.value }))} />
             </div>
+            <div className="space-y-2">
+              <Label>Street Address</Label>
+              <Input data-testid="input-company-address" placeholder="123 Main Street" value={form.address || ""} onChange={e => setForm((p: any) => ({ ...p, address: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-2 col-span-1">
+                <Label>City</Label>
+                <Input data-testid="input-company-city" placeholder="Victoria" value={form.city || ""} onChange={e => setForm((p: any) => ({ ...p, city: e.target.value }))} />
+              </div>
+              <div className="space-y-2 col-span-1">
+                <Label>Province / State</Label>
+                <Input data-testid="input-company-province" placeholder="BC" value={form.province || ""} onChange={e => setForm((p: any) => ({ ...p, province: e.target.value }))} />
+              </div>
+              <div className="space-y-2 col-span-1">
+                <Label>Postal / ZIP</Label>
+                <Input data-testid="input-company-postal" placeholder="V8T 5L9" value={form.postalCode || ""} onChange={e => setForm((p: any) => ({ ...p, postalCode: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Company Phone</Label>
+                <Input data-testid="input-company-phone" placeholder="+1 (250) 555-0100" value={form.companyPhone || ""} onChange={e => setForm((p: any) => ({ ...p, companyPhone: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Company Email</Label>
+                <Input type="email" data-testid="input-company-email" placeholder="info@company.com" value={form.companyEmail || ""} onChange={e => setForm((p: any) => ({ ...p, companyEmail: e.target.value }))} />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">Address and contact details appear on official pay stubs.</p>
             <div className="space-y-2">
               <Label>Timezone</Label>
               <p className="text-xs text-muted-foreground">Used for schedules, attendance, and payroll calculations</p>

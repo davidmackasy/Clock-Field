@@ -43,6 +43,13 @@ export const companies = pgTable("companies", {
   activatedAt: text("activated_at"),
   suspendedAt: text("suspended_at"),
   internalBypass: boolean("internal_bypass").notNull().default(false),
+  // Company contact / address (for pay stubs)
+  address: text("address"),
+  city: text("city"),
+  province: text("province"),
+  postalCode: text("postal_code"),
+  companyPhone: text("company_phone"),
+  companyEmail: text("company_email"),
 });
 
 export const users = pgTable("users", {
@@ -352,6 +359,7 @@ export const payRuns = pgTable("pay_runs", {
 // ── Pay Stubs ─────────────────────────────────────────────────────────────────
 export const payStubs = pgTable("pay_stubs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  displayPaystubId: text("display_paystub_id"),
   companyId: varchar("company_id").notNull(),
   payRunId: varchar("pay_run_id").notNull(),
   employeeId: varchar("employee_id").notNull(),

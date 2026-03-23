@@ -43,68 +43,127 @@ const DEDUCTION_TYPES = ["tax", "provincial_tax", "cpp", "ei", "medical", "denta
 function typeLabel(t: string) { return t.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()); }
 
 // ─── Print helper ─────────────────────────────────────────────────────────────
+function buildCompanyAddressLines(stub: any): string {
+  const ca = stub.companyAddress || {};
+  const lines: string[] = [];
+  if (ca.address) lines.push(ca.address);
+  const cityProvPostal = [ca.city, ca.province, ca.postalCode].filter(Boolean).join(", ");
+  if (cityProvPostal) lines.push(cityProvPostal);
+  if (ca.companyPhone) lines.push(ca.companyPhone);
+  if (ca.companyEmail) lines.push(ca.companyEmail);
+  return lines.join("<br>");
+}
+
 function printPayStub(stub: any, payRun: any) {
+  const ytdLabel = `YTD ${stub.ytdYear || new Date().getFullYear()}`;
+  const ytdE = stub.ytdEarningsByType || {};
+  const ytdD = stub.ytdDeductionsByType || {};
+
+  // 5-column earnings rows (desc | hours | rate | amount | ytd)
   const earningsRows = (stub.earnings || []).map((e: any) => `
     <tr>
       <td>${e.description}</td>
-      <td style="text-align:right">${parseFloat(e.hours||"0").toFixed(2)}</td>
-      <td style="text-align:right">$${parseFloat(e.rate||"0").toFixed(2)}</td>
+      <td style="text-align:right">${e.hours ? parseFloat(e.hours).toFixed(2) : "—"}</td>
+      <td style="text-align:right">${e.rate ? "$" + parseFloat(e.rate).toFixed(2) : "—"}</td>
       <td style="text-align:right">$${parseFloat(e.amount||"0").toFixed(2)}</td>
-      <td style="text-align:right">—</td>
+      <td style="text-align:right">$${(ytdE[e.description] ?? parseFloat(e.amount||"0")).toFixed(2)}</td>
     </tr>`).join("");
+
+  // 5-column deduction rows (desc | blank | blank | amount | ytd)
   const deductionRows = (stub.deductions || []).map((d: any) => `
     <tr>
       <td>${d.description}</td>
+      <td></td>
+      <td></td>
       <td style="text-align:right">$${parseFloat(d.amount||"0").toFixed(2)}</td>
-      <td style="text-align:right">—</td>
+      <td style="text-align:right">$${(ytdD[d.description] ?? parseFloat(d.amount||"0")).toFixed(2)}</td>
     </tr>`).join("");
 
-  const html = `<!DOCTYPE html><html><head><title>Pay Stub</title>
+  const displayId = stub.displayPaystubId || `PS-${stub.id.substring(0,8).toUpperCase()}`;
+  const companyAddrHtml = buildCompanyAddressLines(stub);
+  const payDate = stub.payDate || payRun?.payDate || "";
+
+  const html = `<!DOCTYPE html><html><head><title>Pay Stub — ${displayId}</title>
   <style>
-    body { font-family: Arial, sans-serif; font-size: 12px; color: #000; padding: 20px; }
-    h1 { font-size: 18px; margin: 0; }
-    h2 { font-size: 14px; margin: 0 0 4px; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 12px; }
-    .info-row { display: flex; justify-content: space-between; margin-bottom: 16px; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 12px; color: #111; padding: 24px 28px; max-width: 780px; margin: 0 auto; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 14px; border-bottom: 2px solid #111; margin-bottom: 18px; }
+    .header-left h1 { font-size: 20px; font-weight: 700; }
+    .header-right { text-align: right; }
+    .header-right .label { font-size: 15px; font-weight: 700; letter-spacing: 1px; }
+    .header-right .id { font-size: 10px; color: #555; margin-top: 3px; }
+    .info-row { display: flex; justify-content: space-between; margin-bottom: 16px; gap: 20px; }
     .info-block { flex: 1; }
-    .meta { display: flex; gap: 40px; margin-bottom: 16px; background: #f5f5f5; padding: 8px 12px; border-radius: 4px; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-    th { background: #f0f0f0; padding: 6px 8px; text-align: left; font-size: 11px; border-bottom: 1px solid #ccc; }
+    .info-block .block-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #666; margin-bottom: 5px; border-bottom: 1px solid #ddd; padding-bottom: 3px; }
+    .info-block .block-name { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+    .info-block .block-detail { font-size: 11px; color: #444; line-height: 1.6; }
+    .info-block.right { text-align: right; }
+    .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; background: #f7f7f7; border: 1px solid #e5e5e5; border-radius: 4px; padding: 10px 14px; margin-bottom: 18px; }
+    .meta-item .meta-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #777; margin-bottom: 3px; }
+    .meta-item .meta-val { font-size: 12px; font-weight: 600; }
+    .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #444; background: #f0f0f0; padding: 5px 8px; border-top: 1px solid #ccc; border-bottom: 1px solid #ccc; margin-bottom: 0; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+    th { padding: 6px 8px; text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: #555; background: #fafafa; border-bottom: 1px solid #ddd; }
     th:not(:first-child) { text-align: right; }
-    td { padding: 5px 8px; border-bottom: 1px solid #eee; }
-    .totals { font-weight: bold; background: #f5f5f5; }
-    .net-pay { font-size: 16px; font-weight: bold; text-align: right; border-top: 2px solid #000; padding-top: 8px; margin-top: 4px; }
-    .stub-id { font-size: 10px; color: #666; margin-top: 20px; text-align: center; }
-    @media print { body { padding: 0; } }
+    td { padding: 6px 8px; border-bottom: 1px solid #eee; font-size: 12px; vertical-align: middle; }
+    td:not(:first-child) { text-align: right; }
+    .totals-row td { font-weight: 700; background: #f5f5f5; border-top: 1px solid #ccc; }
+    .section-gap { height: 14px; }
+    .takehome-row { display: flex; justify-content: flex-end; align-items: baseline; gap: 24px; border-top: 2px solid #111; margin-top: 14px; padding-top: 10px; }
+    .takehome-label { font-size: 14px; font-weight: 700; }
+    .takehome-amount { font-size: 22px; font-weight: 700; color: #166534; }
+    .footer { font-size: 9px; color: #999; margin-top: 24px; text-align: center; border-top: 1px solid #eee; padding-top: 8px; }
+    @media print { body { padding: 12px; } .footer { position: fixed; bottom: 0; left: 0; right: 0; } }
   </style></head><body>
   <div class="header">
-    <div><h1>${stub.companyNameSnapshot || "Company"}</h1></div>
-    <div style="text-align:right"><h2>PAY STUB</h2><div style="font-size:11px; color:#555">ID: ${stub.id.substring(0,8).toUpperCase()}</div></div>
+    <div class="header-left"><h1>${stub.companyNameSnapshot || "Company"}</h1></div>
+    <div class="header-right">
+      <div class="label">PAY STUB</div>
+      <div class="id">ID: ${displayId}</div>
+    </div>
   </div>
+
   <div class="info-row">
-    <div class="info-block"><strong>Employer</strong><br>${stub.companyNameSnapshot || ""}</div>
-    <div class="info-block" style="text-align:right"><strong>Employee</strong><br>${stub.employeeNameSnapshot || ""}<br>${stub.employeeIdSnapshot ? "ID: " + stub.employeeIdSnapshot : ""}${stub.employeePositionSnapshot ? "<br>" + stub.employeePositionSnapshot : ""}</div>
+    <div class="info-block">
+      <div class="block-label">Employer</div>
+      <div class="block-name">${stub.companyNameSnapshot || ""}</div>
+      <div class="block-detail">${companyAddrHtml || ""}</div>
+    </div>
+    <div class="info-block right">
+      <div class="block-label">Employee</div>
+      <div class="block-name">${stub.employeeNameSnapshot || ""}</div>
+      <div class="block-detail">${stub.employeeIdSnapshot ? "ID: " + stub.employeeIdSnapshot : ""}${stub.employeePositionSnapshot ? "<br>" + stub.employeePositionSnapshot : ""}</div>
+    </div>
   </div>
+
   <div class="meta">
-    <div><strong>Pay Period</strong><br>${fmtDate(stub.periodStart)} – ${fmtDate(stub.periodEnd)}</div>
-    <div><strong>Pay Date</strong><br>${fmtDate(stub.payDate || payRun?.payDate || "")}</div>
-    <div><strong>Pay Rate</strong><br>$${parseFloat(stub.employeeRateSnapshot||"0").toFixed(2)}/hr</div>
-    <div><strong>Pay Type</strong><br>${typeLabel(stub.employeePayTypeSnapshot || "hourly")}</div>
+    <div class="meta-item"><div class="meta-label">Pay Period</div><div class="meta-val">${fmtDate(stub.periodStart)} – ${fmtDate(stub.periodEnd)}</div></div>
+    <div class="meta-item"><div class="meta-label">Pay Date</div><div class="meta-val">${fmtDate(payDate)}</div></div>
+    <div class="meta-item"><div class="meta-label">Pay Rate</div><div class="meta-val">$${parseFloat(stub.employeeRateSnapshot||"0").toFixed(2)}/hr</div></div>
+    <div class="meta-item"><div class="meta-label">Pay Type</div><div class="meta-val">${typeLabel(stub.employeePayTypeSnapshot || "hourly")}</div></div>
   </div>
-  <h2>Earnings</h2>
+
+  <div class="section-title">Earnings</div>
   <table>
-    <thead><tr><th>Description</th><th>Hours</th><th>Rate</th><th>Amount</th><th>YTD</th></tr></thead>
-    <tbody>${earningsRows}</tbody>
-    <tfoot><tr class="totals"><td colspan="3">Gross Pay</td><td style="text-align:right">$${fmt(stub.grossPay)}</td><td style="text-align:right">—</td></tr></tfoot>
+    <thead><tr><th>Description</th><th>Hours</th><th>Rate</th><th>Amount</th><th>${ytdLabel}</th></tr></thead>
+    <tbody>${earningsRows || '<tr><td colspan="5" style="text-align:center;color:#999">No earnings</td></tr>'}</tbody>
+    <tfoot><tr class="totals-row"><td colspan="3">Gross Pay</td><td>$${fmt(stub.grossPay)}</td><td>$${Object.values(ytdE as Record<string,number>).reduce((a:number,b:number)=>a+b,0).toFixed(2) || fmt(stub.grossPay)}</td></tr></tfoot>
   </table>
-  <h2>Deductions</h2>
+
+  <div class="section-gap"></div>
+  <div class="section-title">Deductions</div>
   <table>
-    <thead><tr><th>Description</th><th>Amount</th><th>YTD</th></tr></thead>
-    <tbody>${deductionRows}</tbody>
-    <tfoot><tr class="totals"><td>Total Deductions</td><td style="text-align:right">$${fmt(stub.totalDeductions)}</td><td style="text-align:right">—</td></tr></tfoot>
+    <thead><tr><th>Description</th><th></th><th></th><th>Amount</th><th>${ytdLabel}</th></tr></thead>
+    <tbody>${deductionRows || '<tr><td colspan="5" style="text-align:center;color:#999">No deductions</td></tr>'}</tbody>
+    <tfoot><tr class="totals-row"><td colspan="3">Total Deductions</td><td>$${fmt(stub.totalDeductions)}</td><td>$${Object.values(ytdD as Record<string,number>).reduce((a:number,b:number)=>a+b,0).toFixed(2) || fmt(stub.totalDeductions)}</td></tr></tfoot>
   </table>
-  <div class="net-pay">Net Pay: $${fmt(stub.netPay)}</div>
-  <div class="stub-id">Pay Stub ID: ${stub.id} &bull; Generated by Cloud Clock Field</div>
+
+  <div class="takehome-row">
+    <div class="takehome-label">Take-Home Pay</div>
+    <div class="takehome-amount">$${fmt(stub.netPay)}</div>
+  </div>
+
+  <div class="footer">${displayId} &bull; Generated by Clockfield</div>
   </body></html>`;
   const win = window.open("", "_blank");
   if (win) { win.document.write(html); win.document.close(); win.focus(); setTimeout(() => win.print(), 400); }

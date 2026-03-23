@@ -2665,12 +2665,19 @@ export async function registerRoutes(
       const netPay = grossPay - totalDeductions;
       const now = new Date().toISOString();
 
+      // Generate a human-readable display ID: PS-[EMP_CODE_OR_NAME]-[4-digit]
+      const empSlug = (employee.employeeId || `${employee.firstName}${employee.lastName}`)
+        .toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 8);
+      const suffix = String(Math.floor(1000 + Math.random() * 9000));
+      const displayPaystubId = `PS-${empSlug}-${suffix}`;
+
       const stub = await storage.createPayStub({
         companyId: user.companyId,
         payRunId,
         employeeId,
         timesheetId: matchingTimesheet?.id || null,
         status: "draft",
+        displayPaystubId,
         employeeNameSnapshot: `${employee.firstName} ${employee.lastName}`,
         employeeIdSnapshot: employee.employeeId || null,
         employeePositionSnapshot: employee.position || null,
@@ -2747,10 +2754,37 @@ export async function registerRoutes(
       const user = req.user as any;
       const stub = await storage.getPayStub(req.params.id);
       if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      const earnings = await storage.getPayStubEarnings(stub.id);
-      const deductions = await storage.getPayStubDeductions(stub.id);
-      const auditLog = await storage.getPayStubAuditLog(stub.id);
-      res.json({ ...stub, earnings, deductions, auditLog });
+      const [earnings, deductions, auditLog, company] = await Promise.all([
+        storage.getPayStubEarnings(stub.id),
+        storage.getPayStubDeductions(stub.id),
+        storage.getPayStubAuditLog(stub.id),
+        storage.getCompany(user.companyId),
+      ]);
+      // YTD: sum amounts from all finalized/confirmed_paid/published stubs for same employee this year
+      const ytdYear = stub.payDate ? stub.payDate.substring(0, 4) : stub.periodEnd.substring(0, 4);
+      const allStubs = await storage.getPayStubsByEmployee(stub.employeeId, user.companyId);
+      const ytdStubs = allStubs.filter(s =>
+        ["finalized", "confirmed_paid", "published"].includes(s.status) &&
+        (s.payDate || s.periodEnd).substring(0, 4) === ytdYear &&
+        s.id !== stub.id
+      );
+      // Also include this stub itself (if finalized+)
+      const includeSelf = ["finalized", "confirmed_paid", "published"].includes(stub.status);
+      const ytdStubIds = [...ytdStubs.map(s => s.id), ...(includeSelf ? [stub.id] : [])];
+      const ytdEarningsByType: Record<string, number> = {};
+      const ytdDeductionsByType: Record<string, number> = {};
+      for (const sid of ytdStubIds) {
+        const se = await storage.getPayStubEarnings(sid);
+        const sd = await storage.getPayStubDeductions(sid);
+        for (const e of se) {
+          ytdEarningsByType[e.description] = (ytdEarningsByType[e.description] || 0) + parseFloat(e.amount || "0");
+        }
+        for (const d of sd) {
+          ytdDeductionsByType[d.description] = (ytdDeductionsByType[d.description] || 0) + parseFloat(d.amount || "0");
+        }
+      }
+      const companyAddress = { address: (company as any)?.address, city: (company as any)?.city, province: (company as any)?.province, postalCode: (company as any)?.postalCode, companyPhone: (company as any)?.companyPhone, companyEmail: (company as any)?.companyEmail };
+      res.json({ ...stub, earnings, deductions, auditLog, ytdYear, ytdEarningsByType, ytdDeductionsByType, companyAddress });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
@@ -2943,9 +2977,27 @@ export async function registerRoutes(
       const stub = await storage.getPayStub(req.params.id);
       if (!stub || stub.employeeId !== user.id || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       if (!["confirmed_paid", "published"].includes(stub.status) || !stub.employeeVisibleAt) return res.status(403).json({ message: "Pay stub not yet available" });
-      const earnings = await storage.getPayStubEarnings(stub.id);
-      const deductions = await storage.getPayStubDeductions(stub.id);
-      res.json({ ...stub, earnings, deductions });
+      const [earnings, deductions, company] = await Promise.all([
+        storage.getPayStubEarnings(stub.id),
+        storage.getPayStubDeductions(stub.id),
+        storage.getCompany(user.companyId),
+      ]);
+      // YTD calculation
+      const ytdYear = stub.payDate ? stub.payDate.substring(0, 4) : stub.periodEnd.substring(0, 4);
+      const allStubs = await storage.getPayStubsByEmployee(stub.employeeId, user.companyId);
+      const ytdStubIds = allStubs
+        .filter(s => ["finalized", "confirmed_paid", "published"].includes(s.status) && (s.payDate || s.periodEnd).substring(0, 4) === ytdYear)
+        .map(s => s.id);
+      const ytdEarningsByType: Record<string, number> = {};
+      const ytdDeductionsByType: Record<string, number> = {};
+      for (const sid of ytdStubIds) {
+        const se = await storage.getPayStubEarnings(sid);
+        const sd = await storage.getPayStubDeductions(sid);
+        for (const e of se) ytdEarningsByType[e.description] = (ytdEarningsByType[e.description] || 0) + parseFloat(e.amount || "0");
+        for (const d of sd) ytdDeductionsByType[d.description] = (ytdDeductionsByType[d.description] || 0) + parseFloat(d.amount || "0");
+      }
+      const companyAddress = { address: (company as any)?.address, city: (company as any)?.city, province: (company as any)?.province, postalCode: (company as any)?.postalCode, companyPhone: (company as any)?.companyPhone, companyEmail: (company as any)?.companyEmail };
+      res.json({ ...stub, earnings, deductions, ytdYear, ytdEarningsByType, ytdDeductionsByType, companyAddress });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
