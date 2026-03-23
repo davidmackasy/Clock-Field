@@ -1,0 +1,325 @@
+Yes. This should be implemented as an automatic first message for every new business account.
+
+It should appear inside the existing Messages section after signup so that once the business logs in, they already have a welcome message waiting for them.
+
+Do not change anything else.
+Do not touch attendance.
+Do not touch schedule.
+Do not touch payroll.
+Do not touch work log.
+Do not touch subscription logic except for the one trigger needed to create this welcome message.
+Do not redesign the whole messages page.
+Only implement the automatic welcome-message flow properly.
+
+DEV NOTE FOR AGENT
+
+Task
+Automatically create one welcome platform message for every new business account right after successful signup/onboarding so that when they first log in and open Messages, they already see a welcome message from ClockField.
+
+Scope
+Only implement:
+
+1. automatic welcome message creation for new business signups
+2. ability to open/read that message in the existing Messages area
+3. basic message interaction such as mark as read and optional reaction buttons
+
+Do not touch anything else.
+
+Goal
+When a new business signs up and gets access to the platform, ClockField should automatically create one default platform message in their Messages inbox.
+
+That message should:
+
+* welcome them to ClockField
+* motivate them about using the platform
+* briefly explain the value
+* direct them to [support@clockfield.com](mailto:support@clockfield.com) for help
+* feel warm, professional, and polished
+
+Expected user experience
+
+* New business signs up successfully
+* They enter the platform
+* Messages section already contains one unread welcome message
+* They click it
+* They read the full welcome note
+* They can mark it as read
+* Optional: react with thumbs up or thumbs down
+
+Implementation requirements
+
+1. Trigger point
+   Create the welcome message automatically only when a brand new business/company account is successfully created.
+
+Trigger this after:
+
+* signup is completed
+* business/account record exists
+* user has platform access
+
+Do not create it:
+
+* on every login
+* on page refresh
+* on subscription renewal
+* on every admin added to the same business
+* repeatedly for the same business
+
+Important
+This must be a one-time onboarding message per business account.
+
+2. One message only per new business
+   Make sure each new business gets only one default welcome message.
+
+Prevent duplicates.
+If the welcome message already exists for that business, do not create another one.
+
+Recommended protection
+Use one of these:
+
+* message type = `welcome`
+* message source = `system_onboarding`
+* unique per company/business id
+
+3. Message placement
+   Use the existing Messages section in the sidebar.
+   Do not create a new page.
+   Do not change the existing navigation structure.
+
+Inside Messages:
+
+* show the welcome message as one item in the list
+* mark it unread by default
+* when clicked, show the full message body
+* allow mark as read
+
+Optional but recommended
+Add a small badge like:
+
+* New
+* Unread
+* Welcome
+
+4. Message content
+   Use a polished welcome message.
+
+Suggested subject
+Welcome to ClockField
+
+Suggested category/tag
+
+* Welcome
+* Platform
+* Onboarding
+
+Suggested body
+
+Welcome to ClockField
+
+We’re excited to have you here.
+
+ClockField is built to help you manage your business with more clarity, save time on daily operations, and keep everything organized in one place. From schedules and attendance to work logs, reports, and team activity, the goal is to help you stay on top of your business with less stress.
+
+As you get started, take your time exploring the platform and setting up the tools that fit your workflow best. Every feature is designed to help you run your operations more smoothly and present your work more professionally.
+
+If you ever have any questions, feedback, or need help with anything, please contact us at [support@clockfield.com](mailto:support@clockfield.com).
+
+Welcome again, and thank you for choosing ClockField.
+
+— The ClockField Team
+
+You can tighten wording slightly if needed, but keep it warm, motivating, and professional.
+
+5. Full message view
+   Right now the screenshot shows list-style cards.
+   Improve this flow so when a user clicks a message, they can view the full message properly.
+
+Recommended behavior
+
+* clicking a message opens full content
+* either in a detail panel, modal, or inline expanded card
+* preserve existing page structure
+* do not redesign the whole module
+
+Full message view should show:
+
+* subject/title
+* category tags
+* full body text
+* sent date/time
+* sender/source like “ClockField Team” or “Platform Message”
+
+6. Read state
+   Support read/unread status.
+
+Required behavior
+
+* welcome message starts as unread
+* once opened, either auto-mark as read or allow manual Mark as Read
+* unread/read state should persist
+* do not reset to unread on refresh
+
+7. Reactions
+   You mentioned thumbs up and thumbs down.
+   Add lightweight reactions only if easy within the current system.
+
+Recommended reactions
+
+* 👍 Helpful
+* 👎 Not helpful
+
+Optional alternative
+
+* Mark as Read only for v1
+* Reactions can be added if already simple in current schema
+
+If reactions are added:
+
+* only one reaction per user per message
+* store reaction cleanly
+* do not overcomplicate with full comments/replies unless already supported
+
+8. Database/storage structure
+   Use the existing messages structure if there is one.
+   If not, extend it minimally.
+
+Suggested fields
+
+* id
+* businessId or companyId
+* type = welcome
+* category = onboarding/platform
+* title
+* body
+* createdAt
+* createdBy = system
+* isRead
+* readAt
+* reaction nullable
+* isPinned optional
+* status active
+
+If there is already a platform messages table, reuse it instead of building another system.
+
+9. Admin/system message source
+   This should be a platform-generated message, not a user-to-user message.
+
+Suggested display label
+
+* From ClockField Team
+  or
+* Platform Message
+
+Do not make it look like it came from another random user/admin.
+
+10. UI behavior in Messages page
+    Keep the existing Messages page intact.
+    Only enhance it just enough so the welcome message feels useful.
+
+Recommended improvements
+
+* unread message styling
+* full content open on click
+* mark as read button
+* thumbs up/down buttons if enabled
+
+Do not turn this into a full chat system.
+Do not add unnecessary complexity.
+
+11. Do not create welcome message for existing businesses retroactively unless explicitly needed
+    Default behavior should be:
+
+* only future new signups get it automatically
+
+Optional admin migration later if you want older businesses to receive it too, but do not do that unless requested.
+
+12. Edge cases
+    Handle these properly:
+
+* duplicate signup retries should not create duplicate welcome messages
+* partially failed signups should not create orphan messages
+* business with multiple admins should still have one business welcome message unless the system is user-specific
+
+Important architecture choice
+Decide whether Messages are business-level or user-level.
+
+Based on your screenshots, this looks more like business/account-level messaging.
+So safest implementation:
+
+* create one welcome message tied to the business/company account
+* any authorized account user under that business can see it in Messages
+
+13. Acceptance criteria
+
+Test 1
+Create a brand new business account
+Expected:
+
+* after signup, Messages contains one unread welcome message
+
+Test 2
+Open the message
+Expected:
+
+* full message body opens properly
+* looks clean and professional
+
+Test 3
+Mark as read
+Expected:
+
+* unread indicator disappears
+* state persists after refresh
+
+Test 4
+Optional reaction
+Expected:
+
+* user can tap thumbs up or thumbs down
+* reaction persists
+
+Test 5
+Duplicate prevention
+Expected:
+
+* same business does not get duplicate welcome messages from refresh/login
+
+Test 6
+Regression
+Expected:
+
+* nothing else in the app changes
+* signup still works
+* navigation still works
+* no other modules affected
+
+STRICT INSTRUCTION TO AGENT
+Do not change anything unrelated.
+Do not redesign the platform.
+Do not alter existing business logic except for the one hook that creates the welcome message after successful new business signup.
+Keep this isolated to the Messages feature and the signup completion trigger.
+
+WELCOME MESSAGE COPY TO USE
+
+Title:
+Welcome to ClockField
+
+Body:
+Welcome to ClockField.
+
+We’re excited to have you here.
+
+ClockField is designed to help you run your business more smoothly, stay organized, and save time across your daily operations. From scheduling and attendance to work logs, reports, and team management, everything is built to help you manage your workflow in one place with more confidence.
+
+As you get started, take a few moments to explore the platform and set things up in a way that fits your business best. Our goal is to help you work smarter, present your business professionally, and keep your operations clear and efficient.
+
+If you ever have any questions, concerns, or need support, please email us anytime at [support@clockfield.com](mailto:support@clockfield.com).
+
+Welcome again, and thank you for choosing ClockField.
+
+— The ClockField Team
+
+Optional short preview text for list item
+Welcome to ClockField. We’re excited to have you here and help you manage your business more smoothly.
+
+If you want, I can also turn this into a stricter build note with exact database fields, trigger location, and frontend behavior by component.

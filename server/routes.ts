@@ -214,6 +214,33 @@ export async function registerRoutes(
         accountStatus: "active",
       });
 
+      // Create one-time welcome message for the new business
+      try {
+        await storage.createPlatformMessage({
+          companyId: company.id,
+          senderUserId: "system",
+          senderRole: "super_admin",
+          subject: "Welcome to ClockField",
+          body: `Welcome to ClockField.
+
+We're excited to have you here.
+
+ClockField is designed to help you run your business more smoothly, stay organized, and save time across your daily operations. From scheduling and attendance to work logs, reports, and team management, everything is built to help you manage your workflow in one place with more confidence.
+
+As you get started, take a few moments to explore the platform and set things up in a way that fits your business best. Our goal is to help you work smarter, present your business professionally, and keep your operations clear and efficient.
+
+If you ever have any questions, concerns, or need support, please email us anytime at support@clockfield.com.
+
+Welcome again, and thank you for choosing ClockField.
+
+— The ClockField Team`,
+          messageType: "welcome",
+          isRead: false,
+          isBroadcast: false,
+          createdAt: new Date().toISOString(),
+        });
+      } catch (_) { /* do not fail registration if welcome message fails */ }
+
       req.login(user, (err) => {
         if (err) return res.status(500).json({ message: "Login failed" });
         const { password: _, tempPin: __, ...safeUser } = user;
