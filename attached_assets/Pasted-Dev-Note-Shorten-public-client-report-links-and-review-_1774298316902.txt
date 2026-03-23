@@ -1,0 +1,212 @@
+Dev Note: Shorten public client report links and review links only
+
+Important
+Do not change, remove, refactor, or affect anything else in the app.
+Do not change the current public access behavior.
+Do not change permissions, report rendering, review submission flow, auth flow, admin flow, or existing data unless required for this link-shortening task.
+Only improve the generated public URLs so they look shorter and more professional.
+
+Goal
+The current public report links and public review links are too long and look unprofessional when copied into emails or messages.
+
+Current example:
+clockfield.com/public/work-report/[very long hash]
+
+We need to keep the same public functionality, but generate short, clean, professional links instead.
+
+What needs to change
+
+Public cleaning report links must become short
+Public review links must also become short
+Existing long links should still keep working so nothing breaks
+Newly generated links should use the new short format
+Copy button and share UI should display and copy the short version only
+
+Desired link format examples
+Use a short token, not a long hash.
+
+Examples:
+clockfield.com/r/AB72KD
+clockfield.com/report/AB72KD
+clockfield.com/review/X9Q2LM
+
+You can choose one consistent route pattern, but keep it short and clean.
+
+Recommended format
+For public work reports:
+clockfield.com/r/{shortCode}
+
+For public reviews:
+clockfield.com/v/{shortCode}
+or
+clockfield.com/review/{shortCode}
+
+Keep the code around 6 to 8 characters max.
+Use letters and numbers only.
+Avoid confusing characters if possible like O and 0, I and l.
+
+Recommended implementation
+Do not use the long hash in the URL anymore for newly generated links.
+Instead, add a short public code field for each public shareable entity.
+
+Suggested approach
+Add a new unique shortCode column for:
+
+public work reports
+public review links if reviews use a separate public share model
+
+If both report and review already use one shared public-link table, then add shortCode there once and reuse it.
+
+Code requirements
+
+shortCode must be unique
+shortCode must be indexed
+shortCode must be non-guessable enough for public use
+generate 6 to 8 characters
+retry generation if collision happens
+
+Recommended token strategy
+Generate a random uppercase alphanumeric code.
+Example length:
+6 characters minimum
+7 or 8 characters preferred for safer uniqueness
+
+Examples:
+A7K2Q9
+M4X8PL
+R7N2TQ5
+
+Do not use sequential numbers only.
+Do not use database IDs directly.
+Do not use easy-to-predict patterns.
+
+Backward compatibility
+This is very important.
+
+Do not break old public links that were already sent to clients.
+
+That means:
+
+existing long-hash links must continue to resolve normally
+new short links must be supported
+if needed, the route handler should accept both:
+old long token format
+new short code format
+
+So the app should support both old and new URLs during transition.
+
+UI changes required
+Only update the link presentation where public links are shown or copied.
+
+Wherever admin generates or sees a public link:
+
+display the short URL only
+copy the short URL only
+open/share button should use the short URL only
+
+Do not change the rest of the modal or page behavior.
+
+Routing behavior
+Add or update public routes so they resolve by shortCode.
+
+For example:
+
+/r/:shortCode → loads public work report
+/review/:shortCode or /v/:shortCode → loads public review page
+
+If the current route must remain for compatibility, keep it working but do not show it in the UI anymore.
+
+Database / backend expectations
+Possible schema update:
+
+add short_code field to report public link record
+add short_code field to review public link record if separate
+unique index on short_code
+
+When generating a public link:
+
+if record does not yet have shortCode, generate one and save it
+if record already has shortCode, reuse it
+do not generate a different short code every time unless your system explicitly requires rotating links
+
+Best behavior
+One report should keep the same short public URL unless deleted or manually regenerated.
+
+Security / safety
+This must still be public, but safe.
+
+So:
+
+do not expose internal IDs
+do not use predictable counting
+keep enough randomness to avoid easy guessing
+continue enforcing all existing public-access validation rules
+do not weaken access or accidentally expose unrelated reports
+
+Important note
+Because this is a public link, do not shorten it in a way that makes collisions or enumeration easy.
+
+That means:
+
+not 4 digits
+not 5 numeric digits only
+better to use 6 to 8 mixed alphanumeric characters
+
+Recommended minimum:
+7-character uppercase alphanumeric random code
+
+Example:
+clockfield.com/r/K7M4Q2X
+
+Frontend behavior
+On the modal shown in your screenshot:
+
+replace the long URL in the input field with the new short one
+keep Copy button behavior the same
+keep Open button behavior the same
+keep Mark as Reviewed button untouched
+do not redesign anything else
+
+Review link
+Apply the exact same short-link system to review links too.
+They should also look clean and professional when sent to clients.
+
+Testing checklist
+Agent must test all of this carefully without touching unrelated features.
+
+Test these cases:
+
+Generate a new public work report link
+confirm it returns a short URL
+confirm copy button copies short URL
+confirm link opens correct report
+Generate a new public review link
+confirm it returns a short URL
+confirm copy button copies short URL
+confirm link opens correct review page
+Open an old long-format report link
+confirm it still works
+Open an old long-format review link
+confirm it still works
+Refresh public page
+confirm nothing breaks
+Send short link in email/message
+confirm it looks professional and fits properly
+Collision handling
+simulate duplicate shortCode and confirm generator retries safely
+Access validation
+confirm short link only opens intended public content
+
+What not to do
+
+Do not change report layout
+Do not change review layout
+Do not change share modal layout unless needed to show shorter URL
+Do not change admin workflow
+Do not change client workflow
+Do not regenerate all old links unless absolutely necessary
+Do not break previously shared URLs
+Do not touch anything unrelated
+
+Suggested developer note summary
+Please update the public report link system and public review link system so newly generated links use a short unique code instead of the current long hash in the URL. Keep all existing functionality the same. Old long links must continue to work for backward compatibility. Only change the generated link format, the route resolution, and the displayed/copied URL in admin. Do not modify anything else in the app.

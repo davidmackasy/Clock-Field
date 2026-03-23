@@ -2038,22 +2038,29 @@ Welcome again, and thank you for choosing ClockField.
       if (!sub) return res.status(404).json({ message: "Not found" });
       const user = req.user as any;
       if (sub.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
-      // If token already exists, just return it
+      // If token already exists, just return it (generate short code if missing without touching long token)
       if (sub.publicShareToken && sub.publicShareEnabled) {
-        const url = `/public/work-report/${sub.publicShareToken}`;
-        return res.json({ token: sub.publicShareToken, url });
+        let shortCode = sub.reportShortCode;
+        if (!shortCode) {
+          const updated = await storage.generateReportShortCodeOnly(req.params.id);
+          shortCode = updated?.reportShortCode || null;
+        }
+        const shortUrl = shortCode ? `/r/${shortCode}` : `/public/work-report/${sub.publicShareToken}`;
+        return res.json({ token: sub.publicShareToken, url: shortUrl, shortCode, shortUrl });
       }
       const updated = await storage.generateWorkSubmissionShareToken(req.params.id);
       if (!updated) return res.status(500).json({ message: "Failed to generate link" });
-      const url = `/public/work-report/${updated.publicShareToken}`;
-      res.json({ token: updated.publicShareToken, url });
+      const shortCode = updated.reportShortCode;
+      const shortUrl = shortCode ? `/r/${shortCode}` : `/public/work-report/${updated.publicShareToken}`;
+      res.json({ token: updated.publicShareToken, url: shortUrl, shortCode, shortUrl });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
-  // Public report data (no auth required)
+  // Public report data (no auth required) — accepts long token OR 7-char short code
   app.get("/api/public/work-report/:token", async (req, res) => {
     try {
-      const sub = await storage.getWorkSubmissionByToken(req.params.token);
+      let sub = await storage.getWorkSubmissionByToken(req.params.token);
+      if (!sub) sub = await storage.getWorkSubmissionByShortCode(req.params.token);
       if (!sub || !sub.publicShareEnabled) return res.status(404).json({ message: "Report not found or no longer active" });
       // Load items + photos
       const items = await storage.getWorkSubmissionItems(sub.id);
@@ -2095,10 +2102,11 @@ Welcome again, and thank you for choosing ClockField.
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
-  // Public photo serving (no auth, validates via token)
+  // Public photo serving (no auth, validates via token or short code)
   app.get("/api/public/work-report/:token/photos/:photoId", async (req, res) => {
     try {
-      const sub = await storage.getWorkSubmissionByToken(req.params.token);
+      let sub = await storage.getWorkSubmissionByToken(req.params.token);
+      if (!sub) sub = await storage.getWorkSubmissionByShortCode(req.params.token);
       if (!sub || !sub.publicShareEnabled) return res.status(404).json({ message: "Not found" });
       const photo = await storage.getWorkSubmissionPhoto(req.params.photoId);
       if (!photo) return res.status(404).json({ message: "Not found" });
@@ -2117,7 +2125,8 @@ Welcome again, and thank you for choosing ClockField.
   // ── Public: Serve photos for review share page ─────────────────────────────
   app.get("/api/public/review/:reviewShareToken/photos/:photoId", async (req, res) => {
     try {
-      const review = await storage.getWorkSubmissionReviewByShareToken(req.params.reviewShareToken);
+      let review = await storage.getWorkSubmissionReviewByShareToken(req.params.reviewShareToken);
+      if (!review) review = await storage.getWorkSubmissionReviewByShortCode(req.params.reviewShareToken);
       if (!review) return res.status(404).json({ message: "Not found" });
       const photo = await storage.getWorkSubmissionPhoto(req.params.photoId);
       if (!photo) return res.status(404).json({ message: "Not found" });
@@ -2135,7 +2144,8 @@ Welcome again, and thank you for choosing ClockField.
   // ── Public: Submit review for a report ────────────────────────────────────
   app.post("/api/public/work-report/:token/review", async (req, res) => {
     try {
-      const sub = await storage.getWorkSubmissionByToken(req.params.token);
+      let sub = await storage.getWorkSubmissionByToken(req.params.token);
+      if (!sub) sub = await storage.getWorkSubmissionByShortCode(req.params.token);
       if (!sub || !sub.publicShareEnabled) return res.status(404).json({ message: "Report not found" });
       // One review per submission
       const existing = await storage.getWorkSubmissionReviewBySubmissionId(sub.id);
@@ -2172,8 +2182,12 @@ Welcome again, and thank you for choosing ClockField.
       const user = req.user as any;
       const sub = await storage.getWorkSubmission(req.params.id);
       if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      const review = await storage.getWorkSubmissionReviewBySubmissionId(req.params.id);
+      let review = await storage.getWorkSubmissionReviewBySubmissionId(req.params.id);
       if (!review) return res.status(404).json({ message: "No review for this submission" });
+      // Lazily generate short code for reviews that predate the feature
+      if (!review.reviewShortCode) {
+        review = await storage.generateReviewShortCodeOnly(review.id) || review;
+      }
       const employee = sub.employeeId ? await storage.getUser(sub.employeeId) : null;
       const company = await storage.getCompany(sub.companyId);
       res.json({
@@ -2186,10 +2200,11 @@ Welcome again, and thank you for choosing ClockField.
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
-  // ── Public: Get review by reviewShareToken ─────────────────────────────────
+  // ── Public: Get review by reviewShareToken or short code ───────────────────
   app.get("/api/public/review/:reviewShareToken", async (req, res) => {
     try {
-      const review = await storage.getWorkSubmissionReviewByShareToken(req.params.reviewShareToken);
+      let review = await storage.getWorkSubmissionReviewByShareToken(req.params.reviewShareToken);
+      if (!review) review = await storage.getWorkSubmissionReviewByShortCode(req.params.reviewShareToken);
       if (!review) return res.status(404).json({ message: "Review not found" });
       const sub = await storage.getWorkSubmission(review.submissionId);
       if (!sub) return res.status(404).json({ message: "Not found" });
@@ -2226,7 +2241,8 @@ Welcome again, and thank you for choosing ClockField.
   // ── Public: OG image for review share ─────────────────────────────────────
   app.get("/api/public/review/:reviewShareToken/og-image.png", async (req, res) => {
     try {
-      const review = await storage.getWorkSubmissionReviewByShareToken(req.params.reviewShareToken);
+      let review = await storage.getWorkSubmissionReviewByShareToken(req.params.reviewShareToken);
+      if (!review) review = await storage.getWorkSubmissionReviewByShortCode(req.params.reviewShareToken);
       if (!review) return res.status(404).end();
       const sub = await storage.getWorkSubmission(review.submissionId);
       const company = await storage.getCompany(review.companyId);

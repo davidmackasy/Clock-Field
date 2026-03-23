@@ -190,6 +190,23 @@ function AppRouter() {
     );
   }
 
+  // Short public URLs
+  if (location.startsWith("/r/")) {
+    return (
+      <Switch>
+        <Route path="/r/:token" component={PublicWorkReport} />
+      </Switch>
+    );
+  }
+
+  if (location.startsWith("/v/")) {
+    return (
+      <Switch>
+        <Route path="/v/:token" component={PublicReviewShare} />
+      </Switch>
+    );
+  }
+
   if (isLoading) return <LoadingScreen />;
 
   if (!user) {

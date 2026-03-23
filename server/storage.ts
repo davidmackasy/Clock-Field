@@ -517,11 +517,28 @@ export class DatabaseStorage implements IStorage {
   async deleteWorkSubmission(id: string): Promise<void> {
     await db.delete(workSubmissions).where(eq(workSubmissions.id, id));
   }
+  async generateShortCode(checkFn: (code: string) => Promise<boolean>): Promise<string> {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    for (let attempt = 0; attempt < 20; attempt++) {
+      let code = "";
+      const { randomBytes } = await import("crypto");
+      const bytes = randomBytes(7);
+      for (let i = 0; i < 7; i++) code += chars[bytes[i] % chars.length];
+      const taken = await checkFn(code);
+      if (!taken) return code;
+    }
+    throw new Error("Could not generate unique short code after 20 attempts");
+  }
   async generateWorkSubmissionShareToken(id: string): Promise<WorkSubmission | undefined> {
     const { randomBytes } = await import("crypto");
     const token = randomBytes(32).toString("hex");
+    const shortCode = await this.generateShortCode(async (c) => {
+      const [existing] = await db.select({ id: workSubmissions.id })
+        .from(workSubmissions).where(eq(workSubmissions.reportShortCode, c));
+      return !!existing;
+    });
     const [row] = await db.update(workSubmissions)
-      .set({ publicShareToken: token, publicShareEnabled: true })
+      .set({ publicShareToken: token, publicShareEnabled: true, reportShortCode: shortCode })
       .where(eq(workSubmissions.id, id))
       .returning();
     return row;
@@ -529,6 +546,23 @@ export class DatabaseStorage implements IStorage {
   async getWorkSubmissionByToken(token: string): Promise<WorkSubmission | undefined> {
     const [row] = await db.select().from(workSubmissions)
       .where(eq(workSubmissions.publicShareToken, token));
+    return row;
+  }
+  async getWorkSubmissionByShortCode(code: string): Promise<WorkSubmission | undefined> {
+    const [row] = await db.select().from(workSubmissions)
+      .where(eq(workSubmissions.reportShortCode, code));
+    return row;
+  }
+  async generateReportShortCodeOnly(id: string): Promise<WorkSubmission | undefined> {
+    const shortCode = await this.generateShortCode(async (c) => {
+      const [existing] = await db.select({ id: workSubmissions.id })
+        .from(workSubmissions).where(eq(workSubmissions.reportShortCode, c));
+      return !!existing;
+    });
+    const [row] = await db.update(workSubmissions)
+      .set({ reportShortCode: shortCode })
+      .where(eq(workSubmissions.id, id))
+      .returning();
     return row;
   }
 
@@ -798,7 +832,12 @@ export class DatabaseStorage implements IStorage {
 
   // ── Work Submission Reviews ────────────────────────────────────────────────────
   async createWorkSubmissionReview(data: InsertWorkSubmissionReview): Promise<WorkSubmissionReview> {
-    const withToken = { ...data, reviewShareToken: crypto.randomUUID() };
+    const reviewShortCode = await this.generateShortCode(async (c) => {
+      const [existing] = await db.select({ id: workSubmissionReviews.id })
+        .from(workSubmissionReviews).where(eq(workSubmissionReviews.reviewShortCode, c));
+      return !!existing;
+    });
+    const withToken = { ...data, reviewShareToken: crypto.randomUUID(), reviewShortCode };
     const [review] = await db.insert(workSubmissionReviews).values(withToken).returning();
     return review;
   }
@@ -816,6 +855,26 @@ export class DatabaseStorage implements IStorage {
       .where(eq(workSubmissionReviews.reviewShareToken, reviewShareToken))
       .limit(1);
     return review;
+  }
+
+  async getWorkSubmissionReviewByShortCode(code: string): Promise<WorkSubmissionReview | undefined> {
+    const [review] = await db.select().from(workSubmissionReviews)
+      .where(eq(workSubmissionReviews.reviewShortCode, code))
+      .limit(1);
+    return review;
+  }
+
+  async generateReviewShortCodeOnly(id: string): Promise<WorkSubmissionReview | undefined> {
+    const reviewShortCode = await this.generateShortCode(async (c) => {
+      const [existing] = await db.select({ id: workSubmissionReviews.id })
+        .from(workSubmissionReviews).where(eq(workSubmissionReviews.reviewShortCode, c));
+      return !!existing;
+    });
+    const [row] = await db.update(workSubmissionReviews)
+      .set({ reviewShortCode })
+      .where(eq(workSubmissionReviews.id, id))
+      .returning();
+    return row;
   }
 
   async getWorkSubmissionReviewsByCompany(companyId: string): Promise<WorkSubmissionReview[]> {

@@ -223,7 +223,9 @@ function ReviewPopup({ subId, onClose }: { subId: string; onClose: () => void })
     staleTime: 0,
   });
 
-  const reviewShareUrl = review?.reviewShareToken
+  const reviewShareUrl = review?.reviewShortCode
+    ? `${window.location.origin}/v/${review.reviewShortCode}`
+    : review?.reviewShareToken
     ? `${window.location.origin}/public/reviews/${review.reviewShareToken}`
     : null;
 
@@ -462,9 +464,9 @@ export default function AdminWorkLog() {
       return res.json();
     },
     onSuccess: (data: any) => {
-      const fullUrl = `${window.location.origin}${data.url}`;
+      const fullUrl = `${window.location.origin}${data.shortUrl || data.url}`;
       setShareUrl(fullUrl);
-      if (detailSub) setDetailSub((prev: any) => ({ ...prev, publicShareToken: data.token, publicShareEnabled: true }));
+      if (detailSub) setDetailSub((prev: any) => ({ ...prev, publicShareToken: data.token, publicShareEnabled: true, reportShortCode: data.shortCode }));
       queryClient.invalidateQueries({ queryKey: ["/api/work-submissions"] });
       toast({ title: "Public link ready" });
     },
@@ -581,7 +583,7 @@ export default function AdminWorkLog() {
               <Card
                 key={sub.id}
                 className="cursor-pointer hover:border-primary/50 transition-colors"
-                onClick={() => { setDetailSub(sub); setShareUrl(sub.publicShareToken && sub.publicShareEnabled ? `${window.location.origin}/public/work-report/${sub.publicShareToken}` : null); }}
+                onClick={() => { setDetailSub(sub); setShareUrl(sub.publicShareToken && sub.publicShareEnabled ? (sub.reportShortCode ? `${window.location.origin}/r/${sub.reportShortCode}` : `${window.location.origin}/public/work-report/${sub.publicShareToken}`) : null); }}
                 data-testid={`card-submission-${sub.id}`}
               >
                 <CardContent className="p-4">

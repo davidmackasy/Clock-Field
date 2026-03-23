@@ -263,6 +263,7 @@ export const workSubmissions = pgTable("work_submissions", {
   updatedAt: text("updated_at").notNull(),
   publicShareToken: text("public_share_token"),
   publicShareEnabled: boolean("public_share_enabled").notNull().default(false),
+  reportShortCode: text("report_short_code"),
 });
 
 export const workSubmissionItems = pgTable("work_submission_items", {
@@ -291,6 +292,7 @@ export const workSubmissionReviews = pgTable("work_submission_reviews", {
   companyId: varchar("company_id").notNull(),
   shareToken: text("share_token").notNull(),
   reviewShareToken: text("review_share_token"),
+  reviewShortCode: text("review_short_code"),
   clientName: text("client_name").notNull(),
   companyName: text("company_name"),
   reviewText: text("review_text").notNull(),
