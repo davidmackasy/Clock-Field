@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, and, desc, sql, inArray, or, isNull } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, or, isNull, gte } from "drizzle-orm";
 import {
   companies, users, clients, locations, recurringSchedules, shifts, timeEntries, clientRequests, payrollDeductions,
   requestMessages, requestAttachments,
@@ -633,11 +633,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getMessagesForCompany(companyId: string): Promise<PlatformMessage[]> {
+    // Look up the company's creation date so we can filter out broadcasts
+    // that were sent before this company existed
+    const [company] = await db.select({ createdAt: companies.createdAt })
+      .from(companies)
+      .where(eq(companies.id, companyId));
+    const companyCreatedAt = company?.createdAt ?? null;
+
+    const broadcastCondition = companyCreatedAt
+      // New companies: only broadcasts created at or after this company signed up
+      ? and(eq(platformMessages.isBroadcast, true), gte(platformMessages.createdAt, companyCreatedAt))
+      // Legacy companies without a createdAt: include all broadcasts (backward compatible)
+      : eq(platformMessages.isBroadcast, true);
+
     return db.select().from(platformMessages)
       .where(
         or(
           eq(platformMessages.companyId, companyId),
-          eq(platformMessages.isBroadcast, true)
+          broadcastCondition
         )
       )
       .orderBy(desc(platformMessages.createdAt));

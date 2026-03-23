@@ -201,6 +201,7 @@ export async function registerRoutes(
         accountStatus: "pending_subscription",
         subscriptionStatus: "pending",
         planCode: "starter",
+        createdAt: new Date().toISOString(),
       });
       const hashedPassword = await hashPassword(password);
       const user = await storage.createUser({

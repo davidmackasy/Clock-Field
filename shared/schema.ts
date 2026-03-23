@@ -43,6 +43,7 @@ export const companies = pgTable("companies", {
   activatedAt: text("activated_at"),
   suspendedAt: text("suspended_at"),
   internalBypass: boolean("internal_bypass").notNull().default(false),
+  createdAt: text("created_at"),
   // Timed Super Admin temporary access override
   manualAccessEnabled: boolean("manual_access_enabled").notNull().default(false),
   manualAccessExpiresAt: text("manual_access_expires_at"),
