@@ -15,7 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import {
   FileText, Plus, Trash2, Printer, CheckCircle2, XCircle,
-  Lock, Eye, AlertTriangle, RefreshCw, ChevronDown, ChevronUp,
+  Lock, Eye, AlertTriangle, RefreshCw, ChevronDown, ChevronUp, AlertCircle,
 } from "lucide-react";
 
 function fmt(n: number | string) { return parseFloat(n as string || "0").toFixed(2); }
@@ -594,6 +594,9 @@ function GenerateStubDialog({ open, onClose, payRuns, employees }: { open: boole
   const { toast } = useToast();
   const [payRunId, setPayRunId] = useState("");
   const [employeeId, setEmployeeId] = useState("");
+  const [duplicateError, setDuplicateError] = useState<{ employeeName: string; payRunName: string } | null>(null);
+
+  function clearDuplicate() { setDuplicateError(null); }
 
   const generateMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/payroll/pay-stubs/generate", { payRunId, employeeId }),
@@ -601,19 +604,32 @@ function GenerateStubDialog({ open, onClose, payRuns, employees }: { open: boole
       queryClient.invalidateQueries({ queryKey: ["/api/payroll/pay-stubs"] });
       toast({ title: "Pay stub draft generated" });
       onClose();
-      setPayRunId(""); setEmployeeId("");
+      setPayRunId(""); setEmployeeId(""); setDuplicateError(null);
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: any) => {
+      const msg: string = e.message || "";
+      const isDuplicate = msg.includes("already exists") || msg.includes("pay stub already");
+      if (isDuplicate) {
+        const emp = employees.find(emp => emp.id === employeeId);
+        const run = payRuns.find(r => r.id === payRunId);
+        setDuplicateError({
+          employeeName: emp ? `${emp.firstName} ${emp.lastName}` : "This employee",
+          payRunName: run?.name || "the selected pay period",
+        });
+      } else {
+        toast({ title: "Error generating pay stub", description: msg.replace(/^\d+:\s*/, "").replace(/[{}""]/g, "").replace("message:", "").trim(), variant: "destructive" });
+      }
+    },
   });
 
   return (
-    <Dialog open={open} onOpenChange={open2 => { if (!open2) onClose(); }}>
+    <Dialog open={open} onOpenChange={open2 => { if (!open2) { onClose(); setDuplicateError(null); } }}>
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>Generate Pay Stub</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1">
             <Label>Pay Run *</Label>
-            <Select value={payRunId} onValueChange={setPayRunId}>
+            <Select value={payRunId} onValueChange={v => { setPayRunId(v); clearDuplicate(); }}>
               <SelectTrigger data-testid="select-generate-pay-run"><SelectValue placeholder="Select pay run…" /></SelectTrigger>
               <SelectContent>
                 {payRuns.filter(r => r.status !== "closed").map(r => (
@@ -624,7 +640,7 @@ function GenerateStubDialog({ open, onClose, payRuns, employees }: { open: boole
           </div>
           <div className="space-y-1">
             <Label>Employee *</Label>
-            <Select value={employeeId} onValueChange={setEmployeeId}>
+            <Select value={employeeId} onValueChange={v => { setEmployeeId(v); clearDuplicate(); }}>
               <SelectTrigger data-testid="select-generate-employee"><SelectValue placeholder="Select employee…" /></SelectTrigger>
               <SelectContent>
                 {employees.map(e => (
@@ -633,12 +649,27 @@ function GenerateStubDialog({ open, onClose, payRuns, employees }: { open: boole
               </SelectContent>
             </Select>
           </div>
-          <p className="text-xs text-muted-foreground">The system will look for an approved timesheet for the selected pay run period. If none is found, it will fall back to raw time entries.</p>
+
+          {/* Duplicate pay stub inline alert */}
+          {duplicateError ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20 p-3 flex gap-3">
+              <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Pay stub already exists</p>
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                  {duplicateError.employeeName} already has a pay stub for {duplicateError.payRunName}. Open the existing pay stub instead of generating a new one.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">The system will look for an approved timesheet for the selected pay run period. If none is found, it will fall back to raw time entries.</p>
+          )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={() => { onClose(); setDuplicateError(null); }}>Cancel</Button>
           <Button onClick={() => {
             if (!payRunId || !employeeId) { toast({ title: "Select a pay run and employee", variant: "destructive" }); return; }
+            setDuplicateError(null);
             generateMutation.mutate();
           }} disabled={generateMutation.isPending} data-testid="button-generate-stub">
             {generateMutation.isPending ? "Generating…" : "Generate Draft"}

@@ -1,0 +1,280 @@
+DEV NOTE
+
+Task:
+Improve the duplicate pay stub error message and error toast styling in Payroll > Pay Stubs.
+
+Main instruction:
+Do not break, remove, refactor, or affect anything else that is currently working.
+Do not change pay stub generation logic, pay run logic, employee selection logic, or modal flow outside of this exact error-state improvement.
+This is only a UI and messaging cleanup for the duplicate pay stub error case.
+Keep the same feel of the app and make the error state look more professional.
+
+Goal
+
+When an admin tries to generate a pay stub for an employee for a pay run that already has a pay stub, the current error looks too technical and too harsh.
+
+Current problem:
+
+* Error message is raw and unprofessional
+* Red background looks too aggressive and does not match the app
+* Message does not clearly explain what happened in a user-friendly way
+
+Required fix:
+
+* Replace the raw backend-looking error with a clean human-friendly message
+* Update the toast/alert styling to match the app UI
+* Make the message clearly explain that a pay stub already exists for that employee for that specific pay period
+* Keep the user in control by telling them what to do next
+
+1. Error message content update
+
+Current message:
+400: {"message":"A pay stub already exists for this employee in this pay run"}
+
+This should never be shown directly to the user.
+
+Required fix:
+Map this backend error into a clean frontend message.
+
+Recommended final message:
+Pay stub already exists for this employee for this pay period.
+
+Recommended supporting text:
+This employee already has a pay stub for Mar 9, 2026 – Mar 23, 2026. Open the existing pay stub instead of creating another one.
+
+If period label is available, use it dynamically.
+If period label is not available, use:
+This employee already has a pay stub for the selected pay run. Open the existing pay stub instead of creating another one.
+
+Best version:
+Title:
+Pay stub already exists
+
+Body:
+David Zulu already has a pay stub for Mar 9, 2026 – Mar 23, 2026. Open the existing pay stub instead of generating a new one.
+
+Important:
+
+* Do not show raw JSON
+* Do not show 400
+* Do not show backend message text directly
+* Message must sound clean and intentional
+
+2. Message behavior
+
+When duplicate pay stub creation is attempted:
+
+* keep modal open
+* do not crash modal
+* show improved toast/alert
+* clearly explain why generation cannot continue
+* optionally guide the admin to the existing pay stub
+
+Recommended admin guidance:
+
+* “Open existing pay stub”
+  or
+* “View existing pay stub in the list”
+
+If easy to do safely, include a button in the toast or modal:
+
+* View Existing Pay Stub
+
+If that is too much for this change, keep it simple and just improve the message text.
+
+3. Error toast color/style update
+
+Current issue:
+The red block looks too harsh and does not match the rest of the app.
+
+Required fix:
+Replace the aggressive bright red error background with a more polished app-matching destructive/error style.
+
+Design direction:
+
+* softer red or muted rose background
+* better contrast
+* rounded corners matching app cards
+* proper padding
+* title and body separation
+* cleaner typography
+* less alarming, more professional
+
+Recommended styling approach:
+
+* background: soft/desaturated red or tinted error tone
+* border: subtle darker red border or left accent
+* title: stronger text weight
+* body: normal readable text
+* icon: optional alert icon
+* shadow: subtle, same family as app toasts/cards
+
+Visual goal:
+It should feel like part of the Clockfield design system, not like a raw browser/dev error.
+
+4. Recommended UI copy structure
+
+Best structure for duplicate pay stub toast:
+
+Title:
+Pay stub already exists
+
+Body:
+This employee already has a pay stub for the selected pay period.
+
+Optional dynamic version:
+David Zulu already has a pay stub for Mar 9, 2026 – Mar 23, 2026.
+
+Optional secondary guidance:
+Open the existing pay stub instead of generating another one.
+
+Best final compact version:
+Pay stub already exists
+David Zulu already has a pay stub for Mar 9, 2026 – Mar 23, 2026. Open the existing pay stub instead of creating another one.
+
+5. Suggested tone
+
+Use tone that is:
+
+* clear
+* calm
+* professional
+* helpful
+
+Avoid tone that is:
+
+* technical
+* scary
+* raw
+* overly harsh
+
+Do not use:
+
+* raw backend errors
+* JSON
+* status codes
+* developer wording
+
+6. Safe frontend handling
+
+Required implementation:
+Catch duplicate-pay-stub backend response and transform it into a clean UI error state.
+
+Suggested logic:
+If backend returns duplicate pay stub conflict error:
+
+* intercept it
+* replace raw message with friendly message
+* render styled toast/notice
+
+Do not change actual backend validation unless needed.
+This is mainly a frontend error handling and presentation improvement.
+
+7. Optional enhancement if easy and safe
+
+If the API response includes or can include the existing pay stub ID safely, optionally allow:
+
+* toast action button: View Existing
+  or
+* inline helper text inside modal after error
+
+Example:
+Pay stub already exists.
+View the existing pay stub for this employee and period.
+
+If this requires backend changes and may risk breaking other things, skip it for now.
+The main requirement is message and styling cleanup.
+
+8. Keep modal behavior clean
+
+Required:
+
+* modal should remain open after error
+* selected employee and pay run should remain selected
+* admin should not lose form state
+* admin should be able to cancel or choose another employee/pay run
+
+Do not reset the modal unnecessarily after this duplicate error.
+
+9. Scope protection
+
+Do not change:
+
+* pay stub creation rules
+* duplicate protection logic
+* payroll calculations
+* pay run data
+* employee dropdown logic
+* existing pay stub list behavior
+* unrelated error states unless they share same component and can be safely improved without affecting behavior
+
+Only improve:
+
+* duplicate pay stub error text
+* duplicate pay stub toast/alert styling
+* user-facing polish for this specific case
+
+10. Suggested exact content
+
+Recommended final UI text:
+
+Toast title:
+Pay stub already exists
+
+Toast body:
+This employee already has a pay stub for the selected pay period.
+
+Better dynamic version:
+David Zulu already has a pay stub for Mar 9, 2026 – Mar 23, 2026.
+
+Optional second line:
+Open the existing pay stub instead of generating a new one.
+
+11. Testing checklist
+
+Must test all of these:
+
+Duplicate case
+
+* try generating a pay stub for an employee who already has one for that pay run
+* modal stays open
+* no raw 400 message shown
+* no raw JSON shown
+* improved message appears
+* error styling matches app better
+
+UI
+
+* toast color looks polished
+* toast spacing looks clean
+* readable on desktop
+* readable on mobile if toast is reused there
+* does not block the whole screen awkwardly
+
+State preservation
+
+* selected pay run remains selected
+* selected employee remains selected
+* modal does not reset unexpectedly
+
+Regression
+
+* successful generation still works
+* other payroll actions still work
+* existing pay stub list unchanged
+* no backend logic broken
+
+12. Final instruction for agent
+
+Focus only on this duplicate pay stub error-state cleanup.
+
+Make these exact improvements:
+
+* remove raw technical error text
+* replace with human-friendly message
+* mention that the pay stub already exists for that employee and pay period
+* improve the toast color and visual style to match the app
+* keep the modal open and preserve form selections
+* do not break anything else
+
+This should feel like a polished product message, not a backend exception.
