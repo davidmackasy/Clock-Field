@@ -39,11 +39,37 @@ interface WorkItemDraft {
   afterPhotos: PhotoItem[];
 }
 
-function photoToDataUrl(file: File): Promise<string> {
-  return new Promise((res, rej) => {
+const MAX_PHOTO_DIM = 1800;
+const JPEG_QUALITY = 0.80;
+
+function compressPhoto(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => res(reader.result as string);
-    reader.onerror = rej;
+    reader.onerror = reject;
+    reader.onload = (ev) => {
+      const img = new window.Image();
+      img.onerror = reject;
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > MAX_PHOTO_DIM || height > MAX_PHOTO_DIM) {
+          if (width >= height) {
+            height = Math.round((height / width) * MAX_PHOTO_DIM);
+            width = MAX_PHOTO_DIM;
+          } else {
+            width = Math.round((width / height) * MAX_PHOTO_DIM);
+            height = MAX_PHOTO_DIM;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("canvas")); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", JPEG_QUALITY));
+      };
+      img.src = ev.target?.result as string;
+    };
     reader.readAsDataURL(file);
   });
 }
@@ -72,21 +98,23 @@ function PhotoGrid({ photos, onRemove, label }: { photos: PhotoItem[]; onRemove:
 
 function AddPhotoButton({ onAdd, disabled, label }: { onAdd: (photos: PhotoItem[]) => void; disabled: boolean; label: string }) {
   const ref = useRef<HTMLInputElement>(null);
+  const [compressing, setCompressing] = useState(false);
   const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    const items: PhotoItem[] = [];
-    for (const f of files) {
-      if (f.size > 3 * 1024 * 1024) continue;
-      const dataUrl = await photoToDataUrl(f);
-      items.push({ preview: dataUrl, dataUrl });
+    if (files.length === 0) return;
+    setCompressing(true);
+    try {
+      const dataUrls = await Promise.all(files.map(f => compressPhoto(f)));
+      onAdd(dataUrls.map(dataUrl => ({ preview: dataUrl, dataUrl })));
+    } finally {
+      setCompressing(false);
+      if (ref.current) ref.current.value = "";
     }
-    onAdd(items);
-    if (ref.current) ref.current.value = "";
   };
   return (
     <>
-      <Button type="button" variant="outline" size="sm" className="h-8 text-xs" disabled={disabled} onClick={() => ref.current?.click()}>
-        <Camera className="w-3 h-3 mr-1" /> {label}
+      <Button type="button" variant="outline" size="sm" className="h-8 text-xs" disabled={disabled || compressing} onClick={() => ref.current?.click()}>
+        <Camera className="w-3 h-3 mr-1" /> {compressing ? "Processing…" : label}
       </Button>
       <input ref={ref} type="file" accept="image/*" multiple className="hidden" onChange={handleChange} />
     </>

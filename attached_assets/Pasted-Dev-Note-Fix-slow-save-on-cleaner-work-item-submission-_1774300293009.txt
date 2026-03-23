@@ -1,0 +1,223 @@
+Dev Note: Fix slow save on cleaner work item submission only
+
+Critical instruction
+Do not remove, change, refactor, or affect anything else in the app.
+Do not touch old submitted photos.
+Do not touch existing saved work items.
+Do not change report rendering.
+Do not change admin flow.
+Do not change client flow.
+Do not change attendance, scheduling, payroll, reviews, or public links.
+Only focus on why saving a work item is slow on the cleaner side and fix that safely.
+
+Problem
+On the cleaner side, after the cleaner starts work, adds an area/sub-area, enters notes, uploads before and after photos, and clicks Save Item or Save Work, the save takes too long.
+
+This slows the cleaner down and makes the workflow feel broken.
+
+Goal
+Make the item save much faster and smoother without breaking any existing data or existing uploaded images.
+
+What to investigate first
+Before changing anything, diagnose the exact bottleneck in the current save flow.
+
+Check these points carefully:
+
+Image file sizes from mobile camera uploads
+Number of photos uploaded in one save action
+Whether full original images are being uploaded before the item record is created
+Whether images are being converted on the main request thread
+Whether the request waits for all image uploads before saving the item
+Whether database writes and image uploads are happening sequentially instead of efficiently
+Whether unnecessary image processing happens on the server during save
+Whether the frontend is sending oversized base64 payloads instead of files/blobs/form-data
+Whether duplicate save calls are happening
+Whether the UI waits too long before showing success even when backend already finished
+
+Expected outcome
+When cleaner taps Save Item:
+
+item should save fast
+photos should upload efficiently
+cleaner should be able to continue adding more items without long waiting
+existing behavior should remain the same from the user perspective
+no existing photos or saved records should be changed or damaged
+
+Safe implementation priorities
+Priority 1: Compress and resize images before upload on the cleaner side
+This is likely the biggest win.
+
+If current mobile photos are uploaded at full camera size, reduce them before sending.
+
+Recommended rules:
+
+compress on client before upload
+convert huge originals to a reasonable max dimension
+preserve quality enough for cleaning proof photos
+do not compress already saved old photos
+only apply this to newly added before/after photos during new save
+
+Recommended limits
+For proof/work photos:
+
+max width or height: 1600px to 2000px
+JPEG/WebP quality around 0.7 to 0.82
+preserve orientation using EXIF-safe handling
+create upload-ready blobs/files, not base64 strings if possible
+
+Important
+Do not over-compress.
+These images still need to be clear enough for proof of work.
+
+Priority 2: Stop uploading full-size originals if not needed
+If both original and preview versions are being uploaded, review whether that is necessary.
+
+For this workflow, if only one optimized upload is enough for report viewing, use that.
+Do not remove old originals already stored.
+Only improve new submissions going forward.
+
+Priority 3: Save item metadata first, then upload images efficiently
+If current flow blocks the entire save until every image finishes one-by-one, improve it safely.
+
+Better flow:
+
+Create or upsert work item record quickly
+Upload optimized images efficiently
+Attach returned image URLs to the saved item
+Return success as soon as the final item state is complete
+
+If architecture allows, make uploads concurrent with safe limits instead of fully sequential.
+
+Do not make this so aggressive that it causes failures on weak mobile networks.
+
+Priority 4: Avoid base64 payload submission
+If frontend currently sends images as base64 inside JSON, replace that with file/blob upload using multipart/form-data or existing storage upload flow.
+
+Base64 often makes payloads much larger and slower.
+
+This must be done carefully without breaking server expectations.
+
+Priority 5: Improve UI save feedback
+Even after performance fixes, make sure the cleaner gets clear status feedback.
+
+Required behavior:
+
+disable double-submit while saving
+show small saving state
+as soon as save completes, return button to normal immediately
+show saved success clearly
+keep the cleaner on the same workflow so they can add next item fast
+
+Do not redesign the whole UI.
+Only improve the save responsiveness.
+
+Things the agent must not do
+
+do not delete any existing images
+do not migrate old image records unless absolutely necessary
+do not rewrite the entire photo system
+do not change old reports
+do not change storage bucket structure unless required for this fix
+do not touch other modules
+do not alter how previously submitted work displays
+do not change permissions or access rules
+do not reduce image quality for already stored photos
+
+Recommended diagnosis checklist
+Agent should inspect and measure:
+
+Average image file size from mobile capture
+Time spent in frontend compression
+Time spent sending request
+Time spent on server processing
+Time spent uploading each image to storage
+Time spent writing item + photo records to database
+Whether there are duplicate network requests
+Whether save endpoint is doing unnecessary extra reads or recalculations
+
+Likely safe solution
+Implement this exact approach unless current architecture requires a slight variation:
+
+Cleaner save flow for new work item
+
+User selects photos
+Frontend compresses each new photo before upload
+Frontend uploads optimized files only
+Backend saves item and photo references efficiently
+UI immediately clears saving state and allows next item entry
+
+If current backend requires item ID first:
+
+Save item record first
+Upload compressed photos using item ID
+Save returned URLs
+Finish request
+
+Compression guidance
+Use browser-safe image compression for mobile uploads.
+
+Recommended targets:
+
+max long side: 1800px
+target size per image ideally under 300KB to 700KB depending on content
+JPEG quality around 0.75 to 0.82
+keep enough detail for dirty/clean comparison
+
+For cleaning photos, this is usually more than enough and should greatly improve upload speed.
+
+Extra safety requirement
+Only compress newly added images from the cleaner submission flow.
+Do not run any backfill job.
+Do not alter old stored assets.
+Do not touch other employee records.
+
+Testing requirements
+The agent must test this carefully.
+
+Test case 1
+
+cleaner starts work
+adds 3 before photos and 3 after photos
+clicks save
+confirm save is much faster than before
+confirm item is saved correctly
+
+Test case 2
+
+use large mobile photos directly from phone camera
+confirm they are optimized before upload
+confirm image quality is still acceptable
+
+Test case 3
+
+existing old submitted work items still load correctly
+no old images broken
+
+Test case 4
+
+bad network / slow mobile network
+confirm save still completes safely
+no duplicate items created
+
+Test case 5
+
+cleaner taps save once
+confirm button does not hang forever
+confirm no double-save
+
+Test case 6
+
+multiple items added one after another
+confirm cleaner can continue quickly
+
+Test case 7
+
+public reports and admin reports still show the new saved photos correctly
+
+Implementation rule
+Make the smallest, safest change possible.
+Do not do a broad refactor.
+Do not touch anything outside the cleaner work item photo save flow.
+
+Suggested summary for the agent
+Please investigate and fix the slow save issue only in the cleaner-side work item submission flow. Focus on large photo upload performance and request efficiency. Safely compress and resize newly added mobile photos before upload, avoid oversized payloads, and make item saving faster without touching old data, old photos, existing reports, or any unrelated feature. Keep all current functionality the same and do not break anything else.

@@ -1962,15 +1962,13 @@ Welcome again, and thank you for choosing ClockField.
         sortOrder: existing.length,
         createdAt: now,
       });
-      // Save photos if provided
+      // Save photos in parallel
       const beforePhotos: string[] = req.body.beforePhotos || [];
       const afterPhotos: string[] = req.body.afterPhotos || [];
-      for (const fileUrl of beforePhotos) {
-        await storage.createWorkSubmissionPhoto({ submissionItemId: item.id, photoType: "before", fileUrl, caption: null, createdAt: now });
-      }
-      for (const fileUrl of afterPhotos) {
-        await storage.createWorkSubmissionPhoto({ submissionItemId: item.id, photoType: "after", fileUrl, caption: null, createdAt: now });
-      }
+      await Promise.all([
+        ...beforePhotos.map(fileUrl => storage.createWorkSubmissionPhoto({ submissionItemId: item.id, photoType: "before", fileUrl, caption: null, createdAt: now })),
+        ...afterPhotos.map(fileUrl => storage.createWorkSubmissionPhoto({ submissionItemId: item.id, photoType: "after", fileUrl, caption: null, createdAt: now })),
+      ]);
       await storage.updateWorkSubmission(sub.id, { updatedAt: now });
       const photos = await storage.getWorkSubmissionPhotosByItem(item.id);
       res.status(201).json({ ...item, photos: photos.map(p => ({ id: p.id, photoType: p.photoType, caption: p.caption, createdAt: p.createdAt })) });
@@ -1985,20 +1983,15 @@ Welcome again, and thank you for choosing ClockField.
       if (sub.status !== "draft") return res.status(400).json({ message: "Submission already submitted" });
       const now = new Date().toISOString();
       const updated = await storage.updateWorkSubmissionItem(req.params.itemId, { notes: req.body.notes });
-      // Add new photos
+      // Add new photos and remove old ones in parallel
       const addBefore: string[] = req.body.addBeforePhotos || [];
       const addAfter: string[] = req.body.addAfterPhotos || [];
-      for (const fileUrl of addBefore) {
-        await storage.createWorkSubmissionPhoto({ submissionItemId: req.params.itemId, photoType: "before", fileUrl, caption: null, createdAt: now });
-      }
-      for (const fileUrl of addAfter) {
-        await storage.createWorkSubmissionPhoto({ submissionItemId: req.params.itemId, photoType: "after", fileUrl, caption: null, createdAt: now });
-      }
-      // Remove specific photos
       const removeIds: string[] = req.body.removePhotoIds || [];
-      for (const photoId of removeIds) {
-        await storage.deleteWorkSubmissionPhoto(photoId);
-      }
+      await Promise.all([
+        ...addBefore.map(fileUrl => storage.createWorkSubmissionPhoto({ submissionItemId: req.params.itemId, photoType: "before", fileUrl, caption: null, createdAt: now })),
+        ...addAfter.map(fileUrl => storage.createWorkSubmissionPhoto({ submissionItemId: req.params.itemId, photoType: "after", fileUrl, caption: null, createdAt: now })),
+        ...removeIds.map(photoId => storage.deleteWorkSubmissionPhoto(photoId)),
+      ]);
       await storage.updateWorkSubmission(sub.id, { updatedAt: now });
       const photos = await storage.getWorkSubmissionPhotosByItem(req.params.itemId);
       res.json({ ...updated, photos: photos.map(p => ({ id: p.id, photoType: p.photoType, caption: p.caption, createdAt: p.createdAt })) });
