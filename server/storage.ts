@@ -785,7 +785,9 @@ export class DatabaseStorage implements IStorage {
 
   // ── Work Submission Reviews ────────────────────────────────────────────────────
   async createWorkSubmissionReview(data: InsertWorkSubmissionReview): Promise<WorkSubmissionReview> {
-    const [review] = await db.insert(workSubmissionReviews).values(data).returning();
+    const { v4: uuidv4 } = await import("uuid");
+    const withToken = { ...data, reviewShareToken: uuidv4() };
+    const [review] = await db.insert(workSubmissionReviews).values(withToken).returning();
     return review;
   }
 
@@ -793,6 +795,13 @@ export class DatabaseStorage implements IStorage {
     const [review] = await db.select().from(workSubmissionReviews)
       .where(eq(workSubmissionReviews.submissionId, submissionId))
       .orderBy(desc(workSubmissionReviews.createdAt))
+      .limit(1);
+    return review;
+  }
+
+  async getWorkSubmissionReviewByShareToken(reviewShareToken: string): Promise<WorkSubmissionReview | undefined> {
+    const [review] = await db.select().from(workSubmissionReviews)
+      .where(eq(workSubmissionReviews.reviewShareToken, reviewShareToken))
       .limit(1);
     return review;
   }

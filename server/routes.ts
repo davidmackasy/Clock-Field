@@ -2077,6 +2077,24 @@ export async function registerRoutes(
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  // ── Public: Serve photos for review share page ─────────────────────────────
+  app.get("/api/public/review/:reviewShareToken/photos/:photoId", async (req, res) => {
+    try {
+      const review = await storage.getWorkSubmissionReviewByShareToken(req.params.reviewShareToken);
+      if (!review) return res.status(404).json({ message: "Not found" });
+      const photo = await storage.getWorkSubmissionPhoto(req.params.photoId);
+      if (!photo) return res.status(404).json({ message: "Not found" });
+      const item = await storage.getWorkSubmissionItem(photo.submissionItemId);
+      if (!item || item.submissionId !== review.submissionId) return res.status(403).json({ message: "Forbidden" });
+      const match = photo.fileUrl.match(/^data:([^;]+);base64,(.+)$/s);
+      if (!match) return res.status(400).json({ message: "Invalid image data" });
+      const buffer = Buffer.from(match[2], "base64");
+      res.set("Content-Type", match[1]);
+      res.set("Cache-Control", "public, max-age=86400");
+      res.send(buffer);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   // ── Public: Submit review for a report ────────────────────────────────────
   app.post("/api/public/work-report/:token/review", async (req, res) => {
     try {
@@ -2116,13 +2134,51 @@ export async function registerRoutes(
       if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       const review = await storage.getWorkSubmissionReviewBySubmissionId(req.params.id);
       if (!review) return res.status(404).json({ message: "No review for this submission" });
-      // Enrich with employee name for testimonial
       const employee = sub.employeeId ? await storage.getUser(sub.employeeId) : null;
+      const company = await storage.getCompany(sub.companyId);
       res.json({
         ...review,
         employeeName: employee ? `${employee.firstName} ${employee.lastName}`.trim() : "Staff",
         locationName: sub.locationName,
         workDate: sub.workDate,
+        companyDisplayName: company?.name || "",
+      });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ── Public: Get review by reviewShareToken ─────────────────────────────────
+  app.get("/api/public/review/:reviewShareToken", async (req, res) => {
+    try {
+      const review = await storage.getWorkSubmissionReviewByShareToken(req.params.reviewShareToken);
+      if (!review) return res.status(404).json({ message: "Review not found" });
+      const sub = await storage.getWorkSubmission(review.submissionId);
+      if (!sub) return res.status(404).json({ message: "Not found" });
+      const employee = sub.employeeId ? await storage.getUser(sub.employeeId) : null;
+      const company = await storage.getCompany(review.companyId);
+      // Gather after photos for social proof (only after photos, max 6)
+      const items = await storage.getWorkSubmissionItems(sub.id);
+      const afterPhotos: any[] = [];
+      for (const item of items) {
+        const photos = await storage.getWorkSubmissionPhotosByItem(item.id);
+        const after = photos.filter(p => p.photoType === "after");
+        afterPhotos.push(...after.map(p => ({ id: p.id, caption: p.caption, section: item.section, subArea: item.subArea })));
+        if (afterPhotos.length >= 6) break;
+      }
+      res.json({
+        review: {
+          id: review.id,
+          reviewShareToken: review.reviewShareToken,
+          clientName: review.clientName,
+          companyName: review.companyName,
+          reviewText: review.reviewText,
+          rating: review.rating,
+          submittedAt: review.submittedAt,
+        },
+        workDate: sub.workDate,
+        locationName: sub.locationName,
+        employeeName: employee ? `${employee.firstName} ${employee.lastName}`.trim() : null,
+        companyName: company?.name || "",
+        afterPhotos,
       });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });

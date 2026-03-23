@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   MapPin, User, Calendar, ChevronRight, CheckCircle, Search, Eye, X,
   ChevronLeft, ChevronRight as ChevronRightIcon, Link, Copy, ExternalLink,
-  Star, Shield, MessageSquare, Quote, Share2,
+  Star, Shield, MessageSquare, Quote, Share2, Download,
 } from "lucide-react";
 
 function fmt(iso: string) {
@@ -204,11 +204,13 @@ function SubmissionDetail({ subId }: { subId: string }) {
 }
 
 // ─── Review Popup ──────────────────────────────────────────────────────────────
-function ReviewPopup({ subId, subData, onClose }: { subId: string; subData: any; onClose: () => void }) {
+function ReviewPopup({ subId, onClose }: { subId: string; onClose: () => void }) {
   const { toast } = useToast();
   const [showTestimonial, setShowTestimonial] = useState(false);
   const [testimonialCopied, setTestimonialCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   const { data: review, isLoading } = useQuery<any>({
     queryKey: ["/api/work-submissions", subId, "review"],
@@ -218,9 +220,12 @@ function ReviewPopup({ subId, subData, onClose }: { subId: string; subData: any;
       return res.json();
     },
     enabled: !!subId,
+    staleTime: 0,
   });
 
-  const shareUrl = subData?.publicShareToken ? `${window.location.origin}/public/work-report/${subData.publicShareToken}` : null;
+  const reviewShareUrl = review?.reviewShareToken
+    ? `${window.location.origin}/public/reviews/${review.reviewShareToken}`
+    : null;
 
   function buildTestimonialText(r: any) {
     const stars = r.rating ? "★".repeat(r.rating) + "☆".repeat(5 - r.rating) : "";
@@ -250,20 +255,45 @@ function ReviewPopup({ subId, subData, onClose }: { subId: string; subData: any;
   }
 
   async function copyShareLink() {
-    if (!shareUrl) return;
+    if (!reviewShareUrl) return;
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(reviewShareUrl);
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2000);
-      toast({ title: "Share link copied" });
+      toast({ title: "Review share link copied" });
     } catch {
       toast({ title: "Copy failed", variant: "destructive" });
     }
   }
 
+  async function downloadCard(r: any) {
+    if (!cardRef.current) return;
+    setIsDownloading(true);
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(cardRef.current, {
+        backgroundColor: null,
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+      const link = document.createElement("a");
+      const slug = (r.companyName || r.clientName || "review").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      const dateStr = new Date().toISOString().slice(0, 10);
+      link.download = `review-${slug}-${dateStr}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+      toast({ title: "Card downloaded" });
+    } catch {
+      toast({ title: "Download failed", variant: "destructive" });
+    } finally {
+      setIsDownloading(false);
+    }
+  }
+
   return (
     <Dialog open onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-emerald-500" />
@@ -310,26 +340,30 @@ function ReviewPopup({ subId, subData, onClose }: { subId: string; subData: any;
               </div>
             </div>
 
-            {/* Testimonial card preview */}
+            {/* Share card preview — ref'd for download */}
             {showTestimonial && (
-              <div className="rounded-xl border-2 border-dashed border-primary/30 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 p-5 space-y-3">
+              <div
+                ref={cardRef}
+                className="rounded-xl border-2 border-dashed border-primary/30 bg-gradient-to-br from-blue-50 to-indigo-50 p-5 space-y-3"
+                style={{ fontFamily: "system-ui, -apple-system, sans-serif" }}
+              >
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400">Social Proof Card</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-blue-600">Social Proof Card</span>
                   {review.rating && <StarDisplay value={review.rating} />}
                 </div>
-                <p className="text-sm font-medium text-foreground leading-relaxed">"{review.reviewText}"</p>
+                <p className="text-sm font-medium text-gray-900 leading-relaxed">"{review.reviewText}"</p>
                 <div>
-                  <p className="text-sm font-bold text-foreground">{review.clientName}</p>
-                  {review.companyName && <p className="text-xs text-muted-foreground">{review.companyName}</p>}
+                  <p className="text-sm font-bold text-gray-900">{review.clientName}</p>
+                  {review.companyName && <p className="text-xs text-gray-500">{review.companyName}</p>}
                 </div>
-                <div className="text-xs text-muted-foreground space-y-0.5">
+                <div className="text-xs text-gray-500 space-y-0.5">
                   {review.locationName && <p className="flex items-center gap-1"><MapPin className="w-3 h-3" />{review.locationName}</p>}
                   <p className="flex items-center gap-1"><Calendar className="w-3 h-3" />Service date: {fmtDate(review.workDate)}</p>
                   {review.employeeName && <p className="flex items-center gap-1"><User className="w-3 h-3" />Completed by: {review.employeeName}</p>}
                 </div>
-                <div className="pt-2 border-t border-blue-200 dark:border-blue-800 flex items-center gap-1.5">
+                <div className="pt-2 border-t border-blue-200 flex items-center gap-1.5">
                   <Shield className="w-3 h-3 text-emerald-500" />
-                  <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">Verified by ClockField · Submitted through completed service report</span>
+                  <span className="text-[10px] font-semibold text-emerald-600">Verified by ClockField · Submitted through completed service report</span>
                 </div>
               </div>
             )}
@@ -346,6 +380,21 @@ function ReviewPopup({ subId, subData, onClose }: { subId: string; subData: any;
                 <Share2 className="w-4 h-4" />
                 {showTestimonial ? "Hide Share Card" : "Generate Share Card"}
               </Button>
+
+              {showTestimonial && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start gap-2"
+                  onClick={() => downloadCard(review)}
+                  disabled={isDownloading}
+                  data-testid="button-download-card"
+                >
+                  <Download className="w-4 h-4" />
+                  {isDownloading ? "Downloading..." : "Download Card"}
+                </Button>
+              )}
+
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -357,18 +406,17 @@ function ReviewPopup({ subId, subData, onClose }: { subId: string; subData: any;
                   <Copy className="w-3.5 h-3.5" />
                   {testimonialCopied ? "Copied!" : "Copy Review Text"}
                 </Button>
-                {shareUrl && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 gap-1.5"
-                    onClick={copyShareLink}
-                    data-testid="button-copy-share-link"
-                  >
-                    <Link className="w-3.5 h-3.5" />
-                    {linkCopied ? "Copied!" : "Copy Share Link"}
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 gap-1.5"
+                  onClick={copyShareLink}
+                  disabled={!reviewShareUrl}
+                  data-testid="button-copy-share-link"
+                >
+                  <Link className="w-3.5 h-3.5" />
+                  {linkCopied ? "Copied!" : "Copy Share Link"}
+                </Button>
               </div>
             </div>
           </div>
@@ -577,7 +625,6 @@ export default function AdminWorkLog() {
       {showReviewPopup && detailSub && (
         <ReviewPopup
           subId={detailSub.id}
-          subData={detailSub}
           onClose={() => setShowReviewPopup(false)}
         />
       )}

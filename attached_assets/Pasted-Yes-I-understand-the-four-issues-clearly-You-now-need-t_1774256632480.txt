@@ -1,0 +1,458 @@
+Yes. I understand the four issues clearly.
+
+You now need to separate:
+
+1. the public client service report link
+2. the public review/share link
+
+Those are not the same thing and should never behave the same way.
+
+DEV NOTE FOR AGENT
+
+Important
+Do not touch anything else.
+Do not change scheduling.
+Do not change settings.
+Do not change existing work log behavior outside this review feature.
+Do not refactor unrelated pages.
+Do not break the current client report flow.
+Only fix the review system issues listed below.
+
+Main problem
+The current implementation is mixing the service report link with the review share link.
+That is wrong.
+
+There must be two different public experiences:
+
+A. Client Service Report Link
+Purpose:
+
+* sent to the client
+* shows the completed work
+* allows the client to leave a review
+
+B. Review Share Link
+Purpose:
+
+* generated from admin after review is submitted
+* safe to share publicly
+* shows only approved review/testimonial content plus allowed work proof
+* must not expose sensitive client report details or private report context
+
+ISSUE 1
+Generated review card cannot be downloaded
+
+Required fix
+When admin clicks Generate Share Card, the system must allow the card to be downloaded.
+
+Implement
+
+* Add a real Download Card button
+* Export the visible social proof card as PNG
+* Use the exact card content shown in admin preview
+* Preserve layout, stars, review text, client name, company name, service date, completed by, Verified by Clockfield
+* File name example:
+  review-acme-corp-2026-03-23.png
+
+Do not
+
+* Do not screenshot the entire modal
+* Only export the actual card area
+* Do not include admin controls in export
+* Do not include background overlay or modal chrome
+
+Acceptance
+
+* Admin clicks Generate Share Card
+* Card preview appears
+* Admin clicks Download Card
+* PNG downloads successfully
+* Downloaded image matches preview exactly
+
+ISSUE 2
+Copy Share Link is pointing to the full client report
+That is not acceptable.
+
+Required fix
+Create a dedicated review share page and dedicated review share token/link.
+
+Current wrong behavior
+Copy Share Link is using the public service report URL.
+That exposes the client report context and can reveal information that should not be part of a public testimonial share flow.
+
+Correct behavior
+Copy Share Link must generate a separate review-only public page.
+
+Example concept
+/public/reviews/:reviewShareToken
+
+Not
+/public/report/:reportToken
+
+Review share page must show
+
+* before/after photos if allowed for social proof
+* review as main focus
+* star rating
+* client name
+* company name
+* your business name
+* Verified by Clockfield
+* optional service date
+* optional completed by employee
+* optional location only if safe and intended
+
+Review share page must not show
+
+* prepared by internal admin blocks
+* submitted timestamps from internal workflow unless intentionally formatted
+* client report header metadata that belongs to service report flow
+* internal report ID
+* private submission details
+* internal notes
+* anything that lets outsiders navigate back into the client report flow
+
+Important clarification
+You said client name and company name can still show.
+That is fine.
+But the review share page must not expose contactable client details or the full raw service report structure intended only for the original client.
+
+Best layout for review share page
+Top
+
+* your logo/business name
+* Verified by Clockfield
+
+Main section
+
+* review stars
+* review text
+* reviewer name
+* company name
+
+Proof section
+
+* before/after photos
+* completed work visuals
+* optional service date
+* optional “Completed by [employee]”
+
+Footer
+
+* your business contact info only
+* your website
+* Powered by Clockfield or Verified by Clockfield
+
+Do not show the client report submission layout.
+
+Acceptance
+
+* Copy Share Link generates a review-only public URL
+* Opening that URL does not expose client report details
+* The page focuses on testimonial and work proof only
+* The page shows your company branding and safe public info only
+
+ISSUE 3
+Review content submitted by client is not matching what appears in admin
+
+This is a serious data integrity problem.
+The system must display exactly what the client submitted.
+
+Required fix
+The review record shown in admin must always come from the saved public review submission tied to that report.
+No placeholder text.
+No fallback generic text.
+No seeded sample review.
+No hardcoded demo data.
+No cached fake content.
+
+What must match exactly
+
+* rating
+* reviewer name
+* company name
+* review text
+* submission time
+* linked work item
+
+Example from your test
+If client entered:
+
+* Name: David
+* Company: DMI
+* Review: I love the service please come again
+* Rating: 5
+
+Then admin Work Log review modal must show exactly:
+
+* David
+* DMI
+* I love the service please come again
+* 5 stars
+
+And the generated share card must use that same exact saved data.
+
+Likely root causes to check
+
+* hardcoded review preview data still left in component
+* review modal reading mock object instead of DB object
+* frontend state not refreshed after submission
+* review fetch endpoint returning wrong review or default object
+* admin modal using incorrect field names
+* stale cache on detail modal
+* wrong join between work item and review record
+* mapping issue between public submit payload and admin display model
+
+Implementation requirement
+Trace the full review data path end to end:
+
+1. public form submit
+2. API payload
+3. database save
+4. review retrieval by work item
+5. admin modal display
+6. share card display
+7. review share page display
+
+Every step must use the same saved review record.
+
+Acceptance
+
+* Submit a unique review from public report
+* Open admin Work Log
+* View review
+* All values match exactly
+* Generate share card
+* All values still match exactly
+* Open review share link
+* All values still match exactly
+
+ISSUE 4
+Review share experience is not properly separated from report experience
+
+This is the main architecture fix.
+
+Required separation
+
+1. Public service report page
+   Purpose:
+
+* client sees completed work
+* client leaves a review
+
+Allowed content
+
+* service report details
+* before/after proof
+* report metadata intended for the client
+* leave review form or submitted review block
+
+2. Public review share page
+   Purpose:
+
+* social proof
+* testimonial marketing page
+* safe to share publicly anywhere
+
+Allowed content
+
+* polished review/testimonial
+* selected work images
+* your company identity
+* Verified by Clockfield
+* optional safe work proof
+
+Not allowed
+
+* raw client report structure
+* anything that feels like a private delivery report page
+* private operational metadata
+
+This must be implemented as a separate page, separate link, separate rendering logic.
+
+Do not reuse the client report page and just hide a couple elements.
+That is risky.
+Build a dedicated review-share view.
+
+REQUIRED FIXES BY AREA
+
+1. Database
+   Make sure review table has proper fields and real saved values.
+
+Required fields
+
+* id
+* workSubmissionId
+* publicReportId or reportToken relation
+* reviewShareToken
+* clientName
+* companyName
+* reviewText
+* rating
+* submittedAt
+* source
+* status
+* createdAt
+* updatedAt
+
+Optional helpful fields
+
+* isPublicShareEnabled
+* shareCardGeneratedAt
+
+Important
+reviewShareToken must be separate from report token.
+
+2. Public review form submission
+   Fix submit pipeline so it saves exact client input.
+
+Requirements
+
+* sanitize text safely
+* preserve line breaks if intended
+* save exact review content
+* return saved review record from API
+* update UI using saved record, not mock record
+
+3. Admin Work Log modal
+   Fix review modal so it fetches actual linked review record.
+
+Requirements
+
+* no demo text
+* no placeholder reviewer
+* no fallback sample stars
+* read from database by workSubmissionId or reviewId
+* show latest saved review tied to that work item
+
+4. Share card generator
+   Fix share card so it uses actual review data and supports download.
+
+Buttons required
+
+* Generate Share Card
+* Download Card
+* Copy Review Text
+* Copy Share Link
+
+Copy Review Text should copy formatted real content
+Example:
+5 stars
+“I love the service please come again”
+David
+DMI
+Verified by Clockfield
+Service date: March 23, 2026
+
+5. Review share page
+   Create dedicated route/page for public testimonial sharing.
+
+Recommended page sections
+
+* business header
+* testimonial hero
+* proof photos
+* verified label
+* optional CTA to contact your business
+* footer with your business only
+
+Do not include client report delivery structure.
+
+6. Privacy/confidentiality handling
+   Per your instruction:
+
+* client name can show
+* company name can show
+* review can show
+* work photos can show
+
+Do not expose
+
+* direct client contact details
+* private report-only metadata
+* full internal delivery/report context
+* anything that helps outsiders use the client information inappropriately
+
+UI changes needed in admin modal
+Current modal should become:
+
+Top card
+
+* actual saved review
+* actual saved stars
+* actual saved client name
+* actual saved company name
+* service date
+* completed by
+* verified by Clockfield
+
+Share section
+
+* Generate Share Card
+* Download Card
+* Copy Review Text
+* Copy Share Link
+
+When share card is generated
+
+* preview should show exactly what will be downloaded
+* preview should match public review share page branding closely
+
+Testing checklist for agent
+
+Test 1
+Submit review from public report:
+Name: David
+Company: DMI
+Review: I love the service please come again
+Rating: 5
+
+Expected
+
+* public page shows exact same review after submit
+* admin modal shows exact same values
+* share card shows exact same values
+* copied review text matches exact same values
+* review share page shows exact same values
+
+Test 2
+Copy Share Link
+Expected
+
+* opens dedicated review share page
+* does not open service report page
+* does not expose private client report structure
+
+Test 3
+Download Card
+Expected
+
+* downloads PNG successfully
+* downloaded file visually matches generated share card
+* no modal controls included
+
+Test 4
+Regression
+Expected
+
+* original public client service report still works
+* client can still leave review from that report
+* Work Log still works
+* no other modules affected
+
+Final implementation rule
+Do not patch this by reusing the same report URL.
+Do not patch this by hiding a few fields on the old page.
+Do it properly:
+
+* one link for service report
+* one separate link for public testimonial/review share
+* one actual downloadable card
+* one exact review data source used everywhere
+
+This is the correct behavior:
+the client report remains for the client,
+the review share page becomes the public social-proof page,
+and the saved review content must stay identical everywhere.
+
+I can also turn this into a stricter step-by-step build order for your agent with frontend components, backend endpoints, and exact route naming.

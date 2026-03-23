@@ -44,6 +44,7 @@ import ClientDashboard from "@/pages/client/dashboard";
 import ClientRequestsPage from "@/pages/client/requests";
 import ClientProfile from "@/pages/client/profile";
 import PublicWorkReport from "@/pages/public/work-report";
+import PublicReviewShare from "@/pages/public/review-share";
 
 function LoadingScreen() {
   return (
@@ -177,6 +178,14 @@ function AppRouter() {
     return (
       <Switch>
         <Route path="/public/work-report/:token" component={PublicWorkReport} />
+      </Switch>
+    );
+  }
+
+  if (location.startsWith("/public/reviews/")) {
+    return (
+      <Switch>
+        <Route path="/public/reviews/:token" component={PublicReviewShare} />
       </Switch>
     );
   }

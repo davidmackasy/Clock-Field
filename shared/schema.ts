@@ -284,6 +284,7 @@ export const workSubmissionReviews = pgTable("work_submission_reviews", {
   submissionId: varchar("submission_id").notNull(),
   companyId: varchar("company_id").notNull(),
   shareToken: text("share_token").notNull(),
+  reviewShareToken: text("review_share_token"),
   clientName: text("client_name").notNull(),
   companyName: text("company_name"),
   reviewText: text("review_text").notNull(),
