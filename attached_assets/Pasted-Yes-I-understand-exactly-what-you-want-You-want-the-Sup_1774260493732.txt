@@ -1,0 +1,406 @@
+Yes. I understand exactly what you want.
+
+You want the Super Admin to be able to manually grant temporary platform access to a newly signed-up business even if that business has not paid yet, without changing Stripe, plan logic, or the normal subscription flow.
+
+That means:
+A new company can sign up normally.
+They may still be pending subscription.
+The Super Admin can manually grant access for a limited number of days like 5, 10, or 30.
+While that manual access is active, that business must be allowed into the platform and must not be forced back to the subscription page.
+When the manual access expires, the system should go back to normal subscription enforcement.
+
+This must be added safely.
+Do not break Stripe.
+Do not break plans.
+Do not break current subscription rules.
+Do not break Super Admin.
+Do not change any unrelated logic.
+
+DEV NOTE FOR AGENT
+
+Task
+
+Add a time-based Super Admin access override for businesses so Super Admin can manually grant temporary access to the platform for a set number of days even when the business has not completed subscription payment.
+
+Strict scope
+
+Only implement:
+
+1. Super Admin temporary business access override
+2. Subscription gate check update to respect that override
+3. Clear UI in Super Admin to grant and revoke timed access
+4. Expiry handling for that temporary access
+
+Do not touch anything else.
+Do not refactor Stripe.
+Do not modify plan pricing.
+Do not change normal subscription flow.
+Do not change signup flow except for reading this override after signup.
+Do not break current bypass logic if some of it already exists.
+Only extend it properly.
+
+Main goal
+
+When a business signs up and has not paid yet, the Super Admin should be able to give that business platform access for a specific number of days.
+
+Examples:
+
+* 5 days
+* 10 days
+* 30 days
+* custom number of days
+
+While that override is active:
+
+* the business can log in normally
+* the business can access the platform
+* the business is not redirected to the subscription page
+
+When that override expires:
+
+* the business goes back to the normal subscription requirement
+* if they still do not have a valid subscription, they should again be redirected to subscription as usual
+
+Important concept
+
+This is not changing their Stripe subscription.
+This is not changing their plan billing.
+This is not marking them as a paid customer.
+This is a temporary admin-granted access window.
+
+Recommended naming
+
+Use a clear internal concept like:
+
+* manual access override
+  or
+* admin access grant
+  or
+* temporary platform access
+
+Do not rely on vague naming only like bypass.
+If bypass already exists, keep it working, but make it time-based and explicit.
+
+Required behavior
+
+1. New business signs up
+
+* business appears in Super Admin business list
+* status can remain pending subscription or whatever current flow uses
+
+2. Super Admin opens that business
+
+* sees current subscription state
+* sees access controls
+* can grant temporary access for X number of days
+
+3. Once granted
+
+* system stores start and expiry time
+* business can log in and use platform immediately
+* subscription page gate must be skipped during active override period
+
+4. After expiry
+
+* override becomes invalid automatically
+* business returns to normal subscription enforcement
+* no manual cleanup required for basic functionality
+
+Super Admin UI changes
+
+In the business modal or business actions area, add a clear section for temporary access.
+
+Recommended controls
+
+Add button:
+Grant Temporary Access
+
+When clicked, open a small modal or inline control with:
+
+* number of days input
+* quick-select buttons: 5 days, 10 days, 30 days
+* optional note field for internal reason
+* confirm button
+
+Example labels
+
+* Grant 5 Days
+* Grant 10 Days
+* Grant 30 Days
+* Custom Days
+
+Once granted, show:
+
+* Temporary Access Active
+* Expires on [date/time]
+* Days remaining
+* Granted by [super admin name] optional
+* Remove Access button
+* Extend Access button optional
+
+Do not make this confusing with paid subscription badges.
+It should be visually separate.
+
+Recommended statuses in UI
+
+Keep subscription and access as different concepts.
+
+Example:
+Subscription:
+
+* pending
+  or
+* active
+  or
+* canceled
+
+Access Override:
+
+* inactive
+  or
+* active until Apr 22, 2026
+  or
+* expired
+
+That separation is important.
+
+Database fields
+
+Add only the minimum needed fields to the business/company/subscription-access layer.
+
+Recommended fields
+
+* manualAccessEnabled boolean
+* manualAccessStartAt datetime
+* manualAccessExpiresAt datetime
+* manualAccessGrantedBy userId nullable
+* manualAccessReason text nullable
+* manualAccessCreatedAt datetime nullable
+* manualAccessUpdatedAt datetime nullable
+
+If there is already a bypass field, do not remove it blindly.
+Extend safely.
+If current system uses something like internalBypass, keep that logic intact and separate from this new timed override unless they are intentionally the same concept.
+
+Best structure
+If existing bypass is permanent internal bypass, keep it separate.
+Add a new timed temporary access override specifically for these trial/granted-access cases.
+
+Access check logic
+
+This is the most important fix.
+
+Wherever the app currently checks:
+Does this business have an active subscription?
+and redirects them to subscription if not,
+
+update that logic to allow access when either of these is true:
+
+1. business has a valid paid subscription
+   or
+2. business has an active Super Admin temporary access override that has not expired
+   or
+3. existing permanent internal bypass is active if that already exists and should remain supported
+
+Pseudo logic
+
+allowPlatformAccess =
+hasActivePaidSubscription
+OR hasPermanentBypass
+OR (
+manualAccessEnabled
+AND manualAccessExpiresAt exists
+AND now < manualAccessExpiresAt
+)
+
+If false:
+
+* keep current redirect to subscription page exactly as it already works
+
+If true:
+
+* do not redirect to subscription page
+* allow platform access normally
+
+Important
+Use this logic in all critical subscription gate points.
+Do not patch only one page.
+Make sure the central gate or middleware or loader respects it.
+
+Expiry behavior
+
+Expiry must be automatic.
+No cron job is required unless your current architecture needs one.
+
+At access time:
+
+* if current date is past manualAccessExpiresAt, treat override as expired
+* access should no longer be granted
+
+Optional cleanup
+You can mark expired overrides inactive automatically when read, but not required if the logic checks expiry correctly.
+
+Super Admin actions required
+
+Add these actions safely:
+
+* Grant Temporary Access
+* Remove Temporary Access
+* Extend Temporary Access
+
+Grant Temporary Access
+
+* sets enabled true
+* sets start date now
+* sets expiry based on selected days
+
+Remove Temporary Access
+
+* disables manual access immediately
+* business returns to subscription gate
+
+Extend Temporary Access
+
+* adds more days or updates expiry date
+* only if you want to support this now
+* if not, at least allow re-granting cleanly
+
+Business login behavior
+
+After Super Admin grants access:
+
+* business should not have to do anything special
+* if they refresh, they should be allowed in
+* if they log out and log back in, they should still be allowed in until expiry
+* if they were previously blocked on subscription page, re-check access and allow entry
+
+Important
+Do not require payment page completion if admin override is active.
+
+Subscription page behavior
+
+Do not change the subscription page design or flow.
+Only change the gate logic so it does not force businesses there while temporary access is active.
+
+Optional nice message for the business side
+If needed and only if easy, show a subtle notice like:
+Your account has temporary access until [date].
+But this is optional.
+Main requirement is access, not messaging.
+
+Super Admin table/list behavior
+
+In the business list, add a small badge for companies with temporary access.
+
+Example badge:
+trial access
+or
+temp access
+or
+access until Apr 22
+
+This helps Super Admin quickly see who has manual access.
+
+Do not clutter the table.
+A simple badge is enough.
+
+Do not confuse it with subscription active badge.
+
+Detailed acceptance criteria
+
+Test 1
+New company signs up without subscription
+Expected:
+
+* company appears in Super Admin list
+* company still shows pending subscription or equivalent normal status
+
+Test 2
+Super Admin grants 5 days access
+Expected:
+
+* access record is saved
+* UI shows active temporary access and expiry date
+
+Test 3
+Business logs in
+Expected:
+
+* no redirect to subscription page
+* business can access platform normally
+
+Test 4
+Business logs out and logs back in during access period
+Expected:
+
+* still has access
+* no forced subscription page
+
+Test 5
+Access expires
+Expected:
+
+* business is again blocked by normal subscription gate if unpaid
+* redirect works as before
+
+Test 6
+Super Admin removes access before expiry
+Expected:
+
+* business loses manual access immediately
+* next gate check sends them to subscription if unpaid
+
+Test 7
+Regression
+Expected:
+
+* Stripe still works
+* paid subscriptions still work
+* existing plans still work
+* permanent bypass logic still works if already present
+* no unrelated modules break
+
+Important implementation warning
+
+Do not fake this with only UI labels.
+This must be enforced in the actual access gate.
+If Super Admin grants access but the middleware or backend gate still sees no subscription, the business will still be blocked.
+So the subscription enforcement point must be updated properly.
+
+Recommended safe implementation order
+
+1. Identify the single source of truth for business subscription access checks
+2. Add timed manual access fields
+3. Add Super Admin UI to grant/remove timed access
+4. Update central platform access gate to respect manual active access
+5. Add list/modal badges for visibility
+6. Test refresh, logout/login, and expiry
+
+Suggested button labels
+
+In business modal:
+
+* Grant Temporary Access
+* Remove Temporary Access
+* Extend Access
+
+Quick options:
+
+* 5 Days
+* 10 Days
+* 30 Days
+
+Suggested helper text
+Grant this business temporary platform access without requiring subscription payment during the selected period.
+
+Important final instruction to agent
+
+Do not rewrite the subscription system.
+Do not alter Stripe.
+Do not alter the signup flow beyond the access check.
+Do not change any other admin features.
+Only add a timed Super Admin business access override that allows platform entry for unpaid businesses until the selected expiry date.
+
+You can send this exact short version too:
+
+Add a timed temporary access override for Super Admin on each business. When a new business signs up but has not subscribed yet, Super Admin must be able to grant access for 5, 10, 30, or custom days. While that override is active, the business must be able to log in and use the platform without being redirected to the subscription page. When it expires, normal subscription enforcement must resume. Do not change Stripe, plans, or any unrelated logic.

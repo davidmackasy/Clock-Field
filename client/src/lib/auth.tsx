@@ -16,6 +16,10 @@ export type CompanyStatus = {
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
   stripeCustomerId: string | null;
+  manualAccessEnabled: boolean;
+  manualAccessExpiresAt: string | null;
+  manualAccessGrantedBy: string | null;
+  manualAccessReason: string | null;
 };
 
 interface AuthContextType {
@@ -80,16 +84,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isSuperAdmin = !!(user && (user as any).isSuperAdmin === true && user.role === "admin");
 
   // A company can access the platform if:
-  // 1. They have internal_bypass (super-admin-granted) OR
+  // 1. They have internal_bypass (super-admin-granted permanent bypass) OR
   // 2. They have the legacy plan (existing grandfathered accounts) OR
   // 3. They have active account_status AND a valid paid subscription status
-  //    (active, trialing, or past_due — past_due gets a grace period, not immediate lockout)
+  //    (active, trialing, or past_due — past_due gets a grace period, not immediate lockout) OR
+  // 4. They have an active Super Admin timed temporary access override that has not expired
   const canAccessPlatform = (() => {
     if (!companyStatus) return true; // loading state — don't block yet
     if (companyStatus.internalBypass) return true;
     if (companyStatus.planCode === "legacy") return true;
     const validSubStatuses = ["active", "trialing", "past_due"];
     if (companyStatus.accountStatus === "active" && validSubStatuses.includes(companyStatus.subscriptionStatus)) return true;
+    // Timed temporary access override
+    if (
+      companyStatus.manualAccessEnabled &&
+      companyStatus.manualAccessExpiresAt &&
+      new Date() < new Date(companyStatus.manualAccessExpiresAt)
+    ) return true;
     return false;
   })();
 

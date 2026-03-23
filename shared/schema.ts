@@ -43,6 +43,11 @@ export const companies = pgTable("companies", {
   activatedAt: text("activated_at"),
   suspendedAt: text("suspended_at"),
   internalBypass: boolean("internal_bypass").notNull().default(false),
+  // Timed Super Admin temporary access override
+  manualAccessEnabled: boolean("manual_access_enabled").notNull().default(false),
+  manualAccessExpiresAt: text("manual_access_expires_at"),
+  manualAccessGrantedBy: text("manual_access_granted_by"),
+  manualAccessReason: text("manual_access_reason"),
   // Company contact / address (for pay stubs)
   address: text("address"),
   city: text("city"),

@@ -268,6 +268,10 @@ Welcome again, and thank you for choosing ClockField.
         currentPeriodEnd: company.currentPeriodEnd,
         cancelAtPeriodEnd: company.cancelAtPeriodEnd,
         stripeCustomerId: company.stripeCustomerId,
+        manualAccessEnabled: company.manualAccessEnabled,
+        manualAccessExpiresAt: company.manualAccessExpiresAt,
+        manualAccessGrantedBy: company.manualAccessGrantedBy,
+        manualAccessReason: company.manualAccessReason,
       });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -2348,7 +2352,8 @@ Welcome again, and thank you for choosing ClockField.
 
   app.patch("/api/super-admin/businesses/:id", requireSuperAdmin, async (req, res) => {
     try {
-      const { planCode, billingCycle, accountStatus, subscriptionStatus, suspendedReason, internalBypass } = req.body;
+      const { planCode, billingCycle, accountStatus, subscriptionStatus, suspendedReason, internalBypass,
+              manualAccessEnabled, manualAccessExpiresAt, manualAccessGrantedBy, manualAccessReason } = req.body;
       const updates: Record<string, any> = {};
       if (planCode !== undefined) updates.planCode = planCode;
       if (billingCycle !== undefined) updates.billingCycle = billingCycle;
@@ -2360,6 +2365,10 @@ Welcome again, and thank you for choosing ClockField.
       if (subscriptionStatus !== undefined) updates.subscriptionStatus = subscriptionStatus;
       if (suspendedReason !== undefined) updates.suspendedReason = suspendedReason;
       if (internalBypass !== undefined) updates.internalBypass = !!internalBypass;
+      if (manualAccessEnabled !== undefined) updates.manualAccessEnabled = !!manualAccessEnabled;
+      if (manualAccessExpiresAt !== undefined) updates.manualAccessExpiresAt = manualAccessExpiresAt;
+      if (manualAccessGrantedBy !== undefined) updates.manualAccessGrantedBy = manualAccessGrantedBy;
+      if (manualAccessReason !== undefined) updates.manualAccessReason = manualAccessReason;
       const updated = await storage.updateCompany(req.params.id, updates);
       if (!updated) return res.status(404).json({ message: "Not found" });
       res.json(updated);

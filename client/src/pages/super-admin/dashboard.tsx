@@ -17,7 +17,8 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Building2, Users, DollarSign, TrendingUp, AlertTriangle, Clock,
   Eye, Ban, CheckCircle, ShieldAlert, MessageSquare, ChevronRight,
-  ArrowLeft, Send, Globe, RefreshCw, ShieldCheck, ShieldOff
+  ArrowLeft, Send, Globe, RefreshCw, ShieldCheck, ShieldOff, CalendarClock,
+  X, Timer
 } from "lucide-react";
 
 type Business = {
@@ -35,6 +36,10 @@ type Business = {
   currentPeriodEnd: string | null;
   stripeCustomerId: string | null;
   internalBypass: boolean;
+  manualAccessEnabled: boolean;
+  manualAccessExpiresAt: string | null;
+  manualAccessGrantedBy: string | null;
+  manualAccessReason: string | null;
 };
 
 type Stats = {
@@ -69,6 +74,15 @@ const planColors: Record<string, string> = {
   pro: "bg-emerald-100 text-emerald-800",
 };
 
+function isManualAccessActive(b: { manualAccessEnabled: boolean; manualAccessExpiresAt: string | null }) {
+  return b.manualAccessEnabled && b.manualAccessExpiresAt && new Date() < new Date(b.manualAccessExpiresAt);
+}
+
+function daysRemaining(expiresAt: string) {
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
+
 function StatCard({ icon: Icon, label, value, sub, color }: { icon: any; label: string; value: string | number; sub?: string; color?: string }) {
   return (
     <Card>
@@ -97,6 +111,7 @@ export default function SuperAdminDashboard() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [messageOpen, setMessageOpen] = useState(false);
   const [changePlanOpen, setChangePlanOpen] = useState(false);
+  const [grantAccessOpen, setGrantAccessOpen] = useState(false);
   const [msgTarget, setMsgTarget] = useState<Business | null>(null);
   const [msgSubject, setMsgSubject] = useState("");
   const [msgBody, setMsgBody] = useState("");
@@ -105,6 +120,8 @@ export default function SuperAdminDashboard() {
   const [newPlanCode, setNewPlanCode] = useState("");
   const [newBillingCycle, setNewBillingCycle] = useState("monthly");
   const [search, setSearch] = useState("");
+  const [accessDays, setAccessDays] = useState("5");
+  const [accessReason, setAccessReason] = useState("");
 
   if (!isSuperAdmin) {
     return (
@@ -182,6 +199,36 @@ export default function SuperAdminDashboard() {
       billingCycle: newBillingCycle,
     });
     setChangePlanOpen(false);
+  };
+
+  const handleGrantAccess = () => {
+    if (!detailData) return;
+    const days = parseInt(accessDays, 10);
+    if (isNaN(days) || days < 1) {
+      toast({ title: "Enter a valid number of days", variant: "destructive" });
+      return;
+    }
+    const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+    patchBiz.mutate({
+      id: detailData.id,
+      manualAccessEnabled: true,
+      manualAccessExpiresAt: expiresAt,
+      manualAccessGrantedBy: (user as any)?.id ?? "super_admin",
+      manualAccessReason: accessReason.trim() || null,
+    });
+    setGrantAccessOpen(false);
+    setAccessDays("5");
+    setAccessReason("");
+  };
+
+  const handleRemoveAccess = (bizId: string) => {
+    patchBiz.mutate({
+      id: bizId,
+      manualAccessEnabled: false,
+      manualAccessExpiresAt: null,
+      manualAccessGrantedBy: null,
+      manualAccessReason: null,
+    });
   };
 
   const openDetail = (b: Business) => {
@@ -311,6 +358,14 @@ export default function SuperAdminDashboard() {
                             </Badge>
                           </div>
                         )}
+                        {isManualAccessActive(b) && (
+                          <div className="mt-1">
+                            <Badge className="bg-amber-100 text-amber-800 border-0 text-[10px] flex items-center gap-0.5 w-fit" data-testid={`badge-temp-access-${b.id}`}>
+                              <Timer className="w-2.5 h-2.5" />
+                              temp access · {daysRemaining(b.manualAccessExpiresAt!)}d left
+                            </Badge>
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
@@ -429,6 +484,7 @@ export default function SuperAdminDashboard() {
 
               <Separator />
 
+              {/* Standard actions */}
               <div className="flex flex-wrap gap-2">
                 {detailData.accountStatus !== "active" && (
                   <Button size="sm" variant="outline" className="text-green-700"
@@ -476,13 +532,185 @@ export default function SuperAdminDashboard() {
               </div>
 
               {detailData.internalBypass && (
-                <div className="mt-2 p-2.5 bg-purple-50 rounded-lg text-xs text-purple-700 flex items-center gap-2">
+                <div className="p-2.5 bg-purple-50 rounded-lg text-xs text-purple-700 flex items-center gap-2">
                   <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
                   Internal bypass is active — this business has full platform access regardless of subscription status.
                 </div>
               )}
+
+              <Separator />
+
+              {/* Temporary Access Section */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <CalendarClock className="w-4 h-4 text-amber-600" />
+                  <p className="text-sm font-semibold">Temporary Access Override</p>
+                </div>
+
+                {isManualAccessActive(detailData) ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Timer className="w-4 h-4 text-amber-600" />
+                        <span className="text-sm font-medium text-amber-800">Temporary Access Active</span>
+                      </div>
+                      <Badge className="bg-amber-100 text-amber-800 border-0 text-xs" data-testid="badge-detail-temp-access-active">
+                        Active
+                      </Badge>
+                    </div>
+                    <div className="text-xs text-amber-700 space-y-0.5">
+                      <p>Expires: <span className="font-medium">{new Date(detailData.manualAccessExpiresAt).toLocaleString()}</span></p>
+                      <p>Days remaining: <span className="font-medium">{daysRemaining(detailData.manualAccessExpiresAt)}</span></p>
+                      {detailData.manualAccessReason && (
+                        <p>Reason: <span className="font-medium">{detailData.manualAccessReason}</span></p>
+                      )}
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-amber-700 border-amber-300 hover:bg-amber-100 h-7 text-xs"
+                        onClick={() => setGrantAccessOpen(true)}
+                        data-testid="button-extend-temp-access"
+                      >
+                        <CalendarClock className="w-3.5 h-3.5 mr-1.5" />
+                        Extend Access
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-red-700 border-red-300 hover:bg-red-50 h-7 text-xs"
+                        onClick={() => handleRemoveAccess(detailData.id)}
+                        disabled={patchBiz.isPending}
+                        data-testid="button-remove-temp-access"
+                      >
+                        <X className="w-3.5 h-3.5 mr-1.5" />
+                        Remove Access
+                      </Button>
+                    </div>
+                  </div>
+                ) : detailData.manualAccessEnabled && detailData.manualAccessExpiresAt ? (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Timer className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm font-medium text-gray-600">Temporary Access Expired</span>
+                      <Badge className="bg-gray-100 text-gray-600 border-0 text-xs">Expired</Badge>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Expired: {new Date(detailData.manualAccessExpiresAt).toLocaleString()}
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs text-amber-700 border-amber-300 hover:bg-amber-50"
+                      onClick={() => setGrantAccessOpen(true)}
+                      data-testid="button-regrant-temp-access"
+                    >
+                      <CalendarClock className="w-3.5 h-3.5 mr-1.5" />
+                      Grant Access Again
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 p-3">
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Grant this business temporary platform access without requiring subscription payment.
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs text-amber-700 border-amber-300 hover:bg-amber-50"
+                      onClick={() => setGrantAccessOpen(true)}
+                      data-testid="button-grant-temp-access"
+                    >
+                      <CalendarClock className="w-3.5 h-3.5 mr-1.5" />
+                      Grant Temporary Access
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           ) : null}
+        </DialogContent>
+      </Dialog>
+
+      {/* Grant Temporary Access Dialog */}
+      <Dialog open={grantAccessOpen} onOpenChange={setGrantAccessOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarClock className="w-4 h-4 text-amber-600" />
+              Grant Temporary Access
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-xs text-muted-foreground">
+              The business will be able to log in and use the platform during the selected period without a paid subscription.
+            </p>
+            <div className="space-y-2">
+              <Label className="text-sm">Duration</Label>
+              <div className="flex gap-2 flex-wrap">
+                {["5", "10", "30"].map(d => (
+                  <Button
+                    key={d}
+                    size="sm"
+                    variant={accessDays === d ? "default" : "outline"}
+                    className="h-8 text-xs"
+                    onClick={() => setAccessDays(d)}
+                    data-testid={`button-days-${d}`}
+                  >
+                    {d} Days
+                  </Button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <Input
+                  type="number"
+                  min="1"
+                  max="365"
+                  value={accessDays}
+                  onChange={e => setAccessDays(e.target.value)}
+                  className="h-8 text-sm w-24"
+                  placeholder="Days"
+                  data-testid="input-access-days"
+                />
+                <span className="text-sm text-muted-foreground">
+                  custom days
+                </span>
+              </div>
+              {accessDays && parseInt(accessDays) > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Access until: <span className="font-medium text-amber-700">
+                    {new Date(Date.now() + parseInt(accessDays) * 24 * 60 * 60 * 1000).toLocaleDateString(undefined, {
+                      weekday: "short", month: "short", day: "numeric", year: "numeric"
+                    })}
+                  </span>
+                </p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">Reason <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Input
+                value={accessReason}
+                onChange={e => setAccessReason(e.target.value)}
+                placeholder="e.g. Onboarding trial, support case..."
+                className="h-8 text-sm"
+                data-testid="input-access-reason"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setGrantAccessOpen(false)}>Cancel</Button>
+            <Button
+              size="sm"
+              onClick={handleGrantAccess}
+              disabled={patchBiz.isPending || !accessDays || parseInt(accessDays) < 1}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              data-testid="button-confirm-grant-access"
+            >
+              <CalendarClock className="w-3.5 h-3.5 mr-1.5" />
+              {patchBiz.isPending ? "Granting..." : `Grant ${accessDays || "?"} Days`}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
