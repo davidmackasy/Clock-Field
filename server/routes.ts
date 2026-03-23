@@ -1945,12 +1945,25 @@ export async function registerRoutes(
       const sub = await storage.getWorkSubmission(req.params.id);
       if (!sub || sub.employeeId !== user.id) return res.status(403).json({ message: "Forbidden" });
       if (sub.status !== "draft") return res.status(400).json({ message: "Submission already submitted" });
-      const updated = await storage.updateWorkSubmissionItem(req.params.itemId, {
-        section: req.body.section,
-        subArea: req.body.subArea,
-        notes: req.body.notes,
-      });
-      res.json(updated);
+      const now = new Date().toISOString();
+      const updated = await storage.updateWorkSubmissionItem(req.params.itemId, { notes: req.body.notes });
+      // Add new photos
+      const addBefore: string[] = req.body.addBeforePhotos || [];
+      const addAfter: string[] = req.body.addAfterPhotos || [];
+      for (const fileUrl of addBefore) {
+        await storage.createWorkSubmissionPhoto({ submissionItemId: req.params.itemId, photoType: "before", fileUrl, caption: null, createdAt: now });
+      }
+      for (const fileUrl of addAfter) {
+        await storage.createWorkSubmissionPhoto({ submissionItemId: req.params.itemId, photoType: "after", fileUrl, caption: null, createdAt: now });
+      }
+      // Remove specific photos
+      const removeIds: string[] = req.body.removePhotoIds || [];
+      for (const photoId of removeIds) {
+        await storage.deleteWorkSubmissionPhoto(photoId);
+      }
+      await storage.updateWorkSubmission(sub.id, { updatedAt: now });
+      const photos = await storage.getWorkSubmissionPhotosByItem(req.params.itemId);
+      res.json({ ...updated, photos: photos.map(p => ({ id: p.id, photoType: p.photoType, caption: p.caption, createdAt: p.createdAt })) });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

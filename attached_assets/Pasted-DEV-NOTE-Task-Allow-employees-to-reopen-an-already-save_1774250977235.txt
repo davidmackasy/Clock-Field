@@ -1,0 +1,562 @@
+DEV NOTE
+
+Task:
+Allow employees to reopen an already saved work item and keep adding more before/after photos until the full work log is submitted.
+
+Main instruction:
+Do not break, remove, refactor, or affect anything else that is currently working.
+Do not change admin workflow, report delivery, submission flow, or existing work log structure outside of this exact improvement.
+This must be a safe employee-side workflow enhancement only.
+Keep the same feel of the app.
+Do not redesign the entire page.
+Only improve the saved work-item editing flow so employees can go back into an existing area and continue adding photos before final submission.
+
+Goal
+
+Right now, when an employee adds a work area and saves it, that item becomes too final too early.
+The employee cannot go back into that saved item and continue adding more before photos or after photos.
+That causes a bad workflow because:
+
+* one area may need multiple photos
+* before and after photos may be taken at different times
+* employees should not be forced to create another area just to add more pictures for the same place
+
+Required fix:
+Before the full work session is submitted, employees must be able to:
+
+* tap an already saved work item
+* reopen it
+* see existing details and existing photos
+* add more before photos
+* add more after photos
+* optionally update notes
+* save changes back to that same work item
+
+Important:
+This must only be allowed while the session is still open or draft.
+Once the employee submits the full work session, the item should become locked as it already does, unless you already support a separate edit-after-submit workflow.
+
+Business rule
+
+A saved work item is not finished just because it was created.
+A saved work item should remain editable until the employee submits the full work session.
+
+That means:
+
+* Create work item
+* Add one or more before photos
+* Save item
+* Continue working
+* Reopen same item later
+* Add after photos or more before photos
+* Save again
+* Repeat as needed
+* Submit full work session
+* Then lock editing
+
+This is the correct workflow.
+
+1. Current problem
+
+Current behavior:
+
+* Employee taps Add Area
+* Employee selects section and area
+* Employee adds one photo
+* Employee saves work item
+* Work item appears in Active Session
+* But employee cannot reopen that same item and continue adding more pictures
+
+Why this is a problem:
+
+* cleaners often take before photos first and after photos later
+* one room may need multiple photos
+* one area may need multiple angles
+* users are forced to create duplicate areas just to keep adding photos
+* this makes the final report confusing for admin and client
+* before/after grouping becomes messy
+
+Example of the problem:
+Employee creates:
+Floors > Main Floor
+Adds one before photo
+Saves
+
+Later they finish cleaning and want to add two after photos to that same Floors > Main Floor item.
+Currently they cannot properly continue that same item, so they are pushed into adding another area or another record.
+That breaks the structure of the report.
+
+2. Required new behavior
+
+For employee account only:
+Any saved work item inside the active session must remain editable until the entire work session is submitted.
+
+Required behavior:
+
+* Employee can tap a saved work item card in Active Session
+* Existing modal or editor opens again in edit mode
+* Existing data is loaded into the form
+* Existing photos are shown
+* Employee can add more before photos
+* Employee can add more after photos
+* Employee can keep notes or update notes
+* Employee can save changes without creating a duplicate item
+* All new photos remain attached to that same work item
+
+Important:
+Do not replace the existing workflow.
+Extend it.
+
+So:
+
+* Add Area still creates a new work item
+* But saved items can now be reopened and updated before submission
+
+3. Scope of change
+
+This change applies only to:
+
+* employee active work session
+* employee saved work items before full submission
+
+Do not apply this change to:
+
+* admin completed report viewer unless it already reads all photos safely
+* submitted session editing
+* history items that are already submitted
+* archived reports
+* payroll
+* timesheets
+* attendance
+* profile
+* other unrelated pages
+
+4. UI behavior inside Active Session
+
+Current active session area already shows saved items.
+Those saved items must now become interactive.
+
+Required change:
+Each saved work item card in Active Session should be tappable or have a clear edit action.
+
+Recommended behavior:
+
+* tapping the work item card opens it
+  or
+* add a small edit icon/button on the card
+  or
+* both
+
+Best option:
+Make the whole card tappable and keep optional small edit icon for clarity.
+
+Saved item card should show:
+
+* section name
+* sub-area name
+* number of photos attached
+* maybe badges like Before: 1, After: 2
+* existing delete icon can stay if already supported
+* existing image icon can stay if already supported
+
+The main point:
+It should be obvious that this item can be reopened and updated.
+
+5. Edit modal / work item modal behavior
+
+Reuse the existing Add Work Area modal if possible.
+Do not build a second completely separate UI unless absolutely necessary.
+
+Required upgrade:
+The current modal should support two modes:
+
+* create mode
+* edit mode
+
+Create mode:
+Used when employee taps Add Area
+
+Edit mode:
+Used when employee taps an existing saved work item
+
+In edit mode, preload:
+
+* section
+* area / sub-area
+* notes
+* existing before photos
+* existing after photos
+
+Required change to button labels:
+Create mode:
+
+* Save Work Item
+
+Edit mode:
+
+* Update Work Item
+  or
+* Save Changes
+
+Recommended:
+Save Changes
+
+6. Photo behavior change
+
+This is the most important part.
+
+Right now, the item behaves too much like one-photo-and-done.
+That must change.
+
+New required rules:
+Before submission, each work item must support:
+
+* multiple before photos
+* multiple after photos
+
+Employees must be able to:
+
+* add another before photo later
+* add another after photo later
+* delete an existing photo before submission if needed
+* view thumbnails of already attached photos
+* keep adding photos over time to the same item
+
+Important:
+Do not force one before and one after only.
+Allow multiple photos in each category.
+
+Recommended structure:
+Work item
+
+* before_photos: array
+* after_photos: array
+
+Not:
+
+* before_photo: single item
+* after_photo: single item
+
+If the backend already supports arrays, use that.
+If not, extend carefully without breaking existing records.
+
+Backward compatibility:
+If older work items only have one before or one after image, they should still render properly.
+Treat single existing values as the first item in the array where needed.
+
+7. Editing rules
+
+Allowed before session submission:
+
+* add before photos
+* add after photos
+* update notes
+* remove photos
+* possibly change section/area only if safe
+
+Recommended rule for section/area:
+If changing section/area could break report grouping, keep section and area read-only once item is created.
+Let employee update notes and photos only.
+
+This is safer.
+
+Best recommendation:
+After item creation:
+
+* section = locked
+* sub-area = locked
+* notes = editable
+* before photos = editable
+* after photos = editable
+
+Reason:
+This avoids a saved Floors item suddenly being changed into Washroom and causing mismatched data.
+
+8. Submission lock rule
+
+Very important:
+Editing must stop once the full work session is submitted.
+
+Required rule:
+If session status is draft or active:
+
+* work item editable
+
+If session status is submitted:
+
+* work item locked
+* no more adding photos
+* no more changing notes
+* no more deleting existing photos
+
+History items should remain read-only as they already should be.
+
+9. Data model expectations
+
+Keep this safe and backward compatible.
+
+Recommended work item structure:
+
+* id
+* session_id
+* section_id or section_name
+* area_id or sub_area_name
+* notes
+* before_photos []
+* after_photos []
+* created_at
+* updated_at
+* status
+
+If your current structure already has:
+
+* before_photo
+* after_photo
+
+Then safely migrate or normalize to support:
+
+* before_photos []
+* after_photos []
+
+Backward-safe handling:
+When reading older records:
+
+* if before_photo exists and before_photos is empty, map it into before_photos[0]
+* if after_photo exists and after_photos is empty, map it into after_photos[0]
+
+Do not break old reports.
+
+10. Required frontend changes
+
+A. Active Session item cards
+Update each saved work item card so employee can open it again.
+
+Add:
+
+* tap to edit behavior
+  or
+* small edit button
+  or both
+
+B. Work item modal
+Upgrade current modal to support edit mode.
+
+Show in edit mode:
+
+* existing photos
+* add more before photos button
+* add more after photos button
+* notes
+* save changes button
+
+C. Existing photo preview area
+Inside modal, show thumbnails for:
+
+* before photos
+* after photos
+
+Each thumbnail should allow:
+
+* preview
+* remove before submission
+
+D. Save behavior
+On save changes:
+
+* update same work item
+* do not create a duplicate work item
+* do not create a second area entry unless employee truly taps Add Area
+
+11. Required backend/API behavior
+
+Do not rewrite the whole backend.
+Only extend the work item update behavior.
+
+Need:
+
+* existing create work item endpoint remains
+* add or fix update work item endpoint
+* support appending photos to existing work item
+* support deleting specific photo before submission if already supported or easy to add safely
+
+Recommended operations:
+
+* createWorkItem
+* updateWorkItem
+* appendBeforePhotos
+* appendAfterPhotos
+* removePhotoFromWorkItem
+
+If you want to keep it simple:
+A single update endpoint can handle:
+
+* notes changes
+* photo additions
+* photo removals
+
+Important:
+Update the existing work item by ID.
+Do not create a new one when editing.
+
+12. Report consistency rule
+
+This must not break the admin-facing report.
+
+Expected final result after submission:
+If employee worked on:
+Floors > Main Floor
+
+And added:
+
+* 2 before photos
+* 3 after photos
+
+Then admin/client should still see one work item:
+Floors > Main Floor
+
+With grouped photos under that item.
+
+Not:
+
+* five separate area entries
+* duplicate rows for the same area
+* broken before/after structure
+
+This is the whole reason for the fix.
+
+13. UX expectations
+
+The flow should feel natural.
+
+Example good flow:
+
+* Employee starts session
+* Employee taps Add Area
+* Creates Floors > Main Floor
+* Adds 1 before photo
+* Saves
+* Later taps Floors > Main Floor card
+* Modal opens
+* Adds 2 after photos
+* Saves changes
+* Later taps same item again
+* Adds another before photo or note if needed
+* Saves changes
+* When all work is done, taps Submit Work
+* Session locks and goes through normal workflow
+
+That is the exact experience needed.
+
+14. Visual/UI notes
+
+Do not redesign the page.
+Keep same compact native feel.
+
+Only improve:
+
+* saved item tap behavior
+* saved item clarity
+* modal edit mode
+* photo grouping inside modal
+
+Recommended small UI enhancements on saved work item card:
+
+* show small count like:
+
+  * Before 1
+  * After 2
+    or
+  * 3 photos total
+* keep layout compact
+* do not make card huge
+* preserve current page spacing
+
+15. Edge cases to handle
+
+* employee adds only before photos first
+* employee adds after photos later
+* employee adds multiple before photos
+* employee adds multiple after photos
+* employee removes one photo before submission
+* employee closes modal and comes back later
+* employee reopens same item many times
+* employee submits session with only before photos
+* employee submits session with both before and after photos
+* old work items with only single image still render
+* submitted history items remain read-only
+* duplicate area should only be created when user explicitly taps Add Area
+
+16. Testing checklist
+
+Must test all of these:
+
+Create flow
+
+* Add Area still creates a new work item normally
+* Save Work Item still works
+
+Edit flow
+
+* tapping saved work item opens it
+* existing notes load
+* existing before photos load
+* existing after photos load
+* save changes updates same item
+* no duplicate item created
+
+Photo flow
+
+* add second before photo
+* add second after photo
+* add multiple photos across multiple edits
+* delete a photo before submit
+* photo previews still display correctly
+
+Submission
+
+* after full session submit, editing is blocked
+* submitted items still appear correctly in history
+* admin still receives same workflow output
+* reports still group photos under the correct area
+
+Regression
+
+* Add Area button still works
+* Submit Work still works
+* item count still works
+* delete item still works if already supported
+* admin side unchanged
+* history screen unchanged
+* mobile UI layout unchanged except this improvement
+
+17. Safe implementation recommendation
+
+Best safe implementation:
+Do not create a brand new “photo item” system.
+Just make existing saved work items editable before submission.
+
+That means:
+
+* reuse current modal
+* add edit mode
+* store multiple before/after photos on same item
+* keep section and area locked after creation
+* allow notes and photos to be updated
+* lock everything after session submission
+
+This is the cleanest and safest path.
+
+18. Final instruction for agent
+
+Focus only on this employee-side workflow improvement.
+
+Do not break anything else.
+Do not affect admin.
+Do not affect report submission structure.
+Do not affect completed history items.
+Do not redesign the whole page.
+
+Make this exact fix:
+Once an employee saves a work item, they must be able to reopen that same item and continue adding more before and after photos until the whole work session is submitted.
+
+That is the required behavior.

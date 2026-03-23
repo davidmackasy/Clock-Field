@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Trash2, Camera, CheckCircle, Clock, ChevronRight, Image, AlertCircle } from "lucide-react";
+import { Plus, MapPin, Trash2, Camera, CheckCircle, Clock, ChevronRight, Image, AlertCircle, Pencil } from "lucide-react";
 
 const SECTIONS = ["Washrooms", "Offices", "Floors", "Kitchen", "Stairs", "Common Area", "Reception", "Garbage", "Supplies", "Other"];
 
@@ -100,6 +100,14 @@ export default function EmployeeWorkLog() {
   const [startOpen, setStartOpen] = useState(false);
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editItem, setEditItem] = useState<any>(null);
+  const [editDraft, setEditDraft] = useState<{
+    notes: string;
+    newBeforePhotos: PhotoItem[];
+    newAfterPhotos: PhotoItem[];
+    removePhotoIds: string[];
+  }>({ notes: "", newBeforePhotos: [], newAfterPhotos: [], removePhotoIds: [] });
   const [activeSub, setActiveSub] = useState<any>(null);
   const [detailSub, setDetailSub] = useState<any>(null);
   const [selectedLocation, setSelectedLocation] = useState<any>(null);
@@ -179,6 +187,22 @@ export default function EmployeeWorkLog() {
     },
   });
 
+  const updateItemMut = useMutation({
+    mutationFn: async ({ itemId, data }: { itemId: string; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/work-submissions/${activeSub.id}/items/${itemId}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/work-submissions", activeSub.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/work-submissions"] });
+      setEditOpen(false);
+      setEditItem(null);
+      setEditDraft({ notes: "", newBeforePhotos: [], newAfterPhotos: [], removePhotoIds: [] });
+      toast({ title: "Work item updated!" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   const submitMut = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("PATCH", `/api/work-submissions/${activeSub.id}`, { status: "submitted" });
@@ -224,6 +248,30 @@ export default function EmployeeWorkLog() {
     setDetailOpen(true);
   }
 
+  function openEditItem(item: any) {
+    setEditItem(item);
+    setEditDraft({
+      notes: item.notes || "",
+      newBeforePhotos: [],
+      newAfterPhotos: [],
+      removePhotoIds: [],
+    });
+    setEditOpen(true);
+  }
+
+  function handleUpdateItem() {
+    if (!editItem) return;
+    updateItemMut.mutate({
+      itemId: editItem.id,
+      data: {
+        notes: editDraft.notes || null,
+        addBeforePhotos: editDraft.newBeforePhotos.map(p => p.dataUrl),
+        addAfterPhotos: editDraft.newAfterPhotos.map(p => p.dataUrl),
+        removePhotoIds: editDraft.removePhotoIds,
+      },
+    });
+  }
+
   const pastSubs = (submissions || []).filter(s => !activeSub || s.id !== activeSub.id);
 
   return (
@@ -267,29 +315,48 @@ export default function EmployeeWorkLog() {
               <p className="text-xs text-muted-foreground text-center py-3">No work items yet. Add your first area.</p>
             ) : (
               <div className="space-y-2">
-                {items.map((item: any) => (
-                  <div key={item.id} className="flex items-center justify-between bg-background rounded-lg px-3 py-2 border border-border">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{item.section}</p>
-                      <p className="text-xs text-muted-foreground truncate">{item.subArea}</p>
+                {items.map((item: any) => {
+                  const beforeCount = item.photos?.filter((p: any) => p.photoType === "before").length || 0;
+                  const afterCount = item.photos?.filter((p: any) => p.photoType === "after").length || 0;
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between bg-background rounded-lg px-3 py-2.5 border border-border hover:border-primary/40 transition-colors cursor-pointer"
+                      onClick={() => openEditItem(item)}
+                      data-testid={`card-work-item-${item.id}`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{item.section}</p>
+                        <p className="text-xs text-muted-foreground truncate">{item.subArea}</p>
+                        {(beforeCount > 0 || afterCount > 0) && (
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {beforeCount > 0 && (
+                              <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                                <Image className="w-3 h-3" />Before: {beforeCount}
+                              </span>
+                            )}
+                            {afterCount > 0 && (
+                              <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                                <Image className="w-3 h-3" />After: {afterCount}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 ml-2 shrink-0">
+                        <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deleteItemMut.mutate(item.id); }}
+                          disabled={deleteItemMut.isPending}
+                          data-testid={`button-delete-item-${item.id}`}
+                          className="text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 ml-2 shrink-0">
-                      {item.photos?.length > 0 && (
-                        <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
-                          <Image className="w-3 h-3" />{item.photos.length}
-                        </span>
-                      )}
-                      <button
-                        onClick={() => deleteItemMut.mutate(item.id)}
-                        disabled={deleteItemMut.isPending}
-                        data-testid={`button-delete-item-${item.id}`}
-                        className="text-muted-foreground hover:text-destructive transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -535,6 +602,136 @@ export default function EmployeeWorkLog() {
               data-testid="button-save-work-item"
             >
               {addItemMut.isPending ? "Saving..." : "Save Work Item"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Work Item Dialog */}
+      <Dialog open={editOpen} onOpenChange={(v) => {
+        setEditOpen(v);
+        if (!v) { setEditItem(null); setEditDraft({ notes: "", newBeforePhotos: [], newAfterPhotos: [], removePhotoIds: [] }); }
+      }}>
+        <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Work Area</DialogTitle>
+            <DialogDescription>
+              {editItem?.section} — {editItem?.subArea}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-1">
+            {/* Locked section/area */}
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Section</Label>
+                <div className="mt-1 h-9 px-3 flex items-center rounded-md border border-border bg-muted text-sm text-muted-foreground">{editItem?.section}</div>
+              </div>
+              <div className="flex-1">
+                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Area</Label>
+                <div className="mt-1 h-9 px-3 flex items-center rounded-md border border-border bg-muted text-sm text-muted-foreground truncate">{editItem?.subArea}</div>
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Notes (optional)</Label>
+              <Textarea
+                placeholder="Any notes about this area..."
+                value={editDraft.notes}
+                onChange={e => setEditDraft(d => ({ ...d, notes: e.target.value }))}
+                className="mt-1 resize-none text-sm"
+                rows={2}
+                data-testid="textarea-edit-notes"
+              />
+            </div>
+
+            {/* Before photos */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Before Photos</Label>
+                <AddPhotoButton
+                  label="Add Before"
+                  disabled={false}
+                  onAdd={(photos) => setEditDraft(d => ({ ...d, newBeforePhotos: [...d.newBeforePhotos, ...photos] }))}
+                />
+              </div>
+              {/* Existing before photos */}
+              {editItem?.photos?.filter((p: any) => p.photoType === "before" && !editDraft.removePhotoIds.includes(p.id)).length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Saved</p>
+                  <div className="flex flex-wrap gap-2">
+                    {editItem.photos.filter((p: any) => p.photoType === "before" && !editDraft.removePhotoIds.includes(p.id)).map((p: any) => (
+                      <div key={p.id} className="relative w-20 h-20 rounded-md overflow-hidden border border-border bg-muted">
+                        <img src={`/api/work-submission-photos/${p.id}/image`} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        <button
+                          type="button"
+                          onClick={() => setEditDraft(d => ({ ...d, removePhotoIds: [...d.removePhotoIds, p.id] }))}
+                          className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center"
+                        >
+                          <Trash2 className="w-3 h-3 text-white" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* New before photos */}
+              {editDraft.newBeforePhotos.length > 0 && (
+                <PhotoGrid
+                  photos={editDraft.newBeforePhotos}
+                  label="New"
+                  onRemove={(i) => setEditDraft(d => ({ ...d, newBeforePhotos: d.newBeforePhotos.filter((_, idx) => idx !== i) }))}
+                />
+              )}
+            </div>
+
+            {/* After photos */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">After Photos</Label>
+                <AddPhotoButton
+                  label="Add After"
+                  disabled={false}
+                  onAdd={(photos) => setEditDraft(d => ({ ...d, newAfterPhotos: [...d.newAfterPhotos, ...photos] }))}
+                />
+              </div>
+              {/* Existing after photos */}
+              {editItem?.photos?.filter((p: any) => p.photoType === "after" && !editDraft.removePhotoIds.includes(p.id)).length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Saved</p>
+                  <div className="flex flex-wrap gap-2">
+                    {editItem.photos.filter((p: any) => p.photoType === "after" && !editDraft.removePhotoIds.includes(p.id)).map((p: any) => (
+                      <div key={p.id} className="relative w-20 h-20 rounded-md overflow-hidden border border-border bg-muted">
+                        <img src={`/api/work-submission-photos/${p.id}/image`} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        <button
+                          type="button"
+                          onClick={() => setEditDraft(d => ({ ...d, removePhotoIds: [...d.removePhotoIds, p.id] }))}
+                          className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center"
+                        >
+                          <Trash2 className="w-3 h-3 text-white" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* New after photos */}
+              {editDraft.newAfterPhotos.length > 0 && (
+                <PhotoGrid
+                  photos={editDraft.newAfterPhotos}
+                  label="New"
+                  onRemove={(i) => setEditDraft(d => ({ ...d, newAfterPhotos: d.newAfterPhotos.filter((_, idx) => idx !== i) }))}
+                />
+              )}
+            </div>
+
+            <Button
+              className="w-full"
+              onClick={handleUpdateItem}
+              disabled={updateItemMut.isPending}
+              data-testid="button-save-edit-work-item"
+            >
+              {updateItemMut.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </div>
         </DialogContent>
