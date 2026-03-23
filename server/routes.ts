@@ -2212,47 +2212,6 @@ export async function registerRoutes(
     } catch (err: any) { res.status(500).end(); }
   });
 
-  // ── Public: Review share page with injected OG meta tags ────────────────────
-  app.get("/public/reviews/:reviewShareToken", async (req, res, next) => {
-    try {
-      const review = await storage.getWorkSubmissionReviewByShareToken(req.params.reviewShareToken);
-      if (!review) return next();
-      const sub = await storage.getWorkSubmission(review.submissionId);
-      const company = await storage.getCompany(review.companyId);
-      const baseUrl = `${req.protocol}://${req.get("host")}`;
-      const pageUrl = `${baseUrl}/public/reviews/${req.params.reviewShareToken}`;
-      const ogImageUrl = `${baseUrl}/api/public/review/${req.params.reviewShareToken}/og-image.png`;
-      const companyName = company?.name || "ClockField";
-      const stars = review.rating ? "\u2605".repeat(review.rating) + "\u2606".repeat(5 - review.rating) : "";
-      const truncReview = review.reviewText.length > 160 ? review.reviewText.slice(0, 157) + "..." : review.reviewText;
-      const reviewerAttr = review.companyName ? `${review.clientName} from ${review.companyName}` : review.clientName;
-      const ogTitle = `${reviewerAttr} reviewed ${companyName}`;
-      const ogDesc = `${stars ? stars + " " : ""}"${truncReview}" \u00B7 Verified by ClockField.com`;
-      const metaTags = [
-        `<meta property="og:type" content="website" />`,
-        `<meta property="og:site_name" content="ClockField.com" />`,
-        `<meta property="og:url" content="${escHtml(pageUrl)}" />`,
-        `<meta property="og:title" content="${escHtml(ogTitle)}" />`,
-        `<meta property="og:description" content="${escHtml(ogDesc)}" />`,
-        `<meta property="og:image" content="${escHtml(ogImageUrl)}" />`,
-        `<meta property="og:image:width" content="1200" />`,
-        `<meta property="og:image:height" content="630" />`,
-        `<meta property="og:image:type" content="image/png" />`,
-        `<meta name="twitter:card" content="summary_large_image" />`,
-        `<meta name="twitter:site" content="@ClockField" />`,
-        `<meta name="twitter:title" content="${escHtml(ogTitle)}" />`,
-        `<meta name="twitter:description" content="${escHtml(ogDesc)}" />`,
-        `<meta name="twitter:image" content="${escHtml(ogImageUrl)}" />`,
-        `<title>${escHtml(ogTitle)} | ClockField.com</title>`,
-      ].join("\n    ");
-      const templatePath = path.resolve(process.cwd(), "client", "index.html");
-      let html = await fs.promises.readFile(templatePath, "utf-8");
-      html = html.replace("<head>", `<head>\n    ${metaTags}`);
-      html = html.replace(`<title>ClockField</title>`, "");
-      res.status(200).set("Content-Type", "text/html").end(html);
-    } catch (err: any) { next(err); }
-  });
-
   // ── Admin Plan / Subscription routes ──────────────────────────────────────
   app.get("/api/admin/plan", requireRole("admin"), async (req, res) => {
     try {

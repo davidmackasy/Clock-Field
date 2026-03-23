@@ -1,0 +1,235 @@
+Yes. This means the social preview part was added, but the actual public review page render got broken.
+
+So the fix now is not the social card itself.
+The fix is to restore the real public review page so both things work together:
+
+1. link preview on social media shows the review card
+2. clicking that same link opens the actual review page normally
+
+DEV NOTE FOR AGENT
+
+Important
+Do not touch anything else.
+Do not touch email flow.
+Do not touch attendance.
+Do not touch scheduling.
+Do not touch settings.
+Do not touch work log logic outside this review share fix.
+Do not refactor unrelated routes.
+Only fix the public review share page so it renders correctly again while keeping the social preview working.
+
+Problem
+The review share URL now generates a preview card on social platforms, but when that same URL is opened directly in the browser, the actual page renders blank or white.
+
+That is wrong.
+
+Correct behavior
+The same review share URL must do both:
+
+* when pasted into social media, it exposes proper preview metadata and preview image
+* when opened in a browser, it renders the full public review page with:
+
+  * company/business name
+  * testimonial/review card
+  * review text
+  * saved reviewer name
+  * saved company name
+  * rating
+  * service proof photos if enabled
+  * Powered by ClockField.com
+  * Verified by ClockField.com
+
+Root issue to investigate
+Most likely one of these happened:
+
+1. The route was changed to only return metadata logic and no longer renders the page
+2. The review page now depends on client-side data that is failing to load
+3. The review token lookup is failing after the OG implementation
+4. The route is returning blank because of a rendering error
+5. The page is crashing from undefined review fields
+6. The OG/meta implementation replaced the original page render
+7. The review page is trying to render before real data is loaded and ends up white
+8. The saved review record being fetched is wrong or null
+9. The route is using the OG image endpoint logic instead of the normal page component
+10. A server/client mismatch or hydration issue is causing the blank page
+
+What must be true after fix
+The public review link should still be one URL.
+That URL should:
+
+* return HTML/meta for crawlers
+* render full review page for real users
+
+Do not make the link only useful for crawlers.
+Do not make the link only show metadata.
+Do not make the link depend on JavaScript-only state if the server can render it.
+
+Required fix
+
+1. Restore the actual review page render
+   Check the public review share route and make sure it still renders the full review page content.
+
+Example concept
+/public/reviews/:reviewShareToken
+
+This route must:
+
+* validate token
+* fetch review record
+* fetch linked safe work proof data if enabled
+* render the review page UI
+* also include OG/Twitter meta tags in head
+
+It must not return blank.
+
+2. Keep OG tags separate from page UI logic
+   Do not mix the preview image logic with the actual page rendering logic in a way that breaks the page.
+
+Correct structure
+
+* page route renders HTML page
+* meta tags are inserted into head
+* og:image points to a separate image URL
+* page body renders the normal review page
+
+Do not replace the page body with preview-only behavior.
+
+3. Fix data loading for the review page
+   Make sure the review page is fetching the exact saved review record using the review share token.
+
+The actual page must show the real saved values:
+
+* reviewer name
+* company name
+* review text
+* rating
+* date
+* related safe work photos
+* business name
+
+No placeholder data.
+No blank states unless token is invalid.
+No generic fallback review.
+
+4. Fix blank page handling
+   If the token is invalid or data is missing, do not show a white page.
+
+Show a proper safe fallback like:
+Review not found
+This testimonial link may be invalid or no longer available.
+
+But for valid reviews, the full page must render.
+
+5. Preserve the previous review page layout
+   Bring back the page layout the user already approved before the OG/social preview change.
+
+That means the actual page should again show:
+
+* Verified by ClockField.com badge
+* business name
+* testimonial card
+* images/proof of service
+* full review block
+* Powered by ClockField.com in footer
+
+Do not simplify it into a blank shell.
+
+6. Verify the page uses real saved review values
+   You also said it still may not be matching the saved review data.
+
+So while fixing the blank page, also verify the review page itself is reading from the same saved review record used by:
+
+* public review submission result
+* admin review modal
+* share card preview
+* OG preview metadata
+
+All four must match the same database record.
+
+Data path to verify
+
+* public form submit saves review
+* reviewShareToken maps to that exact saved review
+* browser page fetches that exact review
+* meta tags use that exact review
+* OG image uses that exact review
+
+Nothing should be generic or hardcoded.
+
+Implementation rule
+Use one source of truth for the review record.
+Do not have separate fake objects for:
+
+* page
+* modal
+* share card
+* og image
+
+7. Do not break what already works
+   Keep the following working:
+
+* social media preview card
+* public review share URL format
+* admin review modal
+* copy share link button
+* email flows
+* attendance
+* everything unrelated
+
+Only fix:
+
+* actual public review page rendering
+* exact data binding for review content
+
+Suggested agent checklist
+
+Check 1
+Open the review link directly in browser
+Expected:
+
+* full review page renders
+* not blank
+* shows testimonial card and review page content
+
+Check 2
+Paste same link into Facebook/X/Reddit
+Expected:
+
+* preview card still appears
+
+Check 3
+Click preview card from social
+Expected:
+
+* opens full review page
+* not white
+
+Check 4
+Compare values
+Expected:
+If saved review is:
+
+* David
+* DMI
+* I love the service please come again
+* 5 stars
+
+Then the actual public review page must show exactly those values.
+
+Check 5
+Regression
+Expected:
+
+* email flow still works
+* attendance unchanged
+* other modules unchanged
+
+Strict instruction to agent
+Do not rebuild this feature from scratch.
+Do not touch unrelated systems.
+Do not remove social preview support.
+Just fix the public review route so it renders the actual review page again and uses the exact saved review data.
+
+You can send this to the agent exactly like this:
+
+The public review share URL must both render OG metadata for social previews and render the full public review page for real users. Right now the preview works but the actual page is blank. Restore the full page render on the same review URL, keep the social preview working, and make sure the page uses the exact saved review values from the database with no placeholders or demo data. Do not touch email, attendance, scheduling, settings, or anything unrelated.
