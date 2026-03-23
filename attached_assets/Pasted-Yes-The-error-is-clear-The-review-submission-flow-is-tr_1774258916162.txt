@@ -1,0 +1,246 @@
+Yes. The error is clear.
+
+The review submission flow is trying to import `uuid` from `server/storage.ts`, but that package is either not installed, not available in this runtime, or imported incorrectly. Because of that, the client-facing review form is throwing a raw server/import error into the UI.
+
+That must never be shown to clients.
+
+DEV NOTE FOR AGENT
+
+Task
+Fix the public review submission error:
+Cannot find package 'uuid' imported from /home/runner/workspace/server/storage.ts
+
+Scope
+Only fix the public client review submission flow and the related review save path.
+Do not touch anything else.
+Do not touch attendance.
+Do not touch email.
+Do not touch schedules.
+Do not touch unrelated report pages.
+Do not refactor unrelated storage logic unless required for this exact review submission fix.
+
+Main issue
+When a client submits a review from the public service report, the backend crashes because `server/storage.ts` is importing `uuid` and the runtime cannot resolve it.
+
+This is causing:
+
+* review submission to fail
+* raw technical error message to appear to the client
+* review data not to be saved properly
+
+That is unprofessional and must be fixed immediately.
+
+Required fixes
+
+1. Fix the backend import/runtime problem
+   Find where `server/storage.ts` or the review-create path is importing `uuid`.
+
+Likely problem
+
+* package not installed
+* wrong import syntax
+* dependency not in package.json
+* runtime cannot bundle it
+* code is using `uuid` where the environment already provides a native alternative
+
+Best safe fix
+Use the platform-native UUID generator if available instead of relying on the external `uuid` package.
+
+Preferred approach
+Use:
+
+* `crypto.randomUUID()` on the server
+
+Why
+
+* no external dependency needed
+* reliable
+* simpler
+* avoids package resolution errors
+
+So if the code is doing something like:
+
+* import { v4 as uuidv4 } from "uuid"
+
+Replace usage with:
+
+* `crypto.randomUUID()`
+
+If there are multiple review-token or review-id creation points for this exact feature, standardize them on the same safe method.
+
+Important
+Do not broadly rewrite all ID generation across the app.
+Only fix the review flow and only any directly related token generation that is currently breaking this feature.
+
+2. Make sure review submission works end to end
+   After fixing the UUID issue, verify the full public review submission pipeline works:
+
+Public form input
+
+* client name
+* company name
+* review text
+* rating if selected
+
+Submit
+
+* backend accepts request
+* review saves successfully
+* tied to correct work/report
+* admin can see exact saved values in Work Log
+
+3. Never expose raw server errors to the client
+   Even if submission fails for any reason, the client should never see:
+
+* import stack traces
+* package errors
+* server file paths
+* raw exception strings
+
+Replace with safe user-facing error handling.
+
+Client-safe error message example
+Unable to submit your review right now. Please try again in a moment.
+
+Log the real technical error on the server only.
+
+Requirements
+
+* catch the error in the API route
+* return clean JSON error response
+* frontend displays friendly message
+* do not leak internal paths like `/home/runner/workspace/server/storage.ts`
+
+4. Preserve exact review data
+   Once fixed, make sure the saved review uses the real values entered by the client.
+
+If the client submits:
+
+* Name: mackasy
+* Company: MID INC
+* Review: Excellent cleaning service, very professional and thorough!
+* Rating: 3
+
+Then admin should receive exactly:
+
+* mackasy
+* MID INC
+* Excellent cleaning service, very professional and thorough!
+* 3 stars
+
+No generic replacements.
+No placeholder review text.
+No fake company names.
+No mismatched saved data.
+
+5. Validate the review creation code path
+   Check the exact review save flow:
+
+* public form submit handler
+* backend route/controller
+* storage createReview or equivalent method
+* database insert
+* admin fetch/read
+
+Make sure the failure is not partially swallowed and leaving broken state.
+
+Likely place to inspect
+
+* review creation function in `server/storage.ts`
+* review submit route in server API
+* any token creation for `reviewShareToken`
+* any create object builder using `uuid`
+
+6. Add proper graceful fallback in UI
+   On the public review form:
+
+* keep entered form values in place if submit fails
+* show a friendly inline error message
+* allow retry
+* do not clear the form unless save succeeds
+
+Good behavior
+
+* client types review
+* server fails
+* client sees friendly message
+* their text stays in the form
+* they can retry
+
+7. Do not break existing working pieces
+   Keep these working:
+
+* public service report display
+* public review form layout
+* admin Work Log review view
+* review share link
+* review preview card
+* anything else unrelated
+
+Only fix:
+
+* backend review submission import/runtime issue
+* public-facing error handling
+* accurate review saving
+
+Implementation guidance
+
+Preferred fix path
+
+1. Remove dependency on external `uuid` in the review submission path
+2. Use `crypto.randomUUID()` for review IDs and/or review share tokens where needed
+3. Make sure the route catches and handles errors safely
+4. Return friendly frontend messages only
+5. Verify the saved review values are exact
+
+Example expectation
+If code currently does this:
+
+* import { v4 as uuidv4 } from "uuid"
+* const id = uuidv4()
+
+Change it in this feature path to:
+
+* const id = crypto.randomUUID()
+
+If the runtime needs explicit access, use the Node crypto module safely according to the project’s server setup.
+
+Acceptance criteria
+
+Test 1
+Open public service report and submit a review
+Expected:
+
+* no raw package/import error
+* review saves successfully
+* success state appears
+
+Test 2
+Force an error case
+Expected:
+
+* client sees friendly message only
+* no stack trace
+* no file path
+* no package error
+
+Test 3
+Check admin Work Log
+Expected:
+
+* exact client name saved
+* exact company name saved
+* exact review message saved
+* exact rating saved
+
+Test 4
+Regression
+Expected:
+
+* no unrelated pages changed
+* no email flow affected
+* no attendance changes
+* no schedule/settings changes
+
+Message to agent
+Fix the public review submission backend so it no longer depends on the broken `uuid` import in `server/storage.ts`. Use a safe built-in UUID generation method for this review feature, make review submission succeed, and make sure raw technical errors never show to clients. Preserve the exact submitted client name, company name, review text, and rating in admin Work Log. Do not touch anything else.

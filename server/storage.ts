@@ -785,8 +785,7 @@ export class DatabaseStorage implements IStorage {
 
   // ── Work Submission Reviews ────────────────────────────────────────────────────
   async createWorkSubmissionReview(data: InsertWorkSubmissionReview): Promise<WorkSubmissionReview> {
-    const { v4: uuidv4 } = await import("uuid");
-    const withToken = { ...data, reviewShareToken: uuidv4() };
+    const withToken = { ...data, reviewShareToken: crypto.randomUUID() };
     const [review] = await db.insert(workSubmissionReviews).values(withToken).returning();
     return review;
   }

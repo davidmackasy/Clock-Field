@@ -2128,7 +2128,10 @@ export async function registerRoutes(
         createdAt: now,
       });
       res.status(201).json({ id: review.id, message: "Thank you! Your review has been submitted." });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) {
+      console.error("[review submit]", err);
+      res.status(500).json({ message: "Unable to submit your review right now. Please try again in a moment." });
+    }
   });
 
   // ── Admin: Get review for a submission ────────────────────────────────────
