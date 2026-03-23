@@ -1827,7 +1827,8 @@ export async function registerRoutes(
       const user = req.user as any;
       if (user.role === "admin") {
         const subs = await storage.getWorkSubmissionsByCompany(user.companyId);
-        res.json(subs);
+        const reviewIds = await storage.getSubmissionIdsWithReviews(user.companyId);
+        res.json(subs.map(s => ({ ...s, hasReview: reviewIds.has(s.id) })));
       } else {
         const subs = await storage.getWorkSubmissionsByEmployee(user.id);
         res.json(subs);
@@ -2036,6 +2037,7 @@ export async function registerRoutes(
           .filter(p => p.submissionItemId === item.id)
           .map(p => ({ id: p.id, photoType: p.photoType, caption: p.caption })),
       }));
+      const existingReview = await storage.getWorkSubmissionReviewBySubmissionId(sub.id);
       res.json({
         id: sub.id,
         workDate: sub.workDate,
@@ -2045,6 +2047,13 @@ export async function registerRoutes(
         companyName: company?.name || "ClockField",
         employeeName,
         items: itemsWithPhotos,
+        review: existingReview ? {
+          clientName: existingReview.clientName,
+          companyName: existingReview.companyName,
+          reviewText: existingReview.reviewText,
+          rating: existingReview.rating,
+          submittedAt: existingReview.submittedAt,
+        } : null,
       });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -2065,6 +2074,56 @@ export async function registerRoutes(
       res.set("Content-Type", match[1]);
       res.set("Cache-Control", "public, max-age=86400");
       res.send(buffer);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ── Public: Submit review for a report ────────────────────────────────────
+  app.post("/api/public/work-report/:token/review", async (req, res) => {
+    try {
+      const sub = await storage.getWorkSubmissionByToken(req.params.token);
+      if (!sub || !sub.publicShareEnabled) return res.status(404).json({ message: "Report not found" });
+      // One review per submission
+      const existing = await storage.getWorkSubmissionReviewBySubmissionId(sub.id);
+      if (existing) return res.status(409).json({ message: "A review has already been submitted for this report." });
+      const { clientName, companyName, reviewText, rating } = req.body;
+      if (!clientName || !clientName.trim()) return res.status(400).json({ message: "Client name is required." });
+      if (!reviewText || !reviewText.trim()) return res.status(400).json({ message: "Review message is required." });
+      if (rating !== undefined && rating !== null && (isNaN(Number(rating)) || Number(rating) < 1 || Number(rating) > 5)) {
+        return res.status(400).json({ message: "Rating must be between 1 and 5." });
+      }
+      const now = new Date().toISOString();
+      const review = await storage.createWorkSubmissionReview({
+        submissionId: sub.id,
+        companyId: sub.companyId,
+        shareToken: req.params.token,
+        clientName: clientName.trim().substring(0, 200),
+        companyName: companyName ? companyName.trim().substring(0, 200) : null,
+        reviewText: reviewText.trim().substring(0, 2000),
+        rating: rating ? Number(rating) : null,
+        status: "submitted",
+        submittedAt: now,
+        createdAt: now,
+      });
+      res.status(201).json({ id: review.id, message: "Thank you! Your review has been submitted." });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ── Admin: Get review for a submission ────────────────────────────────────
+  app.get("/api/work-submissions/:id/review", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getWorkSubmission(req.params.id);
+      if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const review = await storage.getWorkSubmissionReviewBySubmissionId(req.params.id);
+      if (!review) return res.status(404).json({ message: "No review for this submission" });
+      // Enrich with employee name for testimonial
+      const employee = sub.employeeId ? await storage.getUser(sub.employeeId) : null;
+      res.json({
+        ...review,
+        employeeName: employee ? `${employee.firstName} ${employee.lastName}`.trim() : "Staff",
+        locationName: sub.locationName,
+        workDate: sub.workDate,
+      });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams } from "wouter";
-import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, X, Clock, MapPin, User, Calendar, CheckCircle } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { ChevronLeft, ChevronRight, X, Clock, MapPin, User, Calendar, CheckCircle, Star, MessageSquare, Shield } from "lucide-react";
 
 function fmt(iso: string) {
   return new Date(iso).toLocaleString("en-CA", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -9,6 +9,29 @@ function fmt(iso: string) {
 
 function fmtDate(d: string) {
   return new Date(d + "T12:00:00").toLocaleDateString("en-CA", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+}
+
+function StarRating({ value, onChange }: { value: number; onChange?: (v: number) => void }) {
+  const [hover, setHover] = useState(0);
+  return (
+    <div className="flex gap-1">
+      {[1, 2, 3, 4, 5].map(i => (
+        <button
+          key={i}
+          type="button"
+          className="focus:outline-none"
+          onMouseEnter={() => onChange && setHover(i)}
+          onMouseLeave={() => onChange && setHover(0)}
+          onClick={() => onChange && onChange(i)}
+          data-testid={`star-${i}`}
+        >
+          <Star
+            className={`w-7 h-7 transition-colors ${i <= (hover || value) ? "fill-amber-400 text-amber-400" : "text-gray-300"}`}
+          />
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function Lightbox({ photos, token, startIdx, onClose }: { photos: any[]; token: string; startIdx: number; onClose: () => void }) {
@@ -78,6 +101,179 @@ function PhotoRow({ photos, token, label }: { photos: any[]; token: string; labe
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function ReviewSection({ token, companyName, existingReview }: { token: string; companyName: string; existingReview: any }) {
+  const [showForm, setShowForm] = useState(false);
+  const [clientName, setClientName] = useState("");
+  const [companyNameVal, setCompanyNameVal] = useState("");
+  const [reviewText, setReviewText] = useState("");
+  const [rating, setRating] = useState(0);
+  const [errors, setErrors] = useState<{ clientName?: string; reviewText?: string }>({});
+  const [submitted, setSubmitted] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  const submitMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/public/work-report/${token}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientName, companyName: companyNameVal, reviewText, rating: rating || null }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Failed to submit review");
+      }
+      return res.json();
+    },
+    onSuccess: () => setSubmitted(true),
+    onError: (e: any) => setServerError(e.message),
+  });
+
+  function validate() {
+    const errs: { clientName?: string; reviewText?: string } = {};
+    if (!clientName.trim()) errs.clientName = "Your name is required.";
+    if (!reviewText.trim()) errs.reviewText = "Please write a review message.";
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  }
+
+  function handleSubmit() {
+    setServerError(null);
+    if (!validate()) return;
+    submitMutation.mutate();
+  }
+
+  // Already has a review (from initial load) or just submitted
+  if (existingReview || submitted) {
+    const review = existingReview || { clientName, companyName: companyNameVal, reviewText, rating, submittedAt: new Date().toISOString() };
+    return (
+      <div className="max-w-2xl mx-auto px-4 pb-8">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center">
+              <Shield className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide">Verified Client Review</p>
+              <p className="text-[10px] text-gray-400">Submitted through completed service report · Verified by ClockField</p>
+            </div>
+          </div>
+          {review.rating && (
+            <div className="mb-3">
+              <StarRating value={review.rating} />
+            </div>
+          )}
+          <blockquote className="text-sm text-gray-700 italic leading-relaxed mb-4">
+            "{review.reviewText}"
+          </blockquote>
+          <div>
+            <p className="text-sm font-semibold text-gray-800">{review.clientName}</p>
+            {review.companyName && <p className="text-xs text-gray-500">{review.companyName}</p>}
+            <p className="text-xs text-gray-400 mt-0.5">{fmt(review.submittedAt)}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 pb-8">
+      {!showForm ? (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 text-center">
+          <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <MessageSquare className="w-6 h-6 text-blue-500" />
+          </div>
+          <h3 className="text-base font-bold text-gray-900 mb-1">Enjoyed the work?</h3>
+          <p className="text-sm text-gray-500 mb-5">Leave a review about this service</p>
+          <button
+            onClick={() => setShowForm(true)}
+            className="inline-flex items-center gap-2 bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-blue-700 transition-colors"
+            data-testid="button-leave-review"
+          >
+            <Star className="w-4 h-4" />
+            Leave a Review
+          </button>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <h3 className="text-base font-bold text-gray-900 mb-1">Leave a Review</h3>
+          <p className="text-xs text-gray-400 mb-5">Your feedback will be shared with {companyName}</p>
+
+          {serverError && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+              <p className="text-sm text-red-700">{serverError}</p>
+            </div>
+          )}
+
+          {/* Rating */}
+          <div className="mb-4">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 block">Rating (optional)</label>
+            <StarRating value={rating} onChange={setRating} />
+          </div>
+
+          {/* Client Name */}
+          <div className="mb-3">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Your Name *</label>
+            <input
+              type="text"
+              value={clientName}
+              onChange={e => { setClientName(e.target.value); setErrors(prev => ({ ...prev, clientName: undefined })); }}
+              placeholder="Jane Smith"
+              className={`w-full text-sm rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-400 ${errors.clientName ? "border-red-400 bg-red-50" : "border-gray-200"}`}
+              data-testid="input-client-name"
+            />
+            {errors.clientName && <p className="text-xs text-red-500 mt-1">{errors.clientName}</p>}
+          </div>
+
+          {/* Company Name */}
+          <div className="mb-3">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Company Name (optional)</label>
+            <input
+              type="text"
+              value={companyNameVal}
+              onChange={e => setCompanyNameVal(e.target.value)}
+              placeholder="Acme Corp"
+              className="w-full text-sm rounded-xl border border-gray-200 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-400"
+              data-testid="input-company-name"
+            />
+          </div>
+
+          {/* Review Text */}
+          <div className="mb-5">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Your Review *</label>
+            <textarea
+              value={reviewText}
+              onChange={e => { setReviewText(e.target.value); setErrors(prev => ({ ...prev, reviewText: undefined })); }}
+              placeholder="Share your experience with the service..."
+              rows={4}
+              className={`w-full text-sm rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-400 resize-none ${errors.reviewText ? "border-red-400 bg-red-50" : "border-gray-200"}`}
+              data-testid="input-review-text"
+            />
+            {errors.reviewText && <p className="text-xs text-red-500 mt-1">{errors.reviewText}</p>}
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setShowForm(false); setErrors({}); setServerError(null); }}
+              className="flex-1 text-sm font-medium text-gray-600 border border-gray-200 rounded-xl py-2.5 hover:bg-gray-50 transition-colors"
+              data-testid="button-cancel-review"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={submitMutation.isPending}
+              className="flex-1 text-sm font-semibold bg-blue-600 text-white rounded-xl py-2.5 hover:bg-blue-700 transition-colors disabled:opacity-60"
+              data-testid="button-submit-review"
+            >
+              {submitMutation.isPending ? "Submitting..." : "Submit Review"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -239,6 +435,16 @@ export default function PublicWorkReport() {
           </div>
         )}
       </div>
+
+      {/* Review section */}
+      <div className="max-w-2xl mx-auto px-4 mb-4">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="h-px flex-1 bg-gray-200" />
+          <span className="text-xs font-bold uppercase tracking-wider text-gray-400 px-2">Client Review</span>
+          <div className="h-px flex-1 bg-gray-200" />
+        </div>
+      </div>
+      <ReviewSection token={token!} companyName={data.companyName} existingReview={data.review} />
 
       {/* Footer */}
       <div className="border-t border-gray-200 bg-white mt-4">

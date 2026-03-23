@@ -1,0 +1,374 @@
+Yes. I understand exactly what you want.
+
+This should be added only to the existing public work report and the existing admin Work Log flow.
+Do not create a separate admin page.
+Do not touch schedules, settings, attendance, other report logic, or anything else not mentioned.
+
+DEV NOTE FOR AGENT
+
+Task
+Add a client review and testimonial flow tied directly to each shared public service report link, then surface that review inside the existing Admin > Work Log view for that exact work submission.
+
+Strict scope
+Only implement the following:
+
+1. Public shared report review section
+2. Review storage tied to the exact work submission/report
+3. Admin Work Log review display and filtering
+4. Shareable testimonial/social proof generator from that saved review
+
+Do not touch anything else.
+Do not modify scheduling.
+Do not modify work report generation logic outside what is needed to attach reviews.
+Do not change permissions unrelated to this feature.
+Do not redesign unrelated admin pages.
+Do not add a brand new main admin page.
+Do not break existing public report sharing.
+
+Feature goal
+When a public report link is generated and shared to a client, that public page should allow the client to leave a review based on that specific completed work report.
+Once submitted, the review must appear inside Admin > Work Log on that exact work item.
+Admin should be able to open the review, read it, and generate a shareable testimonial/social proof card from it.
+
+What to build
+
+1. Public report review section
+   On the public Cleaning Service Report page, add a review section near the bottom of the report, after the report content.
+
+UI copy example
+Enjoyed the work?
+Leave a review about this service
+
+Add a button or CTA:
+Leave a Review
+
+When clicked, open a modal or expandable form.
+Do not redirect away from the report.
+
+Form fields
+
+* Client name
+* Company name
+* Review message
+
+Optional but recommended
+
+* Rating out of 5 stars
+
+Buttons
+
+* Submit Review
+* Cancel
+
+Validation
+
+* Client name required
+* Review message required
+* Company name optional if already known from report, but preferred to collect
+* Prevent empty submissions
+* Show clean success state after submit
+
+Success state example
+Thank you. Your review has been submitted.
+
+Behavior
+
+* One review should be tied to one specific work submission/report
+* If a review already exists for that report, do not allow unlimited duplicate spam submissions from the same public report without protection
+* Best safe approach:
+
+  * allow one approved review record per public report by default
+  * or allow multiple, but mark them individually and display latest in admin
+* Recommended:
+  one primary client review per public report
+
+2. Review data model
+   Create a review entity tied to the existing work submission/report record.
+
+Suggested fields
+
+* id
+* workLogId or workSubmissionId
+* publicReportId or shareToken relation if that already exists
+* clientName
+* companyName
+* reviewText
+* rating nullable
+* submittedAt
+* source = public_report
+* status = submitted
+* createdAt
+* updatedAt
+
+Optional helpful fields
+
+* reviewerIp or anti-spam token if already available
+* shareableAssetGeneratedAt
+* isFeatured
+* isArchived
+
+Important
+The review must be directly linked to the exact work submission shown in Work Log.
+Do not make reviews float independently.
+We need to know:
+
+* which company/location it belongs to
+* who did the work
+* which submission date it belongs to
+* which report it came from
+
+3. Public report logic
+   When the public report is opened:
+
+* load the report as normal
+* also load existing linked review state for that report
+* if no review yet, show CTA to leave review
+* if review already exists, show either:
+
+  * “Review already submitted”
+  * or display the submitted testimonial in a read-only block
+
+Optional nice touch
+Below the report, display the submitted review as:
+Verified client review
+
+This helps the public report feel complete.
+
+4. Admin > Work Log integration
+   Do not create a new page.
+   Inside the existing Work Log list and detail flow, add review visibility tied to each work item.
+
+In Work Log list row
+If a work item has a client review, show a small badge such as:
+Reviewed by Client
+or
+Has Review
+
+When clicking/opening that work log item, add a Reviews section inside the existing work detail area or detail modal.
+
+Inside that section show
+
+* Client name
+* Company name
+* Submission date of review
+* Rating if used
+* Full review text
+
+Add button
+View Review
+
+If using modal:
+Open a clean review modal that looks like a testimonial/review popup.
+
+5. Work Log filtering for reviews
+   Inside Admin > Work Log, add review-aware filters without creating a new page.
+
+Add filter options such as
+
+* All
+* Has Review
+* No Review
+
+Optional advanced filters
+
+* Filter by company
+* Filter by employee who completed the work
+* Filter by location
+* Filter by date
+* Filter by review submission date
+
+Important
+Do not clutter the current Work Log UI.
+Keep it simple and consistent with the existing design.
+
+6. Review popup in admin
+   Inside the admin review popup, include:
+
+* Client name
+* Company name
+* Verified by Clockfield
+* Related work date
+* Related cleaner/employee
+* Review text
+* Optional star rating
+* Timestamp
+
+Buttons in popup
+
+* Copy Review Text
+* Generate Share Card
+* Copy Share Link
+* Close
+
+7. Shareable social proof generator
+   This is important.
+
+From the saved review in admin, add a way to generate a social-proof card/snippet that can be shared externally.
+
+Goal
+Create a clean testimonial card that can be copied, downloaded, or shared as social proof.
+
+Suggested testimonial card content
+
+* Company name
+* Client name
+* Review text
+* “Verified by Clockfield”
+* Service date
+* Optional location
+* Optional “Work completed by [employee name]”
+
+Design direction
+Keep it simple, clean, and premium.
+Looks good as a screenshot for Instagram, Facebook, LinkedIn, or website testimonials.
+Do not overcomplicate v1.
+
+Recommended output options
+
+* Copy formatted testimonial text
+* Copy public testimonial link
+* Generate a branded visual card preview in a modal
+* Optional export as PNG later if already easy
+
+For now, at minimum implement:
+
+* modal preview of testimonial card
+* copy text
+* copy share link
+
+8. Verification language
+   Use wording like:
+   Verified by Clockfield
+   Verified client feedback
+   Submitted through completed service report
+
+Only use this if the review truly came from the public report link tied to a real completed job.
+That is the value.
+
+9. Security and anti-spam
+   Public review submission should be protected.
+   At minimum:
+
+* tie form to valid report token
+* prevent random submission without valid public report access
+* basic rate limiting if possible
+* sanitize review text
+* escape HTML
+* prevent script injection
+* prevent repeated duplicate spam submissions
+
+10. Notifications
+    Optional but useful:
+    When a client submits a review, show a small notification indicator in admin or mark the work item with a review badge.
+    Do not build a whole notification system unless already present.
+
+11. Database and API requirements
+    Need endpoints or handlers for:
+
+Public
+
+* get public report with review state
+* submit review for report
+
+Admin
+
+* get reviews for work log item
+* filter work log by review presence
+* generate shareable testimonial data
+
+Keep API changes isolated to this feature.
+
+12. UI placement summary
+
+Public report page
+At bottom of the shared report:
+
+* Leave a Review CTA
+* review form modal/expand section
+* success state
+
+Admin Work Log list
+
+* badge if review exists
+
+Admin Work Log detail
+
+* Reviews section
+* View Review button
+* Generate Share Card action
+
+Review popup
+
+* review details
+* copy/share actions
+
+13. Acceptance criteria
+
+Public side
+
+* Shared public report displays review CTA
+* Client can submit name, company, and review
+* Review is tied to the exact work report
+* Success state appears after submit
+* Invalid/empty form is blocked
+* Existing report still works normally
+
+Admin side
+
+* Work Log shows which items have reviews
+* Opening a work item shows linked review
+* Admin can read review in popup/modal
+* Admin can filter work by review presence
+* Admin can copy/share testimonial content
+* Review can be used as social proof with Clockfield verification text
+
+Protection
+
+* No unrelated pages changed
+* No scheduling/settings changed
+* No existing report logic broken
+* No existing Work Log behavior broken
+
+14. Recommended v1 implementation path
+
+Phase 1
+
+* Add review table/model
+* Add public review form
+* Save review against work submission
+* Show review badge in Work Log
+
+Phase 2
+
+* Add review modal in admin
+* Add filters
+* Add testimonial preview/share block
+
+Phase 3
+
+* Polish branded social-proof card
+* Optional export image/download later
+
+15. Important warning to agent
+    Do not touch anything outside this feature.
+    Do not refactor unrelated report pages.
+    Do not move Work Log to a new page.
+    Do not change scheduling.
+    Do not change settings.
+    Do not change attendance.
+    Do not change submission flow other than attaching the review system.
+    Keep all existing report generation and sharing working exactly as it is.
+
+16. Best UX recommendation
+    On the public report page, place the review section below the photo/report content with a clear CTA.
+    Inside admin, keep the review access inside the same Work Log item so it feels tied to that exact job.
+    For social proof, use a clean testimonial card with company name, client name, review, service date, and Verified by Clockfield.
+
+This is the right implementation:
+public report review in the shared link, review stored against the exact work item, visible inside existing Work Log, and usable for shareable social proof.
+
+If you want, I can turn this into an even more strict agent-ready dev note with:
+frontend changes,
+backend routes,
+database schema,
+and exact UI blocks by page.

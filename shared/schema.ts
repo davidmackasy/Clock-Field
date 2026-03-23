@@ -278,9 +278,25 @@ export const workSubmissionPhotos = pgTable("work_submission_photos", {
   createdAt: text("created_at").notNull(),
 });
 
+// ── Work Submission Reviews ───────────────────────────────────────────────────
+export const workSubmissionReviews = pgTable("work_submission_reviews", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  submissionId: varchar("submission_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  shareToken: text("share_token").notNull(),
+  clientName: text("client_name").notNull(),
+  companyName: text("company_name"),
+  reviewText: text("review_text").notNull(),
+  rating: integer("rating"),
+  status: text("status").notNull().default("submitted"),
+  submittedAt: text("submitted_at").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
 export const insertWorkSubmissionSchema = createInsertSchema(workSubmissions).omit({ id: true });
 export const insertWorkSubmissionItemSchema = createInsertSchema(workSubmissionItems).omit({ id: true });
 export const insertWorkSubmissionPhotoSchema = createInsertSchema(workSubmissionPhotos).omit({ id: true });
+export const insertWorkSubmissionReviewSchema = createInsertSchema(workSubmissionReviews).omit({ id: true });
 
 export type WorkSubmission = typeof workSubmissions.$inferSelect;
 export type InsertWorkSubmission = z.infer<typeof insertWorkSubmissionSchema>;
@@ -288,6 +304,8 @@ export type WorkSubmissionItem = typeof workSubmissionItems.$inferSelect;
 export type InsertWorkSubmissionItem = z.infer<typeof insertWorkSubmissionItemSchema>;
 export type WorkSubmissionPhoto = typeof workSubmissionPhotos.$inferSelect;
 export type InsertWorkSubmissionPhoto = z.infer<typeof insertWorkSubmissionPhotoSchema>;
+export type WorkSubmissionReview = typeof workSubmissionReviews.$inferSelect;
+export type InsertWorkSubmissionReview = z.infer<typeof insertWorkSubmissionReviewSchema>;
 
 // ── Platform Messages ─────────────────────────────────────────────────────────
 export const platformMessages = pgTable("platform_messages", {

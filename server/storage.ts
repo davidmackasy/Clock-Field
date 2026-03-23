@@ -4,7 +4,7 @@ import {
   companies, users, clients, locations, recurringSchedules, shifts, timeEntries, clientRequests, payrollDeductions,
   requestMessages, requestAttachments,
   timesheets,
-  workSubmissions, workSubmissionItems, workSubmissionPhotos,
+  workSubmissions, workSubmissionItems, workSubmissionPhotos, workSubmissionReviews,
   platformMessages,
   payRuns, payStubs, payStubEarnings, payStubDeductions, payStubAuditLog,
   type Company, type InsertCompany,
@@ -22,6 +22,7 @@ import {
   type WorkSubmission, type InsertWorkSubmission,
   type WorkSubmissionItem, type InsertWorkSubmissionItem,
   type WorkSubmissionPhoto, type InsertWorkSubmissionPhoto,
+  type WorkSubmissionReview, type InsertWorkSubmissionReview,
   type PlatformMessage, type InsertPlatformMessage,
   type PayRun, type InsertPayRun,
   type PayStub, type InsertPayStub,
@@ -181,6 +182,12 @@ export interface IStorage {
   // Pay Stub Audit Log
   createPayStubAuditLog(data: Omit<PayStubAuditLog, "id">): Promise<PayStubAuditLog>;
   getPayStubAuditLog(payStubId: string): Promise<PayStubAuditLog[]>;
+
+  // Work Submission Reviews
+  createWorkSubmissionReview(data: InsertWorkSubmissionReview): Promise<WorkSubmissionReview>;
+  getWorkSubmissionReviewBySubmissionId(submissionId: string): Promise<WorkSubmissionReview | undefined>;
+  getWorkSubmissionReviewsByCompany(companyId: string): Promise<WorkSubmissionReview[]>;
+  getSubmissionIdsWithReviews(companyId: string): Promise<Set<string>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -774,6 +781,33 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(payStubAuditLog)
       .where(eq(payStubAuditLog.payStubId, payStubId))
       .orderBy(desc(payStubAuditLog.createdAt));
+  }
+
+  // ── Work Submission Reviews ────────────────────────────────────────────────────
+  async createWorkSubmissionReview(data: InsertWorkSubmissionReview): Promise<WorkSubmissionReview> {
+    const [review] = await db.insert(workSubmissionReviews).values(data).returning();
+    return review;
+  }
+
+  async getWorkSubmissionReviewBySubmissionId(submissionId: string): Promise<WorkSubmissionReview | undefined> {
+    const [review] = await db.select().from(workSubmissionReviews)
+      .where(eq(workSubmissionReviews.submissionId, submissionId))
+      .orderBy(desc(workSubmissionReviews.createdAt))
+      .limit(1);
+    return review;
+  }
+
+  async getWorkSubmissionReviewsByCompany(companyId: string): Promise<WorkSubmissionReview[]> {
+    return db.select().from(workSubmissionReviews)
+      .where(eq(workSubmissionReviews.companyId, companyId))
+      .orderBy(desc(workSubmissionReviews.createdAt));
+  }
+
+  async getSubmissionIdsWithReviews(companyId: string): Promise<Set<string>> {
+    const rows = await db.select({ submissionId: workSubmissionReviews.submissionId })
+      .from(workSubmissionReviews)
+      .where(eq(workSubmissionReviews.companyId, companyId));
+    return new Set(rows.map(r => r.submissionId));
   }
 }
 
