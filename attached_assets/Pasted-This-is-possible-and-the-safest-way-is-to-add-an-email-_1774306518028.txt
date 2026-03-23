@@ -1,0 +1,244 @@
+This is possible, and the safest way is to add an email preview block that uses the first few report images as clickable thumbnails linked to the public report URL.
+
+Use this dev note for the agent.
+
+Dev Note: Add clickable report thumbnails inside outgoing client email only
+
+Critical instruction
+
+Do not change, remove, refactor, or affect anything else in the app.
+Do not break the current public report flow.
+Do not break public links.
+Do not change report generation.
+Do not change stored photos.
+Do not change review flow.
+Do not touch unrelated email behavior.
+Only add thumbnail preview support for report emails.
+
+Goal
+
+When sending a public cleaning report by email, do not send only a raw link by itself.
+
+Instead, the email should include:
+a short message written by the sender,
+the public report link,
+and a row of clickable image thumbnails pulled from the report.
+
+The thumbnails should come from the report itself, preferably the first 3 after photos.
+When the client clicks any thumbnail, it should open the public report link.
+
+Desired result
+
+Instead of this:
+https://clockfield.com/r/BE5WBMJ
+
+The email should look more professional like:
+Hello, please find your completed cleaning report below.
+[three image thumbnails]
+View full report
+
+Each thumbnail must link to the same public report URL.
+
+What to use as thumbnails
+
+Use the first 3 after photos from the report.
+
+Fallback order:
+
+first 3 after photos
+if no after photos exist, use first 3 report photos
+if there are no photos at all, fall back to normal text link only
+
+Do not fail the email if thumbnails are missing.
+The email must still send successfully.
+
+Important behavior
+
+The thumbnails are for the email body only.
+Do not change the actual report page.
+Do not change the images stored in the report.
+Do not change photo ordering unless the system already has a defined order.
+
+Recommended implementation
+
+Safest and cleanest solution:
+generate an HTML email template for report emails only.
+
+The template should include:
+
+sender message or default message
+button or text link to full report
+a 3-thumbnail preview row
+each thumbnail wrapped in an anchor tag pointing to the public report link
+
+Basic flow
+
+Admin generates or already has the public report link
+When opening the send email flow for that report, fetch the first 3 eligible thumbnails from the report
+Build HTML email body using those image URLs
+Send the email as HTML
+Clicking any image opens the public report link
+
+Do not rely on the email client automatically generating a preview from the link.
+That behavior is inconsistent and cannot be controlled reliably.
+
+Important technical note
+
+Do not try to paste a raw link and expect Outlook or Gmail to automatically render the report thumbnails.
+That is not dependable.
+
+Instead, explicitly build the thumbnails inside the HTML email body.
+
+Email template behavior
+
+Use a simple, safe layout that works in Outlook and Gmail:
+
+short intro text
+stacked or 3-column image block
+button under it saying View Full Report
+
+Safer email layout recommendation:
+Use table-based HTML for compatibility.
+
+Suggested structure:
+
+greeting paragraph
+spacer
+3-image table row
+spacer
+CTA button linking to report
+fallback plain link text under button
+
+Each thumbnail:
+
+fixed size
+cropped or contain-fit consistently
+clickable
+alt text like “Report photo 1”
+
+Recommended thumbnail size
+
+Use a small optimized version for email.
+Do not embed giant original images.
+
+Recommended display size:
+around 160 to 220px wide each
+
+Recommended source behavior:
+
+use existing stored image URLs if already web-accessible
+preferably use resized thumbnail URLs if your storage/image pipeline supports that
+if not, load the existing image carefully but keep rendered size small in email HTML
+
+If your system does not already generate thumbnails:
+add a lightweight thumbnail version only for new email rendering, but do not alter original stored photos.
+
+Very important:
+do not create a risky migration of old image data.
+Do not regenerate old stored images.
+Use existing URLs where possible.
+
+Backend logic
+
+Add this only to the report email sending flow.
+
+Suggested helper behavior:
+getReportEmailPreviewImages(reportId):
+
+fetch report items
+collect after photos in report order
+return first 3 image URLs
+fallback to first 3 general photos if after photos unavailable
+
+Then pass those URLs into the email template renderer.
+
+Frontend / compose behavior
+
+If there is an email compose modal or send screen:
+
+allow the user to type their custom message on top
+underneath, auto-render the thumbnail preview block
+then show the report link/button
+
+Do not replace the user’s message.
+Do not remove the link completely.
+Keep the full link or button in the email for clarity.
+
+Recommended default email body example
+
+Hello,
+
+Please find your completed cleaning report below. You can preview a few photos here and click any image to view the full report.
+
+[thumbnails]
+
+View Full Report
+
+This keeps it professional and clear.
+
+What not to do
+
+Do not attach the images as large file attachments unless specifically needed.
+Do not send only image attachments without the report link.
+Do not depend on social preview meta tags for email rendering.
+Do not change report page structure just for email previews.
+Do not change public report permissions.
+Do not break the current send-report workflow.
+
+If you want better preview later
+
+A second future improvement could be adding proper Open Graph preview tags on the public report page, but that is separate and should not be the main solution for email thumbnails.
+
+Why:
+
+email clients do not reliably show OG previews from pasted links
+HTML email with embedded clickable thumbnails is the correct controlled solution
+
+Testing requirements
+
+The agent must test this carefully in real email clients.
+
+Test 1
+Send report email with at least 3 after photos
+
+confirm 3 thumbnails appear
+confirm each thumbnail opens the public report
+
+Test 2
+Send report email with only 1 or 2 after photos
+
+confirm only available thumbnails appear correctly
+
+Test 3
+Send report email with no after photos but other report photos
+
+confirm fallback photos appear
+
+Test 4
+Send report email with no photos at all
+
+confirm email still sends with text link only
+
+Test 5
+Open in Outlook
+
+confirm thumbnails render correctly
+
+Test 6
+Open in Gmail
+
+confirm thumbnails render correctly
+
+Test 7
+Mobile email app
+
+confirm layout stacks or scales properly
+
+Test 8
+Public link still opens the exact same report
+
+no changes to report behavior
+
+Best safe summary for the agent
+
+Add HTML email preview support for public report emails only. Pull the first 3 after photos from the report and display them as clickable thumbnails inside the email body, all linking to the public report URL. Fall back gracefully if after photos or any photos are missing. Do not change the report itself, do not alter stored photos, and do not affect any other app functionality.
