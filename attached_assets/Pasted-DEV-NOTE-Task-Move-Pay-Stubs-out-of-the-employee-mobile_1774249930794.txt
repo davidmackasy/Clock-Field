@@ -1,0 +1,310 @@
+DEV NOTE
+
+Task:
+Move Pay Stubs out of the employee mobile bottom navigation and place it inside Profile.
+
+Main instruction:
+Do not break, remove, refactor, or affect anything else that is currently working.
+Do not change any unrelated employee, admin, payroll, timesheet, attendance, or report logic.
+This is a small employee mobile UI navigation cleanup only.
+Keep the same app feel, same compact layout, and same current styling language.
+Only make the exact changes listed below.
+
+Goal
+
+For employee mobile UI only:
+
+* Bottom native navigation must show only 5 items
+* Remove Pay Stubs from bottom navigation
+* Keep these 5 bottom items only:
+
+  * Home
+  * Schedule
+  * Work (center plus button)
+  * Reports
+  * Profile
+* Move Pay Stubs into the Profile page as a list item
+* Keep access to pay stubs working exactly the same
+* Do not change pay stub data, permissions, visibility, or download logic
+* Do not change admin UI at all
+
+Important clarification
+
+This change is for employee mobile UI only.
+Do not apply this change to admin navigation.
+Do not change desktop navigation unless the employee mobile layout shares the same component and requires a safe conditional render.
+If shared navigation is used, add a safe employee-mobile-only condition.
+
+1. Required bottom navigation update
+
+Current issue:
+The employee mobile bottom navigation currently has 6 items:
+
+* Home
+* Schedule
+* Work
+* Pay Stubs
+* Reports
+* Profile
+
+This is too crowded.
+
+Required fix:
+Bottom navigation for employee mobile must now contain only 5 items:
+
+* Home
+* Schedule
+* Work
+* Reports
+* Profile
+
+Required action:
+
+* Remove Pay Stubs tab from the employee mobile bottom nav
+* Keep Work in the middle with the same plus-sign button styling
+* Keep icon sizes, spacing, and general native feel the same
+* Do not redesign the whole nav
+* Do not shift the app into a different style
+* Just cleanly return it to 5 buttons
+
+2. Move Pay Stubs into Profile page
+
+Required fix:
+Add a new row inside employee Profile page for Pay Stubs.
+
+Profile page list order should become:
+
+* My Hours
+* My Timesheets
+* Pay Stubs
+* Password section
+* Sign Out
+
+Recommended exact label:
+Pay Stubs
+
+Recommended supporting text:
+View and download your payroll records
+
+Alternative supporting text:
+Access your pay stubs and download records
+
+Keep it short and consistent with the other rows.
+
+Recommended icon:
+Use a payroll, receipt, wallet, or document-money style icon that matches the current icon set and weight.
+Do not use a random new icon style that clashes with the rest of the app.
+
+3. Profile row behavior
+
+The new Pay Stubs row inside Profile must:
+
+* Navigate to the same existing employee pay stubs page
+* Reuse the same route/page/component if already working
+* Keep current pay stub permissions
+* Keep current pay stub filtering/history/download behavior
+* Not change how pay stubs are generated or fetched
+
+This is a navigation relocation only.
+Do not rebuild the pay stub page unless absolutely necessary.
+
+4. Keep existing styling language
+
+Important:
+The app already has a small, compact, native feel.
+Do not change that.
+
+Required UI behavior:
+
+* Keep same card/list-row appearance as My Hours and My Timesheets
+* Keep same row height
+* Keep same font sizes
+* Keep same paddings
+* Keep same chevron on the right
+* Keep same icon circle style if that is already used
+* Keep same hover/tap/pressed behavior
+* Keep same border radius and spacing rhythm
+
+The new Pay Stubs row should look like it has always been part of the Profile page.
+
+5. Navigation logic requirements
+
+Bottom nav changes:
+
+* Remove Pay Stubs item only from employee mobile bottom nav
+* Ensure Reports and Profile keep their correct order after removal
+* Ensure the active tab highlighting still works correctly
+* Ensure Work button remains centered visually
+
+Profile changes:
+
+* Add Pay Stubs row in Profile
+* Clicking it should open the existing pay stub page
+* Back navigation from Pay Stubs should still work properly
+
+Important:
+Do not leave orphaned active-state logic for a removed bottom-nav Pay Stubs tab.
+Clean up any active-state mapping that assumes Pay Stubs is still a bottom tab.
+
+6. Route safety
+
+If the existing pay stub page already has a route, keep that same route.
+Do not rename routes unless absolutely necessary.
+
+Example:
+If current route is something like:
+
+* /employee/pay-stubs
+  or
+* /pay-stubs
+
+Keep it.
+
+Only update how users reach it:
+
+* no longer from bottom nav
+* now from Profile row
+
+7. Scope protection
+
+Do not touch:
+
+* Admin navigation
+* Desktop UI unless needed for shared component safety
+* Payroll backend
+* Pay stub generation
+* Pay stub PDF logic
+* Employee permissions
+* Reports page logic
+* Work button behavior
+* My Hours page
+* My Timesheets page
+* Password section
+* Sign Out flow
+
+This is not a redesign.
+This is only a controlled relocation of one entry point.
+
+8. Suggested implementation approach
+
+A. Employee mobile bottom nav
+Find the employee mobile bottom navigation config/component.
+Remove the Pay Stubs tab item from that config only.
+
+Expected final order:
+
+1. Home
+2. Schedule
+3. Work
+4. Reports
+5. Profile
+
+B. Employee Profile page
+Add one new navigation row between:
+
+* My Timesheets
+  and
+* Password
+
+New row content:
+Title:
+Pay Stubs
+
+Subtitle:
+View and download your payroll records
+
+Action:
+Navigate to existing pay stubs screen
+
+C. Shared components safety
+If bottom nav is shared between employee/admin or mobile/desktop:
+
+* add a role-based and layout-based condition
+* only remove Pay Stubs for employee mobile UI
+* do not accidentally remove it anywhere else unless intentionally desired
+
+9. UX details
+
+Bottom nav
+
+* still must feel balanced with 5 items
+* Work button must remain visually centered
+* labels must not shift awkwardly
+* spacing should look intentional, not stretched
+
+Profile page
+
+* new Pay Stubs item must match existing section rhythm
+* do not create a giant new card if rows are already simple list cards
+* match current icon background style
+* keep chevron alignment consistent
+
+10. Testing checklist
+
+Must test these before shipping:
+
+Employee mobile nav
+
+* Bottom nav shows only 5 items
+* Home works
+* Schedule works
+* Work works
+* Reports works
+* Profile works
+* No Pay Stubs item appears in bottom nav
+
+Profile
+
+* Pay Stubs row appears under Profile
+* It is positioned after My Timesheets
+* It matches the style of other rows
+* It opens the pay stubs page correctly
+
+Pay stub access
+
+* Employee can still view their pay stubs
+* Employee can still download pay stubs
+* Existing pay stub data still loads normally
+
+Navigation
+
+* Back button from Pay Stubs returns correctly
+* Active bottom tab highlighting still behaves correctly
+* No empty tab state remains from removed Pay Stubs tab
+
+Regression safety
+
+* Admin UI unchanged
+* Desktop UI unchanged unless intended
+* Payroll generation unchanged
+* Report page unchanged
+* Work button unchanged
+* Profile page other sections unchanged
+
+11. Final instruction for agent
+
+Do this carefully.
+This is a live system with active users.
+
+Only make these exact employee mobile UI changes:
+
+* remove Pay Stubs from bottom native navigation
+* keep bottom nav at 5 items only
+* add Pay Stubs as a row inside Profile
+* preserve the same look and feel
+* preserve all pay stub functionality
+* do not break anything else
+
+Final expected employee mobile bottom nav:
+Home
+Schedule
+Work
+Reports
+Profile
+
+Final expected Profile list:
+My Hours
+My Timesheets
+Pay Stubs
+Password
+Sign Out
