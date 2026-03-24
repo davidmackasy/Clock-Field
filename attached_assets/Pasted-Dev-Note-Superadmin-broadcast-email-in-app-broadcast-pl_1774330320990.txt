@@ -1,0 +1,584 @@
+Dev Note: Superadmin broadcast email + in-app broadcast, plus welcome email for new business signups only
+
+Objective
+
+Implement a safe dual-channel broadcast system for Superadmin so broadcast messages can be sent:
+
+inside the app as the current broadcast/inbox message
+by email to all business accounts
+
+At the same time, implement a welcome email for new business signups only.
+
+This must be done without breaking or affecting anything else that is already working.
+
+Scope lock
+
+Only work on these features:
+
+Superadmin broadcast flow
+business in-app broadcast delivery
+broadcast email delivery to business emails
+new business welcome email
+Mailgun email sending for these two use cases only
+
+Do not touch:
+
+attendance
+schedules
+payroll
+employee clock in/out
+cleaner portal
+cleaner accounts
+employee accounts
+report generation
+public reports
+public links
+reviews
+forgot password logic
+login flow
+signup flow except for hooking a welcome email after successful business creation
+subscription logic
+billing
+Stripe
+business data outside what is needed for broadcast targeting
+any unrelated admin features
+
+If anything outside this scope appears necessary, stop and ask for approval before proceeding.
+
+Product behavior to build
+
+There are now two message types in Superadmin:
+
+Regular message
+This stays in-app only.
+It does not send email.
+Broadcast
+This can send:
+in-app only
+email only
+both in-app and email
+
+This choice must be controlled by Superadmin when creating the broadcast.
+
+Also add:
+3. Welcome email for new business accounts only
+When a new business successfully registers, send a welcome email to that business email.
+This is separate from broadcast.
+This should not backfill to old accounts.
+This should not send to cleaners or employees.
+
+Required end result
+
+Superadmin should be able to create a broadcast and choose the delivery channel:
+
+In-app only
+Email only
+In-app + Email
+
+If In-app is chosen:
+
+the broadcast appears in the existing business in-app message/broadcast area
+
+If Email is chosen:
+
+the broadcast is emailed to all target businesses
+
+If In-app + Email is chosen:
+
+the same broadcast content is saved in-app and also sent by email
+
+For new business signup:
+
+after successful business registration, send one welcome email to the new business email
+this welcome email must not send to old businesses retroactively
+this welcome email must not expose old broadcast history
+this welcome email is standalone and only for the new account
+
+Mailgun implementation approach
+
+Use Mailgun HTTP API for sending the email channel. Mailgun supports sending through the Messages API, supports batch sending to multiple recipients in a single API call, and also supports mailing lists. Batch sending currently allows up to 1,000 recipients per batch request. Mailgun also supports stored templates with template variables, which is useful for reusable welcome and broadcast emails.
+
+For this feature, use one of these approaches:
+
+Recommended now
+Use Mailgun batch sending for broadcast emails if your business count is manageable and under batch limits per chunk.
+This is simpler and safer than introducing Mailgun mailing lists into your app immediately. Mailgun’s docs state batch sending supports up to 1,000 recipients per batch request.
+
+Do not use test mode in production. Mailgun test mode accepts the message but does not actually send it.
+
+Use Mailgun templates if you want reusable branded emails for:
+
+welcome email
+broadcast email layout
+
+Mailgun supports domain-level templates and variables through its Templates API and sending API.
+
+Delivery model to implement
+
+Part A: Superadmin regular messages
+No change in behavior.
+Still in-app only.
+
+Part B: Superadmin broadcasts
+Add delivery mode selection on broadcast creation:
+
+in_app
+email
+both
+
+Behavior:
+
+in_app: create broadcast records in app only
+email: send email only, do not create in-app message if that is the chosen mode
+both: create in-app broadcast and send email
+
+Part C: Welcome email
+On new business registration success:
+
+create account as usual
+after successful account creation and commit, queue or trigger welcome email send
+do not change the in-app welcome message unless already present and working
+do not send previous broadcast history
+if you already create an in-app welcome message, keep it as is
+just add the welcome email as a second channel for the new business only
+
+Safe architecture
+
+Do not rewrite the message system.
+Do not merge regular messages and broadcasts.
+
+Keep this separation:
+
+Regular messages
+
+current in-app only system
+unchanged
+
+Broadcasts
+
+current broadcast system
+extended with optional email delivery mode
+
+Welcome email
+
+standalone post-signup event for business accounts only
+
+Add only the minimum data needed.
+
+Database additions
+
+Only add fields or tables necessary for channel tracking and send logs.
+
+Recommended additions:
+
+Broadcasts table or model
+If you already have a broadcast table, add:
+delivery_mode: enum or string
+in_app
+email
+both
+email_subject nullable
+email_cta_label nullable
+email_cta_url nullable
+email_sent_at nullable
+email_status nullable
+created_by_superadmin_id
+audience_type if needed, default business_only
+Broadcast delivery log table
+Recommended new table:
+broadcast_email_deliveries
+id
+broadcast_id
+business_id
+recipient_email
+status
+mailgun_message_id nullable
+sent_at nullable
+failed_at nullable
+error_message nullable
+created_at
+
+This gives you per-business visibility without affecting the existing message system.
+
+Welcome email log table
+Recommended new table:
+welcome_email_deliveries
+id
+business_id
+recipient_email
+status
+mailgun_message_id nullable
+sent_at nullable
+failed_at nullable
+error_message nullable
+created_at
+
+Do not modify unrelated tables unless absolutely required.
+Do not change employee or cleaner tables.
+
+Superadmin UI changes
+
+Add or update only the broadcast composer in Superadmin.
+
+Required fields for broadcast composer:
+
+title
+body
+delivery mode selector:
+In-app only
+Email only
+In-app + Email
+optional email subject
+optional CTA button label
+optional CTA button URL
+preview area if easy to add without refactor
+
+Rules:
+
+If delivery includes email, email subject is required
+CTA URL is optional
+CTA button should usually point back to app, such as dashboard, updates page, promo page, profile, or feature landing route
+If CTA URL is provided, it must be validated as HTTPS or approved internal app URL
+
+Do not redesign the whole Superadmin page.
+Only add what is needed for broadcast delivery mode and email content.
+
+Business targeting rules
+
+Default audience:
+
+all active business accounts only
+
+Do not send broadcast emails to:
+
+cleaners
+employees
+superadmins
+internal test records unless explicitly allowed
+disabled businesses if you want to exclude them, but only if that logic already exists and is safe to reuse
+
+If the existing broadcast system already targets business accounts correctly, reuse that same audience selection logic.
+
+Do not invent a new audience engine unless approved.
+
+Email content behavior
+
+Broadcast email
+
+Use a clean branded email layout:
+
+title
+body
+optional CTA button
+footer text
+optional line like “You can also view updates in your Clockfield account”
+
+Suggested CTA:
+
+Open Clockfield
+View update
+See feature
+Go to dashboard
+
+CTA URL should send the user back into the app.
+If they are not logged in, they log in normally and continue.
+
+Welcome email
+
+This email should:
+
+welcome the new business
+explain briefly what Clockfield is for
+mention what they can expect
+encourage them to log in and start using the app
+include support contact info or reply path if you want
+include a button back to the app
+
+Suggested welcome email sections:
+
+Welcome to Clockfield
+What the app helps with
+What to do first
+Support/help contact
+Open Clockfield button
+
+Do not include old broadcasts.
+Do not include previous company messages.
+Do not include data from other businesses.
+
+Message consistency rule
+
+Broadcasts:
+
+if delivery mode is both, the in-app message and email should represent the same broadcast intent
+they can share the same title/body
+email can include extra CTA button and subject line
+do not create two separate broadcasts for the same send
+
+Regular messages:
+
+remain in-app only
+no email
+
+This distinction must stay clear in code and UI.
+
+Sending strategy
+
+For broadcast emails:
+
+fetch all eligible business emails
+filter out null, empty, invalid, duplicate emails
+chunk sends in safe batches
+recommended batch size: up to 1,000 per Mailgun batch request, or smaller if you want tighter retry control. Mailgun’s docs specify a maximum of 1,000 recipients for batch sending.
+record delivery attempts per recipient or per chunk depending on your implementation
+do not block the UI waiting for every email to finish if your architecture supports background jobs
+if you do not have a queue system, at least make the send operation fault-tolerant and log all outcomes
+
+For welcome email:
+
+single transactional send after successful business signup
+send only once per new business creation
+log result
+
+Recommended technical pattern
+
+Use a dedicated email service module with separate methods:
+
+sendBroadcastEmailToBusinesses(...)
+sendWelcomeEmailToBusiness(...)
+optional shared helper sendMailgunMessage(...)
+
+Do not copy-paste email code into controllers repeatedly.
+
+Mailgun configuration requirements
+
+Use the verified Mailgun sending domain and aligned From address.
+Since you are already using Mailgun with mg.clockfield.com, keep email sending aligned to that domain unless a different production-approved sender domain is fully configured.
+
+Recommended:
+
+MAILGUN_DOMAIN=mg.clockfield.com
+MAIL_FROM_BROADCAST=Clockfield noreply@mg.clockfield.com
+MAIL_FROM_WELCOME=Clockfield noreply@mg.clockfield.com
+
+Use the correct Mailgun API base URL for the region where the domain is hosted. Mailgun’s docs note that EU domains must use https://api.eu.mailgun.net instead of the default US base URL.
+
+Do not put Mailgun into test mode in production. In test mode Mailgun accepts the request but does not actually send the email.
+
+Suggested backend flow: broadcast
+
+When Superadmin submits a broadcast:
+
+validate input
+create broadcast record
+if delivery includes in-app:
+create in-app broadcast records using the existing broadcast mechanism
+if delivery includes email:
+resolve all target business emails
+sanitize and dedupe
+send via Mailgun batch sending or queued chunked sends
+write delivery logs
+mark broadcast email status accordingly
+
+Suggested backend flow: welcome email
+
+When new business signup completes successfully:
+
+create business account normally
+commit transaction
+trigger welcome email send
+log success or failure
+do not block account creation if email delivery fails
+do not retry infinitely
+do not touch existing welcome in-app message if it already works
+
+Critical safety rule:
+A failed email send must not break signup.
+A failed broadcast email must not delete or corrupt in-app broadcast data.
+
+Validation rules
+
+Broadcast composer
+
+title required
+body required
+delivery mode required
+if email or both selected, email_subject required
+if CTA URL present, validate URL
+only allow approved protocols
+ideally require HTTPS for external links
+
+Recipient selection
+
+only business emails
+trim spaces
+lowercase for dedupe comparison if needed
+skip invalid emails
+log skipped recipients if useful
+
+Welcome email trigger
+
+only for new business registrations
+not for existing businesses edited later
+not for cleaners
+not for employees
+not for imported accounts unless explicitly requested later
+
+Permissions
+
+Only Superadmin can create email-capable broadcasts.
+
+Business admins:
+
+receive broadcasts
+receive welcome emails for their own business signup
+cannot send broadcasts from the business side through this feature unless explicitly added later
+
+Do not expose broadcast email controls to business admins, cleaners, or employees.
+
+Error handling
+
+Broadcast send failures
+
+a failed email to one recipient must not stop in-app broadcast creation
+a failed batch should log which recipients were affected
+the system should show Superadmin a summary:
+broadcast saved
+in-app delivered count
+email attempted count
+email success count
+email failed count
+
+Welcome email failure
+
+log it
+do not fail the signup
+optionally allow manual resend later, but only if easy and safe to add
+if manual resend is not already scoped, ask before adding it
+
+Recommended templates
+
+Broadcast email template
+
+subject from composer
+title
+body
+CTA button if provided
+footer:
+You are receiving this because you have a business account on Clockfield.
+Open Clockfield
+
+Welcome email template
+
+subject:
+Welcome to Clockfield
+title:
+Welcome to Clockfield
+body:
+short explanation of what the app helps them manage
+what to expect
+where to start
+support/help line
+CTA:
+Open Clockfield
+
+Do not overcomplicate the template system if not needed.
+A simple reusable HTML template is enough.
+Mailgun templates are optional but helpful if you want maintainable email layouts and variable substitution. Mailgun supports sending with stored templates and variables.
+
+Observability and logs
+
+Add focused logs only for this feature:
+
+broadcast create requested
+broadcast saved
+delivery mode selected
+in-app broadcast creation result
+email recipient count
+Mailgun request started
+Mailgun accepted response
+per-recipient or per-batch failure details
+welcome email requested
+welcome email sent
+welcome email failed
+
+Do not log:
+
+API keys
+raw secrets
+unrelated user data
+full sensitive payloads beyond what is needed for debugging
+
+Testing checklist
+
+Broadcast tests
+
+In-app only
+create broadcast
+confirm it appears in app
+confirm no email sent
+Email only
+create broadcast
+confirm no in-app message if email-only was selected
+confirm emails sent to business recipients only
+In-app + Email
+create broadcast
+confirm in-app broadcast appears
+confirm matching email sent
+Target filtering
+cleaners do not receive it
+employees do not receive it
+businesses with invalid or missing emails are skipped safely
+duplicates do not receive multiple copies unless intentionally allowed
+Link behavior
+CTA opens app
+logged-out user can log in normally
+no broken redirect
+
+Welcome email tests
+
+New business signup
+business account created
+welcome email sent once
+welcome in-app behavior remains correct if already present
+Existing business edit
+no welcome email resent
+Cleaner or employee creation
+no welcome email sent
+Failure handling
+simulate Mailgun failure
+signup still succeeds
+failure is logged
+
+Regression tests
+
+current in-app message system still works
+current broadcast display still works
+current welcome in-app message behavior still works
+forgot password still works
+attendance unaffected
+schedules unaffected
+payroll unaffected
+reviews unaffected
+public reports unaffected
+auth unaffected
+
+Definition of done
+
+This feature is complete only when:
+
+Superadmin can send a broadcast as in-app only, email only, or both
+regular messages remain in-app only
+business recipients receive broadcast emails when selected
+new business accounts receive one welcome email after successful signup
+no old businesses receive the welcome email retroactively
+no cleaners or employees receive these emails
+no unrelated feature is changed or broken
+
+Instruction to agent
+
+Implement only the Superadmin broadcast email extension and the new business welcome email. Keep regular messages in-app only. Extend broadcasts so Superadmin can choose in-app only, email only, or both. For email delivery, use Mailgun through the verified sending domain already in use, with aligned From address and no test mode in production. For new business signup, send one welcome email after successful account creation. Do not touch attendance, payroll, scheduling, cleaners, employees, public reports, reviews, forgot password, billing, or unrelated auth flows. If anything outside this exact scope seems necessary, stop and ask for approval before proceeding.
+
+Copy-ready short version for your agent
+
+Add dual-channel broadcast support in Superadmin only. Regular messages stay in-app only. Broadcasts must support three delivery modes: in-app only, email only, or both. Email broadcasts must send to business accounts only using Mailgun. Also add a welcome email for new business signups only, triggered after successful business registration. Keep any existing in-app welcome message logic unchanged. Do not touch cleaners, employees, attendance, payroll, schedules, reports, reviews, forgot password, billing, or unrelated auth. If any extra change outside this scope seems necessary, ask for approval before proceeding.

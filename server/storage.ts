@@ -5,7 +5,7 @@ import {
   requestMessages, requestAttachments,
   timesheets,
   workSubmissions, workSubmissionItems, workSubmissionPhotos, workSubmissionReviews,
-  platformMessages,
+  platformMessages, broadcastEmailDeliveries, welcomeEmailDeliveries,
   payRuns, payStubs, payStubEarnings, payStubDeductions, payStubAuditLog,
   passwordResetTokens,
   type Company, type InsertCompany,
@@ -25,6 +25,7 @@ import {
   type WorkSubmissionPhoto, type InsertWorkSubmissionPhoto,
   type WorkSubmissionReview, type InsertWorkSubmissionReview,
   type PlatformMessage, type InsertPlatformMessage,
+  type BroadcastEmailDelivery, type WelcomeEmailDelivery,
   type PayRun, type InsertPayRun,
   type PayStub, type InsertPayStub,
   type PayStubEarning, type InsertPayStubEarning,
@@ -154,6 +155,12 @@ export interface IStorage {
   markPlatformMessageRead(id: string): Promise<void>;
   getAllPlatformMessages(): Promise<PlatformMessage[]>;
   getPlatformMessage(id: string): Promise<PlatformMessage | undefined>;
+  updatePlatformMessage(id: string, data: Partial<InsertPlatformMessage>): Promise<void>;
+  // Broadcast email deliveries
+  createBroadcastEmailDelivery(data: Omit<BroadcastEmailDelivery, "id">): Promise<BroadcastEmailDelivery>;
+  // Welcome email deliveries
+  createWelcomeEmailDelivery(data: Omit<WelcomeEmailDelivery, "id">): Promise<WelcomeEmailDelivery>;
+  getWelcomeEmailDeliveryByBusinessId(businessId: string): Promise<WelcomeEmailDelivery | undefined>;
 
   // Pay Runs
   createPayRun(data: InsertPayRun): Promise<PayRun>;
@@ -708,6 +715,25 @@ export class DatabaseStorage implements IStorage {
   async getPlatformMessage(id: string): Promise<PlatformMessage | undefined> {
     const [msg] = await db.select().from(platformMessages).where(eq(platformMessages.id, id));
     return msg;
+  }
+
+  async updatePlatformMessage(id: string, data: Partial<InsertPlatformMessage>): Promise<void> {
+    await db.update(platformMessages).set(data).where(eq(platformMessages.id, id));
+  }
+
+  async createBroadcastEmailDelivery(data: Omit<BroadcastEmailDelivery, "id">): Promise<BroadcastEmailDelivery> {
+    const [row] = await db.insert(broadcastEmailDeliveries).values(data as any).returning();
+    return row;
+  }
+
+  async createWelcomeEmailDelivery(data: Omit<WelcomeEmailDelivery, "id">): Promise<WelcomeEmailDelivery> {
+    const [row] = await db.insert(welcomeEmailDeliveries).values(data as any).returning();
+    return row;
+  }
+
+  async getWelcomeEmailDeliveryByBusinessId(businessId: string): Promise<WelcomeEmailDelivery | undefined> {
+    const [row] = await db.select().from(welcomeEmailDeliveries).where(eq(welcomeEmailDeliveries.businessId, businessId));
+    return row;
   }
 
   // ── Pay Runs ─────────────────────────────────────────────────────────────────

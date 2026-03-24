@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { MessageSquare, Send, Globe, ArrowLeft, Plus, Megaphone, CreditCard, Tag, AlertTriangle, Headphones } from "lucide-react";
+import { MessageSquare, Send, Globe, ArrowLeft, Plus, Megaphone, CreditCard, Tag, AlertTriangle, Headphones, Mail, LayoutList, CheckCircle2 } from "lucide-react";
 import type { PlatformMessage } from "@shared/schema";
 
 type Business = { id: string; name: string };
@@ -26,6 +26,19 @@ const typeConfig: Record<string, { label: string; icon: any; color: string }> = 
   support: { label: "Support", icon: Headphones, color: "bg-purple-100 text-purple-800" },
 };
 
+const deliveryModeConfig: Record<string, { label: string; icon: any; desc: string }> = {
+  in_app: { label: "In-app only", icon: LayoutList, desc: "Delivered to the business inbox inside ClockField" },
+  email: { label: "Email only", icon: Mail, desc: "Sent by email to all business accounts with a company email" },
+  both: { label: "In-app + Email", icon: Send, desc: "Delivered in-app and also sent by email" },
+};
+
+function DeliveryBadge({ mode }: { mode?: string }) {
+  if (!mode || mode === "in_app") return <Badge className="bg-indigo-100 text-indigo-700 border-0 text-xs">In-app</Badge>;
+  if (mode === "email") return <Badge className="bg-amber-100 text-amber-800 border-0 text-xs">Email</Badge>;
+  if (mode === "both") return <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs">In-app + Email</Badge>;
+  return null;
+}
+
 export default function SuperAdminMessages() {
   const { isSuperAdmin } = useAuth();
   const [, navigate] = useLocation();
@@ -37,6 +50,12 @@ export default function SuperAdminMessages() {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [msgType, setMsgType] = useState("announcement");
+  const [deliveryMode, setDeliveryMode] = useState<"in_app" | "email" | "both">("in_app");
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailCtaLabel, setEmailCtaLabel] = useState("");
+  const [emailCtaUrl, setEmailCtaUrl] = useState("");
+
+  const needsEmail = isBroadcast && (deliveryMode === "email" || deliveryMode === "both");
 
   const { data: messages = [], isLoading } = useQuery<PlatformMessage[]>({
     queryKey: ["/api/super-admin/messages"],
@@ -57,22 +76,51 @@ export default function SuperAdminMessages() {
       const res = await apiRequest("POST", url, { ...data, isBroadcast });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["/api/super-admin/messages"] });
-      toast({ title: "Message sent" });
+      let desc = "";
+      if (result.emailResult) {
+        const { attempted, sent, failed } = result.emailResult;
+        if (attempted > 0) {
+          desc = `Email: ${sent} sent, ${failed} failed out of ${attempted} businesses.`;
+        }
+      }
+      toast({ title: "Broadcast sent", description: desc || undefined });
       setComposeOpen(false);
-      setSubject("");
-      setBody("");
-      setTargetBizId("");
+      resetForm();
     },
-    onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: "Failed", description: e.message.replace(/^\d+:\s*/, ""), variant: "destructive" }),
   });
+
+  function resetForm() {
+    setSubject("");
+    setBody("");
+    setTargetBizId("");
+    setMsgType("announcement");
+    setDeliveryMode("in_app");
+    setEmailSubject("");
+    setEmailCtaLabel("");
+    setEmailCtaUrl("");
+  }
 
   const handleSend = () => {
     if (!subject.trim() || !body.trim()) return;
     if (!isBroadcast && !targetBizId) return;
-    sendMessage.mutate({ subject, body, messageType: msgType });
+    if (needsEmail && !emailSubject.trim()) return;
+    sendMessage.mutate({
+      subject,
+      body,
+      messageType: msgType,
+      ...(isBroadcast ? {
+        deliveryMode,
+        emailSubject: emailSubject || undefined,
+        emailCtaLabel: emailCtaLabel || undefined,
+        emailCtaUrl: emailCtaUrl || undefined,
+      } : {}),
+    });
   };
+
+  const canSend = subject.trim() && body.trim() && (isBroadcast || targetBizId) && (!needsEmail || emailSubject.trim());
 
   if (!isSuperAdmin) {
     return (
@@ -93,7 +141,7 @@ export default function SuperAdminMessages() {
           <p className="text-sm text-muted-foreground mt-0.5">Send and manage messages to businesses</p>
         </div>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => { setIsBroadcast(true); setComposeOpen(true); }} data-testid="button-new-broadcast">
+          <Button size="sm" variant="outline" onClick={() => { setIsBroadcast(true); setDeliveryMode("in_app"); setComposeOpen(true); }} data-testid="button-new-broadcast">
             <Globe className="w-4 h-4 mr-1.5" />
             Broadcast
           </Button>
@@ -127,6 +175,7 @@ export default function SuperAdminMessages() {
           {messages.map(msg => {
             const config = typeConfig[msg.messageType] || typeConfig.announcement;
             const Icon = config.icon;
+            const mode = (msg as any).deliveryMode;
             return (
               <Card key={msg.id} data-testid={`message-${msg.id}`}>
                 <CardContent className="pt-3 pb-3">
@@ -139,7 +188,11 @@ export default function SuperAdminMessages() {
                         <span className="font-medium text-sm">{msg.subject}</span>
                         <Badge className={`${config.color} border-0 text-xs`}>{config.label}</Badge>
                         {msg.isBroadcast && <Badge className="bg-gray-100 text-gray-600 border-0 text-xs">Broadcast</Badge>}
-                        {!msg.isBroadcast && <Badge className="bg-indigo-100 text-indigo-700 border-0 text-xs">Direct</Badge>}
+                        {!msg.isBroadcast && msg.companyId && <Badge className="bg-indigo-100 text-indigo-700 border-0 text-xs">Direct</Badge>}
+                        <DeliveryBadge mode={mode} />
+                        {(msg as any).emailStatus === "sent" && <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />Emails sent</Badge>}
+                        {(msg as any).emailStatus === "partial" && <Badge className="bg-amber-100 text-amber-800 border-0 text-xs">Emails partial</Badge>}
+                        {(msg as any).emailStatus === "failed" && <Badge className="bg-red-100 text-red-700 border-0 text-xs">Email failed</Badge>}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{msg.body}</p>
                       <p className="text-xs text-muted-foreground mt-1">{new Date(msg.createdAt).toLocaleString()}</p>
@@ -152,8 +205,8 @@ export default function SuperAdminMessages() {
         </div>
       )}
 
-      <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
-        <DialogContent className="max-w-md">
+      <Dialog open={composeOpen} onOpenChange={open => { if (!open) resetForm(); setComposeOpen(open); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Send className="w-4 h-4" />
@@ -176,6 +229,28 @@ export default function SuperAdminMessages() {
                 </Select>
               </div>
             )}
+
+            {isBroadcast && (
+              <div className="space-y-1.5">
+                <Label>Delivery Channel</Label>
+                <Select value={deliveryMode} onValueChange={v => setDeliveryMode(v as any)} data-testid="select-delivery-mode">
+                  <SelectTrigger data-testid="select-delivery-mode-trigger">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(deliveryModeConfig).map(([key, cfg]) => (
+                      <SelectItem key={key} value={key}>
+                        <span className="font-medium">{cfg.label}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {deliveryMode && (
+                  <p className="text-xs text-muted-foreground">{deliveryModeConfig[deliveryMode].desc}</p>
+                )}
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label>Type</Label>
               <Select value={msgType} onValueChange={setMsgType}>
@@ -191,20 +266,47 @@ export default function SuperAdminMessages() {
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-1.5">
-              <Label>Subject</Label>
+              <Label>Title / Subject</Label>
               <Input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Subject" data-testid="input-compose-subject" />
+              <p className="text-xs text-muted-foreground">Shown as the message title in-app and as the in-app subject line.</p>
             </div>
+
             <div className="space-y-1.5">
               <Label>Message</Label>
               <Textarea value={body} onChange={e => setBody(e.target.value)} rows={5} placeholder="Write your message..." data-testid="textarea-compose-body" />
             </div>
+
+            {needsEmail && (
+              <>
+                <div className="border-t pt-3 space-y-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Email Settings</p>
+
+                  <div className="space-y-1.5">
+                    <Label>Email Subject <span className="text-red-500">*</span></Label>
+                    <Input value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="e.g. New feature available on ClockField" data-testid="input-email-subject" />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label>CTA Button Label <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
+                    <Input value={emailCtaLabel} onChange={e => setEmailCtaLabel(e.target.value)} placeholder="e.g. Open ClockField" data-testid="input-email-cta-label" />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label>CTA Button URL <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
+                    <Input type="url" value={emailCtaUrl} onChange={e => setEmailCtaUrl(e.target.value)} placeholder="https://clockfield.com/..." data-testid="input-email-cta-url" />
+                    <p className="text-xs text-muted-foreground">Leave blank to use the app home URL.</p>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setComposeOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { resetForm(); setComposeOpen(false); }}>Cancel</Button>
             <Button
               onClick={handleSend}
-              disabled={!subject.trim() || !body.trim() || (!isBroadcast && !targetBizId) || sendMessage.isPending}
+              disabled={!canSend || sendMessage.isPending}
               data-testid="button-compose-send"
             >
               <Send className="w-3.5 h-3.5 mr-1.5" />

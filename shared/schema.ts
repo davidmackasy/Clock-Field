@@ -331,11 +331,45 @@ export const platformMessages = pgTable("platform_messages", {
   isBroadcast: boolean("is_broadcast").notNull().default(false),
   parentMessageId: varchar("parent_message_id"),
   createdAt: text("created_at").notNull(),
+  // Broadcast email delivery fields
+  deliveryMode: text("delivery_mode").notNull().default("in_app"),
+  emailSubject: text("email_subject"),
+  emailCtaLabel: text("email_cta_label"),
+  emailCtaUrl: text("email_cta_url"),
+  emailSentAt: text("email_sent_at"),
+  emailStatus: text("email_status"),
+});
+
+export const broadcastEmailDeliveries = pgTable("broadcast_email_deliveries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  broadcastId: varchar("broadcast_id").notNull(),
+  businessId: varchar("business_id").notNull(),
+  recipientEmail: text("recipient_email").notNull(),
+  status: text("status").notNull().default("pending"),
+  mailgunMessageId: text("mailgun_message_id"),
+  sentAt: text("sent_at"),
+  failedAt: text("failed_at"),
+  errorMessage: text("error_message"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const welcomeEmailDeliveries = pgTable("welcome_email_deliveries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  businessId: varchar("business_id").notNull().unique(),
+  recipientEmail: text("recipient_email").notNull(),
+  status: text("status").notNull().default("pending"),
+  mailgunMessageId: text("mailgun_message_id"),
+  sentAt: text("sent_at"),
+  failedAt: text("failed_at"),
+  errorMessage: text("error_message"),
+  createdAt: text("created_at").notNull(),
 });
 
 export const insertPlatformMessageSchema = createInsertSchema(platformMessages).omit({ id: true });
 export type PlatformMessage = typeof platformMessages.$inferSelect;
 export type InsertPlatformMessage = z.infer<typeof insertPlatformMessageSchema>;
+export type BroadcastEmailDelivery = typeof broadcastEmailDeliveries.$inferSelect;
+export type WelcomeEmailDelivery = typeof welcomeEmailDeliveries.$inferSelect;
 
 export const insertCompanySchema = createInsertSchema(companies).omit({ id: true });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });

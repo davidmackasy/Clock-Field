@@ -244,6 +244,34 @@ Welcome again, and thank you for choosing ClockField.
         });
       } catch (_) { /* do not fail registration if welcome message fails */ }
 
+      // Send welcome email (non-blocking — failure must not prevent signup)
+      if (user.email) {
+        const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+        import("./mail").then(({ sendWelcomeEmailToBusiness }) =>
+          sendWelcomeEmailToBusiness({ to: user.email!, businessName: companyName, appUrl })
+            .then(result => storage.createWelcomeEmailDelivery({
+              businessId: company.id,
+              recipientEmail: user.email!,
+              status: "sent",
+              mailgunMessageId: result.id || null,
+              sentAt: new Date().toISOString(),
+              failedAt: null,
+              errorMessage: null,
+              createdAt: new Date().toISOString(),
+            }))
+            .catch(err => storage.createWelcomeEmailDelivery({
+              businessId: company.id,
+              recipientEmail: user.email!,
+              status: "failed",
+              mailgunMessageId: null,
+              sentAt: null,
+              failedAt: new Date().toISOString(),
+              errorMessage: err.message,
+              createdAt: new Date().toISOString(),
+            }).catch(() => {}))
+        ).catch(() => {});
+      }
+
       req.login(user, (err) => {
         if (err) return res.status(500).json({ message: "Login failed" });
         const { password: _, tempPin: __, ...safeUser } = user;
@@ -2524,21 +2552,123 @@ Welcome again, and thank you for choosing ClockField.
   app.post("/api/super-admin/messages/broadcast", requireSuperAdmin, async (req, res) => {
     try {
       const user = req.user as any;
-      const { subject, body, messageType } = req.body;
+      const { subject, body, messageType, deliveryMode, emailSubject, emailCtaLabel, emailCtaUrl } = req.body;
       if (!subject?.trim() || !body?.trim()) return res.status(400).json({ message: "Subject and body are required" });
-      const msg = await storage.createPlatformMessage({
-        companyId: null,
-        senderUserId: user.id,
-        senderRole: "super_admin",
-        subject: subject.trim(),
-        body: body.trim(),
-        messageType: messageType || "announcement",
-        isRead: false,
-        isBroadcast: true,
-        parentMessageId: null,
-        createdAt: new Date().toISOString(),
-      });
-      res.status(201).json(msg);
+      const mode: string = deliveryMode || "in_app";
+      if (!["in_app", "email", "both"].includes(mode)) return res.status(400).json({ message: "Invalid delivery mode" });
+      if ((mode === "email" || mode === "both") && !emailSubject?.trim()) {
+        return res.status(400).json({ message: "Email subject is required when sending by email" });
+      }
+      if (emailCtaUrl) {
+        try {
+          const parsed = new URL(emailCtaUrl.trim());
+          if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+            return res.status(400).json({ message: "CTA URL must be a valid URL" });
+          }
+        } catch {
+          return res.status(400).json({ message: "CTA URL is not a valid URL" });
+        }
+      }
+
+      // Create in-app broadcast record (for in_app or both modes)
+      let msg: any = null;
+      if (mode === "in_app" || mode === "both") {
+        msg = await storage.createPlatformMessage({
+          companyId: null,
+          senderUserId: user.id,
+          senderRole: "super_admin",
+          subject: subject.trim(),
+          body: body.trim(),
+          messageType: messageType || "announcement",
+          isRead: false,
+          isBroadcast: true,
+          parentMessageId: null,
+          createdAt: new Date().toISOString(),
+          deliveryMode: mode,
+          emailSubject: emailSubject?.trim() || null,
+          emailCtaLabel: emailCtaLabel?.trim() || null,
+          emailCtaUrl: emailCtaUrl?.trim() || null,
+          emailSentAt: null,
+          emailStatus: null,
+        });
+      } else {
+        // email-only: still create a record for audit trail (no in-app visibility)
+        msg = await storage.createPlatformMessage({
+          companyId: null,
+          senderUserId: user.id,
+          senderRole: "super_admin",
+          subject: subject.trim(),
+          body: body.trim(),
+          messageType: messageType || "announcement",
+          isRead: false,
+          isBroadcast: false,
+          parentMessageId: null,
+          createdAt: new Date().toISOString(),
+          deliveryMode: mode,
+          emailSubject: emailSubject?.trim() || null,
+          emailCtaLabel: emailCtaLabel?.trim() || null,
+          emailCtaUrl: emailCtaUrl?.trim() || null,
+          emailSentAt: null,
+          emailStatus: null,
+        });
+      }
+
+      // Send emails if mode includes email
+      let emailResult: { attempted: number; sent: number; failed: number } = { attempted: 0, sent: 0, failed: 0 };
+      if (mode === "email" || mode === "both") {
+        try {
+          const { sendBroadcastEmails } = await import("./mail");
+          const allCompanies = await storage.getAllCompanies();
+          const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+          // Only business accounts with a valid email
+          const seen = new Set<string>();
+          const recipients = allCompanies
+            .filter(c => c.accountStatus !== "suspended" && c.companyEmail)
+            .map(c => ({ email: c.companyEmail!.trim().toLowerCase(), businessId: c.id }))
+            .filter(r => {
+              if (!r.email || seen.has(r.email)) return false;
+              seen.add(r.email);
+              return true;
+            });
+          emailResult.attempted = recipients.length;
+          if (recipients.length > 0) {
+            const results = await sendBroadcastEmails({
+              recipients,
+              subject: emailSubject!.trim(),
+              title: subject.trim(),
+              body: body.trim(),
+              ctaLabel: emailCtaLabel?.trim() || "Open ClockField",
+              ctaUrl: emailCtaUrl?.trim() || appUrl,
+              appUrl,
+            });
+            const now = new Date().toISOString();
+            for (const r of results) {
+              if (r.ok) emailResult.sent++;
+              else emailResult.failed++;
+              await storage.createBroadcastEmailDelivery({
+                broadcastId: msg.id,
+                businessId: r.businessId,
+                recipientEmail: r.email,
+                status: r.ok ? "sent" : "failed",
+                mailgunMessageId: r.messageId || null,
+                sentAt: r.ok ? now : null,
+                failedAt: r.ok ? null : now,
+                errorMessage: r.error || null,
+                createdAt: now,
+              });
+            }
+            await storage.updatePlatformMessage(msg.id, {
+              emailSentAt: now,
+              emailStatus: emailResult.failed === 0 ? "sent" : emailResult.sent > 0 ? "partial" : "failed",
+            });
+          }
+        } catch (emailErr: any) {
+          console.error("[broadcast] email send error:", emailErr.message);
+          await storage.updatePlatformMessage(msg.id, { emailStatus: "failed" });
+        }
+      }
+
+      res.status(201).json({ ...msg, emailResult });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
