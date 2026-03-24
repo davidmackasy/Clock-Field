@@ -810,6 +810,26 @@ Welcome again, and thank you for choosing ClockField.
           return res.status(400).json({ message: "Invalid timezone value" });
         }
       }
+      if (req.body.googleReviewUrl !== undefined) {
+        const raw = (req.body.googleReviewUrl || "").trim();
+        if (raw === "") {
+          req.body.googleReviewUrl = null;
+        } else {
+          let parsed: URL;
+          try { parsed = new URL(raw); } catch {
+            return res.status(400).json({ message: "Invalid Google review URL. Please enter a valid https link." });
+          }
+          if (parsed.protocol !== "https:") {
+            return res.status(400).json({ message: "Google review URL must use https." });
+          }
+          const allowed = ["google.com", "www.google.com", "g.page", "goo.gl", "maps.google.com", "maps.app.goo.gl"];
+          const isGoogle = allowed.some(h => parsed.hostname === h || parsed.hostname.endsWith("." + h));
+          if (!isGoogle) {
+            return res.status(400).json({ message: "Please enter a valid Google Business review link (e.g. google.com or g.page)." });
+          }
+          req.body.googleReviewUrl = raw;
+        }
+      }
       const updated = await storage.updateCompany(user.companyId, req.body);
       if (!updated) return res.status(404).json({ message: "Company not found" });
       res.json(updated);
@@ -2157,6 +2177,16 @@ Welcome again, and thank you for choosing ClockField.
           .map(p => ({ id: p.id, photoType: p.photoType, caption: p.caption })),
       }));
       const existingReview = await storage.getWorkSubmissionReviewBySubmissionId(sub.id);
+      // Only expose googleReviewUrl if it's a valid https Google URL
+      let googleReviewUrl: string | null = null;
+      if (company?.googleReviewUrl) {
+        try {
+          const parsed = new URL(company.googleReviewUrl);
+          const allowed = ["google.com", "www.google.com", "g.page", "goo.gl", "maps.google.com", "maps.app.goo.gl"];
+          const isGoogle = allowed.some(h => parsed.hostname === h || parsed.hostname.endsWith("." + h));
+          if (parsed.protocol === "https:" && isGoogle) googleReviewUrl = company.googleReviewUrl;
+        } catch { /* ignore invalid stored URL */ }
+      }
       res.json({
         id: sub.id,
         workDate: sub.workDate,
@@ -2166,6 +2196,7 @@ Welcome again, and thank you for choosing ClockField.
         companyName: company?.name || "ClockField",
         employeeName,
         items: itemsWithPhotos,
+        googleReviewUrl,
         review: existingReview ? {
           clientName: existingReview.clientName,
           companyName: existingReview.companyName,

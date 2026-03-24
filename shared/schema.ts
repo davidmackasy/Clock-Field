@@ -56,6 +56,8 @@ export const companies = pgTable("companies", {
   postalCode: text("postal_code"),
   companyPhone: text("company_phone"),
   companyEmail: text("company_email"),
+  // Optional Google Review link (shown as external button on public report pages)
+  googleReviewUrl: text("google_review_url"),
 });
 
 export const users = pgTable("users", {

@@ -1,0 +1,441 @@
+Dev Note: Add optional Google review button to public client reports only
+
+Objective
+
+Add a second optional review option on public client report pages so clients can choose to:
+
+Leave a review on Clockfield
+Leave a review on Google
+
+This must be implemented safely and in isolation.
+
+This feature must only affect:
+
+business admin settings
+public client report review section
+
+Do not break, change, remove, or refactor anything else.
+
+Critical scope lock
+
+You must not touch or modify anything outside this feature unless explicitly approved first.
+
+Do not touch:
+
+attendance
+schedule
+payroll
+employee clock in/out
+cleaner portal
+business login
+forgot password
+auth
+public link generation
+public report permissions
+report share logic
+review verification logic already used by Clockfield
+employee accounts
+cleaner accounts
+report upload flow
+report creation flow
+client report rendering outside the review section
+admin systems unrelated to business settings
+
+If you discover anything that appears to require a change outside this exact scope, stop and ask for approval before proceeding.
+
+Feature summary
+
+Businesses already have a Clockfield review option on public reports.
+
+We now want to add a second optional button for Google reviews.
+
+If a business has added its Google review link in admin settings:
+
+show both review options on the public report page
+
+If a business has not added its Google review link:
+
+show only the existing Clockfield review option
+
+Clicking the Google review button must:
+
+open the business’s saved Google review link in a new tab
+not submit any data through Clockfield
+not alter the existing Clockfield review process
+
+Required end result
+
+On the public report page review section, clients should see:
+
+Leave a review on Clockfield
+Leave a review on Google
+
+But only show the Google button when that business has configured a valid Google review link in settings.
+
+Implementation requirements
+
+Database
+
+Add one nullable field to the business or company settings record.
+
+Recommended field name:
+
+google_review_url
+
+Requirements:
+
+nullable
+string/text
+stored per business only
+default null
+
+Do not:
+
+create a new review system
+change any existing review table
+change report tables
+change public link token tables
+modify auth tables
+touch employee-related data
+Admin settings
+
+Add one field in business admin settings only.
+
+Field label:
+
+Google Review Link
+
+Input type:
+
+URL / text input
+
+Buttons:
+
+Save
+Optional: Test Google Review Link
+
+Helper text:
+
+Paste your Google Business Profile review link here. This will appear as an optional review button on your public client reports.
+
+Requirements:
+
+only the logged-in business should be able to edit its own link
+trim spaces before save
+validate before save
+allow update
+allow clear/remove
+
+Optional extra:
+
+add a small preview or “Test Google Review Link” button that opens the saved URL in a new tab
+
+Do not:
+
+add this setting anywhere outside business admin settings
+add it to cleaner accounts
+add it to employee accounts
+move other settings around unless necessary for layout only
+URL validation rules
+
+When saving the Google review link:
+
+must be a valid https URL
+must not be empty if user is saving a value
+trim leading and trailing spaces
+preferably restrict to Google review-related URLs only
+store exactly for that business only
+
+Recommended validation behavior:
+
+accept only https links
+reject invalid or malformed URLs
+reject non-Google domains if you want tighter validation
+do not save javascript links or unsafe protocols
+
+Recommended safer validation:
+
+only allow hosts that match Google review/profile URLs
+examples may include google.com or g.page related review links depending on what the business provides
+
+If validation fails:
+
+show a clean admin error message
+do not save partial or broken data
+Public report page changes
+
+This change must happen only on public report pages where the current review section already exists.
+
+Do not change any other page.
+
+In the review section:
+
+keep the existing Clockfield review flow exactly as it is
+add a second optional button for Google review
+
+Recommended layout:
+Title:
+
+Leave a review
+
+Supporting text:
+
+Choose where you want to leave your feedback
+
+Buttons:
+
+Leave a review on Clockfield
+Leave a review on Google
+
+Behavior:
+
+if google_review_url exists and passes validation, show both buttons
+if google_review_url is missing or invalid, show only the existing Clockfield button
+clicking Clockfield keeps current behavior exactly the same
+clicking Google opens external review link in new tab
+
+For the Google button use:
+
+target="_blank"
+rel="noopener noreferrer"
+
+Do not:
+
+auto-submit anything to Google
+prefill Google review content
+change current Clockfield review submission flow
+replace the existing review form
+combine the systems
+Existing Clockfield review flow
+
+Do not alter it.
+
+This must remain exactly the same:
+
+verified Clockfield reviews
+current review modal/form behavior
+existing stored review behavior
+current admin visibility of Clockfield reviews
+any current validation or moderation logic
+
+Google review button is only an additional external redirect option.
+It is not a replacement.
+It is not part of the verified Clockfield review system.
+
+Access control
+
+Make sure:
+
+each business can only save and manage its own Google review link
+one business cannot view or edit another business’s review link from admin settings
+the public report page only reads the link associated with the report’s business owner
+
+Do not:
+
+expose raw settings from other businesses
+expose hidden admin data on public pages
+use shared global Google review URL unless explicitly requested later
+Data flow
+
+Expected flow:
+
+business goes to admin settings
+business adds Google Review Link
+system validates and saves link to that business settings
+public client report loads
+report resolves associated business
+if business has valid google_review_url, show second button
+client clicks Google review button
+browser opens saved external Google review URL
+
+That is all.
+
+No backend review submission to Google is needed.
+No Google API integration is needed.
+No OAuth is needed.
+No extra third-party service is needed.
+
+UI behavior requirements
+
+Admin settings
+
+field should feel native to the existing settings layout
+do not redesign the full settings page
+add only the required field and optional test button
+
+Public report
+
+place Google review option only within the current review section
+do not move the full page layout around
+do not change photo grids, report header, report content, or share UI
+keep the UI clean and simple
+
+Suggested button wording:
+
+Leave a review on Clockfield
+Leave a review on Google
+
+Suggested fallback:
+
+if no Google link exists, hide the Google button entirely
+do not show disabled or broken placeholder button
+Safe implementation order
+
+Step 1
+Add nullable google_review_url field to business settings table/model
+
+Step 2
+Add backend read and update support for that field in business settings only
+
+Step 3
+Add admin settings UI to save/edit/remove the link
+
+Step 4
+Add backend validation for the URL
+
+Step 5
+Add optional “Test Google Review Link” button in admin
+
+Step 6
+Update only the public report review section to conditionally show the Google button
+
+Step 7
+Run regression checks to confirm nothing else changed
+
+Regression protection
+
+Before merging, verify all of the following still work exactly as before:
+
+public report generation
+public report access
+current Clockfield review submission
+current Clockfield review verification
+attendance
+schedule
+payroll
+employee clock in/out
+cleaner portal
+admin dashboard
+report uploads
+report sharing links
+login/auth
+
+If any unrelated flow is affected, stop and revert that unrelated change.
+
+What not to do
+
+Do not:
+
+redesign the review system
+merge Google reviews into Clockfield reviews
+store Google review submissions in Clockfield
+add Google API integration
+change report permissions
+change report token logic
+modify existing review tables unless absolutely necessary and approved
+touch attendance, payroll, schedules, cleaner accounts, employee flows, or auth
+expose internal settings in public responses
+create a global Google review link for all businesses unless explicitly requested later
+Error handling
+
+Admin settings save
+
+invalid URL: show clear validation error
+failed save: show non-destructive error message
+do not wipe existing value on failed save
+
+Public report rendering
+
+if link missing or invalid, do not show Google button
+do not break report page rendering
+do not show raw error to client
+Suggested backend logic
+
+Business settings model:
+
+add google_review_url nullable field
+
+Save/update endpoint:
+
+validate current user owns business
+normalize input
+validate HTTPS URL
+optionally restrict to approved Google domains
+save field
+return success
+
+Public report read logic:
+
+resolve report business
+fetch business settings
+expose only boolean plus safe url needed for public button rendering
+if invalid or null, omit Google review button data
+Suggested validation logic
+
+Safe validation rules:
+
+required only if user is trying to save a non-empty value
+must parse as URL
+protocol must be https
+preferably host must match allowed Google review hosts
+reject all non-https protocols
+reject javascript:, data:, file:, or other unsafe protocols
+
+Optional host allowlist approach:
+
+google.com
+www.google.com
+g.page
+
+Only implement host allowlist if it does not break legitimate Google review links the business may use.
+If unsure, ask before tightening it further.
+
+Testing checklist
+
+Admin settings tests
+
+save valid Google review URL
+update existing Google review URL
+clear Google review URL
+invalid URL is rejected
+another business cannot edit someone else’s link
+
+Public report tests
+
+report with no google_review_url shows only Clockfield review option
+report with valid google_review_url shows both buttons
+Clockfield button still works exactly as before
+Google button opens correct link in new tab
+invalid stored URL does not break page
+
+Regression tests
+
+report loads normally
+photos and report details still render
+current internal review flow still works
+no unrelated pages changed
+no unrelated settings changed
+Definition of done
+
+This feature is complete only when:
+
+businesses can save a Google review link in admin settings
+public reports show a Google review button only when the business has configured a valid link
+existing Clockfield review flow remains unchanged
+no unrelated feature is changed
+no unrelated data is changed
+no active user workflow is disrupted
+Instruction to agent
+
+Implement only this feature:
+
+add optional Google review link storage in business settings
+expose it safely on public report pages
+show a second external Google review button only when configured
+
+Do not change anything else.
+If you believe any additional change outside this scope is necessary, stop and ask for approval before proceeding.
+
+Copy-ready short instruction for agent
+
+Add an optional Google review link feature for businesses only. Store one nullable field named google_review_url in business settings. Add admin settings UI so a business can save, edit, remove, and optionally test its Google review link. On public client report pages only, keep the current Clockfield review flow unchanged and conditionally show a second button labeled “Leave a review on Google” when that business has a valid google_review_url. Clicking it should open the saved link in a new tab. Do not touch attendance, payroll, schedules, auth, public link generation, employee flows, cleaner flows, or any unrelated logic. If anything outside this exact scope seems necessary, ask for approval before proceeding.

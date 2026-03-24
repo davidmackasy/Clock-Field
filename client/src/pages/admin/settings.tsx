@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, ExternalLink } from "lucide-react";
 
 const TIMEZONES = [
   { group: "Canada", options: [
@@ -174,6 +174,34 @@ export default function AdminSettings() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">Address and contact details appear on official pay stubs.</p>
+
+            <div className="space-y-2">
+              <Label>Google Review Link</Label>
+              <div className="flex gap-2">
+                <Input
+                  data-testid="input-google-review-url"
+                  type="url"
+                  placeholder="https://g.page/r/your-business-review-link"
+                  value={form.googleReviewUrl || ""}
+                  onChange={e => setForm((p: any) => ({ ...p, googleReviewUrl: e.target.value }))}
+                  className="flex-1"
+                />
+                {form.googleReviewUrl && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => window.open(form.googleReviewUrl, "_blank", "noopener,noreferrer")}
+                    title="Test Google Review Link"
+                    data-testid="button-test-google-review-url"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">Paste your Google Business Profile review link here. When set, a "Leave a Google review" button will appear on your public client reports.</p>
+            </div>
+
             <div className="space-y-2">
               <Label>Timezone</Label>
               <p className="text-xs text-muted-foreground">Used for schedules, attendance, and payroll calculations</p>
