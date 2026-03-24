@@ -46,4 +46,4 @@ timeoutMs = 60000
 [userenv]
 
 [userenv.shared]
-MAIL_FROM = "Clockfield <noreply@clockfield.ca>"
+MAIL_FROM = "Clockfield <noreply@mg.clockfield.com>"
