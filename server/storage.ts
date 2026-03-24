@@ -7,6 +7,7 @@ import {
   workSubmissions, workSubmissionItems, workSubmissionPhotos, workSubmissionReviews,
   platformMessages,
   payRuns, payStubs, payStubEarnings, payStubDeductions, payStubAuditLog,
+  passwordResetTokens,
   type Company, type InsertCompany,
   type User, type InsertUser,
   type Client, type InsertClient,
@@ -127,6 +128,12 @@ export interface IStorage {
   getWorkSubmissionPhotosByItem(submissionItemId: string): Promise<WorkSubmissionPhoto[]>;
   getWorkSubmissionPhotosByItemIds(itemIds: string[]): Promise<WorkSubmissionPhoto[]>;
   deleteWorkSubmissionPhoto(id: string): Promise<void>;
+
+  // Password Reset
+  createPasswordResetToken(data: { userId: string; email: string; tokenHash: string; expiresAt: Date; ipAddress?: string; userAgent?: string }): Promise<void>;
+  getPasswordResetTokenByHash(tokenHash: string): Promise<import("@shared/schema").PasswordResetToken | undefined>;
+  markPasswordResetTokenUsed(id: string): Promise<void>;
+  invalidatePasswordResetTokensForUser(userId: string): Promise<void>;
 
   // Super Admin
   getAllCompanies(): Promise<Company[]>;
@@ -888,6 +895,32 @@ export class DatabaseStorage implements IStorage {
       .from(workSubmissionReviews)
       .where(eq(workSubmissionReviews.companyId, companyId));
     return new Set(rows.map(r => r.submissionId));
+  }
+
+  async createPasswordResetToken(data: { userId: string; email: string; tokenHash: string; expiresAt: Date; ipAddress?: string; userAgent?: string }): Promise<void> {
+    await db.insert(passwordResetTokens).values({
+      userId: data.userId,
+      email: data.email,
+      tokenHash: data.tokenHash,
+      expiresAt: data.expiresAt,
+      ipAddress: data.ipAddress,
+      userAgent: data.userAgent,
+    });
+  }
+
+  async getPasswordResetTokenByHash(tokenHash: string): Promise<import("@shared/schema").PasswordResetToken | undefined> {
+    const rows = await db.select().from(passwordResetTokens).where(eq(passwordResetTokens.tokenHash, tokenHash));
+    return rows[0];
+  }
+
+  async markPasswordResetTokenUsed(id: string): Promise<void> {
+    await db.update(passwordResetTokens).set({ usedAt: new Date() }).where(eq(passwordResetTokens.id, id));
+  }
+
+  async invalidatePasswordResetTokensForUser(userId: string): Promise<void> {
+    await db.update(passwordResetTokens)
+      .set({ usedAt: new Date() })
+      .where(and(eq(passwordResetTokens.userId, userId), isNull(passwordResetTokens.usedAt)));
   }
 }
 

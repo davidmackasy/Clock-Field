@@ -3,6 +3,8 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { setupAuth, hashPassword, comparePasswords, requireAuth, requireRole } from "./auth";
+import { sendPasswordResetEmail } from "./mail";
+import { createHash } from "crypto";
 import passport from "passport";
 import { randomBytes } from "crypto";
 import multer from "multer";
@@ -342,6 +344,86 @@ Welcome again, and thank you for choosing ClockField.
     const { password: _, tempPin: __, ...safeUser } = req.user as any;
     res.json(safeUser);
   });
+
+  // ── Forgot / Reset Password ────────────────────────────────────────────────
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    const GENERIC = "If an account exists for that email, we sent a reset link.";
+    try {
+      const rawEmail: string = (req.body.email || "").trim().toLowerCase();
+      if (!rawEmail) return res.json({ message: GENERIC });
+
+      const user = await storage.getUserByEmail(rawEmail);
+      if (!user || user.role === "employee") return res.json({ message: GENERIC });
+      if (!user.isActive) return res.json({ message: GENERIC });
+
+      const rawToken = randomBytes(32).toString("hex");
+      const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+      const expiresAt = new Date(Date.now() + 20 * 60 * 1000);
+
+      await storage.invalidatePasswordResetTokensForUser(user.id);
+      await storage.createPasswordResetToken({
+        userId: user.id,
+        email: rawEmail,
+        tokenHash,
+        expiresAt,
+        ipAddress: req.ip || undefined,
+        userAgent: req.headers["user-agent"] || undefined,
+      });
+
+      const baseUrl = process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
+      const resetUrl = `${baseUrl}/reset-password?token=${rawToken}`;
+
+      await sendPasswordResetEmail({
+        to: rawEmail,
+        resetUrl,
+        firstName: user.firstName,
+      });
+    } catch (err) {
+      console.error("forgot-password error:", err);
+    }
+    res.json({ message: "If an account exists for that email, we sent a reset link." });
+  });
+
+  app.get("/api/auth/reset-password/validate", async (req, res) => {
+    try {
+      const rawToken = (req.query.token as string || "").trim();
+      if (!rawToken) return res.json({ valid: false, reason: "missing" });
+      const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+      const record = await storage.getPasswordResetTokenByHash(tokenHash);
+      if (!record) return res.json({ valid: false, reason: "invalid" });
+      if (record.usedAt) return res.json({ valid: false, reason: "used" });
+      if (new Date(record.expiresAt) < new Date()) return res.json({ valid: false, reason: "expired" });
+      return res.json({ valid: true });
+    } catch {
+      return res.json({ valid: false, reason: "error" });
+    }
+  });
+
+  app.post("/api/auth/reset-password", async (req, res) => {
+    try {
+      const rawToken = (req.body.token || "").trim();
+      const newPassword = req.body.newPassword || "";
+      if (!rawToken || !newPassword) return res.status(400).json({ message: "Missing required fields." });
+      if (newPassword.length < 6) return res.status(400).json({ message: "Password must be at least 6 characters." });
+
+      const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+      const record = await storage.getPasswordResetTokenByHash(tokenHash);
+      if (!record) return res.status(400).json({ message: "This reset link is invalid or has already been used." });
+      if (record.usedAt) return res.status(400).json({ message: "This reset link has already been used." });
+      if (new Date(record.expiresAt) < new Date()) return res.status(400).json({ message: "This reset link has expired. Please request a new one." });
+
+      const hashed = await hashPassword(newPassword);
+      await storage.updateUser(record.userId, { password: hashed });
+      await storage.markPasswordResetTokenUsed(record.id);
+      await storage.invalidatePasswordResetTokensForUser(record.userId);
+
+      return res.json({ message: "Password reset successfully. You can now sign in." });
+    } catch (err) {
+      console.error("reset-password error:", err);
+      return res.status(500).json({ message: "Something went wrong. Please try again." });
+    }
+  });
+  // ──────────────────────────────────────────────────────────────────────────
 
   // Employees
   app.get("/api/employees", requireRole("admin"), async (req, res) => {

@@ -481,6 +481,20 @@ export const registerSchema = z.object({
   companyName: z.string().min(1),
 });
 
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  email: varchar("email").notNull(),
+  tokenHash: varchar("token_hash").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  ipAddress: varchar("ip_address"),
+  userAgent: text("user_agent"),
+});
+
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+
 export const ACCOUNT_STATUS = {
   PROFILE_ONLY: "profile_only",
   PENDING_ACTIVATION: "pending_activation",

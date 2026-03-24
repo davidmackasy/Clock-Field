@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Clock, Users, Shield, IdCard, AlertCircle } from "lucide-react";
+import { Link } from "wouter";
 
 export default function AuthPage() {
   const { login, employeeLogin, register, user } = useAuth();
@@ -188,7 +189,12 @@ export default function AuthPage() {
                       <Input id="login-email" data-testid="input-login-email" type="email" placeholder="name@company.com" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} required />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="login-password">Password</Label>
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="login-password">Password</Label>
+                        <Link href="/forgot-password" className="text-xs text-muted-foreground hover:text-foreground underline-offset-4 hover:underline" data-testid="link-forgot-password">
+                          Forgot password?
+                        </Link>
+                      </div>
                       <Input id="login-password" data-testid="input-login-password" type="password" placeholder="Enter your password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required />
                     </div>
                     {loginError && (

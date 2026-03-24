@@ -45,6 +45,8 @@ import ClientRequestsPage from "@/pages/client/requests";
 import ClientProfile from "@/pages/client/profile";
 import PublicWorkReport from "@/pages/public/work-report";
 import PublicReviewShare from "@/pages/public/review-share";
+import ForgotPasswordPage from "@/pages/forgot-password";
+import ResetPasswordPage from "@/pages/reset-password";
 
 function LoadingScreen() {
   return (
@@ -189,6 +191,10 @@ function AppRouter() {
       </Switch>
     );
   }
+
+  // Forgot / reset password pages (public, no auth needed)
+  if (location === "/forgot-password") return <ForgotPasswordPage />;
+  if (location.startsWith("/reset-password")) return <ResetPasswordPage />;
 
   // Short public URLs
   if (location.startsWith("/r/")) {
