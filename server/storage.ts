@@ -45,6 +45,7 @@ export interface IStorage {
   getUserByEmployeeId(employeeId: string): Promise<User | undefined>;
   getEmployeesByCompany(companyId: string): Promise<User[]>;
   getAdminsByCompany(companyId: string): Promise<User[]>;
+  getAllCompanyAdmins(): Promise<User[]>;
   updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined>;
 
   createClient(data: InsertClient): Promise<Client>;
@@ -259,6 +260,10 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(users).where(
       and(eq(users.companyId, companyId), eq(users.role, "admin"))
     );
+  }
+
+  async getAllCompanyAdmins(): Promise<User[]> {
+    return db.select().from(users).where(eq(users.role, "admin"));
   }
 
   async updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined> {

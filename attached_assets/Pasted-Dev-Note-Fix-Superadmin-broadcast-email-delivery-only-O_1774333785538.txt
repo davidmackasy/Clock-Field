@@ -1,0 +1,275 @@
+Dev Note: Fix Superadmin broadcast email delivery only
+
+Objective
+
+Fix the Superadmin broadcast email delivery so that:
+
+Email only sends broadcast emails to business owners
+App + Email still sends the in-app broadcast and also sends the email
+App-only behavior remains unchanged
+
+Critical scope lock
+
+Only fix the broadcast email path in Superadmin.
+
+Do not touch:
+
+forgot password
+welcome email
+login/auth
+signup
+attendance
+schedules
+payroll
+cleaners
+employees
+public reports
+reviews
+any unrelated Mailgun email flow
+
+If anything outside this exact scope seems necessary, stop and ask for approval before proceeding.
+
+What we already know
+
+Current behavior:
+
+App + Email creates the in-app broadcast successfully
+Email portion does not reach businesses
+Email only also does not send
+
+Important inference:
+
+Since forgot password and welcome email work, Mailgun setup is likely already valid for at least transactional email
+Therefore the problem is likely inside the broadcast-email logic only, not global email infrastructure
+
+Most likely causes to check in order
+
+Broadcast email send function is never being called
+The UI saves the broadcast and maybe creates the in-app record, but the email send branch may not be firing.
+Recipient query returns zero business emails
+The broadcast may be targeting the wrong table, the wrong account type, or a filtered list that excludes actual business owners.
+Broadcast send is using Mailgun test mode
+Mailgun test mode accepts the request but does not actually deliver messages.
+Batch send payload is malformed
+Mailgun supports batch sending to multiple recipients, but the request must be structured correctly.
+Broadcast path is using the wrong sender config or wrong Mailgun environment variables
+Possible example:
+forgot password and welcome use working MAILGUN_DOMAIN and MAIL_FROM
+broadcast uses different env names or fallback values
+Background job / async queue is failing silently
+If broadcast email is queued, the DB record may be created but the worker never sends the email.
+Broadcast code is swallowing Mailgun errors
+The app may mark the broadcast as sent without checking Mailgun response or saving failure logs.
+
+Required investigation steps
+
+Find the broadcast email send code only
+
+Search for:
+
+broadcast
+sendBroadcast
+email only
+app and email
+mailgun
+delivery channel
+email_subject
+CTA Button URL
+
+Likely locations:
+
+superadmin broadcast controller
+broadcast service
+mail service
+email service
+job worker / queue processor
+Add focused logs only around the broadcast email path
+
+Log these exact points:
+
+broadcast submit received
+selected delivery mode
+broadcast saved
+recipient lookup started
+recipient count found
+Mailgun send started
+Mailgun response status
+Mailgun response body
+delivery success count
+delivery failure count
+
+Do not log:
+
+API keys
+secrets
+raw passwords
+unrelated user data
+Verify the branching logic
+
+Check the delivery-mode logic:
+
+app_only
+email_only
+both
+
+Make sure:
+
+email_only triggers the email send path
+both triggers both the in-app path and the email send path
+
+Possible bug:
+
+code only sends email if delivery mode equals exactly one value, but the UI stores a different value
+
+Example bug pattern:
+
+frontend sends email
+backend expects email_only
+backend falls through and never sends
+Verify recipient lookup
+
+The email must go only to main business owners.
+
+Confirm the query is pulling:
+
+business accounts only
+the correct email field
+active business owner records
+not cleaners
+not employees
+not null emails
+not duplicate emails unless intended
+
+Add a one-time debug output:
+
+total businesses found
+total valid recipient emails
+first 5 redacted recipient examples
+
+Common failure:
+
+the code is reading company email from the wrong field
+the email belongs to a nested company profile, but the query is hitting a different user table
+the query excludes subscribed users or active users incorrectly
+Verify broadcast email is not in Mailgun test mode
+
+Check whether the broadcast path includes:
+
+o:testmode=yes
+o:testmode=true
+any equivalent test flag
+
+Mailgun test mode accepts the request but does not send the message.
+
+Important:
+Do not change forgot-password or welcome email logic while checking this.
+Only inspect the broadcast-email sender.
+
+Verify Mailgun request format for broadcast send
+
+If using batch sending, confirm the code is doing one of these correctly:
+
+multiple to recipients in one request
+or chunked sends per recipient / per batch
+
+Mailgun supports batch sending to multiple recipients in one API call.
+
+Check:
+
+correct API endpoint
+correct domain
+correct auth
+correct from address
+correct subject/body
+no malformed recipient array
+no invalid recipient variables logic
+Compare the working email flows to the broken one
+
+Do a side-by-side comparison between:
+
+forgot password sender
+welcome email sender
+broadcast email sender
+
+Check for differences in:
+
+Mailgun base URL
+Mailgun domain
+From address
+API key env variable
+test mode flag
+request format
+async/queue usage
+
+This is likely where the bug will show up.
+
+Safe implementation rule
+
+If forgot password and welcome email already work, do not refactor them.
+Instead, reuse the same low-level Mailgun send helper they use, and only plug broadcast content and recipient list into that same working sender.
+
+That is the safest fix.
+
+Recommended fix approach
+
+If the broadcast email path currently uses separate custom logic, replace only the sending part so it reuses the same proven Mailgun send utility already used by welcome email or password reset.
+
+Keep:
+
+broadcast DB logic
+broadcast UI
+in-app broadcast logic
+
+Only fix:
+
+recipient gathering
+broadcast email send invocation
+delivery logging
+
+Preferred delivery strategy
+
+If business count is manageable:
+
+use chunked batch sends
+chunk size can be conservative
+log each chunk result
+
+Mailgun supports batch sending, and their docs note support for group recipients in a single API call.
+
+Do not add mailing lists right now unless already in use.
+Keep this simple and low risk.
+
+Required tests after fix
+
+Email only
+create a broadcast with email only
+confirm no in-app message is required unless expected
+confirm business owners receive email
+App + Email
+create a broadcast with app + email
+confirm in-app broadcast still appears
+confirm email also reaches business owners
+Recipient safety
+cleaners do not receive it
+employees do not receive it
+only main business owner emails receive it
+Regression
+forgot password still works
+welcome email still works
+app-only broadcast still works
+no unrelated feature changed
+
+Definition of done
+
+This task is complete only when:
+
+email-only broadcast sends to business owners successfully
+app + email sends both channels successfully
+app-only remains unchanged
+forgot password remains unchanged
+welcome email remains unchanged
+no unrelated app flow is affected
+
+Instruction to agent
+
+Fix only the Superadmin broadcast email path. Do not touch forgot password, welcome email, auth, attendance, payroll, schedules, cleaners, employees, public reports, or unrelated features. Since transactional emails already work, compare the broadcast email code against the working Mailgun sender and align the broadcast flow to reuse that same working Mailgun utility. Check delivery-mode branching, recipient lookup, test mode, batch payload structure, and logging. If any change outside this scope seems necessary, stop and ask for approval before proceeding.

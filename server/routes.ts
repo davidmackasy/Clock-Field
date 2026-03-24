@@ -2618,18 +2618,32 @@ Welcome again, and thank you for choosing ClockField.
       if (mode === "email" || mode === "both") {
         try {
           const { sendBroadcastEmails } = await import("./mail");
-          const allCompanies = await storage.getAllCompanies();
+          const [allCompanies, allAdmins] = await Promise.all([
+            storage.getAllCompanies(),
+            storage.getAllCompanyAdmins(),
+          ]);
           const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
-          // Only business accounts with a valid email
+
+          // Build map: companyId → primary admin email (first admin with a non-null email)
+          const adminEmailByCompany = new Map<string, string>();
+          for (const admin of allAdmins) {
+            if (admin.companyId && admin.email && !adminEmailByCompany.has(admin.companyId)) {
+              adminEmailByCompany.set(admin.companyId, admin.email.trim().toLowerCase());
+            }
+          }
+
+          // One recipient per non-suspended company — using the admin's login email
           const seen = new Set<string>();
           const recipients = allCompanies
-            .filter(c => c.accountStatus !== "suspended" && c.companyEmail)
-            .map(c => ({ email: c.companyEmail!.trim().toLowerCase(), businessId: c.id }))
-            .filter(r => {
-              if (!r.email || seen.has(r.email)) return false;
-              seen.add(r.email);
-              return true;
+            .filter(c => c.accountStatus !== "suspended")
+            .flatMap(c => {
+              const email = adminEmailByCompany.get(c.id);
+              if (!email || seen.has(email)) return [];
+              seen.add(email);
+              return [{ email, businessId: c.id }];
             });
+
+          console.log(`[broadcast] companies=${allCompanies.length} eligible recipients=${recipients.length}`);
           emailResult.attempted = recipients.length;
           if (recipients.length > 0) {
             const results = await sendBroadcastEmails({
