@@ -1,0 +1,354 @@
+Dev Note: Update new business welcome email so it clearly tells users they must subscribe before they can access Clockfield
+
+Objective
+
+Update the new business welcome email only.
+
+The current welcome email says the business is set up and ready to go, but it does not clearly tell the user that they must complete a subscription before they can access the platform. This creates confusion because the user receives the email, tries to log in, and then gets blocked by the payment requirement.
+
+We need to fix that by updating the welcome email content so it:
+
+clearly tells the new business that the account has been created
+clearly tells them they must complete a subscription before they can access the platform
+includes a direct link/button to the subscription page
+explains briefly what Clockfield will help them do after subscribing
+ends with a clear call to action to complete subscription or open Clockfield
+removes the support email line entirely
+
+Critical scope lock
+
+Only update the welcome email content and its CTA links for new business signups.
+
+Do not touch:
+
+signup logic
+login logic
+billing logic
+Stripe logic
+subscription enforcement logic
+plan logic
+welcome in-app message unless explicitly required and approved
+forgot password
+attendance
+schedules
+payroll
+cleaner portal
+employee flows
+reports
+reviews
+broadcasts
+any other email templates unless explicitly approved
+
+If anything outside this exact scope appears necessary, stop and ask for approval before proceeding.
+
+Problem to fix
+
+Current issue:
+
+new business signs up
+receives welcome email
+email suggests they are ready to use the platform
+user clicks in and tries to log in
+platform still requires subscription/payment before access
+email did not prepare them for that next step
+
+This causes confusion.
+
+Required behavior after update
+
+When a new business signs up:
+
+they still receive the welcome email
+the email must clearly say their business account was created
+the email must clearly say they must complete subscription/payment before they can access the platform
+the email must include a direct CTA button/link to the subscription page
+the email must briefly explain what they will get once subscribed
+the email must not include the support email line
+the email must end cleanly with the CTA
+
+Core message to communicate
+
+The email should communicate this order clearly:
+
+Your business account has been created
+Before you can access Clockfield, you need to complete your subscription
+Click here to choose a plan / complete payment
+Once subscribed, you will be able to use Clockfield to manage your business
+Open Clockfield / Complete subscription
+
+Do not make the email sound like full access is already active if payment is still required.
+
+Required copy direction
+
+The tone should be:
+
+welcoming
+clear
+direct
+professional
+simple
+
+It should not:
+
+over-explain
+confuse account creation with active paid access
+mention support email
+mention unrelated features not part of the onboarding promise
+include extra sections not requested
+
+Recommended email structure
+
+Subject
+Choose one of these styles:
+
+Welcome to Clockfield — Complete your subscription
+Your Clockfield business account is ready — Complete subscription
+Welcome to Clockfield — Subscribe to get started
+
+Recommended subject:
+Welcome to Clockfield — Complete your subscription
+
+Email body structure
+
+Section 1: Welcome
+
+Welcome the user
+Confirm account creation
+
+Section 2: Important next step
+
+Clearly state that subscription/payment must be completed before access
+
+Section 3: Main CTA
+
+Add a button linking to the subscription page
+
+Section 4: What they get after subscribing
+
+Briefly explain what Clockfield helps with
+
+Section 5: Final CTA
+
+Encourage them to complete subscription and get started
+
+Do not include:
+
+support@clockfield.com
+“if you have any questions or concerns”
+unrelated footer copy that weakens the main CTA
+
+Exact content direction for the agent
+
+Use updated welcome email content similar to this:
+
+Subject:
+Welcome to Clockfield — Complete your subscription
+
+Headline:
+Your business account has been created
+
+Body:
+Welcome to Clockfield.
+
+Your business account has been set up successfully. Before you can access the platform, you need to complete your subscription by choosing one of our plans.
+
+Once your subscription is active, you will be able to use Clockfield to manage your team, track work, organize schedules, monitor attendance, and keep your business operations in one place.
+
+CTA button:
+Complete Subscription
+
+Secondary CTA or closing line:
+After subscribing, you can open Clockfield and start using your account.
+
+Optional second button or link:
+Open Clockfield
+
+Important rule:
+If using two buttons, the primary CTA must be the subscription page, not the main app dashboard.
+
+Link requirements
+
+Primary CTA
+
+label: Complete Subscription
+destination: subscription or plan selection page
+
+Optional secondary CTA
+
+label: Open Clockfield
+destination: app login or app homepage
+
+Important:
+If the user is not yet subscribed, the primary CTA must push them toward the subscription flow first.
+
+Do not make “Open Clockfield” the main first action if subscription is still required.
+
+Implementation requirements
+
+Update only the welcome email template used for new business signups
+
+Find the email template, mail service, or template builder currently used for the business welcome email.
+
+Update only that template content.
+
+Do not modify:
+
+forgot-password template
+broadcast email template
+review email template
+any unrelated transactional email
+Update CTA links
+
+Add or update the main CTA button so it points to the subscription page.
+
+Required:
+
+use the correct production subscription URL
+do not hardcode the wrong route
+confirm whether there is a dedicated pricing page, checkout selection page, or subscription onboarding page
+if the exact subscription route is unclear, ask before changing it
+
+Important:
+If the route already exists, use it.
+Do not create a new subscription page unless explicitly requested.
+
+Remove support email line
+
+Remove any line such as:
+
+If you have questions or concerns, contact support@clockfield.com
+Contact us at support@clockfield.com
+
+Do not replace it with another support line unless explicitly requested.
+
+Keep welcome email trigger unchanged
+
+Do not change when the welcome email is sent unless absolutely necessary.
+
+Current intended behavior should remain:
+
+send welcome email after successful business signup
+
+Do not:
+
+resend to old accounts
+send to cleaners
+send to employees
+send on account updates
+send multiple welcome emails unnecessarily
+Keep signup and payment enforcement logic unchanged
+
+This task is only to make the email accurately reflect the existing access requirement.
+
+Do not:
+
+change when users are blocked
+change how subscription is checked
+change payment enforcement
+change Stripe flow
+change plan eligibility
+change access control
+
+If those systems are already working, leave them alone.
+
+Recommended final email copy
+
+Use this as the safe base copy:
+
+Subject:
+Welcome to Clockfield — Complete your subscription
+
+Body:
+Your business account has been created.
+
+Before you can access Clockfield, you need to complete your subscription by choosing one of our plans.
+
+Once your subscription is active, you will be able to manage your team, track work, organize schedules, monitor attendance, and keep your business operations in one place.
+
+Primary button:
+Complete Subscription
+
+Closing line:
+After subscribing, open Clockfield and get started.
+
+Optional secondary button:
+Open Clockfield
+
+Do not include support email text.
+
+HTML layout guidance
+
+Keep the current email layout if it already works.
+Only update:
+
+headline text
+body copy
+primary CTA label
+primary CTA target URL
+remove support line
+optional secondary CTA if needed
+
+Do not redesign the full email layout unless necessary.
+
+Keep:
+
+branding
+logo
+main email wrapper
+existing styles if already working
+
+Only change the content and CTA behavior.
+
+Validation and link safety
+
+Before release, verify:
+
+the subscription button goes to the correct subscription page
+the link works in production
+the open Clockfield button goes to the correct login/app route if included
+no broken links
+email renders correctly on desktop and mobile
+no old support email remains in the template
+
+Testing checklist
+
+New business signup
+create a new business account
+confirm welcome email is sent
+confirm subject is updated
+confirm body clearly states subscription is required before access
+confirm primary CTA goes to the subscription page
+CTA behavior
+click Complete Subscription
+confirm it opens the correct plan/payment page
+if secondary Open Clockfield button exists, confirm it opens the app/login route
+Content verification
+confirm email no longer says or implies full access is already active before payment
+confirm support email line is removed
+confirm onboarding copy is clear and accurate
+Regression checks
+no change to signup behavior
+no change to login behavior
+no change to subscription enforcement
+no change to forgot password
+no change to broadcasts
+no change to any unrelated email template
+no change to attendance, schedules, payroll, reports, reviews, cleaner flows, or employee flows
+
+Definition of done
+
+This task is complete only when:
+
+the new business welcome email clearly states subscription is required before access
+the email includes a working CTA to the subscription page
+the email briefly explains what Clockfield will do after subscription
+the support email line is removed
+no unrelated system or flow is changed
+
+Instruction to agent
+
+Update the new business welcome email only. Make it clear that the business account has been created, but the user must complete a subscription before accessing Clockfield. Add a primary CTA button linking to the correct subscription page. Optionally include a secondary Open Clockfield button, but the subscription CTA must be primary. Remove any support email line from the message. Do not touch signup logic, login logic, billing logic, Stripe, access enforcement, forgot password, broadcasts, attendance, schedules, payroll, reviews, reports, cleaners, employees, or any unrelated template. If anything outside this exact scope seems necessary, ask for approval before proceeding.
+
+Copy-ready short version for your agent
+
+Update the new business welcome email only. Change the copy so it clearly says the business account has been created, but the user must complete a subscription before they can access Clockfield. Add a primary button labeled Complete Subscription that links to the existing subscription page. Optionally include a secondary Open Clockfield button, but the subscription CTA must come first. Remove the support email line completely. Do not change signup, login, billing, Stripe, access rules, forgot password, broadcasts, or any unrelated part of the app. If anything outside this scope is needed, ask for approval before proceeding.

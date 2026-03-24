@@ -136,49 +136,43 @@ export async function sendWelcomeEmailToBusiness(opts: {
   const { client, domain } = getClient();
   const from = process.env.MAIL_FROM || "Clockfield <noreply@mg.clockfield.com>";
 
-  const textBody = `Welcome to ClockField!
+  const subscribeUrl = `${opts.appUrl}/admin/subscription`;
+
+  const textBody = `Welcome to ClockField — Complete your subscription
 
 Hi ${opts.businessName},
 
-Your business account is set up and ready to go.
+Your business account has been created.
 
-ClockField helps you manage your team's schedules, track attendance, handle payroll estimates, and share professional work reports with your clients — all in one place.
+Before you can access ClockField, you need to complete your subscription by choosing one of our plans.
 
-Here's what you can do to get started:
-- Set up your team under the Employees section
-- Create a schedule or assign shifts
-- Invite your clients and start sharing work reports
+Once your subscription is active, you will be able to manage your team, track work, organize schedules, monitor attendance, and keep your business operations in one place.
 
-If you have any questions, email us anytime at support@clockfield.com. We're here to help.
+Complete Subscription: ${subscribeUrl}
 
-Open ClockField: ${opts.appUrl}
+After subscribing, open ClockField and get started: ${opts.appUrl}
 
 — The ClockField Team`;
 
   const bodyLines = `
 <p>Hi <strong>${opts.businessName}</strong>,</p>
-<p>Your business account is set up and ready to go.</p>
-<p>ClockField helps you manage your team's schedules, track attendance, handle payroll estimates, and share professional work reports with your clients — all in one place.</p>
-<p><strong>Here's what you can do to get started:</strong></p>
-<ul style="margin:0 0 16px;padding-left:20px;">
-  <li style="margin-bottom:6px;">Set up your team under the <strong>Employees</strong> section</li>
-  <li style="margin-bottom:6px;">Create a schedule or assign shifts</li>
-  <li style="margin-bottom:6px;">Invite your clients and start sharing work reports</li>
-</ul>
-<p style="margin:0 0 20px;">If you have any questions, email us anytime at <a href="mailto:support@clockfield.com" style="color:#2563eb;">support@clockfield.com</a>. We're here to help.</p>`;
+<p>Your business account has been created.</p>
+<p>Before you can access ClockField, you need to complete your subscription by choosing one of our plans.</p>
+<p>Once your subscription is active, you will be able to manage your team, track work, organize schedules, monitor attendance, and keep your business operations in one place.</p>
+<p style="margin:0 0 8px;font-size:13px;color:#6b7280;">After subscribing, you can open ClockField and start using your account. <a href="${opts.appUrl}" style="color:#2563eb;text-decoration:none;">Open ClockField</a></p>`;
 
   const html = buildEmailHtml({
-    title: "Welcome to ClockField",
+    title: "Your business account has been created",
     bodyHtml: bodyLines,
-    ctaLabel: "Open ClockField",
-    ctaUrl: opts.appUrl,
+    ctaLabel: "Complete Subscription",
+    ctaUrl: subscribeUrl,
     footerNote: "You are receiving this because you just created a business account on ClockField.",
   });
 
   const result = await client.messages.create(domain, {
     from,
     to: [opts.to],
-    subject: "Welcome to ClockField",
+    subject: "Welcome to ClockField — Complete your subscription",
     text: textBody,
     html,
   });
