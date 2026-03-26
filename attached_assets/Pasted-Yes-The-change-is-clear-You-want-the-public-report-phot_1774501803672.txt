@@ -1,0 +1,186 @@
+Yes. The change is clear.
+
+You want the public report photo grid on mobile to show 3 images per row instead of 2, so clients can see more photos at once and scroll less.
+
+Nothing else should be touched.
+
+Use this dev note exactly.
+
+DEV NOTE
+
+TASK
+Update the public client report mobile photo grid so Before Photos and After Photos show 3 images per row instead of 2.
+
+PRIORITY
+High
+
+STRICT RULES
+Do not touch anything else.
+Do not change desktop layout unless needed to preserve consistency with the existing 3-column layout.
+Do not change report logic.
+Do not change photo upload logic.
+Do not change section ordering.
+Do not change public link behavior.
+Do not change report content.
+Do not touch reviews, branding, headers, summaries, or metadata.
+Do not alter any existing submitted reports or stored photos.
+Do not refactor unrelated gallery or image components.
+If anything else needs to be changed outside this exact UI update, ask for approval first.
+
+GOAL
+
+Improve the public report mobile UI so photo sections display:
+3 images per row on mobile
+instead of
+2 images per row on mobile
+
+This applies to:
+Before Photos
+After Photos
+and any equivalent photo group shown inside the public client report page if they use the same section photo grid
+
+SCOPE
+
+Only update the photo grid layout inside the public report link.
+
+Do only this:
+
+Change the mobile grid from 2 columns to 3 columns
+Keep spacing clean and professional
+Keep images aligned properly
+Keep click/preview behavior working if already supported
+Keep desktop behavior unchanged unless the same component naturally already uses 3 columns there
+
+CURRENT PROBLEM
+
+On mobile, the public report is showing only 2 images per row.
+This makes each image tile too large.
+That causes unnecessary vertical scrolling.
+Clients have to scroll too much to review all pictures.
+
+You want the mobile UI to feel tighter and more efficient by showing 3 images across, similar to the desktop visual density.
+
+REQUIRED CHANGE
+
+For the public report photo grid on mobile:
+change the grid layout from 2 columns to 3 columns
+
+This should apply to:
+Before Photos
+After Photos
+
+If the same shared grid is used for both, update that one shared mobile grid setting only.
+
+LAYOUT REQUIREMENTS
+
+Mobile target:
+3 columns
+
+Tablet/Desktop:
+keep existing behavior unless it already uses 3 and works properly
+
+The grid should still:
+look balanced
+maintain consistent spacing
+not break card/container width
+not overflow outside the report content area
+
+IMAGE DISPLAY REQUIREMENTS
+
+Each image should:
+fit cleanly inside its tile
+keep rounded corners if already present
+not stretch
+not distort
+not overflow outside its container
+
+Recommended display behavior:
+uniform square thumbnails or the current consistent tile ratio already used by the report
+
+Important:
+Do not redesign the photo aspect ratio unless necessary.
+Only update the column count.
+
+SPACING REQUIREMENTS
+
+Since 3 columns on mobile makes tiles smaller, spacing must remain clean.
+
+Requirements:
+small but visible gap between photos
+tiles align evenly
+no awkward oversized gutters
+no broken wrapping
+no horizontal scrolling
+
+The final result should look like a clean compact gallery.
+
+RESPONSIVE REQUIREMENT
+
+Update only the mobile breakpoint behavior.
+
+Recommended responsive pattern:
+mobile: 3 columns
+larger screens: keep current layout behavior
+
+If the grid currently uses something like:
+grid-cols-2 on mobile
+change it to:
+grid-cols-3 on mobile
+
+Only do this inside the public report photo section.
+
+DO NOT CHANGE
+
+Do not change:
+the header
+service summary
+section titles
+branding
+logo
+company address
+report metadata
+review section
+public link structure
+photo modal behavior unless it breaks from this exact change
+backend logic
+photo data model
+upload process
+
+This is a layout-only update.
+
+COMPONENT TARGET
+
+Find the public report photo gallery/grid component used for section images.
+Update the mobile grid classes or mobile column logic there only.
+
+Possible target examples:
+public report section card
+before/after photo grid component
+shared report gallery component used only in public report
+
+Do not update any global gallery used elsewhere unless this public report is already safely isolated.
+
+ACCEPTANCE CHECKLIST
+
+This task is complete only if all of the below are true:
+
+Before Photos show 3 images per row on mobile
+After Photos show 3 images per row on mobile
+Images remain properly aligned
+Images do not overflow or distort
+Spacing remains clean and professional
+No horizontal scrolling is introduced
+Desktop behavior is not broken
+Public report content and logic remain unchanged
+Existing report links still work
+Nothing else in the app is affected
+
+SHORT INSTRUCTION TO AGENT
+
+Only do this one thing:
+change the public report mobile photo grid from 2 columns to 3 columns for Before Photos and After Photos.
+
+Do not touch anything else.
+Do not refactor anything else.
+Do not redesign anything else.
+If anything outside this exact mobile grid update needs to be changed, ask for approval first.

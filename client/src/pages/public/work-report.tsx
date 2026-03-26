@@ -81,7 +81,7 @@ function PhotoRow({ photos, token, label }: { photos: any[]; token: string; labe
     <div>
       {lb !== null && <Lightbox photos={photos} token={token} startIdx={lb} onClose={() => setLb(null)} />}
       <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">{label}</p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         {photos.map((p: any, i: number) => (
           <button
             key={p.id}
