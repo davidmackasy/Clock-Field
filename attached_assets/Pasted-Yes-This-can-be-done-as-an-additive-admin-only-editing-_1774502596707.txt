@@ -1,0 +1,423 @@
+Yes. This can be done as an additive admin-only editing layer.
+
+The safest way is:
+do not change the cleaner submission flow,
+do not overwrite old submitted reports automatically,
+do not touch anything already working,
+only give the admin a controlled edit mode on submitted workload before they generate or resend the client report.
+
+Use this dev note exactly.
+
+DEV NOTE
+
+TASK
+Allow admin/company to open a submitted cleaner workload entry and edit the submission before generating or sharing the client-facing report.
+
+PRIORITY
+High
+
+STRICT RULES
+Do not break anything that is already working.
+Do not change the cleaner submission flow.
+Do not change how cleaners currently submit work.
+Do not allow cleaners to edit submitted work after submission unless that already exists and is intentionally left unchanged.
+Do not delete old submitted reports.
+Do not rewrite historical submitted data unexpectedly.
+Do not break public links.
+Do not break report generation.
+Do not change unrelated workload, scheduling, attendance, payroll, reviews, or messaging features.
+Do not refactor unrelated pages.
+Do not touch anything outside this exact feature unless absolutely required.
+If anything else needs to be changed, ask for approval first.
+
+GOAL
+
+Add an admin-only ability to edit a submitted cleaner workload entry after it has been submitted, so the admin can improve the final report before generating or sharing the public report link.
+
+This means:
+the cleaner submits work as normal,
+the submission becomes visible in workload as normal,
+the admin opens that submitted entry,
+the admin can click Edit,
+the admin can update text and selected media for the final report,
+the admin can save those edits,
+the final generated public report uses the admin-reviewed version.
+
+This is an admin review and edit layer.
+It is not a replacement for cleaner submission.
+
+CORE PRODUCT RULE
+
+Cleaner submission remains the original source submission.
+Admin gets a post-submission editing layer for report preparation.
+
+That means:
+cleaner submits once
+admin can refine before client-facing output
+client sees the admin-approved final version
+
+This is the correct behavior.
+
+WHAT THE ADMIN SHOULD BE ABLE TO EDIT
+
+Inside a submitted workload item, admin should be able to edit:
+
+Service Summary
+Top-level report introduction or summary
+Section notes / section text
+Per section comments or observations
+Photos
+Add more photos
+Remove selected photos if needed
+Reorder if easy and safe, optional
+Do not make reordering mandatory for v1
+Section content presentation
+Update wording to clean up report quality before client sees it
+Possibly section titles only if your current structure safely supports it
+Recommended for now:
+do not allow editing section names unless already flexible
+Keep focus on notes and photos
+
+WHAT THE ADMIN SHOULD NOT CHANGE
+
+To keep this safe, do not allow admin editing to break original cleaner submission identity or backend structure.
+
+For v1, avoid changing:
+original cleaner identity
+submitted timestamps
+task linkage
+client linkage
+location linkage
+workload ownership
+submission history
+original submission status logic
+
+Those should remain intact.
+
+ONLY ADD
+an editable admin review version layered on top of the submission.
+
+BEST SAFE ARCHITECTURE
+
+Do not directly destroy the original cleaner submission.
+
+Recommended approach:
+preserve original cleaner-submitted data
+store admin edits as report-edit overrides or reviewed submission fields
+
+Best safe model:
+Original submission remains saved
+Admin edits save into editable report fields tied to the same submission
+
+That way:
+nothing is lost
+admin can safely update what the final report shows
+history remains safer
+
+Suggested concept:
+submission.originalData
+submission.adminEditedData
+submission.finalReportDataResolved
+
+If your existing model is simpler, the key rule is:
+do not permanently destroy original cleaner-submitted content unless you already have version safety
+
+MINIMUM REQUIRED FEATURE
+
+In Workload, for submitted items only, add an admin action such as:
+Edit Submission
+or
+Review & Edit
+
+Best label:
+Edit Submission
+
+This should only be visible to admin/company users.
+
+When admin opens the submitted workload item, they should have two modes:
+
+View Mode
+Shows current submitted content as it exists now
+
+Edit Mode
+Allows admin to update report-facing content
+
+UI REQUIREMENT
+
+Inside the workload detail view for a submitted entry, add an Edit button for admin only.
+
+Suggested actions:
+Edit Submission
+Save Changes
+Cancel
+Preview Report
+Generate Public Link
+or existing report action wording if already present
+
+The point is:
+admin should be able to edit first, then generate/share the report.
+
+EDIT MODE SHOULD ALLOW
+
+TOP-LEVEL REPORT FIELDS
+Service Summary
+Optional intro text for report
+
+PER SECTION
+Section note / observation text
+Before photos
+After photos
+Additional photos if your system already supports them
+
+PHOTO ACTIONS
+Add photos to a section
+Delete selected photos from a section
+Optional replace if easy, but not required
+Recommended first:
+add and delete is enough
+
+Important:
+Deleting a photo here means deleting it from the admin-reviewed report version, not necessarily deleting the original raw submission forever unless your current architecture requires that.
+Safer approach is to hide/remove it from the final report version only.
+
+VERY IMPORTANT SAFETY RULE
+
+Do not let admin editing accidentally erase the original cleaner submission without trace.
+
+Best safe behavior:
+original cleaner submission remains stored
+admin-edited version is what public report uses
+
+If full versioning is too heavy right now, at minimum:
+make sure edits are intentional and saved safely
+do not auto-delete data unexpectedly
+
+PUBLIC REPORT BEHAVIOR
+
+Once admin edits a submitted workload entry, the public report should use the admin-edited content.
+
+That means:
+edited service summary appears
+edited section notes appear
+edited photo selections appear
+newly added admin photos appear
+removed photos no longer show in the client-facing report
+
+This is the main goal.
+
+EXISTING SUBMITTED REPORTS
+
+Critical rule:
+do not change already generated old reports unless the admin explicitly edits that specific submission.
+
+Old submitted reports and old public links should remain as they are unless intentionally updated through this new admin editing flow.
+
+Backward compatibility matters.
+
+RECOMMENDED EDIT SCOPES
+
+V1 SAFE SCOPE
+
+Allow admin to edit:
+service summary
+section notes
+add photos
+delete photos from report version
+preview updated result
+save
+generate/share report
+
+Do not add too much at once.
+
+V2 OPTIONAL LATER
+photo reordering
+section reordering
+draft vs published review states
+revision history
+restore original cleaner version
+
+For now, keep it simple and safe.
+
+WORKLOAD PAGE REQUIREMENT
+
+In the workload list, submitted items should remain the same visually unless a small status helper is needed.
+
+Optional status helpers:
+Submitted
+Edited by Admin
+Report Ready
+
+But only add this if it is clean and safe.
+If risky, keep the current list as is.
+
+Minimum required change:
+when admin opens a submitted item, they must have an Edit Submission option.
+
+SUBMISSION DETAIL PAGE / PANEL REQUIREMENT
+
+Inside the submission detail:
+
+Current content should display as normal.
+
+Add admin-only controls:
+Edit Submission
+Save Changes
+Cancel
+Preview Report
+
+In edit mode:
+top-level Service Summary field editable
+each section note editable
+each photo group editable with add/remove controls
+
+PHOTO HANDLING REQUIREMENT
+
+Admin should be able to add more photos to the submitted work.
+
+This means:
+within each section, allow upload from device
+uploaded photos become part of that section’s final report version
+
+Admin should also be able to delete unwanted photos for the client-facing version.
+
+Important:
+this should be controlled and intentional
+show small delete icon or remove action per photo in edit mode only
+
+Do not expose this editing behavior on public pages.
+Do not expose to cleaner after submission unless already intended elsewhere.
+
+TEXT HANDLING REQUIREMENT
+
+Admin should be able to edit:
+service summary
+section notes
+observations/comments inside each work section
+
+This is especially important because you said the company may want to improve the wording before sending to the client.
+
+So make those fields editable in admin edit mode.
+
+GENERATE REPORT FLOW REQUIREMENT
+
+This feature must work with the existing report generation flow, not replace it.
+
+Correct flow:
+Cleaner submits work
+Admin opens submission
+Admin edits if needed
+Admin saves
+Admin generates or shares public report
+Public report reflects edited content
+
+Do not break the existing generate public link flow.
+Just make it pull from the admin-reviewed version when available.
+
+PERMISSION RULES
+
+Cleaner
+can submit as normal
+should not gain admin edit controls
+
+Admin/company
+can open submitted workload
+can edit report-facing content
+can save
+can preview
+can generate/share report
+
+This must be admin-only.
+
+SUGGESTED DATA APPROACH
+
+Safest additive design:
+store optional admin review fields on the submission or linked report draft
+
+Possible examples:
+serviceSummaryOverride
+sectionNoteOverrides
+photoOverrides
+adminEditedAt
+adminEditedBy
+
+If more structured:
+reviewedReportDraft linked to submission
+
+Main principle:
+do not destroy original submission data
+
+UI LABEL SUGGESTIONS
+
+Button:
+Edit Submission
+
+Edit mode actions:
+Save Changes
+Cancel
+Preview Report
+
+Section-level actions:
+Add Photos
+Remove Photo
+
+Top-level labels:
+Service Summary
+Section Notes
+
+If useful:
+Final Report Version
+Reviewed Report Content
+
+But keep it simple.
+
+WHAT NOT TO CHANGE
+
+Do not change:
+cleaner form workflow
+submission button behavior
+existing workload storage logic unless additive only
+public link routing
+branding logic
+report styling beyond using edited content
+existing submitted data display unless needed for edit mode
+other areas of the app
+
+ACCEPTANCE CHECKLIST
+
+This task is complete only if all of the below are true:
+
+Admin can open a submitted workload item
+Admin sees an Edit Submission option
+Admin can edit the Service Summary
+Admin can edit section notes/comments
+Admin can add more photos to a section
+Admin can remove photos from the report-facing version
+Cleaner submission flow remains unchanged
+Cleaner does not gain unwanted edit access
+Existing submitted reports are not broken
+Old public links are not broken
+Public report uses the admin-edited version when edits exist
+Nothing else in the app is changed or broken
+
+SHORT INSTRUCTION TO AGENT
+
+Only add an admin-only edit layer for submitted workload items.
+
+Do these exact things:
+allow admin to open a submitted submission
+allow admin to click Edit Submission
+allow admin to edit Service Summary
+allow admin to edit section notes
+allow admin to add and remove photos for the final report version
+save those edits safely
+make the generated public report use the admin-edited version
+
+Do not change cleaner submission flow.
+Do not break old reports.
+Do not touch anything else.
+If anything outside this scope needs to be changed, ask for approval first.
+
+FINAL SAFETY NOTE FOR IMPLEMENTATION
+
+The safest implementation is not to overwrite the cleaner’s original submission blindly.
+Preserve the original submission data and layer admin edits on top for the final client-facing repor

@@ -2160,6 +2160,28 @@ Welcome again, and thank you for choosing ClockField.
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  // ── Admin-only: edit submitted item notes and photos ──────────────────────
+  app.patch("/api/admin/work-submissions/:id/items/:itemId", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getWorkSubmission(req.params.id);
+      if (!sub || sub.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
+      const now = new Date().toISOString();
+      const updated = await storage.updateWorkSubmissionItem(req.params.itemId, { notes: req.body.notes ?? null });
+      const addBefore: string[] = req.body.addBeforePhotos || [];
+      const addAfter: string[] = req.body.addAfterPhotos || [];
+      const removeIds: string[] = req.body.removePhotoIds || [];
+      await Promise.all([
+        ...addBefore.map(fileUrl => storage.createWorkSubmissionPhoto({ submissionItemId: req.params.itemId, photoType: "before", fileUrl, caption: null, createdAt: now })),
+        ...addAfter.map(fileUrl => storage.createWorkSubmissionPhoto({ submissionItemId: req.params.itemId, photoType: "after", fileUrl, caption: null, createdAt: now })),
+        ...removeIds.map(photoId => storage.deleteWorkSubmissionPhoto(photoId)),
+      ]);
+      await storage.updateWorkSubmission(sub.id, { updatedAt: now });
+      const photos = await storage.getWorkSubmissionPhotosByItem(req.params.itemId);
+      res.json({ ...updated, photos: photos.map(p => ({ id: p.id, photoType: p.photoType, caption: p.caption, createdAt: p.createdAt })) });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   app.delete("/api/work-submissions/:id/items/:itemId", requireRole("employee"), async (req, res) => {
     try {
       const user = req.user as any;
