@@ -9,9 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, ExternalLink } from "lucide-react";
+import { Plus, Trash2, ExternalLink, Upload } from "lucide-react";
 
 const TIMEZONES = [
   { group: "Canada", options: [
@@ -71,6 +71,38 @@ export default function AdminSettings() {
   const [form, setForm] = useState<any>(null);
   const [newDeduction, setNewDeduction] = useState({ label: "", type: "percent", value: "" });
   const [addingDeduction, setAddingDeduction] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleLogoUpload(file: File) {
+    const ALLOWED = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!ALLOWED.includes(file.type)) {
+      toast({ title: "Invalid file type", description: "Please upload a PNG, JPG, JPEG, or WEBP image.", variant: "destructive" });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Logo must be under 5 MB.", variant: "destructive" });
+      return;
+    }
+    setLogoUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("logo", file);
+      const res = await fetch("/api/upload/logo", { method: "POST", body: fd, credentials: "include" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Upload failed");
+      }
+      const { url } = await res.json();
+      setForm((p: any) => ({ ...p, companyLogoUrl: url }));
+      toast({ title: "Logo uploaded", description: "Click Save Settings to apply." });
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setLogoUploading(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  }
 
   useEffect(() => {
     if (company && !form) setForm(company);
@@ -488,26 +520,69 @@ export default function AdminSettings() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Company Logo URL</Label>
-              <Input
-                data-testid="input-company-logo-url"
-                type="url"
-                placeholder="https://yourwebsite.com/logo.png"
-                value={form.companyLogoUrl || ""}
-                onChange={e => setForm((p: any) => ({ ...p, companyLogoUrl: e.target.value }))}
+              <Label>Company Logo</Label>
+              {/* Hidden file input */}
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,image/webp"
+                className="hidden"
+                data-testid="input-logo-file"
+                onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (file) handleLogoUpload(file);
+                }}
               />
-              <p className="text-xs text-muted-foreground">Paste a direct link to your logo image. It will appear in the header of your public service reports.</p>
-              {form.companyLogoUrl && (
-                <div className="mt-2 p-3 rounded-lg border bg-muted/40 flex items-center gap-3">
+
+              {form.companyLogoUrl ? (
+                /* Logo preview with replace / remove controls */
+                <div className="flex items-center gap-4 p-3 rounded-lg border bg-muted/40">
                   <img
                     src={form.companyLogoUrl}
-                    alt="Logo preview"
-                    className="h-10 max-w-[120px] object-contain rounded"
+                    alt="Company logo"
+                    className="h-12 max-w-[140px] object-contain rounded shrink-0"
                     onError={e => (e.currentTarget.style.display = "none")}
                   />
-                  <p className="text-xs text-muted-foreground">Logo preview</p>
+                  <div className="flex flex-col gap-1.5 min-w-0">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs"
+                      disabled={logoUploading}
+                      onClick={() => logoInputRef.current?.click()}
+                      data-testid="button-replace-logo"
+                    >
+                      {logoUploading ? "Uploading..." : "Replace Logo"}
+                    </Button>
+                    <button
+                      type="button"
+                      className="text-xs text-destructive hover:underline text-left"
+                      onClick={() => setForm((p: any) => ({ ...p, companyLogoUrl: "" }))}
+                      data-testid="button-remove-logo"
+                    >
+                      Remove logo
+                    </button>
+                  </div>
                 </div>
+              ) : (
+                /* Upload prompt when no logo is set */
+                <button
+                  type="button"
+                  disabled={logoUploading}
+                  onClick={() => logoInputRef.current?.click()}
+                  data-testid="button-upload-logo"
+                  className="w-full flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border hover:border-primary/50 bg-muted/20 hover:bg-muted/40 transition-colors py-6 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <Upload className="w-6 h-6 text-muted-foreground" />
+                  <span className="text-sm font-medium text-muted-foreground">
+                    {logoUploading ? "Uploading..." : "Upload Logo"}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">PNG, JPG, WEBP · Max 5 MB</span>
+                </button>
               )}
+
+              <p className="text-xs text-muted-foreground">Upload your company logo. It will appear in the header of your public service reports. Recommended: square or horizontal logo with transparent background.</p>
             </div>
             <div className="space-y-2">
               <Label>Brand Color</Label>

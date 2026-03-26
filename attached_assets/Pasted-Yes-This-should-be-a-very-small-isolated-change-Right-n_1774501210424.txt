@@ -1,0 +1,268 @@
+Yes. This should be a very small, isolated change.
+
+Right now the settings use a logo URL field.
+You want that replaced with a real device upload so the user can upload their company logo directly from their phone or computer.
+
+Nothing else should be touched.
+
+Use this dev note exactly.
+
+DEV NOTE
+
+TASK
+Replace the Report Branding logo URL input with a direct logo upload from device.
+
+PRIORITY
+High
+
+STRICT RULES
+Do not touch anything else.
+Do not refactor unrelated settings logic.
+Do not change report generation.
+Do not change public report rendering logic except only what is required so uploaded logos continue to display.
+Do not change branding color logic.
+Do not change default service summary logic.
+Do not touch any other settings fields.
+Do not touch old reports.
+Do not touch company name, address, email, or any unrelated company info logic.
+Do not delete anything that is currently working.
+If anything else seems like it should be changed, stop and ask for approval first.
+
+GOAL
+
+Remove the need for users to paste a logo URL.
+Instead, allow the user to upload a logo image directly from their device in the Report Branding section.
+
+This upload should save the uploaded logo and use that saved file for the public report header exactly the same way the current logo URL is being used.
+
+SCOPE
+
+Only update the company logo input in Settings → Report Branding or Company Branding.
+
+Do only this:
+
+Replace the Company Logo URL text field with a file upload field
+Save uploaded logo properly
+Store the resulting uploaded file URL/path in the same branding data if possible
+Keep public report logo display working with the uploaded logo
+Keep everything else unchanged
+
+CURRENT PROBLEM
+
+The current setup expects a direct URL like:
+https://yourwebsite.com/logo.png
+
+That is not user friendly.
+Most users want to upload a logo from their device directly.
+
+REQUIRED CHANGE
+
+In the Report Branding section, replace:
+
+Company Logo URL
+text input field
+
+with:
+
+Company Logo
+upload field
+
+NEW UI REQUIREMENTS
+
+Field label:
+Company Logo
+
+UI behavior:
+Show an upload button or upload dropzone
+Allow user to choose an image from device
+Accepted file types:
+PNG
+JPG
+JPEG
+WEBP
+SVG only if your current image pipeline safely supports it
+
+Best safe recommendation:
+PNG, JPG, JPEG, WEBP
+
+After upload:
+show logo preview
+show replace option
+show remove option if safe
+save the uploaded result with the settings
+
+Do not require the user to paste a URL anymore.
+
+SUGGESTED UI TEXT
+
+Label:
+Company Logo
+
+Help text:
+Upload your company logo. It will appear in the header of your public service reports.
+
+Optional small note:
+Recommended: square or horizontal logo with transparent background
+
+DATA HANDLING REQUIREMENT
+
+This should be implemented in the safest way possible.
+
+Best approach:
+When user uploads a logo, upload the file to the same storage system already used by the app for images or files.
+Then save the returned file URL/path into the branding/company settings record.
+
+Important:
+If the current backend already stores logo as a string field like companyLogoUrl, keep using that same field if possible.
+Only change how the value gets created.
+Do not redesign the whole schema unless absolutely necessary.
+
+Best compatibility approach:
+Frontend changes from URL input to file upload
+Backend stores uploaded file result into existing logo URL field
+
+This keeps the public report logic stable and avoids breaking anything else.
+
+BACKEND REQUIREMENT
+
+Only do the minimum needed.
+
+If you already have an upload endpoint or storage helper in the app, reuse it.
+Do not build a brand new storage system if one already exists.
+
+Preferred flow:
+
+User selects logo file
+Frontend uploads file
+Backend/storage returns uploaded file URL
+Save that URL into the existing report branding logo field
+Public report continues reading that saved logo field like before
+
+Important:
+Do not change how the public report reads the logo if it already works with a saved URL.
+Just make the settings page generate that URL through upload instead of requiring manual paste.
+
+PREVIEW REQUIREMENT
+
+After a logo is uploaded:
+show a small preview in the settings panel
+
+Preview should:
+fit nicely
+not stretch
+have a simple container
+allow replacement
+
+Suggested controls:
+Upload Logo
+Replace Logo
+Remove Logo
+
+If remove is added:
+only clear the saved logo field
+do not affect anything else
+
+VALIDATION
+
+Validate uploaded files:
+image only
+reasonable file size limit
+reject unsupported files cleanly
+
+Suggested safe max size:
+2 MB to 5 MB depending on your existing upload standards
+
+Error examples:
+Invalid file type
+File too large
+Upload failed, please try again
+
+Do not let upload errors break the settings page.
+
+SAVE BEHAVIOR
+
+Best behavior:
+upload file first
+then store returned URL/path when user clicks Save Settings
+
+or if current pattern supports autosave safely:
+upload and bind immediately, then persist on Save Settings
+
+Most important:
+do not break the current Save Settings flow
+
+PUBLIC REPORT COMPATIBILITY
+
+Public reports should continue working exactly as before.
+
+They should still read the saved company logo field and show it in the header.
+
+The only difference is:
+that field is now filled from a direct upload instead of a manual pasted link
+
+Do not change public report layout in this task.
+Do not modify anything else in branding display.
+Only keep compatibility.
+
+MIGRATION / BACKWARD COMPATIBILITY
+
+Important:
+Do not break companies that already have a logo URL saved.
+
+If a company already has an existing logo URL:
+show it as the current logo preview
+
+This means the system should support both:
+existing saved logo URL values
+new uploaded logo values
+
+Since uploaded logos will also end up as stored URLs or file paths, this should remain compatible.
+
+SETTINGS SECTION TARGET
+
+Current section:
+Report Branding
+
+Current field:
+Company Logo URL
+
+Replace with:
+Company Logo upload
+
+Keep these fields unchanged:
+Brand Color
+Default Service Summary
+
+Do not move them.
+Do not restyle the whole settings page.
+Do not make unrelated UI changes.
+
+ACCEPTANCE CHECKLIST
+
+This task is complete only if all of the below are true:
+
+Company Logo URL text input is removed or replaced
+User can upload a logo from device
+Uploaded logo preview is shown in settings
+User can replace the uploaded logo
+Existing Save Settings flow still works
+Existing saved logos still display if already present
+Public report still shows the saved logo correctly
+Brand Color field remains untouched
+Default Service Summary field remains untouched
+Nothing else in settings is changed
+Nothing else in the app is affected
+
+SHORT INSTRUCTION TO AGENT
+
+Only do this one thing:
+replace the Company Logo URL field with a direct image upload from device.
+
+Use the existing upload/storage flow if possible.
+Save the uploaded result into the same logo field so public reports continue working without further changes.
+
+Do not touch anything else.
+Do not refactor anything else.
+Do not improve anything else.
+Do not change any other settings field.
+If anything else needs to be changed, ask for approval first.

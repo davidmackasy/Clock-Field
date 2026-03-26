@@ -99,6 +99,16 @@ const upload = multer({
   },
 });
 
+const logoUpload = multer({
+  dest: UPLOADS_DIR,
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error("Only PNG, JPG, JPEG, or WEBP files are allowed"));
+  },
+});
+
 function generateTempPin(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -188,6 +198,28 @@ export async function registerRoutes(
         return `/uploads/${newName}`;
       });
       res.json({ urls });
+    });
+  });
+
+  // ── Logo Upload ─────────────────────────────────────────────────────────────
+  app.post("/api/upload/logo", requireRole("admin"), (req, res) => {
+    logoUpload.single("logo")(req, res, (err: any) => {
+      if (err) {
+        if (err.code === "LIMIT_FILE_SIZE") return res.status(400).json({ message: "Logo must be under 5 MB" });
+        return res.status(400).json({ message: err.message || "Upload failed" });
+      }
+      const file = req.file as Express.Multer.File | undefined;
+      if (!file) return res.status(400).json({ message: "No file uploaded" });
+      const extMap: Record<string, string> = {
+        "image/png": ".png",
+        "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+        "image/webp": ".webp",
+      };
+      const ext = extMap[file.mimetype] || ".jpg";
+      const newName = file.filename + ext;
+      fs.renameSync(file.path, path.join(UPLOADS_DIR, newName));
+      res.json({ url: `/uploads/${newName}` });
     });
   });
 
