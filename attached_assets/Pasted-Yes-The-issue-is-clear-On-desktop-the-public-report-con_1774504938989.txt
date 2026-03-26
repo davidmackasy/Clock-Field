@@ -1,0 +1,256 @@
+Yes. The issue is clear.
+
+On desktop, the public report content is sitting too narrow in the middle, which leaves too much empty space on the left and right. The page still works, but it looks too constrained and less professional than it should.
+
+The goal is not to redesign it.
+The goal is only to widen the usable content area on desktop so the report fills the page better while keeping the same overall look, same layout style, same flow, and same report behavior.
+
+Use this dev note exactly.
+
+DEV NOTE
+
+TASK
+
+Reduce the excessive left and right empty space on the desktop public report page by expanding the main report content width slightly, while keeping the same design, same structure, and same flow.
+
+PRIORITY
+
+High
+
+STRICT RULES
+
+Do not break anything that is currently working.
+Do not change report logic.
+Do not change public link behavior.
+Do not change photo logic.
+Do not change branding logic.
+Do not change header content.
+Do not change service summary logic.
+Do not change section ordering.
+Do not change mobile layout unless absolutely required for responsive safety.
+Do not redesign the page.
+Do not touch anything outside this exact desktop spacing adjustment.
+If anything else needs to be changed, ask for approval first.
+
+GOAL
+
+The public report should use more of the desktop width so it looks more balanced and professional.
+
+Right now there is too much empty space on both sides.
+The content container is too narrow for desktop.
+We need to widen the report content area, but keep the same centered professional look.
+
+This is a layout-width adjustment only.
+
+SCOPE
+
+Only update the desktop public report page container width and any directly related spacing needed to support that change.
+
+Do only this:
+
+1. Increase the main public report content width on desktop
+2. Reduce excessive empty left and right margin space
+3. Keep the report centered
+4. Keep the same overall layout style
+5. Keep the same cards, same sections, same header structure, same flow
+
+Do not change:
+
+1. Report content
+2. Typography hierarchy unless needed for width safety
+3. Photo logic
+4. Branding logic
+5. Mobile layout unless responsive checks require protection only
+6. Any admin or cleaner workflow
+7. Public report data structure
+
+CURRENT PROBLEM
+
+On desktop, the report container is too narrow.
+This causes large empty side gutters on the left and right.
+That makes the page feel underused and visually small inside a large desktop viewport.
+
+The report should breathe, but not feel cramped into a thin center column.
+
+REQUIRED FIX
+
+Increase the max width of the public report content container on desktop.
+
+Important:
+Do not make it full width.
+Do not stretch everything edge to edge.
+Do not remove the centered layout.
+
+Instead:
+expand it moderately so the page looks more premium and makes better use of desktop space.
+
+DESIRED RESULT
+
+The page should still look centered and elegant, but the report cards and content area should be wider than they are now.
+
+This should reduce the oversized blank space on both sides while preserving the same visual style.
+
+LAYOUT REQUIREMENTS
+
+Desktop only:
+increase main content width
+
+Recommended behavior:
+keep centered container
+increase max-width
+reduce side gutter size
+
+Examples of what this means conceptually:
+if the current desktop content width is too narrow, increase it to a wider desktop max width
+if there is an inner wrapper and an outer wrapper both constraining width, only loosen the one that is causing the excessive narrow look
+
+Important:
+do not widen so much that text lines become too long or ugly
+do not make cards feel stretched
+do not create a flat full-bleed look
+
+The target is:
+less empty side space
+more balanced report width
+same premium centered presentation
+
+HEADER REQUIREMENT
+
+The top branded header area should also visually align with the wider content width.
+
+That means:
+if the report content container becomes wider, make sure the inner header content block aligns with it properly
+
+Do not change:
+logo placement
+company name logic
+address logic
+report title logic
+
+Only make sure the width feels consistent and not overly narrow compared to the page.
+
+CONTENT AREA REQUIREMENT
+
+These areas should expand naturally with the wider desktop container:
+metadata card
+service summary card
+section cards
+photo grids
+
+Do not redesign them.
+Just allow them to sit inside a slightly wider desktop content area.
+
+PHOTO GRID REQUIREMENT
+
+The photo grid should remain clean.
+Do not change the current 3-per-row behavior if that is already working.
+The wider content area should simply give the grid a little more breathing room and improve alignment.
+
+Do not change image logic.
+Do not change thumbnail logic.
+Do not change preview logic.
+
+SECTION CARD REQUIREMENT
+
+Section cards like Washrooms, Offices, and others should remain the same style.
+Only allow them to use the wider content width.
+
+Do not alter:
+card order
+section label style
+notes placement
+before and after sections
+
+SPACING RULE
+
+Reduce outer side whitespace.
+Do not reduce internal content spacing too much.
+
+Meaning:
+keep the card padding mostly the same
+keep the section spacing mostly the same
+only reduce excessive outer page margin on desktop
+
+This is important because the issue is with page width, not card padding.
+
+RESPONSIVE SAFETY
+
+This change should primarily affect desktop.
+
+Recommended behavior:
+mobile stays as is
+tablet stays close to current if already good
+desktop gets a wider max width
+
+If a responsive breakpoint is used, apply the width increase at desktop breakpoints only.
+
+Do not accidentally stretch the mobile layout.
+
+IMPLEMENTATION TARGET
+
+Find the main public report wrapper/container.
+That is the element likely using a max-width that is too restrictive.
+
+Adjust only that desktop container width.
+
+Possible causes to inspect:
+main max-width class
+inner centered wrapper
+nested width-limited content wrapper
+header wrapper using same narrow max-width
+
+Safest implementation:
+increase the desktop max-width of the main report wrapper and keep margin auto centering
+
+Do not start changing lots of child components if the real problem is only the parent container width.
+
+VISUAL TARGET
+
+The final result should look like this:
+same public report design
+same centered layout
+same structure
+same style
+less empty side space
+slightly wider content area
+more professional desktop presence
+
+WHAT NOT TO DO
+
+Do not make the page full width
+Do not push content too close to the browser edges
+Do not redesign the report
+Do not restyle cards unnecessarily
+Do not alter report data
+Do not change text flow more than necessary
+Do not touch unrelated features
+
+ACCEPTANCE CHECKLIST
+
+This task is complete only if all of the below are true:
+
+1. The public report desktop layout has less empty space on the left and right
+2. The main report content area is wider on desktop
+3. The report remains centered
+4. The same style and structure are preserved
+5. The header aligns properly with the wider content width
+6. Section cards use the wider space cleanly
+7. Photo grids still look correct
+8. Mobile layout is not broken
+9. Tablet layout is not broken
+10. Public report logic remains unchanged
+11. Nothing else in the app is affected
+
+SHORT INSTRUCTION TO AGENT
+
+Only do this one thing:
+widen the desktop public report container so there is less empty space on the left and right.
+
+Keep the same centered style.
+Keep the same design.
+Keep the same layout structure.
+Do not redesign anything.
+Do not touch any logic.
+Do not touch anything else.
+
+If anything outside this exact spacing adjustment needs to be changed, ask for approval first.

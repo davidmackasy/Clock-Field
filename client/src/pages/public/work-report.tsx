@@ -146,7 +146,7 @@ function ReviewSection({ token, companyName, existingReview, googleReviewUrl, br
   if (existingReview || submitted) {
     const review = existingReview || { clientName, companyName: companyNameVal, reviewText, rating, submittedAt: new Date().toISOString() };
     return (
-      <div className="max-w-2xl mx-auto px-4 pb-8">
+      <div className="max-w-4xl mx-auto px-4 pb-8">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center">
@@ -170,7 +170,7 @@ function ReviewSection({ token, companyName, existingReview, googleReviewUrl, br
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 pb-8">
+    <div className="max-w-4xl mx-auto px-4 pb-8">
       {!showForm ? (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 text-center">
           <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: `${brandColor}18` }}>
@@ -353,7 +353,7 @@ export default function PublicWorkReport() {
     <div className="min-h-screen bg-gray-50">
       {/* ── Branded Header ───────────────────────────────────────────── */}
       <div style={{ backgroundColor: brandColor }} className="text-white">
-        <div className="max-w-2xl mx-auto px-5 pt-8 pb-10">
+        <div className="max-w-4xl mx-auto px-5 pt-8 pb-10">
           {/* Top row: logo + SERVICE REPORT label */}
           <div className="flex items-start gap-4 mb-5">
             {data.companyLogoUrl ? (
@@ -386,7 +386,7 @@ export default function PublicWorkReport() {
       </div>
 
       {/* ── Metadata card (overlapping header slightly) ──────────────── */}
-      <div className="max-w-2xl mx-auto px-4 -mt-4">
+      <div className="max-w-4xl mx-auto px-4 -mt-4">
         <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-5 grid grid-cols-2 gap-4">
           <div className="flex items-start gap-3">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style={{ backgroundColor: `${brandColor}15` }}>
@@ -432,7 +432,7 @@ export default function PublicWorkReport() {
       </div>
 
       {/* ── Service Summary / Intro ───────────────────────────────────── */}
-      <div className="max-w-2xl mx-auto px-4 mt-5">
+      <div className="max-w-4xl mx-auto px-4 mt-5">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="px-5 py-3 border-b border-gray-100" style={{ backgroundColor: `${brandColor}0d` }}>
             <p className="text-xs font-bold uppercase tracking-widest" style={{ color: brandColor }}>Service Summary</p>
@@ -444,7 +444,7 @@ export default function PublicWorkReport() {
       </div>
 
       {/* ── Work items by section ────────────────────────────────────── */}
-      <div className="max-w-2xl mx-auto px-4 py-5 space-y-6">
+      <div className="max-w-4xl mx-auto px-4 py-5 space-y-6">
         {Object.entries(sections).map(([sectionName, items]) => (
           <div key={sectionName}>
             <div className="flex items-center gap-2 mb-3">
@@ -495,7 +495,7 @@ export default function PublicWorkReport() {
       </div>
 
       {/* ── Client Review ─────────────────────────────────────────────── */}
-      <div className="max-w-2xl mx-auto px-4 mb-4">
+      <div className="max-w-4xl mx-auto px-4 mb-4">
         <div className="flex items-center gap-2 mb-4">
           <div className="h-px flex-1 bg-gray-200" />
           <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400 px-2">Client Review</span>
@@ -512,7 +512,7 @@ export default function PublicWorkReport() {
 
       {/* ── Footer ────────────────────────────────────────────────────── */}
       <div className="border-t border-gray-200 bg-white mt-4">
-        <div className="max-w-2xl mx-auto px-4 py-6 text-center space-y-1">
+        <div className="max-w-4xl mx-auto px-4 py-6 text-center space-y-1">
           <p className="text-sm font-semibold text-gray-700">Prepared by {data.companyName}</p>
           {data.companyAddress && <p className="text-xs text-gray-400">{data.companyAddress}</p>}
           <p className="text-xs text-gray-400">Service documentation report · Powered by ClockField</p>
