@@ -58,6 +58,10 @@ export const companies = pgTable("companies", {
   companyEmail: text("company_email"),
   // Optional Google Review link (shown as external button on public report pages)
   googleReviewUrl: text("google_review_url"),
+  // Report branding
+  companyLogoUrl: text("company_logo_url"),
+  brandColor: text("brand_color"),
+  defaultReportIntro: text("default_report_intro"),
 });
 
 export const users = pgTable("users", {
@@ -266,6 +270,7 @@ export const workSubmissions = pgTable("work_submissions", {
   publicShareToken: text("public_share_token"),
   publicShareEnabled: boolean("public_share_enabled").notNull().default(false),
   reportShortCode: text("report_short_code"),
+  serviceSummary: text("service_summary"),
 });
 
 export const workSubmissionItems = pgTable("work_submission_items", {

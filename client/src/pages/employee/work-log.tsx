@@ -137,6 +137,7 @@ export default function EmployeeWorkLog() {
     removePhotoIds: string[];
   }>({ notes: "", newBeforePhotos: [], newAfterPhotos: [], removePhotoIds: [] });
   const [activeSub, setActiveSub] = useState<any>(null);
+  const [serviceSummary, setServiceSummary] = useState("");
   const [detailSub, setDetailSub] = useState<any>(null);
   const [selectedLocation, setSelectedLocation] = useState<any>(null);
   const [draft, setDraft] = useState<WorkItemDraft>({
@@ -233,13 +234,16 @@ export default function EmployeeWorkLog() {
 
   const submitMut = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("PATCH", `/api/work-submissions/${activeSub.id}`, { status: "submitted" });
+      const body: any = { status: "submitted" };
+      if (serviceSummary.trim()) body.serviceSummary = serviceSummary.trim();
+      const res = await apiRequest("PATCH", `/api/work-submissions/${activeSub.id}`, body);
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/work-submissions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/work-submissions", activeSub.id] });
       setActiveSub(null);
+      setServiceSummary("");
       toast({ title: "Work submitted!", description: "Your work log has been sent for review." });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -352,6 +356,20 @@ export default function EmployeeWorkLog() {
                 </p>
               </div>
               <Badge variant="secondary" className="text-[10px]">{items.length} item{items.length !== 1 ? "s" : ""}</Badge>
+            </div>
+
+            {/* Service Summary field */}
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Service Summary (optional)</Label>
+              <Textarea
+                className="mt-1 text-sm resize-none"
+                rows={3}
+                placeholder="Briefly describe the service — e.g. 'Full office clean completed including washrooms, floors mopped, and supplies restocked.'"
+                value={serviceSummary}
+                onChange={e => setServiceSummary(e.target.value)}
+                data-testid="textarea-service-summary"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">This will appear as the intro text on the client's public report.</p>
             </div>
 
             {/* Work items list */}

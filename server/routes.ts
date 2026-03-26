@@ -2215,6 +2215,18 @@ Welcome again, and thank you for choosing ClockField.
           if (parsed.protocol === "https:" && isGoogle) googleReviewUrl = company.googleReviewUrl;
         } catch { /* ignore invalid stored URL */ }
       }
+      // Build formatted address from company fields
+      const addrParts = [
+        company?.address,
+        company?.city,
+        company?.province,
+        company?.postalCode,
+      ].filter(Boolean);
+      const companyAddress = addrParts.length > 0 ? addrParts.join(", ") : null;
+
+      // Resolve service summary: report-specific → company default → null
+      const serviceSummary = (sub as any).serviceSummary || company?.defaultReportIntro || null;
+
       res.json({
         id: sub.id,
         workDate: sub.workDate,
@@ -2222,6 +2234,10 @@ Welcome again, and thank you for choosing ClockField.
         locationName: sub.locationName,
         status: sub.status,
         companyName: company?.name || "ClockField",
+        companyAddress,
+        companyLogoUrl: company?.companyLogoUrl || null,
+        brandColor: company?.brandColor || null,
+        serviceSummary,
         employeeName,
         items: itemsWithPhotos,
         googleReviewUrl,

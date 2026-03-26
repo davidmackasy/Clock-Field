@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
+import { Textarea } from "@/components/ui/textarea";
 import { Plus, Trash2, ExternalLink } from "lucide-react";
 
 const TIMEZONES = [
@@ -477,6 +478,68 @@ export default function AdminSettings() {
                 </div>
               </>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Report Branding</CardTitle>
+            <CardDescription className="text-xs">Customize how your public client reports look.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Company Logo URL</Label>
+              <Input
+                data-testid="input-company-logo-url"
+                type="url"
+                placeholder="https://yourwebsite.com/logo.png"
+                value={form.companyLogoUrl || ""}
+                onChange={e => setForm((p: any) => ({ ...p, companyLogoUrl: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">Paste a direct link to your logo image. It will appear in the header of your public service reports.</p>
+              {form.companyLogoUrl && (
+                <div className="mt-2 p-3 rounded-lg border bg-muted/40 flex items-center gap-3">
+                  <img
+                    src={form.companyLogoUrl}
+                    alt="Logo preview"
+                    className="h-10 max-w-[120px] object-contain rounded"
+                    onError={e => (e.currentTarget.style.display = "none")}
+                  />
+                  <p className="text-xs text-muted-foreground">Logo preview</p>
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Brand Color</Label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  data-testid="input-brand-color"
+                  value={form.brandColor || "#2563eb"}
+                  onChange={e => setForm((p: any) => ({ ...p, brandColor: e.target.value }))}
+                  className="h-9 w-14 rounded border border-input cursor-pointer p-0.5 bg-background"
+                />
+                <Input
+                  placeholder="#2563eb"
+                  value={form.brandColor || ""}
+                  onChange={e => setForm((p: any) => ({ ...p, brandColor: e.target.value }))}
+                  className="font-mono text-sm"
+                  data-testid="input-brand-color-hex"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">Used as the header background color on your public service reports. Leave blank for default blue.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Default Service Summary</Label>
+              <Textarea
+                data-testid="textarea-default-report-intro"
+                placeholder="This report provides a summary of the work completed, observations recorded, and supporting service photos for this visit."
+                value={form.defaultReportIntro || ""}
+                onChange={e => setForm((p: any) => ({ ...p, defaultReportIntro: e.target.value }))}
+                rows={4}
+              />
+              <p className="text-xs text-muted-foreground">This intro text appears on all public reports before the work sections. Cleaners can override it per report.</p>
+            </div>
           </CardContent>
         </Card>
 

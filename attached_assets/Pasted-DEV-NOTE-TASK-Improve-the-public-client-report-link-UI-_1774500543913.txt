@@ -1,0 +1,505 @@
+DEV NOTE
+
+TASK
+Improve the public client report link UI without breaking or changing any existing report logic, submitted work, photos, sections, or workflows.
+
+PRIORITY
+High
+
+STRICT RULES
+Do not break anything that is currently working.
+Do not change how reports are generated.
+Do not change how submitted work is stored.
+Do not change existing completed reports.
+Do not delete or rewrite existing report data.
+Do not alter the report submission workflow.
+Do not touch anything outside this public report branding and layout improvement unless absolutely required for this exact task.
+If anything else must be touched, ask for approval first.
+
+GOAL
+
+Improve the public service report link so it looks more professional and branded per company, while keeping the same core structure and report content.
+
+Main updates requested:
+
+1. Show company logo in the public report header
+2. Show company name and company business address in the public report header
+3. Pull this company information from Settings → Company Information
+4. Add a short introduction section before the first work section starts
+5. Keep all current work sections, photos, comments, and report content exactly the same
+6. Improve the public report UI slightly so it looks cleaner and more premium
+7. Add company brand color customization so the public report header is not always blue
+8. Apply the intro section improvement on the cleaner side where appropriate, without changing report flow
+
+SCOPE
+
+Only update:
+
+1. Public client report page UI
+2. Company branding data usage for report display
+3. Intro section placement before work sections
+4. Branding color support for public reports
+5. Cleaner-side report form only where needed to support the intro section cleanly
+
+Do not change:
+
+1. Existing report records
+2. Existing section/photo data structure unless additive only
+3. Existing photo rendering logic unless needed for styling only
+4. Existing public report links
+5. Existing submission endpoints unless additive only
+6. Existing review logic
+7. Existing work section logic
+8. Any unrelated admin pages
+9. Any payroll, attendance, messaging, tasks, or scheduling features
+
+MAIN PROBLEM
+
+The public report currently looks too generic.
+It does not show enough company branding.
+It uses a fixed blue style for everyone.
+It lacks a small introduction area between the report metadata and the actual work sections.
+The business address is not clearly shown in the header.
+The company logo is missing.
+The overall presentation can look more polished while keeping the same content.
+
+REQUIRED UPDATE 1
+SHOW COMPANY LOGO IN PUBLIC REPORT HEADER
+
+Add company logo support to the public report header.
+
+Behavior:
+If the company has uploaded a logo in company settings, show it in the top header area beside or above the company name.
+If no logo exists, fall back to the current simple icon or default placeholder.
+
+Do not make logo upload part of the report itself.
+This must come from company settings.
+
+Source of truth:
+Settings → Company Information / Company Branding
+
+Suggested fields:
+companyLogoUrl
+companyName
+companyAddress
+companyEmail
+companyPhone
+brandColor
+
+UI behavior:
+Logo should appear cleanly in the report header.
+It should not distort.
+Use contain, not stretch.
+Keep size professional and consistent.
+Recommended display size:
+around 40 to 64 px height for header use depending on layout.
+
+Important:
+Do not break reports for companies that do not yet have a logo.
+
+REQUIRED UPDATE 2
+SHOW COMPANY NAME AND BUSINESS ADDRESS
+
+In the public report header, display:
+
+1. Company name
+2. Full company business address
+
+This address must come from Settings → Company Information.
+
+Use the saved company address fields, such as:
+street
+city
+province/state
+postal code
+country
+or existing combined company address field if already available
+
+Display format:
+Company Name
+Company Address Line
+
+Example layout:
+[Logo] Master Commercial Cleaning Services
+123 Main Street, Winnipeg, MB R2X XXX
+
+If there is no address saved:
+show company name only
+do not break layout
+
+Important:
+This is company address only, not the client location field.
+Keep client location/service location where it already appears in the report metadata.
+
+REQUIRED UPDATE 3
+ADD BRAND COLOR CUSTOMIZATION FOR PUBLIC REPORTS
+
+The public report should no longer always use the same default blue for every company.
+
+Add company branding color support.
+
+Source:
+Settings → Company Information or Settings → Branding
+Use whichever existing settings location is safest, but keep it tied to the company profile.
+
+Required behavior:
+Allow admin/company to select a brand color
+Use that brand color on the public report header and key accents
+
+Suggested usage areas:
+top header background
+small badge accents
+icon backgrounds or subtle accent lines
+section highlights if needed
+
+Important:
+Keep the design clean and readable.
+Do not over-apply the color everywhere.
+The header is the main place where the company color should show.
+
+Fallback behavior:
+If no custom brand color is set, use current default blue.
+
+Important safety rule:
+Do not force old reports to break if no brand color exists.
+This must be backward compatible.
+
+REQUIRED UPDATE 4
+ADD INTRODUCTION SECTION BEFORE WORK SECTIONS START
+
+Right now, the report jumps from metadata into work sections like Washrooms.
+
+Add a short intro section between:
+report metadata block
+and
+the first actual work section
+
+This intro section should appear before the white section list starts.
+
+Purpose:
+Give context to the report before the actual work content begins.
+Make the public report feel more complete and professional.
+
+Placement:
+Header
+Metadata card
+New intro section
+Then actual work sections begin
+
+Intro section content
+
+Option A
+Use a company-level default intro template from settings
+
+Option B
+Allow a report-level intro text if entered during report creation/submission
+
+Best implementation:
+Support both safely.
+
+Recommended logic:
+If report-specific intro exists, show it
+Else if company default intro exists, show it
+Else show a clean default system paragraph
+
+Suggested default system intro:
+This report provides a summary of the work completed, observations recorded, and supporting service photos for this visit. It is intended to give the client a clear record of the completed service.
+
+Important:
+Do not make this section too big.
+Keep it short, clean, and professional.
+
+Suggested heading:
+Report Introduction
+or
+Service Summary
+
+Best label:
+Service Summary
+
+Cleaner-side support:
+On the cleaner/admin side where a report is prepared, add a simple introduction field or summary field if it does not already exist.
+This should be optional.
+If left blank, the system should fall back to the company default or default system intro.
+
+REQUIRED UPDATE 5
+KEEP CURRENT REPORT STRUCTURE THE SAME AFTER THE INTRO
+
+After the new intro section, all existing report content should continue exactly as before.
+
+Do not change:
+section names like Washroom 1
+comments/notes blocks
+before photos
+after photos
+additional photos
+section ordering
+existing report content structure
+
+This is important.
+The report body should remain familiar.
+We are only improving the top presentation and adding a short intro before the work begins.
+
+REQUIRED UPDATE 6
+IMPROVE THE PUBLIC REPORT UI SLIGHTLY
+
+Improve the UI, but do not redesign the whole report.
+
+The goal is:
+cleaner
+more premium
+better spacing
+better hierarchy
+still familiar
+
+Requested improvements:
+
+1. Header should feel more branded and polished
+2. Metadata card should align better and feel cleaner
+3. Intro section should visually separate header/meta from work content
+4. Section dividers should look cleaner
+5. Overall spacing should feel more premium
+6. Keep white content card structure that already works
+
+Recommended UI improvements:
+
+1. Better spacing in header
+2. Cleaner logo alignment
+3. Better typography hierarchy for company name and report title
+4. Softer card spacing and padding
+5. Cleaner divider between intro and work sections
+6. Better alignment of metadata items like prepared by, date, location, submitted
+
+Do not:
+remove current fields
+compress everything too tightly
+change the report into a new layout style
+break mobile responsiveness
+
+REQUIRED UPDATE 7
+USE COMPANY INFORMATION SETTINGS AS SOURCE OF TRUTH
+
+All branding info shown in the report must come from company settings.
+
+Expected source fields:
+companyName
+companyAddress
+companyLogo
+brandColor
+companyEmail
+companyPhone if already stored and useful
+
+Do not hardcode anything into report templates.
+Do not make report header branding manually editable per report unless explicitly requested later.
+
+This must stay linked to company settings so future updates to branding work correctly.
+
+REQUIRED UPDATE 8
+CLEANER SIDE SUPPORT FOR INTRO SECTION
+
+You also requested cleaner-side support for the introduction area.
+
+This means:
+where the report is being created or submitted, add support for an optional short intro/service summary field.
+
+Best behavior:
+This field should appear near the report preparation area, not inside every work section.
+It should be a top-level report summary, not a section note.
+
+Suggested field label:
+Service Summary
+or
+Introduction
+
+Best final label:
+Service Summary
+
+Behavior:
+Optional field
+If filled, display on public report above the first work section
+If empty, fall back to company default or system default intro
+
+Important:
+Do not change section comments or notes behavior.
+This new field is separate from section-specific notes.
+
+REQUIRED UPDATE 9
+DO NOT AFFECT EXISTING SUBMITTED REPORTS
+
+This is critical.
+
+Old reports must continue to work.
+Old public links must continue to work.
+Old report data must remain untouched.
+If older reports do not have logo, address, color, or intro data saved in report snapshot form, then:
+use current company settings as fallback where safe
+or use default UI fallback without errors
+
+Recommended compatibility approach:
+If report snapshot branding exists, use it
+Else resolve company branding from current company settings
+If intro does not exist, use default intro or hide gracefully depending on implementation decision
+
+Do not require migration that risks breaking current report access.
+
+RECOMMENDED DATA MODEL APPROACH
+
+Additive only.
+
+Possible company settings fields:
+companyLogoUrl
+brandColor
+defaultReportIntro
+companyAddressLine1
+companyAddressLine2
+companyCity
+companyStateProvince
+companyPostalCode
+companyCountry
+
+Possible report-level optional field:
+serviceSummary or introText
+
+Do not remove or rename existing working fields unless absolutely necessary.
+
+PUBLIC REPORT HEADER LAYOUT RECOMMENDATION
+
+Recommended order:
+
+Top header block
+Company logo
+Company name
+Company address
+Report title
+Short subtitle
+
+Then metadata card below:
+Prepared by
+Service date
+Location
+Submitted
+
+Then intro section:
+Service Summary
+Short paragraph
+
+Then report sections begin:
+Washrooms
+Offices
+Hallways
+etc.
+
+This will create better visual structure.
+
+STYLING GUIDELINES
+
+Header:
+use company brand color as background
+white text or high contrast text
+logo aligned neatly
+company name strong
+address smaller and secondary
+
+Metadata card:
+keep white card
+clean rounded corners
+balanced spacing
+improve icon alignment
+do not overcrowd
+
+Intro section:
+white or very light card
+small heading
+one short paragraph
+clear separation from work sections
+
+Body:
+keep existing report sections mostly the same
+
+MOBILE RESPONSIVENESS
+
+Make sure the public report still looks good on mobile.
+
+Requirements:
+logo scales down properly
+company name wraps cleanly
+address wraps cleanly
+metadata stacks properly on smaller screens
+intro section remains readable
+photos continue to display properly
+
+Do not break the public report on mobile.
+
+DO NOT OVERDO THE REDESIGN
+
+This is not a full report redesign.
+This is a branding and presentation improvement.
+
+Keep:
+same report logic
+same content flow
+same general report body
+
+Only improve:
+branding
+header
+intro
+minor spacing and polish
+
+SETTINGS UI SUPPORT
+
+If not already available, add in settings under Company Information or Branding:
+
+Company Logo upload
+Brand Color picker
+Default Report Intro / Service Summary template
+
+If some of these fields already exist, reuse them.
+Do not duplicate settings unnecessarily.
+
+Suggested settings labels:
+Company Logo
+Brand Color
+Default Report Introduction
+
+Important:
+Do not change existing settings logic unless required to add these fields.
+Do not break current company profile saving.
+
+ACCEPTANCE CHECKLIST
+
+This task is complete only if all of the below are true:
+
+1. Public report header now shows company logo when available
+2. Public report header now shows company name
+3. Public report header now shows company business address from settings
+4. Public report header uses company brand color if set
+5. If no brand color is set, fallback remains safe
+6. A short intro/service summary section appears before the first work section
+7. Cleaner/admin side supports an optional top-level service summary field
+8. Existing work sections still display exactly as before
+9. Existing photos still display exactly as before
+10. Existing public links still work
+11. Existing submitted reports are not broken
+12. No existing report data is deleted or changed incorrectly
+13. Mobile layout still works
+14. Nothing else in the app is affected
+
+SHORT INSTRUCTION TO AGENT
+
+Only improve the public report branding and top layout.
+
+Do these exact things:
+
+1. Show company logo from settings
+2. Show company business address from settings
+3. Add company brand color support for the public report header
+4. Add a short intro/service summary before the first work section
+5. Add optional service summary support on the cleaner/admin side
+6. Keep everything else the same
+
+Do not break report generation.
+Do not break public links.
+Do not touch old submitted reports.
+Do not change any unrelated feature.
+If anything outside this scope needs to be changed, ask for approval first.

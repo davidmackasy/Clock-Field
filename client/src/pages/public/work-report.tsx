@@ -3,6 +3,9 @@ import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, X, Clock, MapPin, User, Calendar, CheckCircle, Star, MessageSquare, Shield } from "lucide-react";
 
+const DEFAULT_BRAND = "#2563eb";
+const DEFAULT_INTRO = "This report provides a summary of the work completed, observations recorded, and supporting service photos for this visit. It is intended to give you a clear record of the completed service.";
+
 function fmt(iso: string) {
   return new Date(iso).toLocaleString("en-CA", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
@@ -38,14 +41,8 @@ function Lightbox({ photos, token, startIdx, onClose }: { photos: any[]; token: 
   const [idx, setIdx] = useState(startIdx);
   const photo = photos[idx];
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center"
-      onClick={onClose}
-    >
-      <button
-        className="absolute top-4 right-4 text-white/70 hover:text-white p-2 rounded-full hover:bg-white/10"
-        onClick={onClose}
-      >
+    <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center" onClick={onClose}>
+      <button className="absolute top-4 right-4 text-white/70 hover:text-white p-2 rounded-full hover:bg-white/10" onClick={onClose}>
         <X className="w-6 h-6" />
       </button>
       <div className="absolute top-4 left-4 text-white/50 text-sm">{idx + 1} / {photos.length}</div>
@@ -88,7 +85,7 @@ function PhotoRow({ photos, token, label }: { photos: any[]; token: string; labe
         {photos.map((p: any, i: number) => (
           <button
             key={p.id}
-            className="group relative aspect-square focus:outline-none focus:ring-2 focus:ring-blue-400 rounded-lg overflow-hidden"
+            className="group relative aspect-square focus:outline-none focus:ring-2 focus:ring-blue-400 rounded-xl overflow-hidden"
             onClick={() => setLb(i)}
           >
             <img
@@ -105,7 +102,7 @@ function PhotoRow({ photos, token, label }: { photos: any[]; token: string; labe
   );
 }
 
-function ReviewSection({ token, companyName, existingReview, googleReviewUrl }: { token: string; companyName: string; existingReview: any; googleReviewUrl?: string | null }) {
+function ReviewSection({ token, companyName, existingReview, googleReviewUrl, brandColor }: { token: string; companyName: string; existingReview: any; googleReviewUrl?: string | null; brandColor: string }) {
   const [showForm, setShowForm] = useState(false);
   const [clientName, setClientName] = useState("");
   const [companyNameVal, setCompanyNameVal] = useState("");
@@ -146,7 +143,6 @@ function ReviewSection({ token, companyName, existingReview, googleReviewUrl }: 
     submitMutation.mutate();
   }
 
-  // Already has a review (from initial load) or just submitted
   if (existingReview || submitted) {
     const review = existingReview || { clientName, companyName: companyNameVal, reviewText, rating, submittedAt: new Date().toISOString() };
     return (
@@ -161,14 +157,8 @@ function ReviewSection({ token, companyName, existingReview, googleReviewUrl }: 
               <p className="text-[10px] text-gray-400">Submitted through completed service report · Verified by ClockField.com</p>
             </div>
           </div>
-          {review.rating && (
-            <div className="mb-3">
-              <StarRating value={review.rating} />
-            </div>
-          )}
-          <blockquote className="text-sm text-gray-700 italic leading-relaxed mb-4">
-            "{review.reviewText}"
-          </blockquote>
+          {review.rating && <div className="mb-3"><StarRating value={review.rating} /></div>}
+          <blockquote className="text-sm text-gray-700 italic leading-relaxed mb-4">"{review.reviewText}"</blockquote>
           <div>
             <p className="text-sm font-semibold text-gray-800">{review.clientName}</p>
             {review.companyName && <p className="text-xs text-gray-500">{review.companyName}</p>}
@@ -183,8 +173,8 @@ function ReviewSection({ token, companyName, existingReview, googleReviewUrl }: 
     <div className="max-w-2xl mx-auto px-4 pb-8">
       {!showForm ? (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 text-center">
-          <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <MessageSquare className="w-6 h-6 text-blue-500" />
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: `${brandColor}18` }}>
+            <MessageSquare className="w-6 h-6" style={{ color: brandColor }} />
           </div>
           <h3 className="text-base font-bold text-gray-900 mb-1">Leave a Review</h3>
           {googleReviewUrl ? (
@@ -193,7 +183,8 @@ function ReviewSection({ token, companyName, existingReview, googleReviewUrl }: 
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <button
                   onClick={() => setShowForm(true)}
-                  className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-blue-700 transition-colors"
+                  className="inline-flex items-center justify-center gap-2 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors"
+                  style={{ backgroundColor: brandColor }}
                   data-testid="button-leave-review"
                 >
                   <Star className="w-4 h-4" />
@@ -221,7 +212,8 @@ function ReviewSection({ token, companyName, existingReview, googleReviewUrl }: 
               <p className="text-sm text-gray-500 mb-5">Leave a review about this service</p>
               <button
                 onClick={() => setShowForm(true)}
-                className="inline-flex items-center gap-2 bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-blue-700 transition-colors"
+                className="inline-flex items-center gap-2 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors"
+                style={{ backgroundColor: brandColor }}
                 data-testid="button-leave-review"
               >
                 <Star className="w-4 h-4" />
@@ -241,13 +233,11 @@ function ReviewSection({ token, companyName, existingReview, googleReviewUrl }: 
             </div>
           )}
 
-          {/* Rating */}
           <div className="mb-4">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 block">Rating (optional)</label>
             <StarRating value={rating} onChange={setRating} />
           </div>
 
-          {/* Client Name */}
           <div className="mb-3">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Your Name *</label>
             <input
@@ -261,7 +251,6 @@ function ReviewSection({ token, companyName, existingReview, googleReviewUrl }: 
             {errors.clientName && <p className="text-xs text-red-500 mt-1">{errors.clientName}</p>}
           </div>
 
-          {/* Company Name */}
           <div className="mb-3">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Company Name (optional)</label>
             <input
@@ -274,7 +263,6 @@ function ReviewSection({ token, companyName, existingReview, googleReviewUrl }: 
             />
           </div>
 
-          {/* Review Text */}
           <div className="mb-5">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Your Review *</label>
             <textarea
@@ -299,7 +287,8 @@ function ReviewSection({ token, companyName, existingReview, googleReviewUrl }: 
             <button
               onClick={handleSubmit}
               disabled={submitMutation.isPending}
-              className="flex-1 text-sm font-semibold bg-blue-600 text-white rounded-xl py-2.5 hover:bg-blue-700 transition-colors disabled:opacity-60"
+              className="flex-1 text-sm font-semibold text-white rounded-xl py-2.5 transition-colors disabled:opacity-60"
+              style={{ backgroundColor: brandColor }}
               data-testid="button-submit-review"
             >
               {submitMutation.isPending ? "Submitting..." : "Submit Review"}
@@ -350,37 +339,58 @@ export default function PublicWorkReport() {
     );
   }
 
+  const brandColor = data.brandColor || DEFAULT_BRAND;
+
   const sections: Record<string, any[]> = {};
   (data.items || []).forEach((item: any) => {
     if (!sections[item.section]) sections[item.section] = [];
     sections[item.section].push(item);
   });
 
+  const introText = data.serviceSummary || DEFAULT_INTRO;
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-blue-600 text-white">
-        <div className="max-w-2xl mx-auto px-4 py-8">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-              <CheckCircle className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-blue-100 text-xs font-medium uppercase tracking-wide">Service Report</p>
-              <h1 className="text-xl font-bold">{data.companyName}</h1>
+      {/* ── Branded Header ───────────────────────────────────────────── */}
+      <div style={{ backgroundColor: brandColor }} className="text-white">
+        <div className="max-w-2xl mx-auto px-5 pt-8 pb-10">
+          {/* Top row: logo + SERVICE REPORT label */}
+          <div className="flex items-start gap-4 mb-5">
+            {data.companyLogoUrl ? (
+              <img
+                src={data.companyLogoUrl}
+                alt={data.companyName}
+                className="h-12 w-auto max-w-[140px] object-contain rounded-lg shrink-0 bg-white/10 p-1"
+                onError={e => (e.currentTarget.style.display = "none")}
+              />
+            ) : (
+              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
+                <CheckCircle className="w-5 h-5 text-white" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-white/70 text-[11px] font-semibold uppercase tracking-widest mb-0.5">Service Report</p>
+              <h1 className="text-xl font-bold leading-tight truncate">{data.companyName}</h1>
+              {data.companyAddress && (
+                <p className="text-white/70 text-xs mt-0.5 leading-relaxed">{data.companyAddress}</p>
+              )}
             </div>
           </div>
-          <h2 className="text-2xl font-bold mb-1">Cleaning Service Report</h2>
-          <p className="text-blue-100 text-sm">Professional service documentation</p>
+
+          {/* Report title */}
+          <div className="border-t border-white/20 pt-5">
+            <h2 className="text-2xl font-extrabold tracking-tight mb-0.5">Cleaning Service Report</h2>
+            <p className="text-white/70 text-sm">Professional service documentation</p>
+          </div>
         </div>
       </div>
 
-      {/* Summary card */}
+      {/* ── Metadata card (overlapping header slightly) ──────────────── */}
       <div className="max-w-2xl mx-auto px-4 -mt-4">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 grid grid-cols-2 gap-4">
+        <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-5 grid grid-cols-2 gap-4">
           <div className="flex items-start gap-3">
-            <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
-              <User className="w-4 h-4 text-blue-500" />
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style={{ backgroundColor: `${brandColor}15` }}>
+              <User className="w-4 h-4" style={{ color: brandColor }} />
             </div>
             <div>
               <p className="text-xs text-gray-400 font-medium">Prepared by</p>
@@ -388,8 +398,8 @@ export default function PublicWorkReport() {
             </div>
           </div>
           <div className="flex items-start gap-3">
-            <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
-              <Calendar className="w-4 h-4 text-blue-500" />
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style={{ backgroundColor: `${brandColor}15` }}>
+              <Calendar className="w-4 h-4" style={{ color: brandColor }} />
             </div>
             <div>
               <p className="text-xs text-gray-400 font-medium">Service Date</p>
@@ -398,8 +408,8 @@ export default function PublicWorkReport() {
           </div>
           {data.locationName && (
             <div className="flex items-start gap-3">
-              <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
-                <MapPin className="w-4 h-4 text-blue-500" />
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style={{ backgroundColor: `${brandColor}15` }}>
+                <MapPin className="w-4 h-4" style={{ color: brandColor }} />
               </div>
               <div>
                 <p className="text-xs text-gray-400 font-medium">Location</p>
@@ -409,8 +419,8 @@ export default function PublicWorkReport() {
           )}
           {data.submittedAt && (
             <div className="flex items-start gap-3">
-              <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
-                <Clock className="w-4 h-4 text-blue-500" />
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style={{ backgroundColor: `${brandColor}15` }}>
+                <Clock className="w-4 h-4" style={{ color: brandColor }} />
               </div>
               <div>
                 <p className="text-xs text-gray-400 font-medium">Submitted</p>
@@ -421,13 +431,25 @@ export default function PublicWorkReport() {
         </div>
       </div>
 
-      {/* Work items by section */}
-      <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+      {/* ── Service Summary / Intro ───────────────────────────────────── */}
+      <div className="max-w-2xl mx-auto px-4 mt-5">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-5 py-3 border-b border-gray-100" style={{ backgroundColor: `${brandColor}0d` }}>
+            <p className="text-xs font-bold uppercase tracking-widest" style={{ color: brandColor }}>Service Summary</p>
+          </div>
+          <div className="px-5 py-4">
+            <p className="text-sm text-gray-600 leading-relaxed">{introText}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Work items by section ────────────────────────────────────── */}
+      <div className="max-w-2xl mx-auto px-4 py-5 space-y-6">
         {Object.entries(sections).map(([sectionName, items]) => (
           <div key={sectionName}>
             <div className="flex items-center gap-2 mb-3">
               <div className="h-px flex-1 bg-gray-200" />
-              <span className="text-xs font-bold uppercase tracking-wider text-gray-400 px-2">{sectionName}</span>
+              <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400 px-2">{sectionName}</span>
               <div className="h-px flex-1 bg-gray-200" />
             </div>
             <div className="space-y-4">
@@ -438,15 +460,18 @@ export default function PublicWorkReport() {
                   <div key={item.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-4">
                     <div className="flex items-start justify-between">
                       <div>
-                        <span className="inline-block text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full mb-1.5">
+                        <span
+                          className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full mb-1.5"
+                          style={{ backgroundColor: `${brandColor}15`, color: brandColor }}
+                        >
                           {item.section}
                         </span>
                         <h3 className="text-base font-bold text-gray-900">{item.subArea}</h3>
                       </div>
                     </div>
                     {item.notes && (
-                      <div className="bg-gray-50 rounded-xl px-4 py-3">
-                        <p className="text-xs text-gray-500 italic">{item.notes}</p>
+                      <div className="bg-gray-50 rounded-xl px-4 py-3 border-l-2" style={{ borderLeftColor: brandColor }}>
+                        <p className="text-sm text-gray-600 italic leading-relaxed">{item.notes}</p>
                       </div>
                     )}
                     {(before.length > 0 || after.length > 0) && (
@@ -469,20 +494,27 @@ export default function PublicWorkReport() {
         )}
       </div>
 
-      {/* Review section */}
+      {/* ── Client Review ─────────────────────────────────────────────── */}
       <div className="max-w-2xl mx-auto px-4 mb-4">
         <div className="flex items-center gap-2 mb-4">
           <div className="h-px flex-1 bg-gray-200" />
-          <span className="text-xs font-bold uppercase tracking-wider text-gray-400 px-2">Client Review</span>
+          <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400 px-2">Client Review</span>
           <div className="h-px flex-1 bg-gray-200" />
         </div>
       </div>
-      <ReviewSection token={token!} companyName={data.companyName} existingReview={data.review} googleReviewUrl={data.googleReviewUrl} />
+      <ReviewSection
+        token={token!}
+        companyName={data.companyName}
+        existingReview={data.review}
+        googleReviewUrl={data.googleReviewUrl}
+        brandColor={brandColor}
+      />
 
-      {/* Footer */}
+      {/* ── Footer ────────────────────────────────────────────────────── */}
       <div className="border-t border-gray-200 bg-white mt-4">
         <div className="max-w-2xl mx-auto px-4 py-6 text-center space-y-1">
           <p className="text-sm font-semibold text-gray-700">Prepared by {data.companyName}</p>
+          {data.companyAddress && <p className="text-xs text-gray-400">{data.companyAddress}</p>}
           <p className="text-xs text-gray-400">Service documentation report · Powered by ClockField</p>
         </div>
       </div>
