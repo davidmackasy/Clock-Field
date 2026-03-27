@@ -1,0 +1,610 @@
+Dev Note: Build a proper SaaS landing page for Clockfield inspired by CompanyCam, while keeping Clockfield’s own features, flows, and branding
+
+Goal
+
+Build a true marketing landing page for Clockfield that feels professional, modern, and conversion-focused, similar in structure and usability to CompanyCam’s website. The landing page must look like a real SaaS homepage on desktop, tablet, and mobile, while still promoting Clockfield’s actual features and workflows. CompanyCam’s current site uses a clear top navigation, strong hero section, repeated calls to action, feature groupings, trust/review elements, pricing access, and direct paths to Log In and Free Trial/Signup, which is the structural reference for this project.
+
+Critical instruction
+
+Do not break or affect anything else that is already working in the app.
+
+Do not modify existing authenticated app logic, dashboard logic, employee logic, admin logic, registration logic, sign-in logic, or public link/report logic unless it is strictly required for routing from the landing page.
+
+Do not rename or move any existing working route without approval.
+
+Do not change database logic for users, employees, admins, teams, tasks, reports, attendance, payroll, reviews, or messaging.
+
+Only add what is needed to introduce a proper public-facing landing page and connect it safely to the existing auth flows.
+
+High-level product behavior
+
+Right now the app needs a public homepage that acts as the main marketing entry point for new visitors.
+
+The landing page should:
+
+Explain what Clockfield does in a clean, user-friendly way
+Show the key value of the product quickly
+Present the product as a SaaS platform for commercial cleaning and field operations
+Make it easy to go to Sign Up
+Make it easy to go to Log In
+Make it easy for employees to access their own entry point if that exists
+Work properly on desktop, tablet, and mobile
+Feel like a real landing page, not like an internal app screen
+
+CompanyCam’s homepage structure is a good reference because it clearly separates public marketing content from app login and trial entry, and it repeats primary CTAs like Log In, Start a Free Trial, Pricing, Reviews, and Demo-style actions across the page.
+
+Main implementation requirement
+
+Build a new public marketing landing page as the root public entry point, likely at:
+
+/
+
+If / is already being used by the product in a way that would disrupt the current user experience, do not break it. In that case:
+
+Create the landing page in a safe new route first, such as /home or /landing
+Then wire the root route to it only after confirming existing app behavior remains intact
+Preserve current logged-in redirects exactly as they are
+
+Routing behavior required
+
+Public visitor behavior
+
+If user is not authenticated:
+
+Visiting / should show the new landing page
+Clicking Sign Up should go to the existing business registration/signup flow
+Clicking Log In should go to the existing login flow
+Clicking Employee Access should go to the employee login or employee entry flow if one exists
+Clicking any CTA should route cleanly without errors
+
+Authenticated user behavior
+
+If business/admin user is already authenticated:
+
+Do not trap them on the landing page
+Either show a top-right “Go to Dashboard” button, or auto-redirect them to their normal authenticated destination if that is already your current app behavior
+Keep current session logic intact
+
+If employee is already authenticated:
+
+Keep employee routing intact
+Do not accidentally redirect employees to the business dashboard
+Preserve their current role-based destination
+
+Required pages and path connections
+
+The landing page must cleanly connect to:
+
+Registration page
+Sign-in page
+Employee sign-in or employee access page
+Pricing page if one exists
+Contact/demo/request info page if one exists
+App/dashboard after authentication
+
+Agents must audit all current auth-related routes and confirm the correct destinations before wiring buttons.
+
+Do not hardcode guessed routes if route names already exist elsewhere in the app. Reuse existing route constants or central route config if available.
+
+Recommended landing page structure
+
+Top announcement bar
+Optional slim top bar for updates such as:
+New review features
+Public report sharing
+Team management updates
+Client review collection
+Keep this dismissible.
+Sticky top navigation
+Desktop nav should include:
+Logo
+Features
+How It Works
+Reviews
+Pricing
+FAQ
+Log In
+Get Started
+
+Mobile nav should collapse into a clean drawer.
+
+Top-right CTA buttons:
+
+Log In
+Get Started
+
+If employee access is important, include a subtle link:
+
+Employee Access
+
+This mirrors the public/app split seen on CompanyCam where Log In and trial/signup are clearly separated.
+
+Hero section
+This is the most important section.
+
+Layout:
+
+Left side: headline, subheadline, CTA buttons, trust points
+Right side: product screenshot/mockup of Clockfield dashboard, report builder, public report, payroll, or cleaner workflow
+
+Recommended headline direction:
+Clockfield helps cleaning companies manage teams, jobs, reports, payroll, and client communication in one place.
+
+Subheadline direction:
+Create work, send public links, collect photos, manage cleaners, track hours, and share professional client reports without the mess of texts, calls, and disconnected tools.
+
+Primary CTAs:
+
+Start Free / Get Started
+Log In
+
+Optional tertiary text link:
+
+Employee Access
+
+Hero support points:
+
+Manage teams and locations
+Share public client reports
+Track attendance and payroll
+Collect reviews and requests
+Works on desktop and mobile
+Social proof / trust strip
+Immediately under hero, add:
+review count or testimonial snippets if real data exists
+“Trusted by cleaning businesses” style strip
+optional logos if available
+optional metrics if real, such as reports created, jobs completed, teams managed
+
+Do not invent fake metrics. Use only real data if available.
+
+Problem to solution section
+Show what Clockfield replaces:
+messy WhatsApp/photo threads
+missed check-outs
+scattered client updates
+inconsistent reports
+manual payroll tracking
+lack of review collection
+
+Then show what Clockfield gives:
+
+structured job documentation
+one place for work photos
+cleaner check-in/check-out
+client-ready public reports
+internal and external requests
+team accountability
+Core features section
+Use a card grid, not giant paragraphs.
+
+Suggested feature groups for Clockfield
+
+A. Team and attendance management
+
+Employee clock-in and clock-out
+missed shift or late tracking
+hours reporting
+payroll estimator
+admin overview
+
+B. Task and work management
+
+create tasks and assignments
+track work progress
+upload before/after photos
+attach notes and updates
+support recurring workflows
+
+C. Public reports and client sharing
+
+generate shareable report links
+allow clients to review work
+display organized photos
+support review/social proof workflows
+client-facing professional presentation
+
+D. Reviews and communication
+
+client review collection
+Google review link support
+message/request handling
+admin response workflows
+
+E. Admin control
+
+location management
+teams and permissions
+dashboard metrics
+role-based access
+multi-admin support if applicable
+
+Each card should include:
+
+short title
+one short benefit statement
+icon or mini screenshot
+optional “Learn more” anchor jump or modal
+
+CompanyCam organizes features into grouped sections like core features, advanced features, AI-powered features, and portfolio/payment areas. We should copy that style of organization, but replace the content with Clockfield’s actual features.
+
+How it works section
+Use 3 to 5 simple steps.
+
+Suggested flow:
+
+Set up your company, team, and locations
+Create work and assign cleaners or staff
+Staff complete work and upload photos
+Generate and share public reports with clients
+Collect reviews, manage hours, and keep everything organized
+
+This section should be highly visual and easy to scan.
+
+Product screenshots section
+Use desktop and mobile mockups.
+
+Show real app flows:
+
+dashboard
+task/work page
+public report page
+employee clock-in/out
+payroll estimator
+review modal or request management
+
+Important:
+Do not use random stock screenshots. Use sanitized real UI screenshots or carefully prepared internal mockups based on the current product.
+
+Role-based section
+Since your app serves different user types, add a section for:
+Business owners/admins
+Supervisors/managers
+Employees/cleaners
+
+For each one, say what they do in Clockfield.
+
+This helps clarify the “employee can switch / log in separately” part the user asked for.
+
+Reviews/testimonials section
+Add a dedicated testimonial section.
+
+If real reviews exist:
+
+use real review text
+use real names/company names only if approved
+include star rating visuals
+
+If no approved real testimonials yet:
+
+build the section shell with placeholder data clearly marked for admin content replacement later
+Pricing section
+If pricing already exists, connect to it.
+If not, create a landing-page pricing block with current plan cards and CTA buttons leading into signup.
+
+Must include:
+
+monthly/annual toggle if your pricing supports it
+clear CTA
+“No credit card” text only if true
+feature bullets per plan
+FAQ section
+Accordion-based.
+Questions should cover:
+What is Clockfield?
+Is it for cleaning companies only?
+Can employees clock in and out?
+Can I share reports with clients?
+Can clients leave reviews?
+Does it work on mobile?
+Can I manage multiple locations or teams?
+How do I sign in as an employee?
+Final CTA section
+End the page with a strong CTA block:
+Start using Clockfield today
+Create your account
+Log in
+Employee access
+
+CompanyCam repeats action prompts near the bottom like free trial, demo, and pricing access. We should do the same with Clockfield’s real conversion actions.
+
+Footer
+Include:
+logo
+short product summary
+Features
+Pricing
+FAQ
+Contact
+Privacy Policy
+Terms
+Log In
+Employee Access
+maybe social links
+
+UX and UI requirements
+
+Desktop
+
+Must look spacious and modern, not stretched or empty
+Max content width around 1200 to 1440px
+Clean grid layout
+Proper visual hierarchy
+Sticky header
+Clear CTA placement
+Screenshot sections should feel like a polished SaaS website
+
+Tablet
+
+Smooth stacking behavior
+No broken grids
+CTAs remain visible and usable
+
+Mobile
+
+Must feel like a native mobile web landing page
+No tiny text
+No cramped hero
+Drawer menu for nav
+CTAs full width where appropriate
+Screenshot cards swipe or stack cleanly
+Avoid overly tall empty sections
+
+Visual style direction
+
+Use your existing brand colors, typography, and design language.
+
+Do not clone CompanyCam visually.
+Use CompanyCam only as a structural and usability reference.
+
+The page should feel:
+
+clean
+trustworthy
+commercial
+professional
+modern SaaS
+easy to scan
+
+Avoid:
+
+overly playful visuals
+giant walls of text
+cluttered icon overload
+confusing animations
+broken spacing on desktop
+
+Technical implementation guidance
+
+Recommended approach
+
+Build the landing page as a separate public page component
+Keep it isolated from app dashboard layout
+Use a separate marketing layout wrapper if needed
+
+Suggested component structure
+
+MarketingLayout
+MarketingHeader
+HeroSection
+TrustBar
+FeatureGrid
+HowItWorks
+ProductShowcase
+RoleSection
+Testimonials
+PricingPreview
+FAQSection
+FinalCTA
+MarketingFooter
+
+Suggested route strategy
+
+Public routes use MarketingLayout
+Authenticated app routes keep existing AppLayout or DashboardLayout
+Avoid mixing dashboard sidebar/header into marketing pages
+
+Auth-safe routing requirements
+
+Reuse existing auth guards
+Reuse existing login and signup endpoints
+Reuse existing session checks
+Reuse role-based redirect logic
+Do not duplicate auth logic
+
+Buttons and destination mapping
+
+Agents must explicitly verify and wire these buttons:
+
+Header
+
+Logo -> /
+Features -> #features
+Pricing -> /pricing or #pricing
+FAQ -> #faq
+Log In -> existing login route
+Get Started -> existing signup route
+Employee Access -> existing employee login route
+
+Hero
+
+Get Started -> signup
+Log In -> login
+Employee Access -> employee login
+
+Footer
+
+same key destinations
+
+If the app currently has separate:
+
+business owner login
+admin login
+employee login
+
+Then the landing page should present them cleanly without confusion. Example:
+
+Log In
+Employee Access
+
+Or a small auth switch modal:
+
+Business/Admin Login
+Employee Login
+
+Only do this if that structure already exists in the app.
+
+Performance requirements
+
+Page should load fast
+Optimize screenshot assets
+Use lazy loading for image-heavy sections below the fold
+Avoid huge uncompressed screenshots
+Use responsive image sizing
+Avoid animations that hurt performance
+
+SEO requirements
+
+Add proper public marketing metadata:
+
+title
+meta description
+OG title
+OG description
+OG image
+canonical URL
+
+Add structured semantic sections:
+
+h1 for hero
+h2 for major sections
+crawlable text content
+clean internal links
+
+This will also help when sharing the main domain.
+
+Analytics requirements
+
+If analytics already exist:
+
+track CTA clicks
+track signup clicks
+track login clicks
+track employee access clicks
+track pricing section views
+track FAQ engagement
+
+Do not break current analytics implementation.
+
+Accessibility requirements
+
+keyboard accessible nav
+focus states on CTA buttons
+adequate color contrast
+aria labels on drawer and accordions
+alt text for screenshots and illustrations
+semantic heading structure
+
+Content guidance for Clockfield landing page
+
+Use Clockfield’s real product language. Focus the copy around:
+
+managing cleaners and teams
+tracking attendance and hours
+creating work and assignments
+collecting job photos
+generating shareable client reports
+collecting reviews
+simplifying operations
+
+Avoid generic “AI future of work” type copy unless it is tied to real existing features.
+
+Suggested headline options
+
+Run your cleaning business with more clarity
+Manage jobs, teams, reports, and reviews in one place
+Clockfield keeps your team, clients, and work updates connected
+
+Suggested subheadline direction
+Clockfield gives cleaning businesses one platform to manage staff, document work, share reports, track hours, and keep clients informed.
+
+Safety and non-breakage checklist
+
+Before merging, agents must verify all of the following:
+
+Existing login still works
+Existing signup still works
+Existing employee login still works
+Existing role-based redirects still work
+Dashboard routes still work
+Public report links still work
+No existing authenticated page styling is broken
+No sidebar or app shell leaks into the marketing page
+Mobile nav works
+Footer links work
+Root route behavior is correct for both public and authenticated users
+Session persistence still works
+No console errors
+No 404 links from the landing page
+No duplicate auth screens created by mistake
+
+Recommended rollout plan for agents
+
+Phase 1
+
+Audit current routes
+Identify existing login, signup, employee access, dashboard, and pricing paths
+Identify root route behavior today
+Confirm whether landing page should replace current root route safely
+
+Phase 2
+
+Build isolated marketing layout and landing page sections
+Add desktop and mobile nav
+Add CTA wiring to existing auth pages
+
+Phase 3
+
+Add screenshot/media sections and responsive layouts
+Add footer, FAQ, pricing preview, testimonials
+
+Phase 4
+
+Connect metadata, analytics, accessibility, performance optimization
+
+Phase 5
+
+Test public and authenticated flows thoroughly
+Verify nothing else in the app has changed
+
+Acceptance criteria
+
+This task is complete only when:
+
+The app has a real public-facing SaaS landing page
+The landing page looks polished on desktop and mobile
+The landing page clearly explains Clockfield’s features
+Users can go from landing page to signup, login, and employee access correctly
+Logged-in users are not blocked or confused
+No existing app flow is broken
+The landing page feels like a proper commercial SaaS homepage, not an internal screen
+
+Reference note for design inspiration
+
+Use CompanyCam for structural inspiration only:
+
+clear public nav with Log In and free-trial/start actions
+strong hero with primary and secondary CTAs
+grouped feature sections
+review/trust elements
+pricing access
+repeated CTA blocks toward the bottom of the page
+
+Do not copy their branding, wording, illustrations, or exact visual design.
+Use Clockfield’s own brand, product flows, and feature set.
+
+Final instruction to agents
+
+Focus only on implementing the landing page and its safe routing connections.
+Do not change any existing working app logic outside what is necessary for this landing page.
+If any route rename, auth flow change, or structural route replacement is needed beyond safe connection work, ask for approval first.

@@ -9,6 +9,12 @@ A workforce operations platform for service businesses with 3 user roles: Admin,
 - **Database**: PostgreSQL with Drizzle ORM
 - **Auth**: Session-based with password hashing (scrypt), role-based access control
 
+## Public Routes
+- **Landing page**: `/` — public SaaS marketing homepage (visible to unauthenticated visitors)
+- **Login**: `/login` — auth page with 3 tabs (Employee, Admin/Client, Register). Supports `?tab=register` and `?tab=login` query params for pre-selecting tabs
+- **Unauthenticated protected routes**: redirect to `/login`
+- **Authenticated users at `/` or `/login`**: redirect to their role dashboard
+
 ## Demo Credentials
 - **Admin**: admin@sparkle.com / admin123
 - **Client**: tom@riverside.com / client123

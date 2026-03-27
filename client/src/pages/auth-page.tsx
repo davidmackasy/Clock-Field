@@ -10,6 +10,15 @@ import { useToast } from "@/hooks/use-toast";
 import { Clock, Users, Shield, IdCard, AlertCircle } from "lucide-react";
 import { Link } from "wouter";
 
+function getTabFromSearch(): string {
+  if (typeof window === "undefined") return "employee";
+  const params = new URLSearchParams(window.location.search);
+  const tab = params.get("tab");
+  if (tab === "register") return "register";
+  if (tab === "login") return "login";
+  return "employee";
+}
+
 export default function AuthPage() {
   const { login, employeeLogin, register, user } = useAuth();
   const [, setLocation] = useLocation();
@@ -105,18 +114,18 @@ export default function AuthPage() {
       <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
         <div className="w-full max-w-md">
           <div className="mb-8">
-            <div className="flex items-center gap-2 mb-2">
+            <Link href="/" className="flex items-center gap-2 mb-2 w-fit hover:opacity-80 transition-opacity" data-testid="link-auth-logo">
               <div className="w-10 h-10 rounded-md bg-primary flex items-center justify-center">
                 <Clock className="w-5 h-5 text-primary-foreground" />
               </div>
               <span className="text-xl font-semibold">ClockField</span>
-            </div>
+            </Link>
             <p className="text-muted-foreground text-sm mt-1">
               Workforce operations platform for service businesses
             </p>
           </div>
 
-          <Tabs defaultValue="employee" className="w-full">
+          <Tabs defaultValue={getTabFromSearch()} className="w-full">
             <TabsList className="grid w-full grid-cols-3 mb-6">
               <TabsTrigger value="employee" data-testid="tab-employee-login">Employee</TabsTrigger>
               <TabsTrigger value="login" data-testid="tab-login">Admin / Client</TabsTrigger>

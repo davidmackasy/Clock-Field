@@ -47,6 +47,7 @@ import PublicWorkReport from "@/pages/public/work-report";
 import PublicReviewShare from "@/pages/public/review-share";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
+import LandingPage from "@/pages/landing";
 
 function LoadingScreen() {
   return (
@@ -216,8 +217,9 @@ function AppRouter() {
   if (isLoading) return <LoadingScreen />;
 
   if (!user) {
-    if (location !== "/") return <Redirect to="/" />;
-    return <AuthPage />;
+    if (location === "/") return <LandingPage />;
+    if (location === "/login" || location.startsWith("/login?")) return <AuthPage />;
+    return <Redirect to="/login" />;
   }
 
   if ((user as any).mustChangePassword) {
@@ -261,12 +263,12 @@ function AppRouter() {
     if (location === "/billing-blocked") return <BillingBlockedPage />;
 
     // Admin app
-    if (location === "/") return <Redirect to="/admin" />;
+    if (location === "/" || location === "/login" || location.startsWith("/login?")) return <Redirect to="/admin" />;
     return <AdminLayout />;
   }
 
   // ── Non-admin routing ─────────────────────────────────────────────────────
-  if (location === "/") {
+  if (location === "/" || location === "/login" || location.startsWith("/login?")) {
     if (user.role === "client") return <Redirect to="/client" />;
     return <Redirect to="/employee" />;
   }
