@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import {
@@ -7,6 +7,13 @@ import {
   ArrowRight, Check, MapPin, Bell, CreditCard, MessageSquare,
   CheckCircle2, Circle
 } from "lucide-react";
+
+const cleanPhoto1 = "/cleaning-photos/cleaning_work_1_1.jpg";
+const cleanPhoto2 = "/cleaning-photos/cleaning_work_1_2.jpg";
+const cleanPhoto3 = "/cleaning-photos/cleaning_work_1_3.jpg";
+const cleanPhoto4 = "/cleaning-photos/cleaning_work_1_4.jpg";
+const cleanPhoto5 = "/cleaning-photos/cleaning_work_1_5.jpg";
+const cleanPhoto6 = "/cleaning-photos/cleaning_work_1_6.jpg";
 
 // ─── Utility: scroll to anchor ────────────────────────────────────────────────
 const scrollTo = (href: string) => {
@@ -323,18 +330,8 @@ function HeroSection() {
                   Get Started Free <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </Link>
-              <Link href="/login" data-testid="link-hero-login">
-                <button className="flex items-center gap-2 border border-[#d1d5db] text-[14px] font-medium text-[#374151] px-5 py-2.5 rounded-[7px] hover:bg-[#f9fafb] transition-colors">
-                  Log In
-                </button>
-              </Link>
             </div>
-            <p className="text-[12px] text-[#9ca3af] mt-3">
-              No credit card required ·{" "}
-              <Link href="/login" className="hover:text-[#374151] underline underline-offset-2 transition-colors" data-testid="link-hero-employee-access">
-                Employee access
-              </Link>
-            </p>
+            <p className="text-[12px] text-[#9ca3af] mt-3">No credit card required</p>
           </div>
 
           {/* Right: dashboard mockup */}
@@ -399,9 +396,16 @@ function ReportMockup() {
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2">
-          {["Before", "During", "After"].map(label => (
-            <div key={label} className="aspect-square rounded-[6px] bg-gradient-to-br from-[#e5e7eb] to-[#d1d5db] flex items-end p-1.5">
-              <span className="text-[9px] font-semibold text-[#6b7280] bg-white/80 rounded px-1">{label}</span>
+          {[
+            { label: "Before", src: cleanPhoto4 },
+            { label: "During", src: cleanPhoto5 },
+            { label: "After", src: cleanPhoto6 },
+          ].map(({ label, src }) => (
+            <div key={label} className="aspect-square rounded-[6px] overflow-hidden relative bg-[#e5e7eb]">
+              <img src={src} alt={label} className="w-full h-full object-cover" />
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/50 to-transparent px-1.5 py-1">
+                <span className="text-[8px] font-semibold text-white">{label}</span>
+              </div>
             </div>
           ))}
         </div>
@@ -469,8 +473,10 @@ function WorkLogMockup() {
         <div>
           <div className="text-[9px] font-semibold text-[#9ca3af] uppercase tracking-widest mb-1.5">Photos (6)</div>
           <div className="grid grid-cols-3 gap-1.5">
-            {["bg-gradient-to-br from-slate-200 to-slate-300","bg-gradient-to-br from-slate-300 to-slate-200","bg-gradient-to-br from-slate-200 to-slate-300"].map((c, i) => (
-              <div key={i} className={`aspect-[4/3] rounded-[4px] ${c}`} />
+            {[cleanPhoto1, cleanPhoto2, cleanPhoto3].map((src, i) => (
+              <div key={i} className="aspect-[4/3] rounded-[4px] overflow-hidden bg-[#e5e7eb]">
+                <img src={src} alt="Job photo" className="w-full h-full object-cover" />
+              </div>
             ))}
           </div>
         </div>

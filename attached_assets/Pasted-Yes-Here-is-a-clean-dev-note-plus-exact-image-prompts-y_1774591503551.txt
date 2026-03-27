@@ -1,0 +1,273 @@
+Yes. Here is a clean dev note plus exact image prompts your agent can use.
+
+Dev Note: Replace the bad landing page mockup photos with realistic commercial cleaning before, during, and after images
+
+Scope
+
+Only update the mockup images inside the landing page feature sections.
+
+Do not change:
+auth,
+signup,
+login,
+employee access,
+dashboard,
+reports,
+tasks,
+attendance,
+payroll,
+reviews,
+or any other working flow.
+
+Do not redesign the sections.
+Do not move layout blocks around.
+Do not touch routing.
+Only replace the wrong images with realistic cleaning visuals that match the product.
+
+Problem
+
+The current generated images inside the landing page mockups look random and unprofessional.
+They do not match commercial cleaning work.
+They weaken trust and make the landing page look fake.
+
+We need realistic, believable, commercial cleaning visuals that fit these two sections:
+
+Work Documentation section
+Service Report section
+
+Image direction
+
+The images must look like real job-site cleaning documentation.
+
+They should show:
+before cleaning,
+during cleaning,
+after cleaning
+
+They must feel:
+professional,
+realistic,
+commercial,
+clean,
+simple,
+and believable.
+
+They must not show:
+random objects,
+camera lenses,
+glasses,
+unrelated close-ups,
+fashion-looking people,
+odd AI compositions,
+or anything that does not clearly communicate cleaning work.
+
+Required scene direction
+
+Use scenes that fit Clockfield’s audience:
+commercial office,
+office desk area,
+meeting room,
+hallway,
+lobby,
+break room,
+washroom,
+floor cleaning,
+table wipe-down,
+mopping,
+vacuuming,
+trash removal,
+surface sanitizing.
+
+Best image set recommendation
+
+For the top Work Documentation mockup:
+Use 3 thumbnails that feel like uploaded job photos from a cleaner.
+
+Recommended 3-image sequence:
+
+Before: slightly messy office table or workstation
+During: cleaner wiping or sanitizing the desk/table
+After: neat clean desk or clean office area
+
+Alternative set:
+
+Before: dusty or lightly messy floor area
+During: person mopping commercial floor
+After: clean polished floor
+
+For the bottom Service Report mockup:
+Use labeled report-style images:
+Before
+During
+After
+
+Recommended scene:
+
+Before: commercial floor or office area needing cleaning
+During: cleaner actively mopping or wiping
+After: same area cleaned and tidy
+
+Important implementation rule
+
+The before, during, and after images should look like the same location or at least a very similar environment.
+
+Do not use three unrelated images.
+They must feel connected, like one real service job.
+
+Styling requirements for inserted images
+
+Realistic photo style
+Natural lighting
+Commercial environment
+No dramatic cinematic look
+No beauty/fashion photography look
+No surreal AI look
+Slightly practical phone-camera or professional documentation style is okay
+Keep aspect ratio consistent
+Use object-fit cover
+Keep corners and spacing consistent with current UI
+Do not overflow the mockup frame
+
+Prompt package for the agent
+
+Use these prompts to generate or source the images.
+
+Prompt Set A: Office desk cleaning sequence
+
+A1. Before image
+Photorealistic commercial cleaning documentation photo of a small office workstation before cleaning, realistic office desk with light mess, fingerprints on the table, papers slightly out of place, keyboard and monitor visible, natural indoor lighting, professional commercial cleaning context, realistic business office environment, no dramatic angles, no artistic styling, no people looking at camera, documentary style, high realism
+
+A2. During image
+Photorealistic commercial cleaning documentation photo of a janitor or cleaner wiping and sanitizing an office desk in a commercial office, gloved hand, spray bottle and cloth, realistic office workstation with monitor and keyboard, natural indoor lighting, believable cleaning action, professional business cleaning setting, documentary style, high realism, no fashion pose, no exaggerated expression
+
+A3. After image
+Photorealistic commercial cleaning documentation photo of the same office workstation after cleaning, spotless desk, organized keyboard and monitor, neat clean surface, fresh professional office appearance, natural indoor lighting, realistic commercial office environment, documentary style, high realism
+
+Prompt Set B: Floor mopping sequence
+
+B1. Before image
+Photorealistic commercial cleaning documentation photo of an office hallway or lobby floor before cleaning, visible dust marks or light dirt on the floor, realistic commercial interior, natural indoor lighting, professional cleaning job context, documentary style, high realism
+
+B2. During image
+Photorealistic commercial cleaning documentation photo of a cleaner mopping the floor in a commercial office hallway or lobby, realistic uniform, mop bucket or mop visible, believable floor cleaning action, business interior, natural indoor lighting, documentary style, high realism, no posing for camera
+
+B3. After image
+Photorealistic commercial cleaning documentation photo of the same office hallway or lobby floor after mopping, visibly clean polished floor, neat commercial space, natural indoor lighting, realistic facility maintenance result, documentary style, high realism
+
+Prompt Set C: Meeting room table cleaning sequence
+
+C1. Before image
+Photorealistic commercial cleaning documentation photo of a meeting room table before cleaning, light dust, fingerprints, coffee ring or minor clutter, realistic office chairs and conference room setting, natural indoor lighting, documentary style, high realism
+
+C2. During image
+Photorealistic commercial cleaning documentation photo of a cleaner wiping down a conference table in a meeting room, cloth and disinfectant spray visible, realistic cleaning action, commercial office environment, natural lighting, documentary style, high realism
+
+C3. After image
+Photorealistic commercial cleaning documentation photo of the same conference room table after cleaning, spotless surface, tidy chairs, clean professional meeting room, natural indoor lighting, documentary style, high realism
+
+Prompt Set D: Break room or kitchen surface cleaning sequence
+
+D1. Before image
+Photorealistic commercial cleaning documentation photo of a small office break room counter before cleaning, light crumbs, smudges, slightly used sink or countertop, realistic commercial interior, natural indoor lighting, documentary style, high realism
+
+D2. During image
+Photorealistic commercial cleaning documentation photo of a cleaner wiping and sanitizing an office break room counter, gloved hand, cloth and spray bottle visible, realistic cleaning process, commercial environment, documentary style, high realism
+
+D3. After image
+Photorealistic commercial cleaning documentation photo of the same office break room counter after cleaning, spotless countertop, tidy sink area, clean organized appearance, natural indoor lighting, commercial setting, documentary style, high realism
+
+Negative prompt guidance
+
+The agent should also use a negative prompt or filter instructions like this:
+
+Avoid:
+fashion pose,
+beauty portrait,
+close-up face emphasis,
+cartoon look,
+illustration,
+surreal lighting,
+random household objects,
+residential luxury home vibe,
+camera equipment,
+eyeglasses close-up,
+unrelated tools,
+overly dramatic cinematic scene,
+blurry hands,
+distorted body,
+extra fingers,
+messy AI artifacts,
+inconsistent environment,
+random background changes
+
+Best usage by section
+
+Top Work Documentation section
+Use Prompt Set A or C.
+Best choice:
+office desk cleaning
+or
+meeting room cleaning
+
+Reason:
+It looks like realistic uploaded work photos from a cleaner on a job.
+
+Bottom Service Report section
+Use Prompt Set B or A as a strict before/during/after set.
+Best choice:
+floor mopping sequence
+
+Reason:
+It reads very clearly in a report card:
+Before
+During
+After
+
+Strong instruction for the agent
+
+Do not generate single unrelated photos and drop them in.
+Generate them as a matching sequence.
+The environment, lighting, and cleaning task should feel connected.
+The three images should look like the same job or same building type.
+
+Preferred final mapping
+
+Work Documentation mockup:
+Photo 1: before office desk or meeting room
+Photo 2: cleaner wiping/sanitizing
+Photo 3: clean finished desk or meeting room
+
+Service Report mockup:
+Before: slightly dirty office floor or hallway
+During: cleaner mopping
+After: clean polished floor
+
+Optional extra prompt for a polished clean floor only
+
+Photorealistic commercial cleaning documentation photo of a clean polished office floor in a professional commercial hallway or lobby, freshly mopped appearance, neat business interior, natural indoor lighting, realistic maintenance result, documentary style, high realism
+
+Implementation note to the agent
+
+Before replacing the assets, verify:
+
+the images fit the existing card dimensions
+they crop well at thumbnail size
+the subject is still readable on desktop and mobile
+the sequence still makes sense when viewed small
+no image feels stock-random or unrelated
+
+Acceptance criteria
+
+This is complete only when:
+
+the fake unrelated images are removed
+the new images clearly show commercial cleaning work
+the top section looks like real uploaded job documentation
+the bottom section looks like a real before/during/after service report
+the images look connected and professional
+nothing else in the landing page or app is broken
+
+Extra instruction
+
+If the first generation still looks too AI-made, regenerate with stricter realism terms:
+photorealistic, commercial cleaning documentation, realistic office interior, natural lighting, business facility maintenance, documentary style, believable cleaning action, same location continuity

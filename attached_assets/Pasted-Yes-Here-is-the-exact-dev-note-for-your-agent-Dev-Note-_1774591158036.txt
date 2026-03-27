@@ -1,0 +1,269 @@
+Yes. Here is the exact dev note for your agent.
+
+Dev Note: Clean up hero CTAs and replace blank placeholder report photos with real cleaning visuals on the Clockfield landing page
+
+Scope
+
+Only make the following landing page improvements.
+
+Do not touch or change anything else that is currently working in the app.
+
+Do not affect:
+login flow,
+signup flow,
+employee flow,
+dashboard,
+reports,
+tasks,
+attendance,
+payroll,
+reviews,
+or any existing backend logic.
+
+If anything outside this scope is required, ask for approval first.
+
+What needs to be changed
+
+Hero section CTA cleanup
+
+On the hero section only:
+
+Remove the secondary Login button from the hero button group.
+Remove the small line text that says Employee access here from below the hero buttons.
+
+Keep only one main CTA in the hero:
+Get Started Free
+
+That button must continue sending users to the existing create account / signup flow.
+
+Important:
+Do not remove the top navigation Log In button.
+Do not remove the top navigation Get Started button.
+Only remove the hero-level Login button and the small employee access text under the hero.
+
+Expected result:
+The hero should feel cleaner, more focused, and less cluttered.
+There should be one clear action in the hero.
+Top navigation still keeps the normal access options.
+
+Improve the blank image sections in the feature/story sections
+
+Problem
+
+Further down the landing page, the sections showing:
+work log / job documentation
+and
+service report / client report
+
+currently have gray empty photo placeholders.
+
+That looks unfinished and unprofessional.
+It makes the landing page feel fake and low quality.
+
+Required fix
+
+Replace those gray placeholder photo boxes with real visuals that show actual cleaning-related before, during, and after examples.
+
+These image areas should feel realistic and relevant to the product.
+
+Visual direction
+
+Use images that show:
+a cleaner or worker documenting work
+a messy area before cleaning
+the area being worked on during cleaning
+the cleaned result after service
+
+Examples of scenes that fit:
+office washroom before and after cleaning
+commercial hallway before and after
+kitchen or breakroom before and after
+floor cleaning before and after
+glass/window cleaning
+restroom restocking and wipe-down
+trash removal and cleaned final result
+
+The visuals should help the user immediately understand:
+this platform is for real cleaning jobs,
+real documentation,
+real reports,
+and real proof of work.
+
+Important quality instruction
+
+Do not use more gray placeholder blocks.
+Do not leave empty image frames.
+Do not use visuals that look obviously fake, random, or AI-sloppy.
+Do not use overly polished stock imagery that looks unrelated to commercial cleaning work.
+
+Use visuals that feel:
+real,
+relevant,
+professional,
+and believable.
+
+Best preferred source order
+
+Preferred option 1
+Use real Clockfield-related product/demo images if available.
+
+Preferred option 2
+Use properly licensed commercial cleaning images that match before, during, and after service documentation.
+
+Preferred option 3
+If there are no usable assets yet, use high-quality generated placeholder visuals temporarily, but they must be realistic, consistent, and professional enough that they do not look like obvious fake demo blocks.
+
+If generated visuals are used temporarily, keep them tightly cropped and styled inside the UI so they feel like real uploaded work photos.
+
+Specific section requirements
+
+A. Work Log / Job Documentation section
+
+Current issue:
+The photo area is blank and gray.
+
+Update required:
+Show realistic job documentation thumbnails inside that card.
+
+Suggested layout:
+3 to 4 photo thumbnails in a row
+small consistent radius
+real image thumbnails
+same size
+proper spacing
+
+The card should look like a real completed job log, not a mockup shell.
+
+Content direction:
+At least one of the photos should show a worker cleaning or documenting work.
+The rest can show before/during/after progress of the same location.
+
+Also improve the text block in that mockup if needed so it looks more realistic and readable, but do not redesign the entire section unless necessary.
+
+B. Service Report / Client Report section
+
+Current issue:
+The report preview also has blank gray image blocks.
+
+Update required:
+Replace those with realistic report-style images showing:
+Before
+During
+After
+
+This is important because that section is meant to sell the report-sharing feature.
+It should immediately look like a real service report a client would receive.
+
+Suggested layout:
+3 labeled thumbnails
+Before
+During
+After
+
+Make them visually distinct enough that the cleaning result is obvious.
+
+Do not overdo it.
+Keep it clean, readable, and professional.
+
+Keep the current section structure
+
+Do not redesign the whole landing page again.
+Do not move all the sections around.
+Do not start rebuilding the entire page.
+
+Only improve what is currently there:
+hero CTA cleanup
+blank image replacement
+visual polish inside those existing feature sections
+
+Styling requirements for the new images
+
+The images inserted into these cards should:
+fit cleanly inside the existing UI
+have consistent aspect ratio
+not stretch
+not look pixelated
+not overflow their containers
+not break mobile layout
+
+Use:
+object-fit cover
+consistent corner radius
+light border if needed
+subtle shadow only if already consistent with the section design
+
+Do not add random new styles that make these image cards look disconnected from the rest of the landing page.
+
+Mobile and desktop requirements
+
+Desktop
+The screenshots/report cards should look filled and polished.
+No blank spaces.
+No broken alignment.
+
+Mobile
+The thumbnails must resize properly.
+No squashed images.
+No overflow.
+No awkward crop that removes all useful visual information.
+
+If needed, slightly adjust the image grid for mobile so it stacks better, but do not change the section layout more than necessary.
+
+Content realism requirement
+
+The inserted visuals should support the message of the section.
+
+For the Work Documentation section:
+show real work in progress and uploaded proof.
+
+For the Client Report section:
+show the kind of photo evidence a client expects to see in a shared report.
+
+That means:
+messy to clean progression
+service proof
+cleaning context
+commercial environment
+
+Avoid random residential-only imagery unless it still fits the product direction.
+The visuals should align with commercial cleaning / field service documentation.
+
+Routing and behavior safety
+
+The hero Get Started Free button must still go to the existing create-account/signup route.
+
+Do not change the nav buttons.
+Do not change top nav routing.
+Do not change auth routes.
+Do not change role logic.
+Do not change employee login flow in the background.
+
+This task is visual cleanup only, except for removing the hero Login button and the employee access text.
+
+Acceptance criteria
+
+This is complete only when all of the following are true:
+
+The hero only shows the main Get Started Free CTA
+The hero Login button is gone
+The small Employee access here text below the hero is gone
+The top nav Log In button still exists
+The top nav Get Started button still exists
+The Get Started Free button still routes correctly to account creation
+The work documentation mockup no longer shows blank gray image placeholders
+The service/client report mockup no longer shows blank gray image placeholders
+The inserted visuals look realistic and professional
+The page looks more finished and credible on both desktop and mobile
+Nothing else in the app is broken
+
+Final instruction
+
+Focus only on these landing page refinements.
+Do not expand scope.
+Do not modify other pages.
+Do not touch working backend or auth logic.
+If any extra change is needed beyond this, ask for approval first.
+
+Extra direction for the agent
+
+If the agent cannot source strong real visuals immediately, it should still replace the gray blocks with temporary professional visuals now, because the empty placeholders are harming trust on the landing page. But those visuals must feel realistic and aligned with cleaning documentation, not generic fake demo art.
