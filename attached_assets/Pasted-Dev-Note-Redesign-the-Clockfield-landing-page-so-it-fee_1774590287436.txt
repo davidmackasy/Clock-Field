@@ -1,0 +1,646 @@
+Dev Note: Redesign the Clockfield landing page so it feels premium, professional, unique, and not AI-generated
+
+Objective
+
+Rework the new Clockfield landing page so it looks like a real premium SaaS homepage, not like a generic AI-made template.
+
+The design direction should take structural inspiration from CompanyCam’s public site because it uses a polished SaaS layout with:
+a strong top navigation,
+clear Log In and Sign Up actions,
+a bold hero section,
+high visual confidence,
+feature-based storytelling,
+and repeated call-to-action placement throughout the page.
+
+This redesign must keep Clockfield’s own product, features, branding, and workflows.
+Do not copy CompanyCam.
+Do not clone their branding, colors, wording, imagery, or exact layout.
+Use them only as inspiration for professionalism, confidence, spacing, and flow.
+
+Critical instruction
+
+Do not break or affect anything else that is currently working in the app.
+
+Do not touch:
+existing login logic,
+signup logic,
+employee access logic,
+dashboard logic,
+public report logic,
+task flows,
+reviews,
+attendance,
+payroll,
+admin features,
+or any other current working page unless it is directly required for safe landing page routing.
+
+If anything outside the landing page must be changed, ask for approval first.
+
+Main problem to fix
+
+The current landing page looks too much like an AI-generated slope.
+It does not feel premium enough.
+It does not feel like a serious SaaS product homepage.
+It likely lacks strong layout discipline, visual hierarchy, unique composition, and brand confidence.
+
+The new landing page must feel:
+premium,
+intentional,
+clean,
+modern,
+conversion-focused,
+credible,
+and designed by a real product team.
+
+It must not feel:
+template-like,
+AI-sloppy,
+over-rounded everywhere,
+randomly spaced,
+too empty,
+too inflated,
+too toy-like,
+or like a fake startup mockup.
+
+Design direction
+
+Overall design tone
+
+The new landing page should feel closer to:
+high-end B2B SaaS,
+field operations software,
+commercial operations platform,
+professional product marketing site.
+
+The vibe should be:
+confident,
+clean,
+bold,
+usable,
+real.
+
+It should have:
+strong section rhythm,
+proper spacing,
+clean typography,
+real screenshot presentation,
+controlled use of gradients,
+subtle premium motion,
+strong CTA placement,
+and crisp desktop structure.
+
+This is what CompanyCam does well from a structural perspective:
+they separate public marketing from product access,
+keep the nav simple,
+keep primary actions visible,
+use a large visual hero,
+and organize feature exploration in a way that feels professional and commercial.
+
+What to avoid
+
+Do not build:
+huge floating blobs,
+random AI gradients everywhere,
+oversized pill shapes on every card,
+generic fake mockup sections,
+too many glows,
+too many shadows,
+cartoon-looking illustrations,
+or placeholder-looking layout blocks.
+
+Do not create a page that looks like:
+a Framer template,
+a fake startup landing page,
+a crypto UI,
+or a random AI prompt result.
+
+The page needs to feel custom.
+
+Landing page design system requirements
+
+Layout width
+
+Use a more premium desktop container width.
+Recommended max width:
+1280px to 1440px
+
+Do not let sections feel too narrow.
+Do not leave huge dead space on desktop.
+Do not create awkward giant gaps.
+
+Spacing system
+
+Use a consistent spacing scale.
+Examples:
+section top/bottom padding should feel deliberate,
+headline margins should be tight and controlled,
+cards should align cleanly,
+and horizontal spacing should feel premium, not random.
+
+Typography
+
+Use stronger professional typography hierarchy:
+Hero headline should be bold and clean
+Subheadline should be readable and slightly softer
+Section headings should be sharp and consistent
+Feature card text should be compact and scannable
+
+Avoid text that feels too centered everywhere unless intentional.
+Use left alignment where it improves professionalism.
+
+Buttons
+
+Buttons should feel premium and product-grade.
+Avoid generic oversized round AI-template buttons.
+
+Primary CTA:
+solid, confident, brand-colored
+
+Secondary CTA:
+outlined or subtle neutral button
+
+Button sizing:
+consistent height,
+clean padding,
+strong hover states,
+not cartoonish
+
+Border radius
+
+Reduce excessive radius.
+The current page likely feels too soft or too “AI UI” because everything may be over-rounded.
+
+Use:
+cards with moderate radius,
+buttons with controlled radius,
+panels with premium corners,
+not giant bubble shapes everywhere.
+
+Shadows
+
+Use subtle shadows only where needed.
+No heavy floating-card overload.
+
+Background strategy
+
+The page background should not feel flat or fake.
+Use layered neutral surfaces.
+
+Recommended:
+off-white or very light neutral base,
+section alternation with subtle tone shifts,
+light grid or texture only if elegant,
+very restrained accent gradients
+
+No noisy abstract AI background.
+
+New structure required
+
+Top utility bar
+Optional but premium.
+A slim bar for:
+announcements,
+new features,
+review system update,
+Google review integration,
+or public report sharing.
+
+It should feel clean and dismissible.
+Not noisy.
+
+Header / navigation redesign
+The header is one of the most important parts.
+It needs to look premium and trustworthy.
+
+Requirements:
+sticky header
+clean white or lightly tinted background
+subtle border bottom
+strong logo placement
+balanced nav spacing
+clear CTA buttons on right side
+
+Desktop nav should include:
+Features
+How It Works
+Pricing
+Reviews
+FAQ
+Log In
+Get Started
+
+Optional small link:
+Employee Access
+
+CompanyCam clearly separates Log In from Sign Up and keeps public nav simple. That is the level of clarity we want.
+
+Mobile header:
+hamburger drawer
+logo visible
+Get Started button optional
+clean drawer with proper spacing
+no broken alignment
+
+Hero redesign
+This is where the current AI-template feel must be removed.
+
+Do not use a generic sloped hero.
+Build a strong premium hero with clear composition.
+
+Recommended hero layout for desktop:
+left side = copy, CTA, trust points
+right side = real product visuals or polished layered screenshots
+
+Alternative premium option:
+centered headline with framed product screenshot below
+but only if executed with proper visual weight
+
+Hero must include:
+strong headline
+clear subheadline
+2 CTAs
+supporting trust/value bullets
+real product visual
+
+Suggested Clockfield hero messaging direction:
+Manage your cleaning business, team, reports, and client updates in one place.
+
+Support copy direction:
+Clockfield helps you assign work, track staff hours, collect job photos, share client-ready reports, and keep every location organized without messy texts and scattered tools.
+
+Primary CTA:
+Get Started
+
+Secondary CTA:
+Log In
+
+Tertiary link:
+Employee Access
+
+Hero visual strategy
+
+Do not use a fake abstract image.
+Do not use a meaningless placeholder dashboard.
+
+Use real or polished app visuals such as:
+dashboard summary,
+public report page,
+work/task page,
+employee clock in/out flow,
+review section,
+payroll estimator,
+admin overview.
+
+Best approach:
+build a layered premium product frame using 2 to 4 real screenshots arranged with intentional overlap.
+One main screenshot.
+One or two supporting floating panels.
+Clean depth.
+Soft shadow.
+Precise alignment.
+
+This makes it feel like a real SaaS product.
+
+Trust row under hero
+Immediately below the hero, add a narrow trust row.
+
+Could include:
+“Built for cleaning businesses”
+“Share reports faster”
+“Manage teams across locations”
+“Works on desktop and mobile”
+
+Or if real numbers exist:
+jobs completed,
+reports shared,
+teams managed
+
+Do not invent fake metrics.
+
+Feature storytelling section
+This section should not be generic cards thrown in a grid.
+It needs hierarchy and product storytelling.
+
+Use a premium split layout:
+left text content,
+right screenshot
+then alternate direction on the next block
+
+Each feature block should feel like a real SaaS sales section.
+
+Suggested feature blocks for Clockfield:
+Manage teams and attendance
+Track hours and payroll estimates
+Create work and collect photos
+Share client-ready reports
+Collect reviews and respond to requests
+Manage multiple locations and admins
+
+For each block include:
+small eyebrow label
+clear heading
+short benefit paragraph
+3 concise bullet benefits
+real screenshot or UI visualization
+
+CompanyCam’s site organizes features in grouped exploration patterns like core features, advanced features, AI features, and portfolio/payment sections. The important takeaway is not the exact content, but the clarity and structure.
+
+How it works section
+This should be a highly polished sequence section.
+
+Use 3 to 5 steps with strong visual consistency.
+
+Suggested Clockfield flow:
+Set up your company and locations
+Assign work to your cleaners or team
+Staff complete work and upload photos
+Share reports with clients
+Track hours, reviews, and follow-ups
+
+Use either:
+horizontal premium steps on desktop
+stacked card steps on mobile
+
+Make this section feel sharp and easy to scan.
+
+Product showcase section
+Add a stronger showcase section with large framed screenshots.
+
+This section should feel like:
+“See how Clockfield works in real life”
+
+Use tabs or category chips such as:
+Dashboard
+Tasks
+Reports
+Attendance
+Reviews
+Payroll
+
+When selected, show a large clean screenshot panel.
+
+This makes the page feel more real and less template-generated.
+
+Role-based section
+Because your app serves different roles, add a clean role section.
+
+Cards or columns for:
+Business Owners
+Supervisors
+Employees
+
+Each one should explain what they do in Clockfield.
+
+This also helps solve the user flow concern around:
+sign up,
+log in,
+employee access,
+and role clarity.
+
+Reviews / testimonials section
+This section must look premium.
+No random quote carousel with fake-looking cards.
+
+Use:
+2 or 3 featured testimonial cards
+clean typography
+real rating style if available
+consistent spacing
+proper author layout
+
+If real reviews exist, use them.
+If not, build the layout only and mark the content source for later replacement.
+
+Pricing preview section
+If pricing already exists, connect to that route.
+If not, create a homepage pricing preview block.
+
+Make it clean and SaaS-like:
+monthly plan cards
+clear feature bullets
+clear CTA
+optional “Most Popular” highlight
+
+Do not overdecorate this section.
+
+FAQ section
+Use clean accordions.
+Not oversized.
+Not overly stylized.
+
+Questions should address:
+What is Clockfield
+Who is it for
+How employees log in
+How reports work
+How reviews work
+If it works on mobile
+If it supports multiple locations
+
+Final CTA
+The final CTA should be strong and polished.
+Use a premium band or boxed section near the footer.
+
+Example direction:
+Start running your cleaning business with more clarity
+Get started with Clockfield today
+
+Buttons:
+Get Started
+Log In
+Employee Access
+
+Footer redesign
+Footer should feel complete and trustworthy.
+
+Include:
+Logo
+short product summary
+Features
+Pricing
+FAQ
+Contact
+Privacy
+Terms
+Log In
+Employee Access
+
+No messy footer stacks.
+Keep it clean.
+
+UI quality standard the agent must follow
+
+The landing page should feel:
+more like a premium software company,
+less like a generated mockup.
+
+That means:
+real alignment
+real spacing
+real hierarchy
+real screenshot usage
+real contrast discipline
+
+Every section should have a reason to exist.
+Every block should have a visual anchor.
+Every CTA should look intentional.
+
+Required visual improvements over the current version
+
+The agent must specifically improve:
+header sophistication
+hero composition
+spacing rhythm
+section transitions
+button styling
+content hierarchy
+visual consistency
+screenshot treatment
+desktop balance
+mobile polish
+
+The current page likely feels AI-generated because it may have:
+too many repeated card styles
+weak structure
+generic hero treatment
+non-distinctive layout rhythm
+and not enough real-product grounding
+
+The redesign should fix that directly.
+
+Implementation guidance for the agent
+
+Architecture
+
+Keep the landing page fully isolated from the authenticated app layout.
+
+Recommended:
+MarketingLayout
+MarketingHeader
+HeroSection
+TrustStrip
+FeatureStoryBlocks
+HowItWorks
+ProductTabsShowcase
+RoleSection
+TestimonialsSection
+PricingPreview
+FAQSection
+FinalCTA
+MarketingFooter
+
+Do not reuse dashboard layout wrappers for the landing page.
+
+Real screenshot strategy
+
+Use real screenshots from the actual app.
+Do not rely on fake placeholder dashboards.
+
+Prepare proper assets for:
+dashboard
+task/work page
+report page
+attendance
+reviews
+payroll
+
+Wrap screenshots in:
+clean browser frame
+or polished app frame
+
+Keep them sharp and consistent.
+
+Motion guidelines
+
+Use subtle motion only:
+fade up
+small hover lift
+tab transitions
+header background shift on scroll
+
+Do not add:
+parallax overload
+floating particles
+glow motion
+random pulsing objects
+
+Responsiveness requirements
+
+Desktop
+Must feel full, balanced, premium.
+No awkward empty left or right space.
+
+Tablet
+Must stack intelligently with proper image scaling.
+
+Mobile
+Must feel like a real premium web app homepage.
+Large enough text.
+Good button tap area.
+Clean drawer menu.
+No cramped screenshot cards.
+
+Routing and connection requirements
+
+The landing page must connect correctly to:
+existing signup route
+existing login route
+existing employee access route
+existing pricing route if available
+
+Do not create broken route assumptions.
+Audit current route structure first.
+Use existing working auth paths.
+
+Important:
+If a user is already logged in, preserve the current redirect logic.
+Do not break role-based access.
+Do not send employees to the wrong dashboard.
+Do not interfere with session logic.
+
+What the agent should not do
+
+Do not:
+rewrite auth
+rename routes without approval
+move dashboard routes
+change existing app state management
+touch backend logic unless required for safe routing
+copy CompanyCam
+use fake stock-heavy layout
+ship generic AI-style gradients everywhere
+over-round everything
+use random icons just to fill space
+
+Acceptance criteria
+
+This redesign is complete only if:
+the landing page feels premium and custom
+the page no longer looks AI-generated
+desktop layout feels polished and balanced
+mobile layout feels intentional and clean
+the hero feels strong and professional
+real app screenshots are used properly
+navigation looks trustworthy
+CTA flow to signup and login works correctly
+employee access is clear
+nothing else in the app is broken
+
+Reference note for inspiration
+
+Use CompanyCam for structural inspiration only because their public site clearly shows:
+top navigation with clear public actions,
+a bold hero,
+feature exploration structure,
+customer review access,
+pricing access,
+and strong sign-up entry points.
+
+Do not copy their design.
+Build a Clockfield-quality version that feels more premium, more custom, and more grounded in your actual product.
+
+Final instruction to the agent
+
+Focus only on improving the landing page and its safe route connections.
+Do not affect anything else in the system.
+If anything else needs to be changed outside this scope, ask for approval first.
