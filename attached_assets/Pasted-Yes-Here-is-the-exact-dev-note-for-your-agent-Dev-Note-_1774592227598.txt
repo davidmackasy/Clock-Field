@@ -1,0 +1,249 @@
+Yes. Here is the exact dev note for your agent.
+
+Dev Note: Improve the mobile hero text layout on the Clockfield landing page so it reads cleaner and converts better
+
+Scope
+
+Only improve the mobile hero text layout and mobile hero copy presentation on the landing page.
+
+Do not touch anything else.
+
+Do not change:
+desktop hero layout,
+desktop spacing,
+navigation behavior,
+signup flow,
+login flow,
+employee access flow,
+feature sections,
+dashboard,
+reports,
+tasks,
+attendance,
+payroll,
+reviews,
+or any backend logic.
+
+This task is only for the mobile landing page hero presentation.
+
+Problem
+
+On mobile, the hero headline is wrapping awkwardly and breaking the reading flow.
+
+Current issue:
+“Manage your team, jobs, and clients in one place.”
+is breaking into lines in a way that feels clunky and less attractive.
+
+It does not feel polished enough for a premium SaaS landing page.
+It should feel sharper, cleaner, and more intentional on small screens.
+
+Goal
+
+Make the mobile hero section feel more professional, more readable, and more conversion-focused without affecting the rest of the landing page.
+
+The mobile hero should:
+read fast,
+look balanced,
+feel premium,
+and make users want to continue or sign up.
+
+Main instruction
+
+Do not simply shrink the text until it fits.
+Fix the layout properly.
+
+The goal is not just to make it smaller.
+The goal is to improve:
+headline line breaks,
+text width,
+spacing,
+CTA spacing,
+and overall mobile hero rhythm.
+
+Required mobile hero improvements
+
+Improve mobile headline line breaks
+
+The headline needs controlled line wrapping on mobile.
+
+Current direction is awkward because it breaks too aggressively and feels bulky.
+
+Use a mobile-specific headline width and max-width so the text wraps in a more intentional way.
+
+Target outcome:
+The headline should break into balanced lines that feel natural and strong.
+
+Recommended mobile headline formatting direction:
+Manage your team,
+jobs, and clients
+in one place.
+
+Or another balanced version that reads cleanly.
+
+Important:
+Do not force ugly manual breaks that look unnatural.
+Use responsive max-width and typography adjustments first.
+Only use controlled line breaks if necessary and if they truly improve the result.
+
+Reduce mobile headline heaviness slightly
+
+The mobile headline is strong, but it may be too large or too dense for the container.
+
+Adjust for mobile only:
+slightly reduce font size,
+slightly tighten line height,
+slightly tighten letter spacing if needed,
+preserve bold premium feel.
+
+The text should still feel powerful, not tiny.
+
+Improve hero content width on mobile
+
+The content column likely needs better width control.
+
+Adjust the mobile hero text container so:
+the text block has a more intentional readable width,
+there is enough breathing room on left and right,
+the headline does not feel cramped,
+the paragraph does not feel too wide or too narrow.
+
+Avoid:
+overly narrow text columns,
+awkward wrapping,
+or too much unused empty space.
+
+Improve mobile paragraph spacing
+
+The supporting paragraph under the headline should sit closer and cleaner beneath the headline.
+
+Adjust:
+margin-top below headline,
+line-height for readability,
+paragraph max-width,
+space between paragraph and bullet points.
+
+It should feel polished and easy to scan.
+
+Improve bullet list spacing on mobile
+
+The bullet points below the paragraph should feel lighter and better aligned.
+
+Adjust only on mobile if needed:
+icon alignment,
+vertical spacing,
+text line-height,
+left padding.
+
+The bullets should feel clean and not crowded.
+
+Improve mobile CTA spacing
+
+The Get Started Free button should remain strong and visible.
+
+Check:
+spacing above the button,
+spacing below the bullets,
+button width,
+tap comfort,
+text centering.
+
+Recommended:
+keep button visually strong
+avoid oversized dead space around it
+make the CTA feel immediately actionable
+
+Preserve the current structure
+
+Do not redesign the whole hero.
+Do not remove the existing content.
+Do not change the desktop hero.
+Do not move sections around.
+
+Only improve how the mobile hero content is presented.
+
+Suggested mobile copy adjustment if needed
+
+If the current headline still does not fit well even after layout tuning, the agent may use a slightly tighter mobile-only headline variation.
+
+Preferred current meaning:
+Manage your team, jobs, and clients in one place.
+
+Allowed mobile-only alternative if needed:
+Manage your team,
+clients, and jobs
+in one place.
+
+Or:
+Manage your cleaning team,
+jobs, and clients
+in one place.
+
+Only use an alternate mobile version if it clearly improves readability and conversion.
+Do not change the desktop headline unless separately approved.
+
+Styling guidance for mobile hero
+
+On mobile, the hero should feel:
+tight,
+premium,
+clean,
+and intentional.
+
+Recommended adjustments:
+slightly smaller headline size than current
+strong bold weight
+line-height around what feels compact but readable
+consistent left alignment
+controlled text width
+clean spacing between all elements
+
+Avoid:
+headline wrapping into too many short lines
+oversized empty gaps
+text touching edges
+CTA too far below content
+paragraph too loose under headline
+
+Technical implementation guidance
+
+Use mobile-only responsive adjustments.
+Do not change tablet or desktop unless absolutely necessary.
+
+Agent should check:
+font-size at small breakpoints
+line-height
+max-width of headline container
+max-width of paragraph
+spacing between eyebrow, headline, paragraph, bullets, and CTA
+button width and placement
+
+Possible safe implementation methods:
+responsive utility classes
+mobile-specific CSS overrides
+breakpoint-specific max-width tuning
+optional controlled line break span for mobile only if needed
+
+Do not hardcode awkward line breaks for all screen sizes.
+
+Acceptance criteria
+
+This is complete only when:
+the hero headline reads cleanly on mobile
+the headline wraps in a more attractive way
+the hero feels more premium and conversion-friendly
+the paragraph spacing feels cleaner
+the bullet list feels properly spaced
+the CTA still stands out clearly
+desktop layout remains unchanged
+nothing else in the landing page or app is affected
+
+Final instruction
+
+Focus only on the mobile hero text presentation.
+Do not expand scope.
+Do not touch any other section.
+Do not affect anything else that is already working.
+
+Extra note to the agent
+
+Make the mobile hero feel like a polished SaaS homepage, not just a squeezed desktop headline.

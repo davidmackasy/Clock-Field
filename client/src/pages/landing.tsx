@@ -292,34 +292,34 @@ function HeroDashboard() {
 // ─── Hero Section ─────────────────────────────────────────────────────────────
 function HeroSection() {
   return (
-    <section className="bg-white pt-16 pb-20 px-6 lg:px-10" data-testid="section-hero">
+    <section className="bg-white pt-10 sm:pt-16 pb-14 sm:pb-20 px-6 lg:px-10" data-testid="section-hero">
       <div className="max-w-[1280px] mx-auto">
         <div className="grid lg:grid-cols-[1fr_1.1fr] gap-14 items-center">
           {/* Left copy */}
-          <div>
-            <div className="inline-flex items-center gap-2 bg-primary/8 text-primary text-[12px] font-semibold px-3 py-1 rounded-full mb-5">
+          <div className="max-w-[500px] sm:max-w-none">
+            <div className="inline-flex items-center gap-2 bg-primary/8 text-primary text-[11.5px] sm:text-[12px] font-semibold px-3 py-1 rounded-full mb-4 sm:mb-5">
               <div className="w-1.5 h-1.5 rounded-full bg-primary" />
               Built for cleaning businesses
             </div>
-            <h1 className="text-[40px] sm:text-[48px] font-bold text-[#111827] leading-[1.12] tracking-[-0.03em] mb-5">
-              Manage your team,<br />
-              <span className="text-primary">jobs, and clients</span><br />
+            <h1 className="text-[33px] sm:text-[48px] font-bold text-[#111827] leading-[1.15] sm:leading-[1.12] tracking-[-0.025em] sm:tracking-[-0.03em] mb-4 sm:mb-5">
+              Manage your team,{" "}
+              <span className="text-primary">jobs, and clients</span>{" "}
               in one place.
             </h1>
-            <p className="text-[17px] text-[#4b5563] leading-[1.6] mb-7 max-w-[470px]">
+            <p className="text-[15px] sm:text-[17px] text-[#4b5563] leading-[1.6] mb-5 sm:mb-7 max-w-[420px] sm:max-w-[470px]">
               Clockfield gives cleaning businesses a single platform to schedule staff,
               document work, share client reports, track hours, and collect reviews.
             </p>
 
             {/* Bullets */}
-            <div className="space-y-2 mb-8">
+            <div className="space-y-1.5 sm:space-y-2 mb-6 sm:mb-8">
               {[
                 "Employee clock-in/out with real-time oversight",
                 "Shareable public reports clients actually read",
                 "Built-in review collection — no extra tools",
               ].map(p => (
-                <div key={p} className="flex items-center gap-2.5 text-[14px] text-[#374151]">
-                  <Check className="w-4 h-4 text-primary flex-shrink-0 stroke-[2.5]" />
+                <div key={p} className="flex items-center gap-2 sm:gap-2.5 text-[13px] sm:text-[14px] text-[#374151]">
+                  <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary flex-shrink-0 stroke-[2.5]" />
                   {p}
                 </div>
               ))}
