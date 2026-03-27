@@ -1,0 +1,280 @@
+Dev note for agent
+
+Task
+Fix only the report branding logo persistence issue in Clockfield admin settings.
+
+Problem
+The company logo upload works at first, but after some time the saved logo stops showing consistently. The admin uploads it, saves it, and it may appear for a while, then disappear or fail to display even though it was already saved.
+
+Scope
+Only fix the logo persistence and display issue for Report Branding.
+Do not change:
+
+payroll
+deductions
+branding color
+default service summary
+report layout
+auth
+storage structure unless strictly required for this fix
+any other settings logic
+any working public report flow
+If anything outside this exact issue needs to be changed, stop and ask for approval first.
+
+Expected result
+Once an admin uploads and saves a company logo:
+
+it must remain saved
+it must still show after refresh
+it must still show after logout and login
+it must still show after several minutes or hours
+it must still show on the public report header
+it must not randomly disappear
+replace logo and remove logo must continue to work properly
+
+Likely root causes to check
+Check these first before changing code broadly.
+
+Logo URL is only being held in local state
+Possible issue:
+file uploads successfully
+preview uses temporary frontend state or object URL
+permanent saved URL is not reliably being read back from database
+Temporary signed URL is expiring
+Possible issue:
+stored value may be a signed URL or temporary access URL
+once it expires, the image breaks
+Correct behavior:
+database should store a stable object key or permanent public URL
+frontend should request a fresh display URL if needed, instead of storing expiring URLs as the source of truth
+Save flow uploads file but does not persist final path correctly
+Possible issue:
+upload finishes
+settings save succeeds visually
+actual database field is empty, stale, or overwritten on later settings save
+Settings read endpoint is returning stale or null logo field
+Possible issue:
+backend save is correct
+frontend fetch later returns old cached settings or wrong field mapping
+Browser caching issue
+Possible issue:
+replace logo uses same URL/path
+browser caches broken or old asset
+Need:
+versioning or cache busting on replace only
+do not use random cache busters on every render unless needed
+Storage cleanup or overwrite issue
+Possible issue:
+old upload is deleted too early
+replace flow writes new file but frontend still points at removed asset
+file path collision creates inconsistent result
+
+Required fix strategy
+Use a stable, predictable logo persistence flow.
+
+Recommended implementation
+
+Treat logo storage in two layers
+Layer A: persistent database value
+Save only a stable logo reference in company/business settings
+Prefer one of these:
+logoStorageKey
+logoPath
+logoFileName plus known base path
+permanent public logoUrl if your storage is public and stable
+
+Do not store:
+
+blob URL
+object URL
+short-lived signed URL as the permanent saved value
+
+Layer B: display URL
+
+When rendering the image, derive the actual display URL from the saved persistent reference
+If the storage system requires signed URLs, generate a fresh signed URL at read time
+If the bucket is public, construct the public URL from the stored path
+Fix the save flow
+When admin clicks Replace Logo and then Save Settings:
+upload file first
+confirm upload success
+receive stable storage key/path/public URL
+save that stable value into company/report branding settings in database
+return saved settings payload from backend
+frontend should update state using the backend returned value, not the temporary upload preview
+Fix the settings load flow
+When settings page opens or refreshes:
+fetch company settings from backend
+load stored logo reference
+resolve it into a valid display URL
+render the logo preview from saved data, not from previous local state
+Fix the public report header flow
+When public report renders:
+use the saved company logo reference from the source of truth
+resolve it the same way every time
+do not depend on leftover session state or frontend memory
+Handle replace logo correctly
+When replacing an existing logo:
+upload new logo
+save new stable reference
+only after successful save, optionally clean up old file if your storage system supports that safely
+never delete the old file before the new value is confirmed saved
+if cleanup is risky, leave old file in place for now and ask later before optimizing storage
+Handle remove logo correctly
+When clicking Remove logo:
+clear the stored database field
+remove preview immediately in UI after successful backend response
+public report should then show no logo gracefully
+do not break brand color or header layout
+
+Exact checks agent must perform
+Backend
+
+Find where report branding settings are stored
+Identify the exact field currently used for the company logo
+Confirm whether it stores:
+stable file path
+public URL
+signed URL
+temporary client preview URL
+Verify the save endpoint returns the updated saved logo value
+Verify the read endpoint returns the same saved logo value consistently
+
+Frontend
+
+Check whether the current preview uses URL.createObjectURL or similar
+If yes, use that only for temporary preview before save, never as permanent saved state
+After successful save, replace temporary preview with the persisted backend value
+On page reload, render only from fetched saved settings
+
+Database
+
+Verify the logo field is not being reset by unrelated settings updates
+Verify Save Settings does not overwrite logo with null when no new file is selected
+This is very important.
+If admin changes brand color or summary text without uploading a new logo, the existing saved logo must remain untouched.
+
+Critical rule for update payloads
+Do not accidentally null out the saved logo when saving other branding fields.
+Common bug:
+
+frontend sends logo: null if no new file is selected
+backend overwrites existing saved logo with null
+Fix:
+only update logo field when:
+a new upload succeeded, or
+user explicitly clicked remove logo
+
+Recommended safe logic
+Case 1: new logo uploaded
+
+save new stable logo reference
+
+Case 2: no new logo uploaded
+
+keep existing saved logo reference unchanged
+
+Case 3: remove logo clicked
+
+clear saved logo reference
+
+Cache handling
+If the same file path is reused on replace, the browser may show stale results.
+Safer options:
+
+generate unique file names for each uploaded logo
+Example:
+company-<companyId>-logo-<timestamp>.png
+then save the new file path
+This avoids browser cache conflicts and is the safest fix.
+
+If you must keep the same path, add versioning:
+
+save updatedAt or logoVersion
+append it as a query param only for display
+But unique filenames are cleaner and safer.
+
+Validation
+Allow:
+
+png
+jpg
+jpeg
+webp
+Recommended:
+max file size limit if already present
+do not add new UI behavior unless needed
+
+Testing checklist
+Do all tests only around this feature.
+
+Admin settings page
+
+Upload logo
+Click Save Settings
+Confirm preview still shows
+Refresh page
+Confirm preview still shows
+Close browser and log back in
+Confirm preview still shows
+Wait long enough to reproduce previous issue
+Confirm preview still shows
+
+Public report
+
+Open report after upload
+Confirm logo shows in header
+Refresh public report
+Confirm logo still shows
+Open in incognito
+Confirm logo still shows
+
+Replace flow
+
+Upload first logo
+Save
+Upload second logo
+Save
+Confirm second logo shows in settings and public report
+Confirm it still shows after refresh
+
+Non-logo save safety
+
+Upload logo and save
+Later edit only brand color or summary
+Save without uploading a new logo
+Confirm original logo remains
+
+Remove flow
+
+Remove logo
+Save
+Confirm no logo in settings preview
+Confirm no logo in public report
+Confirm no errors
+
+Regression rule
+Do not refactor report branding broadly.
+Do not redesign the UI.
+Do not touch storage for other files.
+Do not touch work photos, report images, requests, attendance, or any unrelated upload system.
+Keep this as a surgical fix.
+
+If agent finds one of these, stop and ask for approval
+
+need to change storage provider
+need database migration
+need to move all existing logos to a new bucket or path
+need to modify shared upload utility used by other features
+
+Suggested implementation summary
+The safest fix is:
+
+store a stable logo file key/path in the database
+never store a temporary preview URL as the saved value
+on settings load and public report render, always resolve from that saved stable value
+preserve existing logo when saving other fields unless remove was explicitly chosen
+use unique filenames for replaced logos to avoid cache issues
+
+Message to agent
+Focus only on making the uploaded company logo persist reliably in admin settings and on the public service report. Do not touch anything else. Do not change any other feature, flow, or UI unless directly required for this exact bug. If anything else needs adjustment, ask for approval first.

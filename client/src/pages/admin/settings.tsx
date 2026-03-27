@@ -558,7 +558,7 @@ export default function AdminSettings() {
                     <button
                       type="button"
                       className="text-xs text-destructive hover:underline text-left"
-                      onClick={() => setForm((p: any) => ({ ...p, companyLogoUrl: "" }))}
+                      onClick={() => setForm((p: any) => ({ ...p, companyLogoUrl: null }))}
                       data-testid="button-remove-logo"
                     >
                       Remove logo

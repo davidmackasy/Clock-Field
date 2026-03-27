@@ -11,7 +11,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { isNotNull, eq } from "drizzle-orm";
-import { clientRequests } from "@shared/schema";
+import { clientRequests, companies } from "@shared/schema";
 import { getPlan } from "./plans";
 import { generateReviewOgImage } from "./og-image";
 
@@ -175,6 +175,37 @@ async function migrateUploadsToBase64(): Promise<void> {
   }
 }
 
+// ── Logo to base64 startup migration ──────────────────────────────────────────
+async function migrateLogoToBase64(): Promise<void> {
+  try {
+    const mimeMap: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" };
+    const rows = await db.select({ id: companies.id, companyLogoUrl: companies.companyLogoUrl })
+      .from(companies)
+      .where(isNotNull(companies.companyLogoUrl));
+    const toMigrate = rows.filter(r => r.companyLogoUrl?.startsWith("/uploads/"));
+    if (toMigrate.length === 0) return;
+    console.log(`[logo-migration] Migrating ${toMigrate.length} company logo(s) from disk to base64 in DB...`);
+    for (const row of toMigrate) {
+      const filePath = path.join(process.cwd(), row.companyLogoUrl!);
+      if (!fs.existsSync(filePath)) {
+        // File is gone (e.g. new deployment) — clear the broken URL
+        await db.update(companies).set({ companyLogoUrl: null }).where(eq(companies.id, row.id));
+        console.log(`[logo-migration] Cleared missing logo for company ${row.id}`);
+        continue;
+      }
+      const buf = fs.readFileSync(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      const mime = mimeMap[ext] || "image/jpeg";
+      const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
+      await db.update(companies).set({ companyLogoUrl: dataUrl }).where(eq(companies.id, row.id));
+      console.log(`[logo-migration] Converted logo for company ${row.id}`);
+    }
+    console.log("[logo-migration] Done.");
+  } catch (err: any) {
+    console.error("[logo-migration] Migration failed:", err.message);
+  }
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -202,6 +233,7 @@ export async function registerRoutes(
   });
 
   // ── Logo Upload ─────────────────────────────────────────────────────────────
+  // Converts to base64 data URL so it's stored directly in the DB — no disk dependency.
   app.post("/api/upload/logo", requireRole("admin"), (req, res) => {
     logoUpload.single("logo")(req, res, (err: any) => {
       if (err) {
@@ -210,16 +242,22 @@ export async function registerRoutes(
       }
       const file = req.file as Express.Multer.File | undefined;
       if (!file) return res.status(400).json({ message: "No file uploaded" });
-      const extMap: Record<string, string> = {
-        "image/png": ".png",
-        "image/jpeg": ".jpg",
-        "image/jpg": ".jpg",
-        "image/webp": ".webp",
-      };
-      const ext = extMap[file.mimetype] || ".jpg";
-      const newName = file.filename + ext;
-      fs.renameSync(file.path, path.join(UPLOADS_DIR, newName));
-      res.json({ url: `/uploads/${newName}` });
+      try {
+        const buf = fs.readFileSync(file.path);
+        const mimeMap: Record<string, string> = {
+          "image/png": "image/png",
+          "image/jpeg": "image/jpeg",
+          "image/jpg": "image/jpeg",
+          "image/webp": "image/webp",
+        };
+        const mime = mimeMap[file.mimetype] || "image/jpeg";
+        const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
+        // Clean up the temp file — we don't need it on disk
+        try { fs.unlinkSync(file.path); } catch { /* ignore */ }
+        res.json({ url: dataUrl });
+      } catch (e: any) {
+        res.status(500).json({ message: "Failed to process logo" });
+      }
     });
   });
 
@@ -863,6 +901,10 @@ Welcome again, and thank you for choosing ClockField.
   app.patch("/api/company", requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
+      // Normalize empty companyLogoUrl to null so we don't store blank strings
+      if ("companyLogoUrl" in req.body && !req.body.companyLogoUrl) {
+        req.body.companyLogoUrl = null;
+      }
       if (req.body.timezone) {
         try {
           Intl.DateTimeFormat(undefined, { timeZone: req.body.timezone });
@@ -3536,6 +3578,8 @@ Welcome again, and thank you for choosing ClockField.
 
   // Run once at startup to migrate any /uploads/ imageUrls to base64 in DB
   void migrateUploadsToBase64();
+  // Run once at startup to migrate any disk-based company logos to base64 in DB
+  void migrateLogoToBase64();
 
   return httpServer;
 }
