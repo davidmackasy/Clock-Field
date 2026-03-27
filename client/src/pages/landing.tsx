@@ -8,12 +8,14 @@ import {
   CheckCircle2, Circle
 } from "lucide-react";
 
-const cleanPhoto1 = "/cleaning-photos/cleaning_work_1_1.jpg";
-const cleanPhoto2 = "/cleaning-photos/cleaning_work_1_2.jpg";
-const cleanPhoto3 = "/cleaning-photos/cleaning_work_1_3.jpg";
-const cleanPhoto4 = "/cleaning-photos/cleaning_work_1_4.jpg";
-const cleanPhoto5 = "/cleaning-photos/cleaning_work_1_5.jpg";
-const cleanPhoto6 = "/cleaning-photos/cleaning_work_1_6.jpg";
+// Work documentation section: office desk cleaning sequence (before → during → after)
+const cleanPhoto1 = "/cleaning-photos/desk_before.png";
+const cleanPhoto2 = "/cleaning-photos/desk_during.png";
+const cleanPhoto3 = "/cleaning-photos/desk_after.png";
+// Service report section: floor mopping sequence (before → during → after)
+const cleanPhoto4 = "/cleaning-photos/floor_before.png";
+const cleanPhoto5 = "/cleaning-photos/floor_during.png";
+const cleanPhoto6 = "/cleaning-photos/floor_after.png";
 
 // ─── Utility: scroll to anchor ────────────────────────────────────────────────
 const scrollTo = (href: string) => {
