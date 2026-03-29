@@ -1,0 +1,183 @@
+Dev note for agent
+
+Task
+
+Fix the print/PDF layout so every page, including page 2 and beyond, has proper top spacing.
+
+This is the only task.
+Do not touch anything else.
+
+Do not touch:
+
+* attendance
+* employee accounts
+* client accounts
+* report logic
+* signature logic
+* email logic
+* send flow
+* finalize
+* archive
+* auth
+* any unrelated UI or backend code
+
+Problem
+
+The second page starts too high.
+The Acknowledgement & Signatures section is almost glued to the top edge of page 2.
+It looks broken and unprofessional.
+
+Expected result
+
+Every printed/PDF page must have:
+
+* a consistent top safe area
+* a consistent bottom safe area
+* proper left/right margins
+* clean page-to-page continuity
+
+Page 2 must not start at the very top.
+It needs breathing room, just like a professional document.
+
+What to fix
+
+1. Add a real top margin/padding for every printed page
+   The print layout must reserve top space on all pages, not just page 1.
+
+Right now page 1 has acceptable spacing, but page 2 does not.
+That means the current print flow is not enforcing a repeated page content area.
+
+Fix the printable page structure so each new page begins inside the same printable content frame.
+
+2. The Acknowledgement & Signatures section must not sit flush to the top of page 2
+   If that section moves to page 2, it should begin after a proper top margin.
+
+Required behavior
+
+* page break happens
+* next page starts with top spacing
+* then the section begins
+
+Not:
+
+* page break happens
+* section starts immediately at the top edge
+
+3. Use a proper print page container approach
+   The issue is not just the section itself.
+   The issue is that continued pages are not respecting a repeated page-safe layout.
+
+Implement or fix a print-safe page wrapper so all pages follow the same structure:
+
+* top padding/margin
+* content area
+* footer-safe area
+
+This must apply to:
+
+* page 1
+* page 2
+* page 3
+* all additional pages
+
+4. Keep the signature section grouped, but not jammed
+   The Acknowledgement & Signatures section can move to the next page if needed.
+   That part is fine.
+
+But when it moves:
+
+* it must start with top spacing
+* the section title must not be glued to the page edge
+* the signature row must still look balanced
+
+5. Balance page spacing professionally
+   The top space on page 2 should visually match the document style.
+   It does not need to be huge.
+   It just needs to clearly look intentional and professional.
+
+Target
+
+* not too tight
+* not too empty
+* not touching top edge
+* not visually broken
+
+What not to do
+
+Do not:
+
+* fix only this one section with a random margin hack
+* hardcode spacing that only works for this exact report length
+* add huge empty space
+* shrink all content to force it to fit
+* break the signature cards
+* affect page 1 layout negatively
+* affect any non-report page
+
+Recommended approach
+
+Use the print/PDF template itself and enforce repeated page-safe spacing for continued pages.
+
+Check:
+
+* printable wrapper
+* page container
+* print CSS
+* page break rules
+* section wrappers that move between pages
+
+If using HTML-to-PDF or print CSS:
+
+* ensure new pages inherit a content box with top padding
+* ensure sections after page breaks render inside that box
+* ensure footer-safe spacing still remains
+
+If the signature section is intentionally forced to next page:
+
+* give the next page the same top content padding as page 1
+* not a raw new page start at y=0
+
+Acceptance criteria
+
+This is complete only if all of these are true:
+
+* page 2 has proper top spacing
+* page 3 and later also have proper top spacing if generated
+* Acknowledgement & Signatures no longer starts glued to the top
+* the report looks like a professional multi-page document
+* page 1 still looks good
+* bottom spacing still remains good
+* no unrelated logic or app feature is touched
+
+Test cases
+
+Test all of these before marking done:
+
+1. Current incident report sample
+
+* page 2 has proper top spacing
+
+2. Longer report
+
+* page 2 and page 3 both have top spacing
+
+3. Shorter report where signatures stay on page 1
+
+* page 1 still looks fine
+
+4. Report with employee statement included
+
+* second page still has top breathing room
+
+5. PDF download
+
+* spacing is correct in final file
+
+6. Print preview
+
+* spacing is correct there too
+
+Final instruction
+
+Do not touch anything else.
+Fix the repeated page top spacing in the final report print/PDF layout so page 2 and all following pages look professional.

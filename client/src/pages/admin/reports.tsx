@@ -1211,7 +1211,7 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
       <style>{`
         @media print {
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; visibility: hidden !important; }
-          @page { margin: 0; size: letter; }
+          @page { margin: 0.62in 0.68in 0.80in 0.68in; size: letter; }
           .print-report-container {
             display: block !important;
             visibility: visible !important;
@@ -1219,8 +1219,7 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
             top: 0;
             left: 0;
             width: 100%;
-            padding: 0.62in 0.68in 0.80in 0.68in;
-            box-sizing: border-box;
+            padding: 0;
           }
           .print-report-container * { visibility: visible !important; }
           .print-section { break-inside: avoid; page-break-inside: avoid; }
