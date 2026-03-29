@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { setupAuth, hashPassword, comparePasswords, requireAuth, requireRole } from "./auth";
 import OpenAI from "openai";
-import { sendPasswordResetEmail } from "./mail";
+import { sendPasswordResetEmail, sendReportEmail } from "./mail";
 import { createHash } from "crypto";
 import passport from "passport";
 import { randomBytes } from "crypto";
@@ -3812,19 +3812,94 @@ Return a JSON object with these exact fields:
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
-  // Send report to employee/client (admin only)
+  // Send report to employee/client — supports account delivery + email delivery
   app.post("/api/reports/:id/send", requireRole("admin"), async (req: any, res) => {
     try {
       const { user } = req;
       const report = await storage.getReport(req.params.id, user.companyId);
       if (!report) { res.status(404).json({ message: "Report not found" }); return; }
-      const { sendToEmployee, sendToClient } = req.body;
+
+      const {
+        sendToEmployee = false,
+        sendToClient = false,
+        sendToEmployeeEmail = false,
+        sendToClientEmail = false,
+      } = req.body;
+
+      // Update in-app delivery flags
       const updateData: any = { sentAt: new Date().toISOString(), status: "sent" };
       if (sendToEmployee) updateData.sentToEmployee = true;
       if (sendToClient) updateData.sentToClient = true;
       const updated = await storage.updateReport(req.params.id, user.companyId, updateData);
-      await logReportActivity(req.params.id, "sent", user.id, user.role, { sendToEmployee, sendToClient });
-      res.json(updated);
+
+      // Build base app URL for CTA links
+      const appUrl = `${req.protocol}://${req.get("host")}`;
+      const company = await storage.getCompany(user.companyId);
+      const companyName = company?.name || "ClockField";
+
+      // Track email delivery results for response
+      const emailResults: Array<{ recipient: string; ok: boolean; error?: string }> = [];
+
+      // Send email to assigned employee
+      if (sendToEmployeeEmail && report.assignedEmployeeId) {
+        const empUser = await storage.getUser(report.assignedEmployeeId);
+        if (empUser?.email) {
+          try {
+            await sendReportEmail({
+              to: empUser.email,
+              recipientName: `${empUser.firstName} ${empUser.lastName}`.trim() || empUser.email,
+              reportType: report.reportType,
+              reportTitle: report.title,
+              reportDate: report.incidentDate || null,
+              companyName,
+              reportsUrl: `${appUrl}/employee/reports`,
+              requiresSignature: !!report.requiresEmployeeSignature,
+            });
+            emailResults.push({ recipient: "employee", ok: true });
+            await logReportActivity(report.id, "email_sent", user.id, user.role, {
+              recipientType: "employee", to: empUser.email,
+            });
+          } catch (err: any) {
+            emailResults.push({ recipient: "employee", ok: false, error: "Email could not be delivered" });
+          }
+        } else {
+          emailResults.push({ recipient: "employee", ok: false, error: "No email on file" });
+        }
+      }
+
+      // Send email to assigned client
+      if (sendToClientEmail && report.assignedClientId) {
+        const clientRecord = await storage.getClient(report.assignedClientId);
+        const clientEmail = clientRecord?.contactEmail;
+        if (clientEmail) {
+          try {
+            await sendReportEmail({
+              to: clientEmail,
+              recipientName: clientRecord?.contactName || clientRecord?.name || clientEmail,
+              reportType: report.reportType,
+              reportTitle: report.title,
+              reportDate: report.incidentDate || null,
+              companyName,
+              reportsUrl: `${appUrl}/client/reports`,
+              requiresSignature: !!report.requiresClientSignature,
+            });
+            emailResults.push({ recipient: "client", ok: true });
+            await logReportActivity(report.id, "email_sent", user.id, user.role, {
+              recipientType: "client", to: clientEmail,
+            });
+          } catch (err: any) {
+            emailResults.push({ recipient: "client", ok: false, error: "Email could not be delivered" });
+          }
+        } else {
+          emailResults.push({ recipient: "client", ok: false, error: "No email on file" });
+        }
+      }
+
+      await logReportActivity(req.params.id, "sent", user.id, user.role, {
+        sendToEmployee, sendToClient, sendToEmployeeEmail, sendToClientEmail,
+      });
+
+      res.json({ ...updated, emailResults });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

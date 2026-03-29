@@ -1,0 +1,397 @@
+Dev note for agent
+
+Task
+Add email delivery for reports so reports can be sent not only to the user’s in-app account, but also directly to the selected client’s or employee’s email address using the email already saved on their account.
+
+Scope
+This applies to reports sent from the report view/send flow.
+Examples:
+
+incident reports
+work reports
+other report types already supported in the app
+
+Main goal
+When admin clicks Send Report, they should be able to choose:
+
+send to in-app account
+send to email
+or both
+
+This must use the email already attached to the selected client or employee profile for that report.
+
+Critical restrictions
+Do not break:
+
+current report generation
+finalize flow
+archive flow
+print / PDF flow
+current in-app report sending
+signing flow
+existing email system already used elsewhere
+existing welcome emails
+existing broadcast emails
+password reset
+auth
+anything else outside this report-send flow
+
+Do not rebuild unrelated email infrastructure unless absolutely necessary.
+Extend the current system safely and only where needed.
+
+What needs to happen
+
+Update the Send Report modal
+Current modal only allows:
+Send to assigned employee
+Send to assigned client
+
+Improve it so each recipient has delivery method options.
+
+Recommended structure
+
+Send Report
+
+Select who should receive this report and how:
+
+Assigned employee
+
+Send to account
+Send to email
+
+Assigned client
+
+Send to account
+Send to email
+
+Optional UI behavior
+
+If no email exists for that recipient, disable “Send to email” and show:
+No email available on file
+If only account exists, allow account only
+If both exist, allow both
+If neither exists, disable that recipient block entirely
+
+Do not overcomplicate the UI.
+Keep it clean, simple, and professional.
+
+Recommended modal example
+
+Assigned employee
+[x] Send to account
+[x] Send to email
+employee@email.com
+
+Assigned client
+[x] Send to account
+[x] Send to email
+client@email.com
+
+Buttons
+
+Cancel
+Send
+
+Optional small improvement
+Show a short delivery summary before sending:
+“This report will be sent to 2 recipients by account and email.”
+
+Use saved email data from the selected report entities
+When sending by email:
+for client, use the email on the assigned client record linked to that report
+for employee, use the email on the assigned employee/user record linked to that report
+
+Do not ask the admin to manually type the email unless there is no email on file and you explicitly want a future enhancement.
+For now, use saved email addresses only.
+
+Email content behavior
+When a report is sent by email, the recipient should receive a professional email with:
+report title/type
+date
+short summary line
+company/app branding
+CTA button to open and review the report
+optional secondary CTA to sign if signature is required
+
+The email should not dump the full raw report in plain text unless that is already part of your current email design.
+Prefer a professional summary + secure link.
+
+Recommended email content
+
+Subject examples
+
+Incident Report Ready for Review
+Work Report Ready for Review
+Report Ready for Review
+
+Email body
+Hello [Name],
+
+A new report has been shared with you through Clockfield.
+
+Report type: [Report Type]
+Date: [Date]
+Location: [Location if available]
+
+Please click below to view and review the report.
+
+[View Report]
+
+If a signature is required, you will be able to sign it through the secure report page.
+
+Regards,
+[Company Name or Clockfield branding]
+
+Signing flow requirement
+This part matters.
+
+If the report requires signing, the email should not just send a dead PDF.
+The best flow is:
+
+email contains secure report link
+recipient opens report
+reviews it
+signs it directly in Clockfield
+
+Optional secondary action
+
+Download PDF
+But signature should still happen inside the secure Clockfield flow if that is how your current signing works.
+
+Do not create a separate disconnected signing system unless one already exists.
+Reuse the existing report detail / sign flow.
+
+Link behavior
+Email CTA should open the correct report page directly.
+That link should:
+identify the report
+identify recipient context if needed
+respect current auth/public-access/security rules
+not expose unrelated reports
+
+Preferred approach
+Reuse the same secure/public report link architecture already used elsewhere in the app, if available.
+
+Examples
+
+signed token link
+recipient-specific access token
+secure share link
+report public review page if already supported
+
+Do not expose raw internal IDs without protection.
+
+Backend logic
+Add a safe email send path to the existing report dispatch flow.
+
+Suggested flow
+When admin presses Send:
+
+collect selections
+validate recipient availability
+keep current account-send behavior unchanged
+if email-send selected, queue/send email to each selected valid recipient
+return clear success/failure status per recipient and per channel
+
+Recommended backend payload concept
+
+sendReport({
+reportId,
+sendToClientAccount: true/false,
+sendToClientEmail: true/false,
+sendToEmployeeAccount: true/false,
+sendToEmployeeEmail: true/false
+})
+
+Backend resolves:
+
+report data
+assigned client
+assigned employee
+their saved email addresses
+secure report URL
+email template
+send status
+Delivery logic
+Support mixed sending.
+Examples:
+send to client account only
+send to client email only
+send to employee by both account and email
+send to both recipients by both methods
+
+The action should be idempotent enough to avoid duplicates from accidental double click.
+Prevent repeated sends if button is clicked multiple times quickly.
+
+Success and error handling
+After sending, show a clean result summary.
+
+Examples:
+Success
+Report sent successfully.
+Client: account + email
+Employee: email only
+
+Partial success
+Report sent with some issues.
+Client email sent successfully.
+Employee email could not be sent because no email is on file.
+
+Error
+Could not send report right now. Please try again.
+
+Do not show raw server errors, stack traces, or JSON to the user.
+
+Audit trail / activity logging
+Add light logging so admin can see report delivery history.
+
+At minimum, log:
+
+who triggered send
+report id/type
+recipient type
+delivery method
+timestamp
+status success/failure
+
+Optional future UI
+“Sent history” on the report page
+
+Example
+Sent to client account on Mar 29, 2026 at 4:02 PM
+Sent to client email on Mar 29, 2026 at 4:02 PM
+Sent to employee email on Mar 29, 2026 at 4:03 PM
+
+This is important for troubleshooting and client follow-up.
+
+PDF behavior
+Do not replace Print / PDF.
+Keep it as-is.
+
+Email sending should be an additional option.
+The email may include:
+
+secure view link
+optional PDF attachment if your current infrastructure supports it safely
+
+Recommended first version
+Do not attach the PDF unless it is already easy and reliable.
+Send the secure view/sign link first.
+That is cleaner and easier to maintain.
+
+UI detail for current modal
+Improve the modal slightly while implementing this.
+
+Requirements
+
+show recipient email under each recipient when available
+disable email checkbox if no email exists
+loading state on Send button
+prevent modal close while actively sending unless safely handled
+show success toast or inline success status
+keep styling consistent with app
+no clutter
+
+Suggested layout
+
+Send Report
+
+Select who should receive this report and how.
+
+Assigned employee
+Name: David Mackasy
+Email: david@email.com
+
+[x] Send to account
+[x] Send to email
+
+Assigned client
+Name: Client Name
+Email: client@email.com
+
+[x] Send to account
+[x] Send to email
+
+[Cancel] [Send]
+
+Data checks
+Before enabling send:
+confirm report exists
+confirm assigned client/employee exists
+confirm email exists for selected email route
+confirm report link can be generated
+confirm email service is available
+
+If email is missing:
+
+do not fail the whole send if account send is still possible
+just show that email delivery for that recipient is unavailable
+Recommended implementation order
+Step 1
+Identify current report send modal component and existing send handler
+
+Step 2
+Extend modal UI to include account/email delivery options per recipient
+
+Step 3
+Extend backend report-send endpoint or service to support email delivery
+
+Step 4
+Generate secure report link using the existing report access pattern
+
+Step 5
+Create reusable report email template
+
+Step 6
+Add delivery result handling and clean success/error UI
+
+Step 7
+Add audit logging
+
+Step 8
+Test each report type without changing current flows
+
+Test cases
+You must test all of these without breaking current behavior.
+
+Core tests
+
+send to client account only
+send to client email only
+send to employee account only
+send to employee email only
+send to both client and employee by both methods
+send when employee has no email
+send when client has no email
+send when one recipient is missing entirely
+send report after finalize
+send report before finalize if currently allowed
+print/PDF still works
+archive still works
+existing in-app report visibility still works
+report signing still works from email link
+duplicate button press does not send multiple times
+partial failure displays cleanly
+no raw backend errors shown
+Security requirements
+Very important.
+Do not send insecure direct links.
+Do not expose internal report data publicly.
+If report links can be opened from email without login, they must be tokenized and scoped securely.
+If login is required, email CTA can route them to login and then to the report.
+
+Best choice
+Reuse your current secure public-link/report-link logic if already built.
+
+Future-ready note
+Build this as a reusable report delivery system, not only for incident reports.
+The modal and backend should work for all report types that already use the send flow.
+Final rule
+Do not touch anything else.
+Only extend the current report sending flow to support:
+in-app delivery
+email delivery
+mixed delivery
+using emails already stored on the assigned client and employee records.
+
+If any unrelated structural change is needed, stop and ask for approval before touching it.

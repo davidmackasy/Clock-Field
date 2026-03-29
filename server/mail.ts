@@ -179,6 +179,68 @@ After subscribing, open ClockField and get started: ${opts.appUrl}
   return { id: result.id || "" };
 }
 
+export async function sendReportEmail(opts: {
+  to: string;
+  recipientName: string;
+  reportType: string;
+  reportTitle: string;
+  reportDate: string | null;
+  companyName: string;
+  reportsUrl: string;
+  requiresSignature: boolean;
+}): Promise<void> {
+  const { client, domain } = getClient();
+  const from = process.env.MAIL_FROM || "Clockfield <noreply@mg.clockfield.com>";
+
+  const typeTitles: Record<string, string> = {
+    incident: "Incident Report",
+    issue: "Issue Report",
+    damage: "Damage Report",
+    statement: "Statement Report",
+    complaint: "Complaint Report",
+    general: "General Report",
+  };
+  const typeLabel = typeTitles[opts.reportType] || "Report";
+  const subject = `${typeLabel} Ready for Review`;
+
+  const sigNote = opts.requiresSignature
+    ? `<p style="margin:0 0 14px;color:#374151;">Your signature is required on this report. Please sign it through the secure ClockField portal.</p>`
+    : "";
+
+  const dateRow = opts.reportDate
+    ? `<tr><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:13px;">Date</td><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;">${opts.reportDate}</td></tr>`
+    : "";
+
+  const bodyHtml = `
+<p style="margin:0 0 14px;color:#374151;">Hi <strong>${opts.recipientName}</strong>,</p>
+<p style="margin:0 0 14px;color:#374151;">A report has been shared with you through ClockField.</p>
+<table style="width:100%;border-collapse:collapse;margin:16px 0 20px;border-radius:6px;border:1px solid #e5e7eb;overflow:hidden;">
+  <tr><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:13px;width:120px;">Report type</td><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:600;">${typeLabel}</td></tr>
+  <tr><td style="padding:10px 14px;${opts.reportDate ? "border-bottom:1px solid #e5e7eb;" : ""}color:#6b7280;font-size:13px;">Title</td><td style="padding:10px 14px;${opts.reportDate ? "border-bottom:1px solid #e5e7eb;" : ""}font-size:13px;">${opts.reportTitle}</td></tr>
+  ${dateRow}
+</table>
+${sigNote}
+<p style="margin:0 0 14px;font-size:13px;color:#6b7280;">Click the button below to sign in and review the report.</p>`;
+
+  const html = buildEmailHtml({
+    title: subject,
+    bodyHtml,
+    ctaLabel: opts.requiresSignature ? "Review &amp; Sign Report" : "View Report",
+    ctaUrl: opts.reportsUrl,
+    footerNote: `You are receiving this because a report was shared with you by ${opts.companyName} through ClockField.`,
+  });
+
+  const textBody = `Hi ${opts.recipientName},\n\nA report has been shared with you through ClockField.\n\nReport type: ${typeLabel}\nTitle: ${opts.reportTitle}${opts.reportDate ? `\nDate: ${opts.reportDate}` : ""}\n\nView the report here: ${opts.reportsUrl}\n\nRegards,\n${opts.companyName}`;
+
+  await client.messages.create(domain, {
+    from,
+    to: [opts.to],
+    subject,
+    text: textBody,
+    html,
+  });
+}
+
 export async function sendBroadcastEmails(opts: {
   recipients: Array<{ email: string; businessId: string }>;
   subject: string;

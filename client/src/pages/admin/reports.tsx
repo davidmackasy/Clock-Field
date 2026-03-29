@@ -649,48 +649,156 @@ function CreateReportDialog({ open, onClose, employees, clients, locations }: an
 }
 
 // ─── Send Report Dialog ───────────────────────────────────────────────────────
-function SendReportDialog({ report, open, onClose }: any) {
+function SendReportDialog({ report, open, onClose, employees, clients }: any) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  // Resolve assigned employee and client records
+  const assignedEmployee = report?.assignedEmployeeId
+    ? (employees || []).find((e: any) => e.id === report.assignedEmployeeId) : null;
+  const assignedClient = report?.assignedClientId
+    ? (clients || []).find((c: any) => c.id === report.assignedClientId) : null;
+
+  const empEmail = assignedEmployee?.email || null;
+  const clientEmail = assignedClient?.contactEmail || null;
+
   const [sendToEmployee, setSendToEmployee] = useState(!!report?.assignedEmployeeId);
+  const [sendToEmployeeEmail, setSendToEmployeeEmail] = useState(false);
   const [sendToClient, setSendToClient] = useState(!!report?.assignedClientId);
+  const [sendToClientEmail, setSendToClientEmail] = useState(false);
+  const [deliveryResult, setDeliveryResult] = useState<null | { emailResults: any[] }>(null);
+
+  const anySelected = sendToEmployee || sendToClient || sendToEmployeeEmail || sendToClientEmail;
 
   const sendMut = useMutation({
-    mutationFn: () => apiRequest("POST", `/api/reports/${report.id}/send`, { sendToEmployee, sendToClient }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/reports"] });
-      toast({ title: "Report sent" });
-      onClose();
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/reports/${report.id}/send`, {
+        sendToEmployee, sendToClient, sendToEmployeeEmail, sendToClientEmail,
+      });
+      return res.json();
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/reports"] });
+      const emailResults: any[] = data?.emailResults || [];
+      const failedEmails = emailResults.filter((r: any) => !r.ok);
+      if (failedEmails.length > 0 && (sendToEmployeeEmail || sendToClientEmail)) {
+        setDeliveryResult({ emailResults });
+      } else {
+        toast({ title: "Report sent successfully" });
+        onClose();
+      }
+    },
+    onError: (e: any) => toast({ title: "Error", description: "Could not send report. Please try again.", variant: "destructive" }),
   });
 
+  if (deliveryResult) {
+    const results = deliveryResult.emailResults;
+    return (
+      <Dialog open={open} onOpenChange={onClose}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Report Sent</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">Delivery summary:</p>
+            {results.map((r: any, i: number) => (
+              <div key={i} className={`flex items-start gap-2.5 rounded-md border px-3 py-2.5 text-sm ${r.ok ? "border-green-200 bg-green-50 text-green-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+                {r.ok
+                  ? <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0 text-green-600" />
+                  : <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600" />}
+                <span>
+                  {r.ok
+                    ? `Email sent to ${r.recipient}`
+                    : `${r.recipient} email: ${r.error || "could not be delivered"}`}
+                </span>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button onClick={onClose}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>Send Report</DialogTitle></DialogHeader>
-        <div className="space-y-3 py-2">
-          <p className="text-sm text-muted-foreground">Select who should receive this report:</p>
-          {report?.assignedEmployeeId && (
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <Checkbox checked={sendToEmployee} onCheckedChange={v => setSendToEmployee(!!v)} data-testid="check-send-employee" />
-              Send to assigned employee
-            </label>
+    <Dialog open={open} onOpenChange={sendMut.isPending ? undefined : onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Send Report</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-1">
+          <p className="text-sm text-muted-foreground">Select who should receive this report and how.</p>
+
+          {/* ── Employee recipient block ── */}
+          {report?.assignedEmployeeId && assignedEmployee && (
+            <div className="rounded-lg border bg-muted/30 p-3.5 space-y-2.5">
+              <div className="flex items-center gap-2 mb-1">
+                <User className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Assigned Employee</span>
+              </div>
+              <p className="text-sm font-medium">{assignedEmployee.firstName} {assignedEmployee.lastName}</p>
+              {empEmail && <p className="text-xs text-muted-foreground">{empEmail}</p>}
+              <div className="space-y-2 pt-1">
+                <label className="flex items-center gap-2.5 text-sm cursor-pointer">
+                  <Checkbox checked={sendToEmployee} onCheckedChange={v => setSendToEmployee(!!v)} data-testid="check-send-employee" />
+                  <span>Send to account (in-app)</span>
+                </label>
+                <label className={`flex items-center gap-2.5 text-sm ${empEmail ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}>
+                  <Checkbox
+                    checked={sendToEmployeeEmail}
+                    onCheckedChange={v => empEmail && setSendToEmployeeEmail(!!v)}
+                    disabled={!empEmail}
+                    data-testid="check-send-employee-email"
+                  />
+                  <span>Send to email</span>
+                  {!empEmail && <span className="text-xs text-muted-foreground ml-1">— no email on file</span>}
+                </label>
+              </div>
+            </div>
           )}
-          {report?.assignedClientId && (
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <Checkbox checked={sendToClient} onCheckedChange={v => setSendToClient(!!v)} data-testid="check-send-client" />
-              Send to assigned client
-            </label>
+
+          {/* ── Client recipient block ── */}
+          {report?.assignedClientId && assignedClient && (
+            <div className="rounded-lg border bg-muted/30 p-3.5 space-y-2.5">
+              <div className="flex items-center gap-2 mb-1">
+                <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Assigned Client</span>
+              </div>
+              <p className="text-sm font-medium">{assignedClient.name}</p>
+              {clientEmail && <p className="text-xs text-muted-foreground">{clientEmail}</p>}
+              <div className="space-y-2 pt-1">
+                <label className="flex items-center gap-2.5 text-sm cursor-pointer">
+                  <Checkbox checked={sendToClient} onCheckedChange={v => setSendToClient(!!v)} data-testid="check-send-client" />
+                  <span>Send to account (in-app)</span>
+                </label>
+                <label className={`flex items-center gap-2.5 text-sm ${clientEmail ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}>
+                  <Checkbox
+                    checked={sendToClientEmail}
+                    onCheckedChange={v => clientEmail && setSendToClientEmail(!!v)}
+                    disabled={!clientEmail}
+                    data-testid="check-send-client-email"
+                  />
+                  <span>Send to email</span>
+                  {!clientEmail && <span className="text-xs text-muted-foreground ml-1">— no email on file</span>}
+                </label>
+              </div>
+            </div>
           )}
+
           {!report?.assignedEmployeeId && !report?.assignedClientId && (
             <p className="text-sm text-amber-600">No employee or client assigned to this report.</p>
           )}
         </div>
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={() => sendMut.mutate()} disabled={sendMut.isPending || (!sendToEmployee && !sendToClient)} data-testid="button-send-report">
-            <Send className="w-4 h-4 mr-1.5" />Send
+          <Button variant="outline" onClick={onClose} disabled={sendMut.isPending}>Cancel</Button>
+          <Button
+            onClick={() => sendMut.mutate()}
+            disabled={sendMut.isPending || !anySelected}
+            data-testid="button-send-report"
+          >
+            {sendMut.isPending
+              ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Sending…</>
+              : <><Send className="w-4 h-4 mr-1.5" />Send</>}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1048,7 +1156,7 @@ function ReportDetailDialog({ reportId: rptId, open, onClose, employees, clients
       {/* Print / PDF layout - full page */}
       {rpt && <PrintLayout report={rpt} employees={employees} clients={clients} locations={locations} company={company} />}
 
-      {sendOpen && <SendReportDialog report={rpt} open={sendOpen} onClose={() => setSendOpen(false)} />}
+      {sendOpen && <SendReportDialog report={rpt} open={sendOpen} onClose={() => setSendOpen(false)} employees={employees} clients={clients} />}
     </>
   );
 }
