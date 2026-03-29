@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
@@ -1310,6 +1311,7 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
 // ─── Main Admin Reports Page ──────────────────────────────────────────────────
 export default function AdminReports() {
   const { user } = useAuth();
+  const [location] = useLocation();
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState("all");
@@ -1358,6 +1360,20 @@ export default function AdminReports() {
         <Button onClick={() => setCreateOpen(true)} data-testid="button-new-report">
           <Plus className="w-4 h-4 mr-2" />New Report
         </Button>
+      </div>
+
+      {/* Section nav */}
+      <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg w-fit">
+        <Link href="/admin/reports">
+          <button data-testid="nav-section-reports" className={`px-3.5 py-1.5 text-sm font-medium rounded-md transition-colors ${location === "/admin/reports" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+            Reports
+          </button>
+        </Link>
+        <Link href="/admin/requests">
+          <button data-testid="nav-section-requests" className={`px-3.5 py-1.5 text-sm font-medium rounded-md transition-colors ${location.startsWith("/admin/requests") ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+            Requests
+          </button>
+        </Link>
       </div>
 
       {/* Summary cards */}

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useSearch } from "wouter";
+import { useSearch, useLocation, Link } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -195,6 +195,7 @@ function ThreadMessage({ msg, clientName }: { msg: any; clientName: string }) {
 
 export default function AdminRequests() {
   const { toast } = useToast();
+  const [location] = useLocation();
   const search_ = useSearch();
   const initParams = new URLSearchParams(search_);
   const initStatus = initParams.get("status") === "open" ? "open" : "all";
@@ -325,6 +326,19 @@ export default function AdminRequests() {
           onClose={() => setUrlLightbox(null)}
         />
       )}
+      {/* Section nav */}
+      <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg w-fit">
+        <Link href="/admin/reports">
+          <button data-testid="nav-section-reports" className={`px-3.5 py-1.5 text-sm font-medium rounded-md transition-colors ${location.startsWith("/admin/reports") ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+            Reports
+          </button>
+        </Link>
+        <Link href="/admin/requests">
+          <button data-testid="nav-section-requests" className={`px-3.5 py-1.5 text-sm font-medium rounded-md transition-colors ${location === "/admin/requests" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+            Requests
+          </button>
+        </Link>
+      </div>
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

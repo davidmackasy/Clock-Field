@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { DollarSign, Clock, Users, TrendingDown, ChevronRight, Calendar } from "lucide-react";
 import PayRunsTab from "./pay-runs-tab";
 import PayStubsTab from "./pay-stubs-tab";
+import AdminTimesheets from "./timesheets";
 
 // ── Period helpers ────────────────────────────────────────────────────────────
 
@@ -656,10 +657,11 @@ export default function AdminPayroll() {
         <p className="text-muted-foreground text-sm mt-1">Estimator, pay runs, and official pay stubs</p>
       </div>
       <Tabs defaultValue="estimator" className="space-y-5">
-        <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:inline-flex" data-testid="tabs-payroll">
+        <TabsList className="w-full sm:w-auto grid grid-cols-4 sm:inline-flex" data-testid="tabs-payroll">
           <TabsTrigger value="estimator" data-testid="tab-estimator">Estimator</TabsTrigger>
           <TabsTrigger value="pay-runs" data-testid="tab-pay-runs">Pay Runs</TabsTrigger>
           <TabsTrigger value="pay-stubs" data-testid="tab-pay-stubs">Pay Stubs</TabsTrigger>
+          <TabsTrigger value="timesheets" data-testid="tab-timesheets">Timesheets</TabsTrigger>
         </TabsList>
         <TabsContent value="estimator" className="mt-0">
           <PayrollEstimatorContent />
@@ -669,6 +671,9 @@ export default function AdminPayroll() {
         </TabsContent>
         <TabsContent value="pay-stubs" className="mt-0">
           <PayStubsTab />
+        </TabsContent>
+        <TabsContent value="timesheets" className="mt-0">
+          <AdminTimesheets />
         </TabsContent>
       </Tabs>
     </div>

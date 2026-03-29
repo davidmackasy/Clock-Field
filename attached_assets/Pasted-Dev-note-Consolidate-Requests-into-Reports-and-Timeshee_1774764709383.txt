@@ -1,0 +1,459 @@
+Dev note: Consolidate Requests into Reports and Timesheets into Payroll navigation only
+
+Objective
+
+Reduce the number of left-menu items without changing the actual pages or breaking any working flow.
+
+This task is navigation consolidation only.
+
+We want:
+
+1. remove Requests from the left navigation
+2. surface Requests inside Reports in a visible and clean way for admin, cleaner, and client where applicable
+3. remove Timesheets from the left navigation
+4. surface Timesheets inside Payroll in a visible and clean way
+5. keep the actual Requests page and Timesheets page logic intact unless a small routing wrapper is needed
+6. do not break any currently working page, route, permissions, data, filters, or flows
+
+Critical instruction
+
+Do not touch anything else.
+
+Do not rewrite Requests logic.
+Do not rewrite Reports logic.
+Do not rewrite Timesheets logic.
+Do not rewrite Payroll logic.
+Do not change attendance.
+Do not change payroll calculations.
+Do not change report generation.
+Do not change role permissions unless required for visibility of the moved navigation entry.
+Do not change backend APIs unless absolutely necessary for navigation/entry-point support.
+Do not refactor unrelated layouts.
+Do not rename database models.
+Do not delete any current pages.
+
+If anything outside this exact scope is needed, ask for approval first.
+
+Main goal
+
+This is a menu cleanup only.
+
+The real pages can still exist.
+The routes can still exist.
+The logic can still exist.
+
+We only want the user experience to feel cleaner by nesting or surfacing these pages under more logical parent sections:
+
+* Requests should live under Reports
+* Timesheets should live under Payroll
+
+High-level safe strategy
+
+Do not merge these pages at the backend level right now.
+
+Do not turn Requests into Reports data.
+Do not turn Timesheets into Payroll data.
+
+Safer approach:
+keep the existing pages and routes working, but move the access points in the UI so users enter them through Reports and Payroll.
+
+This means:
+
+* Requests route/page stays alive
+* Timesheets route/page stays alive
+* existing links/bookmarks keep working
+* left navigation gets simplified
+* Reports and Payroll become the visible entry hubs
+
+Required implementation
+
+Part 1: Move Requests under Reports
+
+What to do
+
+Remove Requests from the left sidebar navigation.
+
+Inside Reports, add a visible way to access Requests.
+
+This must be visible and easy to understand for:
+
+* admin
+* cleaner
+* client if they already had access to request-related functionality
+
+Do not bury it in a hidden place.
+
+Recommended safe UI options
+
+Preferred option:
+Add top-level sub-navigation inside Reports.
+
+Example tabs or segmented controls:
+
+* Reports
+* Requests
+
+Or:
+
+* All Reports
+* Requests
+
+Or:
+
+* Reports Center
+* Issue Requests
+
+This allows Reports to act like a hub without destroying the current Requests page.
+
+Safe behavior
+
+If user clicks Requests inside Reports:
+
+* either render the existing Requests page/content inside the Reports shell
+* or route them to the existing Requests page but through a Reports-owned entry point
+* or embed a Requests panel/section inside Reports with current request list/actions
+
+Choose the safest method that requires the least code change and least risk.
+
+Best recommendation
+
+Use Reports as the parent section and add a visible sub-entry such as:
+
+* Reports
+* Requests
+
+When Requests is selected, either:
+
+* navigate to existing `/requests`
+  or
+* render existing Requests component inside Reports layout
+
+Whichever is safer with less risk.
+
+Important:
+Do not rebuild the Requests feature.
+Just relocate access to it.
+
+Visibility requirement
+
+This must also be visible to cleaners in their account.
+
+That means if cleaner currently has Requests access, they should now find that access inside Reports, not as a separate left-nav item.
+
+Same idea for client-facing side if applicable:
+if they had Requests access before, it should now live under Reports there too.
+
+Role-based behavior
+
+Admin:
+
+* Reports section visible
+* Requests accessible inside Reports
+
+Cleaner:
+
+* Reports section visible
+* Requests accessible inside Reports if they had request access before
+
+Client:
+
+* only if Requests/Reports are already available in client portal, place request entry there too under Reports
+* do not add brand-new client permissions if they did not already exist
+
+Part 2: Move Timesheets under Payroll
+
+What to do
+
+Remove Timesheets from the left sidebar navigation.
+
+Inside Payroll, add a visible access point to Timesheets.
+
+Do not change Timesheets page logic.
+Do not merge calculations.
+Do not rebuild Payroll.
+
+Recommended safe UI options
+
+Preferred option:
+Add sub-navigation inside Payroll.
+
+Example:
+
+* Payroll Overview
+* Estimated Payroll
+* Pay Stubs
+* Timesheets
+
+Or if current Payroll already has tabs/cards:
+just add Timesheets as one of those visible options.
+
+Safe behavior
+
+When user clicks Timesheets inside Payroll:
+
+* either route to the current Timesheets page
+* or render the existing Timesheets page/component inside Payroll shell
+
+Choose the least risky approach.
+
+Best recommendation
+
+Keep Timesheets route alive.
+Remove only the left-nav item.
+Add a visible link/tab/button inside Payroll labeled Timesheets.
+
+This is safer than trying to merge the actual page internals.
+
+Navigation design requirement
+
+The new placement must look intentional and neat.
+
+Do not just hide these pages and make them hard to find.
+
+Reports section should clearly expose Requests.
+Payroll section should clearly expose Timesheets.
+
+Recommended UI pattern
+
+If your app already supports section tabs inside a page, use that.
+
+Example:
+
+Reports page top tabs:
+
+* Reports
+* Requests
+
+Payroll page top tabs:
+
+* Overview
+* Estimator
+* Pay Stubs
+* Timesheets
+
+If tabs are too risky, use visible quick links/cards near the page header.
+
+Example in Payroll:
+
+* Estimated Payroll
+* Pay Stubs
+* Timesheets
+
+Example in Reports:
+
+* Reports
+* Requests
+
+The key requirement is visibility and low risk.
+
+Routing requirement
+
+Do not break existing direct routes.
+
+Keep:
+
+* `/requests` working
+* `/timesheets` working
+
+Even after removing them from the left sidebar.
+
+Why:
+
+* protects old bookmarks
+* protects internal links
+* reduces regression risk
+* safer for a live app
+
+Optional safe enhancement
+
+If desired and safe:
+when user lands on `/requests`, show the same current page but under the same layout and maybe with a breadcrumb such as:
+
+Reports / Requests
+
+When user lands on `/timesheets`, show:
+
+Payroll / Timesheets
+
+This is optional and only if it does not risk breaking anything.
+
+Left sidebar changes
+
+Admin sidebar
+
+Remove:
+
+* Requests
+* Timesheets
+
+Keep:
+
+* Reports
+* Payroll
+
+Cleaner sidebar
+
+If cleaner currently sees Requests and/or Timesheets separately:
+remove those left-nav items too, and expose them from the parent page the same way.
+
+Do not remove access entirely.
+Only relocate it.
+
+Client sidebar
+
+Only apply if those entries currently exist for client users.
+
+Important:
+do not make permission changes beyond relocation.
+
+Data and logic safety rules
+
+Do not:
+
+* move database tables
+* combine request records into reports records
+* combine timesheet records into payroll records
+* rename APIs
+* rewrite page fetches
+* alter current filters/sorts
+* alter current URL contracts unless necessary and approved
+
+This is UI/navigation restructuring only.
+
+Safe implementation order
+
+Step 1
+Identify current sidebar nav config for admin, cleaner, and client roles
+
+Step 2
+Remove Requests and Timesheets only from sidebar rendering
+
+Step 3
+Add visible Requests access inside Reports
+
+Step 4
+Add visible Timesheets access inside Payroll
+
+Step 5
+Keep old direct routes working
+
+Step 6
+Test every role carefully
+
+Recommended UI details
+
+Reports page
+
+At the top, near the existing filters or page header, add a clean sub-navigation.
+
+Example:
+
+* Reports
+* Requests
+
+Behavior:
+
+* Reports = current reports page view
+* Requests = current request page view or current request component rendered there
+
+Keep it visible on desktop and mobile.
+
+Payroll page
+
+At the top, add a sub-navigation or action row.
+
+Example:
+
+* Overview
+* Estimated Payroll
+* Pay Stubs
+* Timesheets
+
+If Payroll already has multiple sections, simply add Timesheets there.
+
+Keep it visible on desktop and mobile.
+
+Do not hide Timesheets in a tiny link.
+It should be clear and intentional.
+
+Mobile requirement
+
+Make sure this change also works on mobile.
+
+Users should still be able to find:
+
+* Requests through Reports
+* Timesheets through Payroll
+
+Do not create a desktop-only entry.
+Do not force users to guess where the page went.
+
+Permission requirement
+
+Requests and Timesheets should remain visible only to the same roles that already had access before.
+
+Do not accidentally expose:
+
+* admin-only pages to cleaners
+* cleaner-only pages to clients
+* payroll details to roles that should not see them
+
+The only change is entry location, not access scope.
+
+Testing checklist
+
+Test only this scope.
+
+Admin tests
+
+1. Requests no longer appears in left nav
+2. Timesheets no longer appears in left nav
+3. Requests is clearly accessible inside Reports
+4. Timesheets is clearly accessible inside Payroll
+5. existing Requests route still works
+6. existing Timesheets route still works
+
+Cleaner tests
+
+1. sidebar cleaned up correctly
+2. request access still exists through Reports if cleaner had it before
+3. no permission loss
+4. no accidental new access
+
+Client tests if applicable
+
+1. request-related access still visible through Reports if it existed before
+2. nothing extra exposed
+
+Regression tests
+
+1. Reports page still works
+2. Requests page still works
+3. Payroll page still works
+4. Timesheets page still works
+5. Attendance untouched
+6. Payroll calculations untouched
+7. Filters/search untouched
+8. direct links/bookmarks untouched
+
+Acceptance criteria
+
+This task is complete only when:
+
+* Requests is removed from the left navigation
+* Timesheets is removed from the left navigation
+* Requests is clearly visible and accessible from inside Reports
+* Timesheets is clearly visible and accessible from inside Payroll
+* existing page logic remains unchanged
+* existing routes still work
+* nothing else in the app is broken or changed
+
+Final instruction to the agent
+
+Only perform the navigation consolidation described above.
+
+Do not touch anything else.
+Do not merge page logic.
+Do not refactor unrelated modules.
+Do not rewrite Requests or Timesheets.
+Just remove them from the sidebar and surface them neatly inside Reports and Payroll so the menu is cleaner while all current functionality stays intact.

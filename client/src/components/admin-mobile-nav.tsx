@@ -10,9 +10,9 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Users, Calendar, ClipboardList,
-  DollarSign, Building2, MessageSquare, Settings,
-  LogOut, MoreHorizontal, Clock, ChevronRight, ShieldCheck, BookOpen, ScrollText,
-  CreditCard, Bell, ShieldAlert,
+  DollarSign, Building2, Settings,
+  LogOut, MoreHorizontal, Clock, ChevronRight, ShieldCheck, BookOpen,
+  CreditCard, Bell, ShieldAlert, FolderOpen,
 } from "lucide-react";
 
 const primaryTabs = [
@@ -24,10 +24,9 @@ const primaryTabs = [
 
 const moreItems = [
   { label: "Payroll", href: "/admin/payroll", icon: DollarSign },
-  { label: "Timesheets", href: "/admin/timesheets", icon: ScrollText },
   { label: "Clients", href: "/admin/clients", icon: Building2 },
   { label: "Admins", href: "/admin/admins", icon: ShieldCheck },
-  { label: "Requests", href: "/admin/requests", icon: MessageSquare },
+  { label: "Reports", href: "/admin/reports", icon: FolderOpen },
   { label: "Work Log", href: "/admin/work-log", icon: BookOpen },
   { label: "Settings", href: "/admin/settings", icon: Settings },
   { label: "Subscription", href: "/admin/subscription", icon: CreditCard },
@@ -44,6 +43,7 @@ const pageTitles: Record<string, string> = {
   "/admin/clients": "Clients",
   "/admin/admins": "Admins",
   "/admin/requests": "Requests",
+  "/admin/reports": "Reports",
   "/admin/work-log": "Work Log",
   "/admin/settings": "Settings",
   "/admin/subscription": "Subscription",

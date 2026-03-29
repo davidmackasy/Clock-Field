@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
@@ -296,6 +297,7 @@ function ReportViewDialog({ reportId: rptId, open, onClose }: any) {
 
 // ─── Main Employee Reports Page ───────────────────────────────────────────────
 export default function EmployeeReports() {
+  const [location] = useLocation();
   const [submitOpen, setSubmitOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState("all");
@@ -322,6 +324,22 @@ export default function EmployeeReports() {
         <Button size="sm" onClick={() => setSubmitOpen(true)} data-testid="button-submit-report">
           <Plus className="w-4 h-4 mr-1.5" />Submit
         </Button>
+      </div>
+
+      {/* Section nav */}
+      <div className="px-4 pt-3">
+        <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg w-fit">
+          <Link href="/employee/reports">
+            <button data-testid="nav-section-reports" className={`px-3.5 py-1.5 text-sm font-medium rounded-md transition-colors ${location === "/employee/reports" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+              Reports
+            </button>
+          </Link>
+          <Link href="/employee/requests">
+            <button data-testid="nav-section-requests" className={`px-3.5 py-1.5 text-sm font-medium rounded-md transition-colors ${location.startsWith("/employee/requests") ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+              Requests
+            </button>
+          </Link>
+        </div>
       </div>
 
       {/* Tabs */}

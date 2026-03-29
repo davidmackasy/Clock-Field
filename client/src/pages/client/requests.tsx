@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
@@ -182,6 +183,7 @@ function ThreadMessage({ msg, authorName }: { msg: any; authorName: string }) {
 }
 
 export default function ClientRequests() {
+  const [location] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -246,6 +248,19 @@ export default function ClientRequests() {
         />
       )}
 
+      {/* Section nav */}
+      <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg w-fit">
+        <Link href="/client/reports">
+          <button data-testid="nav-section-reports" className={`px-3.5 py-1.5 text-sm font-medium rounded-md transition-colors ${location.startsWith("/client/reports") ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+            Reports
+          </button>
+        </Link>
+        <Link href="/client/requests">
+          <button data-testid="nav-section-requests" className={`px-3.5 py-1.5 text-sm font-medium rounded-md transition-colors ${location === "/client/requests" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+            Requests
+          </button>
+        </Link>
+      </div>
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div>
