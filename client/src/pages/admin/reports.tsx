@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ReportSignaturePad, type SigCapture } from "@/components/report-signature-pad";
 import {
   FileText, Plus, Search, Filter, Eye, Send, CheckCircle2, Archive,
   RotateCcw, Printer, Download, ChevronRight, AlertTriangle, Clock,
@@ -816,6 +817,7 @@ function ReportDetailDialog({ reportId: rptId, open, onClose, employees, clients
     details: true, people: true, summary_section: true, property: false, evidence: false, signatures: true, admin: true, activity: false,
   });
   const [sigForm, setSigForm] = useState({ name: "", ack: false });
+  const [sigCapture, setSigCapture] = useState<SigCapture>({ signatureType: "typed", signatureDataUrl: null });
   const [adminEdits, setAdminEdits] = useState<Record<string, any>>({});
   const [saving, setSaving] = useState(false);
 
@@ -847,7 +849,7 @@ function ReportDetailDialog({ reportId: rptId, open, onClose, employees, clients
 
   const signMut = useMutation({
     mutationFn: (data: any) => apiRequest("POST", `/api/reports/${rptId}/sign`, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/reports", rptId] }); toast({ title: "Report signed" }); setSigForm({ name: "", ack: false }); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/reports", rptId] }); toast({ title: "Report signed" }); setSigForm({ name: "", ack: false }); setSigCapture({ signatureType: "typed", signatureDataUrl: null }); },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
@@ -1088,37 +1090,56 @@ function ReportDetailDialog({ reportId: rptId, open, onClose, employees, clients
                     {rpt.signatures?.length > 0 && (
                       <div className="space-y-2">
                         {rpt.signatures.map((sig: any) => (
-                          <div key={sig.id} className="flex items-center gap-3 p-3 rounded-md bg-green-50 border border-green-200">
-                            <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
+                          <div key={sig.id} className="rounded-md bg-green-50 border border-green-200 overflow-hidden">
+                            <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
                               <p className="text-sm font-medium">{sig.signerName}</p>
-                              <p className="text-xs text-muted-foreground capitalize">{sig.signerRole} · {sig.signedAt ? format(new Date(sig.signedAt), "MMM d, yyyy h:mm a") : ""}</p>
-                              {sig.acknowledgementText && <p className="text-xs text-green-700 mt-0.5">"{sig.acknowledgementText}"</p>}
+                              <span className="text-xs text-muted-foreground capitalize ml-auto">{sig.signerRole} · {sig.signedAt ? format(new Date(sig.signedAt), "MMM d, yyyy") : ""}</span>
                             </div>
+                            {/* Signature graphic */}
+                            {sig.signatureType === "drawn" && sig.signatureDataUrl ? (
+                              <div className="mx-3 mb-2 rounded bg-white border border-green-100 p-2">
+                                <img src={sig.signatureDataUrl} alt="Signature" className="h-12 w-auto max-w-full object-contain" />
+                              </div>
+                            ) : sig.signatureType === "typed" || (!sig.signatureDataUrl) ? (
+                              <div className="mx-3 mb-2 rounded bg-white border border-green-100 px-3 py-1">
+                                <p className="text-2xl text-foreground leading-tight" style={{ fontFamily: "'Dancing Script', cursive", fontWeight: 600 }}>
+                                  {sig.signerName}
+                                </p>
+                              </div>
+                            ) : null}
                           </div>
                         ))}
                       </div>
                     )}
                     {canSign && (
                       <div className="rounded-md border p-4 space-y-3">
-                        <p className="text-sm font-medium">Sign this report</p>
-                        <div className="space-y-2">
-                          <Label className="text-xs">Your full name</Label>
-                          <Input
-                            data-testid="input-signer-name"
-                            value={sigForm.name}
-                            onChange={e => setSigForm(f => ({ ...f, name: e.target.value }))}
-                            placeholder="Type your full name to sign..."
-                          />
-                        </div>
+                        <p className="text-sm font-medium flex items-center gap-2">
+                          <PenLine className="w-4 h-4 text-primary" />Sign this report
+                        </p>
+                        <ReportSignaturePad
+                          name={sigForm.name}
+                          onChangeName={n => setSigForm(f => ({ ...f, name: n }))}
+                          onChange={v => setSigCapture(prev => ({ ...prev, ...v }))}
+                        />
                         <label className="flex items-start gap-2 text-sm cursor-pointer">
                           <Checkbox checked={sigForm.ack} onCheckedChange={v => setSigForm(f => ({ ...f, ack: !!v }))} data-testid="check-acknowledge" />
                           <span>I acknowledge that the information in this report is accurate to the best of my knowledge.</span>
                         </label>
                         <Button
                           size="sm"
-                          disabled={!sigForm.name || !sigForm.ack || signMut.isPending}
-                          onClick={() => signMut.mutate({ signerName: sigForm.name, acknowledgementText: sigForm.ack ? "I acknowledge this report is accurate." : undefined })}
+                          disabled={
+                            !sigForm.name ||
+                            !sigForm.ack ||
+                            signMut.isPending ||
+                            (sigCapture.signatureType === "drawn" && !sigCapture.signatureDataUrl)
+                          }
+                          onClick={() => signMut.mutate({
+                            signerName: sigForm.name,
+                            signatureType: sigCapture.signatureType,
+                            signatureDataUrl: sigCapture.signatureDataUrl,
+                            acknowledgementText: "I acknowledge this report is accurate.",
+                          })}
                           data-testid="button-sign-report"
                         >
                           <PenLine className="w-3.5 h-3.5 mr-1.5" />Sign Report
@@ -1380,15 +1401,34 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
                 {allCards.map((card, i) => {
                   if (card.type === "signed") {
                     const sig = card.sig;
+                    const hasDrawn = sig.signatureType === "drawn" && sig.signatureDataUrl;
+                    const hasTyped = sig.signatureType === "typed";
                     return (
                       <div key={sig.id} className="print-section" style={{ border: "1px solid #d1d5db", borderRadius: "6px", padding: "14px", background: "#f9fafb" }}>
-                        <p style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#374151", margin: "0 0 8px 0" }}>{roleLabel(sig.signerRole)}</p>
-                        <p style={{ fontSize: "11px", color: "#111827", margin: "0 0 3px 0" }}><span style={{ color: "#6b7280" }}>Signed by:</span> {sig.signerName}</p>
-                        <p style={{ fontSize: "10px", color: "#4b5563", margin: "0 0 2px 0" }}><span>Date:</span> {sig.signedAt ? format(new Date(sig.signedAt), "MMMM d, yyyy") : "—"}</p>
-                        <p style={{ fontSize: "10px", color: "#4b5563", margin: "0 0 10px 0" }}><span>Status:</span> Acknowledged</p>
-                        <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: "7px" }}>
-                          <p style={{ fontSize: "9px", color: "#6b7280" }}>Signed electronically in Clockfield</p>
+                        {/* Title */}
+                        <p style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#374151", margin: "0 0 10px 0" }}>{roleLabel(sig.signerRole)}</p>
+                        {/* Signature graphic area */}
+                        <div style={{ minHeight: "64px", display: "flex", alignItems: "center", borderBottom: "1px solid #e5e7eb", marginBottom: "8px", paddingBottom: "8px" }}>
+                          {hasDrawn ? (
+                            <img
+                              src={sig.signatureDataUrl}
+                              alt="Signature"
+                              style={{ maxHeight: "60px", maxWidth: "100%", objectFit: "contain", objectPosition: "left center" }}
+                            />
+                          ) : hasTyped ? (
+                            <p style={{ fontSize: "26px", fontFamily: "'Dancing Script', 'Brush Script MT', cursive", fontWeight: 600, color: "#1e293b", margin: 0, lineHeight: 1.2 }}>
+                              {sig.signerName}
+                            </p>
+                          ) : (
+                            /* Legacy fallback for records without signatureType */
+                            <p style={{ fontSize: "11px", color: "#374151", margin: 0, fontStyle: "italic" }}>{sig.signerName}</p>
+                          )}
                         </div>
+                        {/* Metadata */}
+                        <p style={{ fontSize: "10px", color: "#374151", margin: "0 0 2px 0" }}><span style={{ color: "#6b7280" }}>Name: </span>{sig.signerName}</p>
+                        <p style={{ fontSize: "10px", color: "#4b5563", margin: "0 0 2px 0" }}><span style={{ color: "#6b7280" }}>Date: </span>{sig.signedAt ? format(new Date(sig.signedAt), "MMMM d, yyyy") : "—"}</p>
+                        <p style={{ fontSize: "10px", color: "#4b5563", margin: "0 0 8px 0" }}><span style={{ color: "#6b7280" }}>Status: </span>Acknowledged</p>
+                        <p style={{ fontSize: "9px", color: "#6b7280" }}>Signed electronically via Clockfield</p>
                       </div>
                     );
                   }

@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ReportSignaturePad, type SigCapture } from "@/components/report-signature-pad";
 import {
   FileText, Plus, Eye, Inbox, Send as SendIcon, CheckCircle2, PenLine,
   ChevronRight, Clock, AlertTriangle, ArrowLeft
@@ -163,6 +164,7 @@ function ReportViewDialog({ reportId: rptId, open, onClose }: any) {
   const { toast } = useToast();
   const { user } = useAuth();
   const [sigForm, setSigForm] = useState({ name: "", ack: false });
+  const [sigCapture, setSigCapture] = useState<SigCapture>({ signatureType: "typed", signatureDataUrl: null });
 
   const { data: report, isLoading } = useQuery<any>({
     queryKey: ["/api/reports", rptId],
@@ -178,7 +180,7 @@ function ReportViewDialog({ reportId: rptId, open, onClose }: any) {
 
   const signMut = useMutation({
     mutationFn: (data: any) => apiRequest("POST", `/api/reports/${rptId}/sign`, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/reports", rptId] }); toast({ title: "Report signed" }); setSigForm({ name: "", ack: false }); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/reports", rptId] }); toast({ title: "Report signed" }); setSigForm({ name: "", ack: false }); setSigCapture({ signatureType: "typed", signatureDataUrl: null }); },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
@@ -256,10 +258,23 @@ function ReportViewDialog({ reportId: rptId, open, onClose }: any) {
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Signatures</p>
                   {rpt.signatures.map((sig: any) => (
-                    <div key={sig.id} className="flex items-center gap-2 p-2 rounded bg-green-50 border border-green-200 text-sm">
-                      <CheckCircle2 className="w-4 h-4 text-green-600" />
-                      <span className="font-medium">{sig.signerName}</span>
-                      <span className="text-muted-foreground text-xs">({sig.signerRole}) · {sig.signedAt ? format(new Date(sig.signedAt), "MMM d") : ""}</span>
+                    <div key={sig.id} className="rounded-md bg-green-50 border border-green-200 overflow-hidden">
+                      <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+                        <span className="text-sm font-medium">{sig.signerName}</span>
+                        <span className="text-xs text-muted-foreground capitalize ml-auto">{sig.signerRole} · {sig.signedAt ? format(new Date(sig.signedAt), "MMM d") : ""}</span>
+                      </div>
+                      {sig.signatureType === "drawn" && sig.signatureDataUrl ? (
+                        <div className="mx-3 mb-2 rounded bg-white border border-green-100 p-2">
+                          <img src={sig.signatureDataUrl} alt="Signature" className="h-10 w-auto max-w-full object-contain" />
+                        </div>
+                      ) : (
+                        <div className="mx-3 mb-2 rounded bg-white border border-green-100 px-3 py-0.5">
+                          <p className="text-xl text-foreground leading-tight" style={{ fontFamily: "'Dancing Script', cursive", fontWeight: 600 }}>
+                            {sig.signerName}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -272,15 +287,30 @@ function ReportViewDialog({ reportId: rptId, open, onClose }: any) {
                     <PenLine className="w-4 h-4 text-amber-600" />
                     Your signature is required
                   </p>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Full name</Label>
-                    <Input data-testid="input-signer-name" value={sigForm.name} onChange={e => setSigForm(f => ({ ...f, name: e.target.value }))} placeholder="Type your full name..." />
-                  </div>
+                  <ReportSignaturePad
+                    name={sigForm.name}
+                    onChangeName={n => setSigForm(f => ({ ...f, name: n }))}
+                    onChange={v => setSigCapture(prev => ({ ...prev, ...v }))}
+                    namePlaceholder="Type your full name..."
+                  />
                   <label className="flex items-start gap-2 text-sm cursor-pointer">
                     <Checkbox checked={sigForm.ack} onCheckedChange={v => setSigForm(f => ({ ...f, ack: !!v }))} data-testid="check-acknowledge" />
                     <span>I acknowledge that the information in this report is accurate to the best of my knowledge.</span>
                   </label>
-                  <Button size="sm" disabled={!sigForm.name || !sigForm.ack || signMut.isPending} onClick={() => signMut.mutate({ signerName: sigForm.name, acknowledgementText: "I acknowledge this report is accurate." })} data-testid="button-sign">
+                  <Button
+                    size="sm"
+                    disabled={
+                      !sigForm.name || !sigForm.ack || signMut.isPending ||
+                      (sigCapture.signatureType === "drawn" && !sigCapture.signatureDataUrl)
+                    }
+                    onClick={() => signMut.mutate({
+                      signerName: sigForm.name,
+                      signatureType: sigCapture.signatureType,
+                      signatureDataUrl: sigCapture.signatureDataUrl,
+                      acknowledgementText: "I acknowledge this report is accurate.",
+                    })}
+                    data-testid="button-sign"
+                  >
                     <PenLine className="w-3.5 h-3.5 mr-1.5" />Sign Report
                   </Button>
                 </div>

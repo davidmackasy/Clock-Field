@@ -1,0 +1,435 @@
+Dev note for agent
+
+Task
+
+Improve the final report output so that when a client, employee, or company representative signs digitally, the actual saved digital signature is shown inside the final report, not just text like “Signed by David” or “Signed by Gift.”
+
+This must apply to the final generated report view and PDF/print output for incident reports and any other report types that already use the same shared signature/report template.
+
+Do not break or touch:
+
+* current report creation flow
+* report data structure unless required for signature rendering support
+* send flow
+* email flow
+* public report signing flow
+* account-based signing flow
+* finalize flow
+* archive flow
+* print / PDF generation
+* existing auth
+* unrelated pages or modules
+
+This is a signature rendering and final document presentation improvement only.
+
+Main problem
+
+Right now the report only shows text such as:
+
+* Signed by: david
+* Status: Acknowledged
+
+That does not look like a properly signed business document.
+
+What is needed
+
+When a signature exists, the final report must display the actual signature that was captured during signing.
+
+Examples:
+
+* if the signer drew with finger or mouse, show that drawn signature image
+* if the signer used typed signature mode, show the rendered signature-style version that was saved during signing
+* still keep supporting metadata like signer name, date, and status underneath or beside it
+
+Main goal
+
+Each signature block in the final report should visually prove the document was signed.
+
+Instead of only showing:
+Signed by: David
+
+It should show:
+
+* the actual signature graphic
+* signer name
+* signed date
+* status
+* optional “Signed electronically via Clockfield” line
+
+Required report sections to support this
+
+At minimum, the following signature blocks must support actual signature display if signed:
+
+* Employee Acknowledgement
+* Client Acknowledgement
+* Prepared By / Company Representative
+* any other signer blocks already supported by shared report templates
+
+If a block is unsigned:
+
+* keep the placeholder line or empty signature area
+* do not fake a signature
+* do not show broken image placeholders
+
+How the final report should behave
+
+If signed
+Show:
+
+* signature graphic at the top of the card/box
+* signer metadata below it
+
+If unsigned
+Show:
+
+* empty signature line or placeholder area
+* label such as Name, Signature & Date
+* no “signed by” text unless truly signed
+
+Recommended layout per signature card
+
+Signature block title
+Example:
+Employee Acknowledgement
+
+Below that:
+
+* actual signature graphic centered or aligned properly
+* signer name
+* signed date
+* status: Acknowledged or Signed
+* optional source note: Signed electronically via Clockfield
+
+For unsigned cards:
+
+* keep professional empty signature area
+* keep label line at bottom
+
+Important
+
+Do not just convert typed names into plain text on the PDF.
+Use the actual saved output of the signing action.
+
+Meaning:
+
+* draw mode should render the saved stroke signature image
+* type mode should render the saved signature-style output, not plain form text
+
+Data/rendering requirements
+
+The final report template must read and render the saved signature asset/value for each signer.
+
+Support these saved signature types:
+
+1. Drawn signature
+   This should render as an image or canvas-derived asset that was saved when the user signed.
+
+2. Typed signature
+   This should render as the styled signature output that was confirmed during signing, not just raw typed text in a normal font.
+
+For each signature record, the report renderer should use:
+
+* signature image or rendered asset if available
+* signer full name
+* signed timestamp
+* signing status
+* signer role
+
+Do not rely only on “signedByName” if a real signature asset exists.
+
+Recommended signature rendering logic
+
+For each signer block:
+
+If signature asset exists:
+
+* render signature asset in dedicated signature area
+* render metadata below
+
+Else if signed status exists but no asset exists from older records:
+
+* show legacy fallback text like “Signed by: [Name]”
+* keep this only as backward compatibility for old already-signed reports
+* do not use this fallback for newly signed reports if signature asset is available
+
+Else if unsigned:
+
+* show empty signature placeholder
+
+This is important so older signed reports do not break.
+
+Backward compatibility requirement
+
+Some older reports may only have:
+
+* signedByName
+* signedAt
+* status
+
+and may not yet have a stored signature asset.
+
+For those old records:
+
+* do not break rendering
+* show legacy fallback cleanly
+
+For new signatures going forward:
+
+* always prefer the actual signature asset
+
+Visual requirements for the signature graphic
+
+The signature must look like a real signed section on a business document.
+
+Requirements:
+
+* enough height so it is visible
+* not tiny
+* not blurry
+* not stretched
+* maintain aspect ratio
+* fit properly inside signature box
+* keep padding around it
+* do not overflow borders
+* print clearly in PDF
+
+Recommended rendering area:
+
+* fixed signature display region inside each signature card
+* around 50 to 90px tall depending on current document scale
+* width constrained to card width
+* object-fit or equivalent behavior to prevent distortion
+
+The signature should appear darker and more visible than faint helper text, but still document-like.
+
+Suggested layout behavior inside each signature box
+
+Top:
+
+* section title
+
+Middle:
+
+* signature graphic area
+
+Bottom:
+
+* signer details
+
+  * Name
+  * Date
+  * Status
+
+Optional footer line:
+Signed electronically via Clockfield
+
+Keep it professional and clean.
+
+Print/PDF requirements
+
+This must work in:
+
+* on-screen final report preview
+* print preview
+* downloaded PDF
+
+The actual signature must appear in all three.
+
+Important:
+
+* signature image must not disappear in print
+* signature image must not be cut off by page breaks
+* signature cards must still align properly
+* signature area must remain readable on PDF export
+
+Do not let image rendering fail because of lazy loading or client-only rendering issues.
+Make sure signature assets are available at PDF generation time.
+
+If the PDF is generated from HTML:
+
+* ensure signature images are fully resolved before print/export
+* avoid broken base64/image loading timing issues
+* avoid CORS/loading issues if using stored file URLs
+
+Preferred technical handling
+
+If signatures are stored as:
+
+* base64 image
+* blob converted to URL
+* uploaded image asset
+* vector/stroke JSON plus rendered preview
+
+Then the final report renderer should use the stable saved renderable version for display.
+
+Best practice:
+store or generate a final renderable signature asset at signing time, then reuse it in:
+
+* public signed report
+* internal final report
+* print/PDF
+
+Do not recalculate signatures in inconsistent ways between pages.
+
+Company representative / prepared by signature
+
+Apply the same logic to the company/prepared-by area if that signer signs digitally too.
+
+If company rep has signed:
+
+* show actual signature graphic
+* show rep name
+* show date
+
+If not signed:
+
+* keep current placeholder line
+
+Do not treat company signature differently unless current system already does.
+
+Security and data integrity
+
+Do not fake signatures from just a name string.
+Only show signature graphics if an actual signature was captured and saved.
+
+Keep:
+
+* signer role mapping correct
+* client signature in client block
+* employee signature in employee block
+* company signature in company/prepared-by block
+
+Do not mix roles or pull the wrong signer asset into the wrong card.
+
+Recommended implementation steps
+
+Step 1
+Locate shared final report template and signature card rendering logic
+
+Step 2
+Identify how each signer record is currently stored:
+
+* name
+* signedAt
+* status
+* signature type
+* signature asset or rendered output
+
+Step 3
+Update the signature card component/template so it renders:
+
+* actual signature asset when available
+* fallback metadata underneath
+* legacy text fallback only for older records with no signature asset
+
+Step 4
+Ensure typed signatures are saved in a renderable signature-style form, not only plain typed text
+
+Step 5
+Ensure drawn signatures are stored in a renderable format suitable for:
+
+* screen preview
+* PDF export
+* print
+
+Step 6
+Update print/PDF template so signature graphics are loaded and visible
+
+Step 7
+Test all report signer types and old/new records
+
+Required UI behavior for signed cards
+
+Signed card should feel complete.
+
+Example structure
+
+Employee Acknowledgement
+
+[actual signature shown here]
+
+Name: David Mackasy
+Date: March 29, 2026
+Status: Acknowledged
+Signed electronically via Clockfield
+
+Unsigned card example
+
+Client Acknowledgement
+
+[empty signature area / line]
+
+Name, Signature & Date
+
+This looks much more professional than only “Signed by”.
+
+Test cases
+
+You must test all of these:
+
+1. Employee signs by drawing
+
+* final report shows actual drawn signature
+
+2. Client signs by drawing
+
+* final report shows actual drawn signature
+
+3. Company rep signs by drawing
+
+* final report shows actual drawn signature
+
+4. Employee signs using typed signature mode
+
+* final report shows rendered signature-style output, not plain text
+
+5. Client signs using typed signature mode
+
+* final report shows rendered signature-style output
+
+6. Unsigned client block
+
+* remains blank/professional placeholder
+
+7. Old signed report with no stored signature asset
+
+* still shows legacy fallback without breaking
+
+8. Screen preview
+
+* signature visible
+
+9. Print preview
+
+* signature visible
+
+10. Downloaded PDF
+
+* signature visible and aligned
+
+11. Multi-page report
+
+* signature section still lays out correctly
+
+12. Mixed signature state
+
+* employee signed, client unsigned, company signed
+* all blocks render correctly
+
+Acceptance criteria
+
+This is complete only if all of the following are true:
+
+* final report shows actual saved digital signature when available
+* drawn signatures appear visually in the report
+* typed signatures appear as rendered signature-style output, not plain text only
+* signer name, date, and status still appear clearly
+* unsigned boxes remain clean and professional
+* older reports without signature assets still render safely
+* signatures appear in preview, print, and PDF
+* no unrelated report logic or app flows are changed
+
+Final rule
+
+Do not touch anything else.
+Only improve the final report signature rendering so signed reports display the real captured digital signatures in a professional way across all supported report outputs.

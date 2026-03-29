@@ -3948,17 +3948,19 @@ Return a JSON object with these exact fields:
       if (!report) { res.status(404).json({ message: "Report not found" }); return; }
       const existing = await storage.getReportSignatureByUser(req.params.id, user.id);
       if (existing) { res.status(400).json({ message: "Already signed" }); return; }
-      const { signerName, acknowledgementText } = req.body;
+      const { signerName, acknowledgementText, signatureType, signatureDataUrl } = req.body;
       if (!signerName) { res.status(400).json({ message: "Signer name is required" }); return; }
+      const resolvedType: "drawn" | "typed" = signatureType === "drawn" ? "drawn" : "typed";
       const now = new Date().toISOString();
       const sig = await storage.createReportSignature({
         reportId: req.params.id,
         signerUserId: user.id,
         signerRole: user.role,
         signerName,
-        signatureType: "typed",
+        signatureType: resolvedType,
         signedAt: now,
         acknowledgementText: acknowledgementText || null,
+        signatureDataUrl: resolvedType === "drawn" ? (signatureDataUrl || null) : null,
       });
       await logReportActivity(req.params.id, "signed", user.id, user.role, { signerName });
       // Update status if awaiting signature
