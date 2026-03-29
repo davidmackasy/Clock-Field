@@ -1,0 +1,323 @@
+Dev note for agent
+
+Task
+
+Make only the following final report layout updates for the final print/PDF preview and signed report output.
+
+Do not touch:
+
+* report submission logic
+* signature saving logic
+* email flow
+* public report access flow
+* send flow
+* finalize flow
+* archive flow
+* auth
+* unrelated UI
+* unrelated report types unless they already use this exact shared final report template safely
+
+This is a final report presentation cleanup only.
+
+Changes required
+
+1. Remove top browser-style print header text from every page
+   Remove:
+
+* date/time shown at top left
+* ClockField shown at top center/top right
+* any browser-injected page chrome text on each printed page
+
+Expected result
+The final report pages should start cleanly with the document itself only.
+No print header noise.
+No timestamp at top.
+No ClockField text at top.
+
+Important
+If this is browser print header content, suppress it through the print/PDF generation method you control.
+If current export relies on plain browser print defaults, update the export path so the final PDF/report does not include browser headers/footers.
+Do not break existing print/download behavior while doing this.
+
+2. Simplify signature card titles
+   Inside the acknowledgement section, change the card titles from:
+
+* Employee Acknowledgement
+* Client Acknowledgement
+
+To:
+
+* Employee
+* Client
+* Prepared By
+
+Reason
+The section already says Acknowledgement & Signatures, so repeating acknowledgement inside each box is unnecessary and makes it feel crowded.
+
+3. Reduce the size of the signature boxes
+   The current signature cards are too large and visually overpower the report.
+
+Adjust them so they:
+
+* still fit the signature clearly
+* still fit signer name, date, and status
+* remain readable
+* take less vertical and visual weight
+* feel proportionate to an incident report
+
+Requirements
+
+* reduce card height
+* tighten internal padding slightly
+* reduce excessive empty space
+* keep signature visible and not cramped
+* keep three cards aligned in one row when space allows
+* maintain clean spacing and print clarity
+
+Do not make them tiny.
+Just scale them down to feel balanced with the rest of the document.
+
+4. Improve the category line on the final printed report
+   Current example:
+   Category: Broke client property
+
+This feels awkward on the final document.
+
+Required change
+Do not show the word “Category:” on the final printed/signed report in this section.
+
+Instead, show a cleaner subtitle under the main incident title.
+
+Recommended format
+Main title:
+Damage to client property
+
+Subtitle:
+Broke client property
+
+or, if you want it even cleaner:
+Property damage
+
+Subtitle:
+Client property was broken during cleaning
+
+Best rule
+Keep the main report title as the readable human title.
+Below it, show a clean descriptive subtitle without the “Category:” label.
+
+This change is only for the final rendered report output.
+Do not change the internal category system or report form data.
+
+5. Improve low-contrast supporting text
+   Some gray text is too dark/muddy and hard to read in the final report.
+
+Adjust only the secondary/supporting text used in final report output so it becomes easier to read.
+
+Targets include:
+
+* subtitles
+* section helper text
+* small metadata text
+* card support text
+* footer/support text if applicable
+
+Important
+Do not make secondary text as heavy as headings.
+Do not over-darken the whole document.
+Just improve contrast and legibility so it reads cleaner in print/PDF.
+
+6. Add employee statement to the final report
+   This is important.
+
+If the employee submitted a statement in their report acknowledgement/review flow, that statement must appear on the final report.
+
+Current problem
+The final report is missing the employee’s own statement, even though they already submitted it on their side.
+
+Required behavior
+Show the employee statement on the final report in a clear dedicated section.
+
+Recommended placement
+Place it before the Acknowledgement & Signatures section, or near the incident narrative section where it fits naturally.
+
+Recommended section title
+Employee Statement
+
+Content
+Show the employee’s submitted statement exactly as stored, with clean formatting.
+
+If no employee statement exists
+
+* hide the section entirely
+  or
+* show nothing for that section
+
+Do not show an empty block unless that is already part of the document design.
+
+Suggested order
+Incident Description
+Immediate Action Taken
+Employee Statement
+Acknowledgement & Signatures
+
+This will make the final report complete and easier for the client/admin to understand.
+
+Layout guidance
+
+A. Report header cleanup
+Keep the actual report header only:
+
+* logo
+* company name
+* address if already used
+* incident report title block
+
+Remove all browser print artifacts at page top.
+
+B. Main title area
+Use:
+
+* strong main title
+* smaller readable subtitle beneath
+* no “Category:” prefix on final printout
+
+Example
+Damage to client property
+Broke client property
+
+C. Signature section
+Section heading stays:
+Acknowledgement & Signatures
+
+Card headings become:
+
+* Employee
+* Client
+* Prepared By
+
+Card sizing
+
+* slightly smaller width/height feel
+* less padding
+* still readable
+* signature remains visible
+* metadata remains visible
+
+D. Employee statement section
+Add a dedicated readable block with:
+
+* title
+* statement text
+* proper spacing above and below
+
+Do not mix the employee statement into the signature card.
+
+Important restrictions
+
+Do not change:
+
+* how signatures are captured
+* how signatures are stored
+* who can sign
+* report routing
+* email routing
+* category saving in backend
+* report send flow
+* report finalize behavior
+
+This task is presentation only for the final report output.
+
+Recommended implementation steps
+
+Step 1
+Locate the shared final report print/PDF template
+
+Step 2
+Remove/suppress browser-style print headers/footers from exported output path
+
+Step 3
+Update the report title/subtitle rendering so category label is no longer shown on final output
+
+Step 4
+Add employee statement block using the existing saved employee statement field
+
+Step 5
+Update signature section headings:
+
+* Employee
+* Client
+* Prepared By
+
+Step 6
+Reduce signature card size and tighten spacing without hurting readability
+
+Step 7
+Adjust final report secondary text color tokens for better legibility
+
+Step 8
+Test print preview and exported PDF
+
+Acceptance criteria
+
+This is complete only if all of the following are true:
+
+* top date/time is removed from each page
+* ClockField text at the top of each page is removed
+* signature card titles are simplified to Employee, Client, and Prepared By
+* signature boxes are smaller and more balanced
+* final report no longer shows “Category:” label
+* subtitle under the report title reads naturally
+* low-contrast gray text is easier to read
+* employee statement appears on final report when available
+* no existing report flow is broken
+* no unrelated feature is changed
+
+Test cases
+
+Test all of these before marking complete:
+
+1. Incident report with employee statement
+
+* statement appears in final preview and PDF
+
+2. Incident report without employee statement
+
+* no broken empty section
+
+3. Signed report with employee and client signatures
+
+* signature cards still render correctly after resizing
+
+4. Unsigned prepared-by block
+
+* placeholder still looks clean
+
+5. Print preview
+
+* top browser text/header removed
+
+6. PDF export
+
+* top browser text/header removed
+
+7. Long report
+
+* employee statement and signatures still paginate cleanly
+
+8. Existing shared report template
+
+* no broken layout in other reports using same template
+
+Final rule
+
+Do not touch anything else.
+Only make these final report output changes:
+
+* remove top print header text
+* simplify signature card titles
+* reduce signature card size
+* clean up the category/title display
+* improve secondary text readability
+* add employee statement to the final report when available
+
+If anything outside this template must be changed, stop and ask first.

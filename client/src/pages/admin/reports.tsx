@@ -961,7 +961,7 @@ function ReportDetailDialog({ reportId: rptId, open, onClose, employees, clients
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 px-1 pb-2">
                     <Field label="Incident Date" value={rpt.incidentDate} />
                     <Field label="Incident Time" value={rpt.incidentTime} />
-                    <Field label="Category" value={rpt.incidentCategory} />
+                    <Field label="Category" value={rpt.incidentCategory ? (INCIDENT_CATEGORIES.find(c => c.value === rpt.incidentCategory)?.label || rpt.incidentCategory) : null} />
                     <Field label="Area Affected" value={rpt.areaAffected} />
                     <Field label="Risk Level" value={rpt.riskLevel} />
                     <Field label="Client Property Affected" value={rpt.clientPropertyAffected} />
@@ -1207,11 +1207,11 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
   }
 
   return (
-    <div className="print-report-container bg-white text-black" style={{ display: "none", padding: "0", fontFamily: "Georgia, serif", width: "100%" }}>
+    <div className="print-report-container bg-white text-black" style={{ display: "none", fontFamily: "Georgia, serif", width: "100%" }}>
       <style>{`
         @media print {
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; visibility: hidden !important; }
-          @page { margin: 0.62in 0.68in 0.80in 0.68in; size: letter; }
+          @page { margin: 0; size: letter; }
           .print-report-container {
             display: block !important;
             visibility: visible !important;
@@ -1219,7 +1219,8 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
             top: 0;
             left: 0;
             width: 100%;
-            padding: 0 !important;
+            padding: 0.62in 0.68in 0.80in 0.68in;
+            box-sizing: border-box;
           }
           .print-report-container * { visibility: visible !important; }
           .print-section { break-inside: avoid; page-break-inside: avoid; }
@@ -1258,8 +1259,8 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
 
       {/* ── Report Title ── */}
       <div style={{ marginBottom: "28px" }}>
-        <h1 style={{ fontSize: "18px", fontWeight: 700, color: "#111827", margin: "0 0 4px 0" }}>{rpt.title}</h1>
-        {incidentCatLabel && <p style={{ fontSize: "11px", color: "#6b7280" }}>Category: {incidentCatLabel}</p>}
+        <h1 style={{ fontSize: "18px", fontWeight: 700, color: "#111827", margin: "0 0 5px 0" }}>{rpt.title}</h1>
+        {incidentCatLabel && <p style={{ fontSize: "12px", color: "#4b5563", fontStyle: "italic" }}>{incidentCatLabel}</p>}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
@@ -1289,16 +1290,26 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
             </h2>
             {rpt.summary && (
               <div style={{ marginBottom: "12px" }}>
-                <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280", marginBottom: "4px" }}>Summary of Events</p>
+                <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#4b5563", marginBottom: "4px" }}>Summary of Events</p>
                 <p style={{ fontSize: "12px", color: "#111827", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>{rpt.summary}</p>
               </div>
             )}
             {rpt.immediateAction && (
               <div>
-                <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280", marginBottom: "4px" }}>Immediate Action Taken</p>
+                <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#4b5563", marginBottom: "4px" }}>Immediate Action Taken</p>
                 <p style={{ fontSize: "12px", color: "#111827", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>{rpt.immediateAction}</p>
               </div>
             )}
+          </section>
+        )}
+
+        {/* ── Employee Statement ── */}
+        {rpt.employeeStatement && (
+          <section>
+            <h2 style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#374151", borderBottom: "1px solid #d1d5db", paddingBottom: "4px", marginBottom: "12px" }}>
+              Employee Statement
+            </h2>
+            <p style={{ fontSize: "12px", color: "#111827", lineHeight: "1.7", whiteSpace: "pre-wrap" }}>{rpt.employeeStatement}</p>
           </section>
         )}
 
@@ -1320,24 +1331,13 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
           </section>
         )}
 
-        {/* ── Employee / Client Statements ── */}
-        {(rpt.employeeStatement || rpt.clientComments) && (
+        {/* ── Client Comments ── */}
+        {rpt.clientComments && (
           <section>
             <h2 style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#374151", borderBottom: "1px solid #d1d5db", paddingBottom: "4px", marginBottom: "12px" }}>
-              Statements
+              Client Comments
             </h2>
-            {rpt.employeeStatement && (
-              <div style={{ marginBottom: "12px" }}>
-                <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280", marginBottom: "4px" }}>Employee Statement</p>
-                <p style={{ fontSize: "12px", color: "#111827", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>{rpt.employeeStatement}</p>
-              </div>
-            )}
-            {rpt.clientComments && (
-              <div>
-                <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280", marginBottom: "4px" }}>Client Comments</p>
-                <p style={{ fontSize: "12px", color: "#111827", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>{rpt.clientComments}</p>
-              </div>
-            )}
+            <p style={{ fontSize: "12px", color: "#111827", lineHeight: "1.7", whiteSpace: "pre-wrap" }}>{rpt.clientComments}</p>
           </section>
         )}
 
@@ -1349,19 +1349,19 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
             </h2>
             {rpt.correctiveAction && (
               <div style={{ marginBottom: "10px" }}>
-                <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280", marginBottom: "4px" }}>Corrective Action</p>
+                <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#4b5563", marginBottom: "4px" }}>Corrective Action</p>
                 <p style={{ fontSize: "12px", color: "#111827", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>{rpt.correctiveAction}</p>
               </div>
             )}
             {rpt.nextSteps && (
               <div style={{ marginBottom: "10px" }}>
-                <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280", marginBottom: "4px" }}>Follow-Up Recommendations</p>
+                <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#4b5563", marginBottom: "4px" }}>Follow-Up Recommendations</p>
                 <p style={{ fontSize: "12px", color: "#111827", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>{rpt.nextSteps}</p>
               </div>
             )}
             {rpt.finalDecision && (
               <div>
-                <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280", marginBottom: "4px" }}>Management Comments</p>
+                <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#4b5563", marginBottom: "4px" }}>Management Comments</p>
                 <p style={{ fontSize: "12px", color: "#111827", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>{rpt.finalDecision}</p>
               </div>
             )}
@@ -1374,15 +1374,15 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
           const signedRoles = new Set(sigs.map((s: any) => s.signerRole));
 
           const roleLabel = (role: string) =>
-            role === "admin" ? "Management Acknowledgement"
-            : role === "employee" ? "Employee Acknowledgement"
-            : role === "client" ? "Client Acknowledgement"
+            role === "admin" ? "Prepared By"
+            : role === "employee" ? "Employee"
+            : role === "client" ? "Client"
             : role;
 
           const pendingBlocks = [
             { role: "admin-prepared", label: "Prepared By", sub: "Company Representative" },
-            { role: "employee", label: "Employee Acknowledgement", sub: "Acknowledging accuracy of report" },
-            { role: "client", label: "Client Acknowledgement", sub: "Acknowledging receipt of report" },
+            { role: "employee", label: "Employee", sub: "Acknowledging accuracy of report" },
+            { role: "client", label: "Client", sub: "Acknowledging receipt of report" },
           ].filter(b => b.role === "admin-prepared" || !signedRoles.has(b.role));
 
           const allCards = [
@@ -1404,41 +1404,40 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
                     const hasDrawn = sig.signatureType === "drawn" && sig.signatureDataUrl;
                     const hasTyped = sig.signatureType === "typed";
                     return (
-                      <div key={sig.id} className="print-section" style={{ border: "1px solid #d1d5db", borderRadius: "6px", padding: "14px", background: "#f9fafb" }}>
+                      <div key={sig.id} className="print-section" style={{ border: "1px solid #d1d5db", borderRadius: "5px", padding: "10px 12px", background: "#f9fafb" }}>
                         {/* Title */}
-                        <p style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#374151", margin: "0 0 10px 0" }}>{roleLabel(sig.signerRole)}</p>
+                        <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#374151", margin: "0 0 8px 0" }}>{roleLabel(sig.signerRole)}</p>
                         {/* Signature graphic area */}
-                        <div style={{ minHeight: "64px", display: "flex", alignItems: "center", borderBottom: "1px solid #e5e7eb", marginBottom: "8px", paddingBottom: "8px" }}>
+                        <div style={{ minHeight: "46px", display: "flex", alignItems: "center", borderBottom: "1px solid #e5e7eb", marginBottom: "7px", paddingBottom: "6px" }}>
                           {hasDrawn ? (
                             <img
                               src={sig.signatureDataUrl}
                               alt="Signature"
-                              style={{ maxHeight: "60px", maxWidth: "100%", objectFit: "contain", objectPosition: "left center" }}
+                              style={{ maxHeight: "44px", maxWidth: "100%", objectFit: "contain", objectPosition: "left center" }}
                             />
                           ) : hasTyped ? (
-                            <p style={{ fontSize: "26px", fontFamily: "'Dancing Script', 'Brush Script MT', cursive", fontWeight: 600, color: "#1e293b", margin: 0, lineHeight: 1.2 }}>
+                            <p style={{ fontSize: "22px", fontFamily: "'Dancing Script', 'Brush Script MT', cursive", fontWeight: 600, color: "#1e293b", margin: 0, lineHeight: 1.2 }}>
                               {sig.signerName}
                             </p>
                           ) : (
-                            /* Legacy fallback for records without signatureType */
                             <p style={{ fontSize: "11px", color: "#374151", margin: 0, fontStyle: "italic" }}>{sig.signerName}</p>
                           )}
                         </div>
                         {/* Metadata */}
-                        <p style={{ fontSize: "10px", color: "#374151", margin: "0 0 2px 0" }}><span style={{ color: "#6b7280" }}>Name: </span>{sig.signerName}</p>
-                        <p style={{ fontSize: "10px", color: "#4b5563", margin: "0 0 2px 0" }}><span style={{ color: "#6b7280" }}>Date: </span>{sig.signedAt ? format(new Date(sig.signedAt), "MMMM d, yyyy") : "—"}</p>
-                        <p style={{ fontSize: "10px", color: "#4b5563", margin: "0 0 8px 0" }}><span style={{ color: "#6b7280" }}>Status: </span>Acknowledged</p>
-                        <p style={{ fontSize: "9px", color: "#6b7280" }}>Signed electronically via Clockfield</p>
+                        <p style={{ fontSize: "9px", color: "#374151", margin: "0 0 1px 0" }}><span style={{ color: "#4b5563" }}>Name: </span>{sig.signerName}</p>
+                        <p style={{ fontSize: "9px", color: "#374151", margin: "0 0 1px 0" }}><span style={{ color: "#4b5563" }}>Date: </span>{sig.signedAt ? format(new Date(sig.signedAt), "MMMM d, yyyy") : "—"}</p>
+                        <p style={{ fontSize: "9px", color: "#374151", margin: "0 0 6px 0" }}><span style={{ color: "#4b5563" }}>Status: </span>Acknowledged</p>
+                        <p style={{ fontSize: "8px", color: "#6b7280" }}>Signed electronically via Clockfield</p>
                       </div>
                     );
                   }
                   const block = card.block;
                   return (
-                    <div key={block.label} className="print-section" style={{ border: "1px solid #d1d5db", borderRadius: "6px", padding: "14px", minHeight: "100px" }}>
-                      <p style={{ fontSize: "10px", fontWeight: 600, color: "#374151", margin: "0 0 3px 0" }}>{block.label}</p>
-                      <p style={{ fontSize: "9px", color: "#6b7280", marginBottom: "18px" }}>{block.sub}</p>
-                      <div style={{ borderBottom: "1px solid #9ca3af", marginTop: "26px" }} />
-                      <p style={{ fontSize: "9px", color: "#6b7280", marginTop: "5px" }}>Name, Signature &amp; Date</p>
+                    <div key={block.label} className="print-section" style={{ border: "1px solid #d1d5db", borderRadius: "5px", padding: "10px 12px", minHeight: "80px" }}>
+                      <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#374151", margin: "0 0 2px 0" }}>{block.label}</p>
+                      <p style={{ fontSize: "8px", color: "#4b5563", marginBottom: "14px" }}>{block.sub}</p>
+                      <div style={{ borderBottom: "1px solid #9ca3af", marginTop: "20px" }} />
+                      <p style={{ fontSize: "8px", color: "#6b7280", marginTop: "4px" }}>Name, Signature &amp; Date</p>
                     </div>
                   );
                 })}
