@@ -1081,7 +1081,8 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
       <style>{`
         @media print {
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; visibility: hidden !important; }
-          @page { margin: 0; size: letter; }
+          @page { margin: 48px 0 0 0; size: letter; }
+          @page :first { margin: 0; }
           .print-report-container {
             display: block !important;
             visibility: visible !important;

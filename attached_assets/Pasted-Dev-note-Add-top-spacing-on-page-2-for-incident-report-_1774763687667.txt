@@ -1,0 +1,160 @@
+Dev note: Add top spacing on page 2 for incident report only
+
+Objective
+
+Fix the incident report print/PDF layout so that when content continues onto page 2 or later, the new page starts with a little more top space.
+
+Right now, when the “Acknowledgement & Signatures” section moves to page 2, it starts too close to the top edge and looks cramped and unprofessional.
+
+This task is only about adding proper top spacing on continuation pages for the incident report export/print layout.
+
+Critical instruction
+
+Do not touch anything else.
+
+Do not redesign the report.
+Do not change fields.
+Do not change branding.
+Do not change logic.
+Do not change signatures content.
+Do not change workflow.
+Do not change AI refinement.
+Do not change unrelated print behavior in other modules.
+Do not refactor unrelated components.
+
+If anything outside this exact scope is needed, ask for approval first.
+
+Main problem
+
+When the report flows onto a second page, the section at the top of that new page starts too high, with almost no breathing room.
+
+Example:
+
+“Acknowledgement & Signatures” lands at the top of page 2
+there is not enough white space above it
+the page looks crowded and less professional
+
+Expected behavior
+
+If content continues onto page 2 or page 3:
+
+there should be a clean top margin
+the first section on the new page should not sit against the page edge
+the report should feel balanced and organized like a real document
+
+Main implementation goal
+
+Add a little top spacing on continuation pages in the incident report print/export output.
+
+This should affect only the printed/exported incident report pages, not the normal app screen UI.
+
+Required fix
+
+Add proper page top margin for printed pages
+
+Ensure the print layout uses a clean A4 page margin so every new printed page has breathing room at the top.
+
+If the current print layout is manually simulating pages, increase the top padding/margin of the content area on continuation pages.
+
+If using real print CSS, make sure page margins are set properly for the document.
+
+Goal:
+page 2 should begin with a comfortable top gap before the first visible section.
+
+Add extra spacing before sections that begin a new page
+
+For important sections like:
+
+Acknowledgement & Signatures
+Additional Sign-Off
+
+If they start on a new page, they should not visually stick to the top edge.
+
+Agent should add a small print-safe top spacing rule so that section blocks starting at the top of a continuation page have a more professional offset.
+
+Important:
+Do not add huge empty gaps.
+Just add enough space to look intentional and clean.
+
+Keep spacing scoped to incident report print/export only
+
+Do not change global app spacing.
+Do not change on-screen layout.
+Do not change spacing for unrelated modules.
+
+This fix must apply only to:
+
+incident report print preview
+incident report PDF/export
+continuation pages in that document
+
+Most likely cause
+
+This usually happens because:
+
+the print page margin is too tight
+continuation page container has no top padding
+content is flowing correctly to page 2, but page 2 starts at raw container top with no visual breathing room
+
+Agent should inspect:
+
+incident report print CSS
+page wrapper for exported report
+multi-page container styles
+any forced page-break section styling
+
+Recommended implementation approach
+
+Find the incident report print/export stylesheet or component
+Identify how page 2+ is being rendered
+Add a small top margin/padding for continuation pages
+Make sure the first section on the new page does not start flush to the top
+Re-test with a long report where “Acknowledgement & Signatures” moves to page 2
+
+Do not change the whole pagination system again.
+Only adjust the top spacing so page 2 looks cleaner.
+
+Visual target
+
+Page 2 should have:
+
+clean white space at top
+section title below that space
+same professional feel as page 1
+no cramped appearance
+
+Testing checklist
+
+Test only this scope.
+
+Short report
+still looks normal
+no extra weird spacing added
+Long report that reaches page 2
+page 2 begins with a little top spacing
+section title is not stuck to the top edge
+Long report with signatures on page 2
+acknowledgement/signature area looks cleaner
+still fits properly
+no clipping
+Regression
+page 1 still looks good
+no other report layout changed
+no unrelated modules changed
+
+Acceptance criteria
+
+This task is complete only when:
+
+continuation pages in incident report export have clean top spacing
+sections at the top of page 2/page 3 no longer look cramped
+nothing else in the app was changed
+
+Final instruction to the agent
+
+Only adjust the top spacing for continuation pages in the incident report print/export layout.
+
+Do not touch anything else.
+Do not redesign the report.
+Do not change any logic.
+Just make page 2 and later pages start with a little more white space so the report looks more organized and professional.
