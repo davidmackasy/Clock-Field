@@ -3654,7 +3654,15 @@ Return a JSON object with these exact fields:
         confidenceNote: parsed.confidence_note || "",
       });
     } catch (err: any) {
-      res.status(500).json({ message: err.message || "AI refinement failed" });
+      const status = err?.status || err?.statusCode || 500;
+      console.error("[reports] AI refinement error:", status, err?.message);
+      if (status === 429) {
+        res.status(503).json({ message: "AI refinement is temporarily unavailable." });
+      } else if (status === 401 || status === 403) {
+        res.status(503).json({ message: "AI refinement is temporarily unavailable." });
+      } else {
+        res.status(500).json({ message: "AI refinement is temporarily unavailable." });
+      }
     }
   });
 
