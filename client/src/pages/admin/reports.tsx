@@ -1186,12 +1186,11 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
   }
 
   return (
-    <div className="print-report-container bg-white text-black" style={{ display: "none", padding: "48px 52px", fontFamily: "Georgia, serif", width: "100%" }}>
+    <div className="print-report-container bg-white text-black" style={{ display: "none", padding: "0", fontFamily: "Georgia, serif", width: "100%" }}>
       <style>{`
         @media print {
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; visibility: hidden !important; }
-          @page { margin: 48px 0 0 0; size: letter; }
-          @page :first { margin: 0; }
+          @page { margin: 0.62in 0.68in 0.80in 0.68in; size: letter; }
           .print-report-container {
             display: block !important;
             visibility: visible !important;
@@ -1199,10 +1198,13 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
             top: 0;
             left: 0;
             width: 100%;
+            padding: 0 !important;
           }
           .print-report-container * { visibility: visible !important; }
           .print-section { break-inside: avoid; page-break-inside: avoid; }
           .print-section-heading { break-after: avoid; page-break-after: avoid; }
+          .print-sig-section { break-inside: avoid; page-break-inside: avoid; }
+          .print-footer { break-inside: avoid; page-break-inside: avoid; }
         }
       `}</style>
 
@@ -1228,8 +1230,8 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
         <div style={{ textAlign: "right" }}>
           <p style={{ fontSize: "20px", fontWeight: 700, color: "#111827", margin: 0 }}>{typeInfo?.label || "Report"}</p>
           <p style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px", fontStyle: "italic" }}>Confidential Business Record</p>
-          <p style={{ fontSize: "10px", color: "#9ca3af", marginTop: "6px" }}>Ref: {reportId(rpt.id)}</p>
-          <p style={{ fontSize: "10px", color: "#9ca3af" }}>Prepared: {preparedDate}</p>
+          <p style={{ fontSize: "10px", color: "#6b7280", marginTop: "6px" }}>Ref: {reportId(rpt.id)}</p>
+          <p style={{ fontSize: "10px", color: "#6b7280" }}>Prepared: {preparedDate}</p>
         </div>
       </div>
 
@@ -1370,33 +1372,33 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
           if (allCards.length === 0) return null;
 
           return (
-            <section className="print-section">
-              <h2 className="print-section-heading" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#374151", borderBottom: "1px solid #d1d5db", paddingBottom: "4px", marginBottom: "12px" }}>
+            <section className="print-sig-section" style={{ marginTop: "8px" }}>
+              <h2 className="print-section-heading" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#374151", borderBottom: "1px solid #d1d5db", paddingBottom: "4px", marginBottom: "16px" }}>
                 Acknowledgement &amp; Signatures
               </h2>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
+              <div className="print-sig-section" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
                 {allCards.map((card, i) => {
                   if (card.type === "signed") {
                     const sig = card.sig;
                     return (
-                      <div key={sig.id} className="print-section" style={{ border: "1px solid #d1d5db", borderRadius: "6px", padding: "12px", background: "#f9fafb" }}>
+                      <div key={sig.id} className="print-section" style={{ border: "1px solid #d1d5db", borderRadius: "6px", padding: "14px", background: "#f9fafb" }}>
                         <p style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#374151", margin: "0 0 8px 0" }}>{roleLabel(sig.signerRole)}</p>
-                        <p style={{ fontSize: "11px", color: "#111827", margin: "0 0 2px 0" }}><span style={{ color: "#6b7280" }}>Signed by:</span> {sig.signerName}</p>
-                        <p style={{ fontSize: "10px", color: "#6b7280", margin: "0 0 2px 0" }}><span>Date:</span> {sig.signedAt ? format(new Date(sig.signedAt), "MMMM d, yyyy") : "—"}</p>
-                        <p style={{ fontSize: "10px", color: "#6b7280", margin: "0 0 8px 0" }}><span>Status:</span> Acknowledged</p>
-                        <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: "6px" }}>
-                          <p style={{ fontSize: "9px", color: "#9ca3af" }}>Signed electronically in Clockfield</p>
+                        <p style={{ fontSize: "11px", color: "#111827", margin: "0 0 3px 0" }}><span style={{ color: "#6b7280" }}>Signed by:</span> {sig.signerName}</p>
+                        <p style={{ fontSize: "10px", color: "#4b5563", margin: "0 0 2px 0" }}><span>Date:</span> {sig.signedAt ? format(new Date(sig.signedAt), "MMMM d, yyyy") : "—"}</p>
+                        <p style={{ fontSize: "10px", color: "#4b5563", margin: "0 0 10px 0" }}><span>Status:</span> Acknowledged</p>
+                        <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: "7px" }}>
+                          <p style={{ fontSize: "9px", color: "#6b7280" }}>Signed electronically in Clockfield</p>
                         </div>
                       </div>
                     );
                   }
                   const block = card.block;
                   return (
-                    <div key={block.label} className="print-section" style={{ border: "1px solid #d1d5db", borderRadius: "6px", padding: "12px", minHeight: "90px" }}>
-                      <p style={{ fontSize: "10px", fontWeight: 600, color: "#374151", margin: "0 0 2px 0" }}>{block.label}</p>
-                      <p style={{ fontSize: "9px", color: "#9ca3af", marginBottom: "16px" }}>{block.sub}</p>
-                      <div style={{ borderBottom: "1px solid #9ca3af", marginTop: "24px" }} />
-                      <p style={{ fontSize: "9px", color: "#9ca3af", marginTop: "4px" }}>Name, Signature &amp; Date</p>
+                    <div key={block.label} className="print-section" style={{ border: "1px solid #d1d5db", borderRadius: "6px", padding: "14px", minHeight: "100px" }}>
+                      <p style={{ fontSize: "10px", fontWeight: 600, color: "#374151", margin: "0 0 3px 0" }}>{block.label}</p>
+                      <p style={{ fontSize: "9px", color: "#6b7280", marginBottom: "18px" }}>{block.sub}</p>
+                      <div style={{ borderBottom: "1px solid #9ca3af", marginTop: "26px" }} />
+                      <p style={{ fontSize: "9px", color: "#6b7280", marginTop: "5px" }}>Name, Signature &amp; Date</p>
                     </div>
                   );
                 })}
@@ -1406,7 +1408,7 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
         })()}
 
         {/* ── Footer ── */}
-        <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: "12px", display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#9ca3af" }}>
+        <div className="print-footer" style={{ borderTop: "1px solid #e5e7eb", marginTop: "8px", paddingTop: "12px", display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#6b7280" }}>
           <span>{company?.name || "Company"} · Confidential</span>
           <span>Prepared using Clockfield</span>
           <span>Generated {format(new Date(), "MMMM d, yyyy")} · {reportId(rpt.id)}</span>

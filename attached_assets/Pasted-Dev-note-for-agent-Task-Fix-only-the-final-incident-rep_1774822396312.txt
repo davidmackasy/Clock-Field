@@ -1,0 +1,278 @@
+Dev note for agent
+
+Task
+
+Fix only the final incident report print/PDF layout so page spacing and text readability look professional.
+
+Do not touch:
+
+report data logic
+incident form logic
+send flow
+signature saving
+archive
+finalize
+email flow
+auth
+any unrelated report type unless the same shared print template is already being used safely
+
+This is a print/PDF presentation fix only.
+
+Main issues to fix
+
+Bottom page spacing is wrong
+The report content is running too close to the page break and footer area.
+It does not feel like a real document page with proper bottom margin.
+The first page should end cleanly, then continue naturally onto the next page.
+Some small/light text is too dark-gray and hard to read
+The smaller supporting text needs better contrast.
+Do not make everything fully bold black.
+Just improve readability so it is cleaner and easier to read.
+
+What the final result should look like
+
+Every PDF page must have:
+
+consistent top margin
+consistent bottom margin
+consistent left/right margins
+content that stops before the footer/safe area
+natural continuation onto next page
+no cramped content at the bottom
+no awkward cutoff feeling before the next page
+
+Typography should:
+
+keep headings strong
+keep body text readable
+improve muted/small text contrast
+still look professional and document-like
+
+Important layout rule
+
+The bottom spacing should visually match the document’s top breathing room.
+Not necessarily identical pixel values, but it should feel balanced.
+The content should never look like it is falling into the footer or page edge.
+
+What to fix in the print/PDF template
+
+Add a real page content wrapper
+The printable report needs a proper page container or print-safe content area.
+
+Recommended structure
+
+page shell
+header area
+content area
+footer area
+page break handling
+
+The main content area must reserve space for:
+
+bottom margin
+footer if present
+signature blocks when they should remain together
+Enforce print-safe page margins
+Use print-specific styling for the PDF/report view.
+
+Required outcome
+
+top margin stays clean
+bottom margin stays clean
+footer never crowds the content
+next page starts with proper spacing
+
+Do not rely on browser default print flow alone.
+Add controlled print CSS for the report layout.
+
+Fix page break behavior around the acknowledgement/signature section
+The acknowledgement and signatures section is currently landing too close to the bottom and looks poorly broken.
+
+Required behavior
+
+avoid placing the start of a major section too low on the page
+if there is not enough room for the section header plus the boxes, move it to the next page cleanly
+keep signature blocks together as much as possible
+
+Recommended print rules
+Apply page-break protection / break-inside avoidance to:
+
+acknowledgement and signatures section
+signature card row/container
+important grouped blocks
+footer block
+
+Examples of safe targets
+
+.acknowledgement-section
+.signature-grid
+.signature-card
+.report-footer
+
+If there is not enough room, move the whole section to the next page instead of splitting it awkwardly.
+
+Prevent content from flowing into the footer zone
+The footer should have its own reserved space.
+Do not let the main body text continue visually into it.
+
+If the document has a footer like:
+
+company confidentiality note
+powered by Clockfield
+reference number / generated date
+
+Then the body content area must stop before that reserved area.
+
+Improve small text contrast
+The smaller gray text is too hard to read.
+
+Adjust only the low-contrast supporting text such as:
+
+subtitle text
+report metadata labels if too faint
+small helper text
+footer text if too light
+secondary descriptive text under titles
+
+Do not over-darken everything.
+Use a darker neutral that is still softer than the primary headings.
+
+Target result
+
+headings remain strongest
+body stays solid and readable
+secondary text becomes easier to see
+overall document still looks premium and formal
+Keep document hierarchy
+Do not flatten the design.
+Maintain visual hierarchy like this:
+
+Primary
+
+report title
+section titles
+
+Secondary
+
+field labels
+subsection labels
+
+Readable support text
+
+metadata details
+small notes
+footer text
+Signature section layout fix
+The signature area should look intentional and aligned.
+
+Requirements
+
+enough top spacing before the signature section
+signature boxes aligned consistently
+avoid signature row breaking across pages
+labels inside boxes readable
+enough internal padding in each signature card
+if needed, place entire signature row on the next page
+
+If the acknowledgement section starts too close to the bottom, move it.
+Do not force it to squeeze into the remaining space.
+
+Print and PDF rendering consistency
+Make sure the same layout looks correct in:
+print preview
+downloaded PDF
+longer incidents with more text
+shorter incidents with less text
+
+This is important because long narrative sections will expose page-break problems faster.
+
+Recommended technical approach
+
+Use print-specific CSS and page layout rules in the report template only.
+
+Suggested areas to check
+
+printable report wrapper
+page container
+footer container
+acknowledgement section
+signature row/grid
+headings and muted text tokens
+@media print styles
+PDF rendering wrapper if server-side PDF generation uses HTML/CSS
+
+Recommended implementation ideas
+
+Page shell
+
+define a fixed printable content width
+define consistent internal page padding
+reserve bottom safe space
+
+Print CSS
+
+add proper margin/padding behavior for print
+add break-inside: avoid where needed
+add page-break-before / page-break-inside handling for sensitive sections
+ensure footer spacing is respected
+
+Typography tokens
+
+slightly darken muted text color
+slightly darken small metadata text
+keep headings unchanged unless needed
+
+Do not do this
+
+do not shrink all text just to fit more
+do not compress spacing globally
+do not remove footer
+do not move content outside the page shell
+do not touch unrelated web UI
+
+Acceptance criteria
+
+This task is complete only if all of the following are true:
+
+every report page has proper bottom breathing room
+content no longer looks like it is running into the page edge
+page 1 ends cleanly before page 2 starts
+acknowledgement/signature section no longer breaks awkwardly
+signature boxes stay together properly
+smaller gray text is easier to read
+heading hierarchy remains professional
+print preview and final PDF both look clean
+no report logic or unrelated app features are changed
+
+Test cases to run
+
+Test these before considering it done:
+
+Short incident report
+verify bottom margin still looks balanced
+verify no large awkward empty gap
+Medium incident report
+verify acknowledgement section lands cleanly
+Long incident report
+verify content flows naturally across multiple pages
+verify no text overlaps footer
+verify signature section moves to next page if needed
+PDF export
+verify same spacing as print preview
+Reports with and without company logo
+verify header spacing still holds
+Reports with long immediate action text
+verify no broken section ending
+Reports with all three signature boxes populated/unpopulated
+verify layout remains stable
+
+Final instruction
+
+Do not touch anything else.
+Only improve:
+
+bottom page spacing / print-safe page ending
+section page-break behavior
+low-contrast small text readability
+
+If any other structural change is needed outside the print/PDF template, stop and ask before changing it.
