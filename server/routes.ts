@@ -575,6 +575,9 @@ Welcome again, and thank you for choosing ClockField.
       const { password: _, tempPin: __, ...safe } = employee;
       res.json(safe);
     } catch (err: any) {
+      if (err.message?.includes("users_email_unique") || err.code === "23505") {
+        return res.status(409).json({ message: "This email address is already in use by another account. Please use a different email or leave the email field blank." });
+      }
       res.status(500).json({ message: err.message });
     }
   });
@@ -592,11 +595,21 @@ Welcome again, and thank you for choosing ClockField.
       };
       if ("hourlyRate" in allowedFields) allowedFields.hourlyRate = toNum(allowedFields.hourlyRate);
       if ("overtimeRate" in allowedFields) allowedFields.overtimeRate = toNum(allowedFields.overtimeRate);
+      // Skip email update if unchanged (prevents unnecessary uniqueness re-check)
+      if ("email" in allowedFields) {
+        const incoming = (allowedFields.email || "").trim().toLowerCase();
+        const existing = (target.email || "").trim().toLowerCase();
+        if (incoming === existing) delete allowedFields.email;
+        else if (!incoming) allowedFields.email = null;
+      }
       const employee = await storage.updateUser(req.params.id, allowedFields);
       if (!employee) return res.status(404).json({ message: "Not found" });
       const { password: _, tempPin: __, ...safe } = employee;
       res.json(safe);
     } catch (err: any) {
+      if (err.message?.includes("users_email_unique") || err.code === "23505") {
+        return res.status(409).json({ message: "This email address is already in use by another account. Please use a different email." });
+      }
       res.status(500).json({ message: err.message });
     }
   });

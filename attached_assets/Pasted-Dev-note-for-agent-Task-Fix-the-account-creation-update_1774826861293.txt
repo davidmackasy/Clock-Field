@@ -1,0 +1,292 @@
+Dev note for agent
+
+Task
+
+Fix the account creation/update logic so a user can use a normal name and email combination without triggering a false duplicate error.
+
+Example that must work:
+
+First name: David
+Last name: Mackasy
+Email: davidmackasy@gmail.com
+
+Using a person’s name inside their email is normal and must not be treated as a uniqueness conflict.
+
+Important
+Only focus on this issue.
+
+Do not touch:
+
+attendance
+employee hours
+payroll
+schedules
+reports
+signatures
+email sending flows
+auth behavior unrelated to this specific duplicate-validation issue
+any unrelated database logic
+anything else in the system
+
+Problem
+
+Right now the system appears to be throwing a duplicate error like:
+users_email_unique
+or a similar uniqueness validation error in situations where the name and the email are naturally related.
+
+That is incorrect behavior.
+
+A person’s:
+
+first name
+last name
+username/display name
+and email
+
+can obviously contain the same words. That does not mean they are duplicates in the wrong way.
+
+What needs to be fixed
+
+The system must only enforce uniqueness on the correct field.
+
+That means:
+
+email uniqueness should only be checked against email
+username uniqueness should only be checked against username if username is actually a unique field in your system
+first name and last name must not be compared against email for uniqueness
+display name/full name must not be compared against email for uniqueness
+
+Examples that must be allowed
+
+Name: David Mackasy
+Email: davidmackasy@gmail.com
+Username: davidmackasy
+Email: davidmackasy@gmail.com
+Name: Gift Banda
+Email: giftbanda@gmail.com
+
+Those are normal and valid.
+
+Likely issue to inspect
+
+Please inspect the actual signup/create-user/update-user validation path carefully.
+
+Possible causes:
+
+Wrong frontend validation logic
+A check may be incorrectly blocking values because email contains first name, last name, or username.
+Wrong backend validation logic
+The server may be performing an incorrect uniqueness comparison across the wrong fields.
+Wrong payload mapping
+The email field may accidentally be getting copied into username, or username into email, causing a conflict.
+Wrong database write/update logic
+During create or update, the same value may be written into multiple unique columns unintentionally.
+Bad duplicate-check query
+The query may be using OR conditions incorrectly, such as:
+email equals value
+username equals value
+without checking which field is actually being validated
+Update flow not excluding current record
+If editing an existing user, the uniqueness check may be comparing the record against itself and falsely failing.
+
+What the correct behavior should be
+
+Email
+
+must only be unique among emails
+
+Username
+
+only enforce uniqueness if the system truly requires unique usernames
+if username is optional, handle that safely
+if username is auto-generated, make sure it does not incorrectly collide with email logic
+
+Names
+
+first name and last name do not need uniqueness
+full name does not need uniqueness
+names can resemble emails and that is fine
+
+Recommended investigation steps
+
+Step 1
+Inspect the backend endpoint/service used for:
+
+creating users
+creating employees
+creating clients if applicable
+updating existing users/employees
+
+Step 2
+Inspect the validation logic for:
+
+email
+username
+firstName
+lastName
+fullName/displayName
+
+Step 3
+Check whether any code is doing something incorrect like:
+
+blocking if email includes username
+blocking if username matches email local-part
+treating full name as a unique identifier
+checking all text fields together for uniqueness
+
+Step 4
+Check database constraints
+Confirm exactly which columns are unique:
+
+email
+username if applicable
+
+Make sure first_name / last_name / display_name are not incorrectly constrained as unique.
+
+Step 5
+Check create and update payload mapping
+Make sure:
+
+email goes to email
+username goes to username only if intended
+first name/last name are not accidentally copied into unique fields
+
+Step 6
+Check update flow carefully
+When editing an existing account:
+
+exclude the current record from uniqueness checks
+do not reject unchanged email if it already belongs to that same user
+
+Correct validation rules
+
+Email validation
+
+valid email format
+compare only against existing email column
+case-insensitive comparison if your system normalizes email
+trim whitespace
+
+Username validation
+
+only if username exists in your system as a unique identifier
+compare only against username column
+do not compare username to email as a uniqueness conflict
+if username equals email local-part, that is allowed unless your product explicitly forbids it
+
+Name validation
+
+required/non-required based on current business rules
+no uniqueness enforcement against email
+no uniqueness enforcement against username unless intentionally designed, which is not recommended here
+
+Safe examples
+
+Allowed:
+
+username: davidmackasy
+email: davidmackasy@gmail.com
+
+Allowed:
+
+firstName: David
+lastName: Mackasy
+email: davidmackasy@gmail.com
+
+Allowed:
+
+username: gift
+email: gift@gmail.com
+
+Allowed:
+
+displayName: David Mackasy
+email: davidmackasy@gmail.com
+
+Only reject when truly duplicate:
+
+another existing account already has the same email
+another existing account already has the same username, if username is meant to be unique
+
+User-facing error behavior
+
+If email is actually already used by another account, show:
+Account already exists
+An account with this email already exists. Please sign in instead, or use a different email.
+
+If username is actually already used and username must be unique, show:
+Username unavailable
+That username is already in use. Please choose another one.
+
+Do not show raw database errors like:
+
+users_email_unique
+duplicate key
+SQL text
+JSON error blobs
+
+Important
+
+Do not “fix” this by removing the email unique constraint entirely.
+Email should still remain unique across accounts if that is the current system rule.
+
+The fix is:
+
+correct the validation
+correct the field comparisons
+correct the payload mapping
+preserve proper uniqueness where it actually belongs
+
+Edge cases to test
+
+You must test all of these:
+
+Create flow
+
+first name David, last name Mackasy, email davidmackasy@gmail.com
+succeeds
+username davidmackasy, email davidmackasy@gmail.com
+succeeds if system allows same username and email local-part
+create second account with same exact email
+correctly fails with clean email duplicate message
+create second account with different email but same first/last name
+succeeds
+
+Update flow
+
+edit existing user and keep same email
+succeeds
+edit existing user and change first/last name to match email wording
+succeeds
+edit existing user and change email to one used by another user
+correctly fails
+
+Whitespace/case
+
+DavidMackasy@gmail.com
+ vs davidmackasy@gmail.com
+ensure normalization behaves correctly according to your email uniqueness rules
+
+Payload tests
+
+verify first name is not being written into username accidentally
+verify email is not being written into username accidentally
+verify username is not being used as the email unique check target
+
+Acceptance criteria
+
+This is complete only if all of the following are true:
+
+normal name/email combinations no longer trigger false duplicate errors
+email uniqueness is checked only against email
+username uniqueness is checked only against username, if applicable
+first name and last name are not treated as unique against email
+existing real duplicate emails are still blocked correctly
+unchanged existing emails on profile update do not fail
+no unrelated systems are touched
+no raw database error is shown to users
+
+Final rule
+
+Do not touch anything else.
+Only fix the false uniqueness/duplicate validation behavior so normal names and matching emails can be saved properly while preserving correct real email uniqueness.
