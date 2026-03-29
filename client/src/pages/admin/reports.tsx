@@ -1077,12 +1077,20 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
   }
 
   return (
-    <div className="hidden print:block bg-white text-black" style={{ padding: "48px 52px", fontFamily: "Georgia, serif", width: "100%" }}>
+    <div className="print-report-container bg-white text-black" style={{ display: "none", padding: "48px 52px", fontFamily: "Georgia, serif", width: "100%" }}>
       <style>{`
         @media print {
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; visibility: hidden !important; }
           @page { margin: 0; size: letter; }
-          nav, header, aside, .no-print, [data-testid="sidebar"], button { display: none !important; }
+          .print-report-container {
+            display: block !important;
+            visibility: visible !important;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+          }
+          .print-report-container * { visibility: visible !important; }
           .print-section { break-inside: avoid; page-break-inside: avoid; }
           .print-section-heading { break-after: avoid; page-break-after: avoid; }
         }

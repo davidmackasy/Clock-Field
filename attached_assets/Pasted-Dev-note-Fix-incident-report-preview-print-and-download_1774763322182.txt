@@ -1,0 +1,293 @@
+Dev note: Fix incident report preview, print, and download view only
+
+Objective
+
+Fix the incident report preview/export experience so users can properly preview, print, save, and download the document.
+
+Right now the preview is broken and unprofessional because the print dialog is showing the full Reports page behind the document, the report preview is tiny and awkward, and the printable area is not isolated correctly.
+
+This task is only about fixing the incident report preview, print, and download presentation.
+
+Critical instruction
+
+Do not touch anything else.
+
+Do not change incident report fields.
+Do not change report workflow.
+Do not change AI refinement.
+Do not change branding logic except where needed for the preview container to render correctly.
+Do not change unrelated reports.
+Do not change auth, settings, dashboard, or other pages.
+Do not refactor unrelated code.
+If anything outside this exact scope is needed, ask for approval first.
+
+Main problem
+
+From the screenshot, the current print/download behavior is wrong because:
+
+the full Reports page is still visible behind the printable document
+the document preview is too small and awkward
+the browser print dialog is treating the whole app screen as the print source instead of only the incident report
+the report preview does not feel like a dedicated printable document
+save/download/print cannot be trusted because users cannot clearly see what is being exported
+
+This means the print source is not isolated properly.
+
+Expected behavior
+
+When user clicks preview, print, save as PDF, or download for an incident report:
+
+only the incident report document should be rendered as the print source
+the rest of the Reports page and app UI must not appear
+the preview should look like a real A4 document
+if the report is multiple pages, it should continue cleanly
+the user should be able to clearly see the document content before saving or printing
+
+Main implementation goal
+
+Create a dedicated incident report print/export view so only the report document is printed or exported.
+
+Do not print the live dashboard page behind it.
+Do not rely on printing the whole current screen/modal.
+Do not let the report sit inside the normal page layout during print/export.
+
+Most likely cause
+
+The current implementation is probably doing one of these:
+
+calling window.print() from the main Reports page without isolating the printable content
+printing a modal overlay that still sits inside the full page DOM
+hiding some UI, but not enough
+using a preview container inside the dashboard instead of a dedicated print document
+not applying scoped print CSS for the report-only view
+
+That is why the preview looks like a manufactured function instead of a real document.
+
+Required fixes
+
+Print only the incident report document
+
+The print/export flow must be scoped to a dedicated printable container.
+
+The browser print source should be:
+
+only the incident report document
+not the entire Reports page
+not the surrounding dashboard
+not background cards, filters, search bars, tables, or page chrome
+
+Agent must make sure that on print:
+
+reports dashboard is hidden
+page header outside the document is hidden
+action buttons are hidden
+background overlay is hidden
+only the incident report sheet remains
+Use a dedicated report print route, window, or isolated print container
+
+Use the safest approach already compatible with the app.
+
+Recommended safe options:
+
+dedicated print view route for incident report
+or
+dedicated print-only component mounted alone
+or
+temporary print window/iframe containing only the report markup
+
+Do not keep printing the live dashboard DOM.
+
+The print source must be isolated.
+
+Fix the preview scale and document width
+
+The report preview must look like a normal A4-sized document on screen and in print preview.
+
+Current problem:
+the document is tiny and awkward inside a larger page.
+
+Fix:
+
+give the preview a proper document container
+center it
+use A4-friendly width
+use consistent background and margins
+make on-screen preview readable before print
+
+This is for preview only.
+Do not distort actual print scaling.
+
+Separate screen preview styles from print styles
+
+Agent must make sure there are two clean style modes:
+
+Screen preview mode
+
+readable centered paper-like document
+clean shadow/background if desired
+proper scaling for users to inspect the report
+
+Print mode
+
+white document
+no app background
+no dashboard
+no overlay clutter
+only report content
+A4-friendly margins
+multi-page support
+
+Do not use one messy mixed style for both screen and print.
+
+Remove app background from preview/export
+
+The screenshot clearly shows the Reports page behind the report.
+That must stop.
+
+When print/export preview opens, user should not see:
+
+report list
+search bar
+summary cards
+dashboard content
+rest of app screen
+
+Only the report itself should be visible as the print source.
+
+Keep pagination working
+
+While fixing preview isolation, do not break the multi-page pagination fix.
+
+Requirements:
+
+one-page report stays one page
+longer report continues to page 2/page 3
+no clipping
+no cutoff
+no overlapping footer/content
+Make download/save reliable
+
+If the current “download” is just relying on raw browser save-from-print with bad page composition, agent should make the preview source cleaner first.
+
+The main requirement is:
+user must clearly preview the actual document being saved.
+
+Do not leave the export dependent on an ugly live dashboard print.
+
+Recommended implementation path
+
+Option A, preferred if easy and safe:
+Create a dedicated incident report print view route, for example a clean standalone route/view that renders only the report document and automatically opens print when needed.
+
+Benefits:
+
+easiest isolation
+cleanest preview
+easiest print CSS
+no dashboard leakage
+
+Option B, acceptable if safer in current codebase:
+Render a dedicated hidden/isolated print container and apply scoped print CSS that hides everything except the report.
+
+But if this route is used, it must truly isolate the report from the rest of the page.
+
+Do not leave the current mixed page approach if it continues to leak surrounding UI.
+
+Print CSS requirements
+
+Agent should scope print CSS specifically for incident report export.
+
+In print mode:
+
+hide everything outside the report container
+remove shadows/background overlays
+remove modal chrome
+remove action buttons
+remove list/table/dashboard content
+print only the report body
+
+Common pattern:
+all app content hidden in @media print
+except the dedicated incident report print container
+
+But do this carefully so it affects only this flow, not the whole app globally.
+
+On-screen preview requirements
+
+The on-screen preview should:
+
+show the report centered
+use readable zoom/scale
+not be cramped in a tiny corner
+not sit on top of the full report dashboard in a messy way
+allow users to inspect the report before print or download
+
+If preview opens in modal:
+
+modal should contain only the document preview
+modal background okay
+but the report itself should be large enough and centered
+the preview should not visually merge into dashboard content
+
+Potential technical issues to inspect
+
+Agent should inspect for:
+
+window.print() being called from the dashboard page directly
+print CSS not hiding non-report DOM
+modal preview using full page as print source
+report preview container not isolated
+position: fixed or overlay elements still included in print
+dashboard DOM still visible during print preview
+incorrect width/scale on report container
+
+Acceptance criteria
+
+This task is complete only when:
+
+print preview shows only the incident report document
+the Reports dashboard is not visible behind or around the printable document
+the incident report preview is readable and properly centered
+save as PDF and print use the real report document only
+the incident report can be clearly previewed before saving
+multi-page reports still continue properly
+nothing else in the app was changed
+
+Testing checklist
+
+Test only this scope.
+
+Open incident report preview
+report is centered
+readable
+not tiny/awkward
+dashboard not mixed into preview
+Click print
+only report appears in print preview
+no summary cards
+no search bar
+no reports table
+no surrounding app UI
+Save as PDF
+exported content matches the report only
+no dashboard background
+no clipped layout
+no weird scaling
+Test short report
+looks clean on one page
+Test long report
+flows across multiple pages correctly
+Regression
+incident report still opens
+existing data still renders
+nothing else changed
+
+Final instruction to the agent
+
+Only fix the incident report preview, print, and download presentation.
+
+Do not touch anything else.
+Do not redesign unrelated parts.
+Do not alter workflow logic.
+Do not print the entire Reports page.
+Isolate the incident report into a proper standalone printable document view so users can clearly preview, save, and print the report professionally.
