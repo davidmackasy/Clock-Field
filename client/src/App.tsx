@@ -29,6 +29,9 @@ import AdminWorkLog from "@/pages/admin/work-log";
 import AdminTimesheets from "@/pages/admin/timesheets";
 import AdminSubscription from "@/pages/admin/subscription";
 import AdminPlatformMessages from "@/pages/admin/platform-messages";
+import AdminReports from "@/pages/admin/reports";
+import EmployeeReports from "@/pages/employee/reports";
+import ClientReports from "@/pages/client/reports";
 import SuperAdminDashboard from "@/pages/super-admin/dashboard";
 import SuperAdminMessages from "@/pages/super-admin/messages";
 import EmployeeHome from "@/pages/employee/home";
@@ -95,6 +98,7 @@ function AdminLayout() {
               <Route path="/admin/timesheets">
                 <FeatureGate feature="timesheets"><AdminTimesheets /></FeatureGate>
               </Route>
+              <Route path="/admin/reports" component={AdminReports} />
               <Route path="/admin/settings" component={AdminSettings} />
               <Route path="/admin/subscription" component={AdminSubscription} />
               <Route path="/admin/platform-messages" component={AdminPlatformMessages} />
@@ -144,6 +148,7 @@ function EmployeeLayout() {
           <Route path="/employee/schedule" component={EmployeeSchedule} />
           <Route path="/employee/hours" component={EmployeeHours} />
           <Route path="/employee/requests" component={EmployeeRequests} />
+          <Route path="/employee/reports" component={EmployeeReports} />
           <Route path="/employee/timesheets" component={EmployeeTimesheets} />
           <Route path="/employee/work-log" component={EmployeeWorkLog} />
           <Route path="/employee/pay-stubs" component={EmployeePayStubs} />
@@ -163,6 +168,7 @@ function ClientLayout() {
         <Switch>
           <Route path="/client" component={ClientDashboard} />
           <Route path="/client/requests" component={ClientRequestsPage} />
+          <Route path="/client/reports" component={ClientReports} />
           <Route path="/client/profile" component={ClientProfile} />
           <Route component={NotFound} />
         </Switch>

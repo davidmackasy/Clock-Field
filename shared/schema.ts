@@ -509,6 +509,105 @@ export type PayStubDeduction = typeof payStubDeductions.$inferSelect;
 export type InsertPayStubDeduction = z.infer<typeof insertPayStubDeductionSchema>;
 export type PayStubAuditLog = typeof payStubAuditLog.$inferSelect;
 
+// ─── Reports Module ───────────────────────────────────────────────────────────
+export const reports = pgTable("reports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  reportType: text("report_type").notNull(), // incident, issue, damage, statement, complaint, general
+  status: text("status").notNull().default("draft"), // draft, submitted, sent, viewed, awaiting_employee, awaiting_client, awaiting_signature, in_review, finalized, closed, archived, reopened
+  createdByUserId: varchar("created_by_user_id").notNull(),
+  createdByRole: text("created_by_role").notNull(), // admin, employee, client
+  // Linked entities
+  assignedClientId: varchar("assigned_client_id"),
+  assignedLocationId: varchar("assigned_location_id"),
+  assignedEmployeeId: varchar("assigned_employee_id"),
+  // Core fields
+  title: text("title").notNull(),
+  summary: text("summary"),
+  incidentDate: text("incident_date"),
+  incidentTime: text("incident_time"),
+  severity: text("severity"), // low, medium, high, critical
+  riskLevel: text("risk_level"), // none, low, medium, high
+  // Incident details
+  incidentCategory: text("incident_category"),
+  areaAffected: text("area_affected"),
+  clientPropertyAffected: boolean("client_property_affected").default(false),
+  companyEquipmentAffected: boolean("company_equipment_affected").default(false),
+  immediateAction: text("immediate_action"),
+  workStopped: boolean("work_stopped").default(false),
+  customerInformed: boolean("customer_informed").default(false),
+  witnesses: text("witnesses"),
+  // Property / equipment
+  itemAffected: text("item_affected"),
+  itemDescription: text("item_description"),
+  damageType: text("damage_type"),
+  estimatedCost: decimal("estimated_cost", { precision: 10, scale: 2 }),
+  itemRemoved: boolean("item_removed").default(false),
+  removedBy: text("removed_by"),
+  removalReason: text("removal_reason"),
+  removalApproved: boolean("removal_approved").default(false),
+  // Employee statement (filled by employee)
+  employeeStatement: text("employee_statement"),
+  // Client comments (filled by client)
+  clientComments: text("client_comments"),
+  // Admin-only fields
+  internalNotes: text("internal_notes"),
+  adminFindings: text("admin_findings"),
+  correctiveAction: text("corrective_action"),
+  finalDecision: text("final_decision"),
+  nextSteps: text("next_steps"),
+  followUpRequired: boolean("follow_up_required").default(false),
+  followUpDueDate: text("follow_up_due_date"),
+  // Signature requirements
+  requiresEmployeeSignature: boolean("requires_employee_signature").default(false),
+  requiresClientSignature: boolean("requires_client_signature").default(false),
+  requiresAdminSignature: boolean("requires_admin_signature").default(false),
+  // Routing state
+  sentToEmployee: boolean("sent_to_employee").default(false),
+  sentToClient: boolean("sent_to_client").default(false),
+  employeeViewedAt: text("employee_viewed_at"),
+  clientViewedAt: text("client_viewed_at"),
+  // Attachments as JSON array string: [{url, type, name}]
+  attachments: text("attachments"),
+  // Timestamps
+  sentAt: text("sent_at"),
+  finalizedAt: text("finalized_at"),
+  archivedAt: text("archived_at"),
+  createdAt: text("created_at").default(sql`now()`),
+  updatedAt: text("updated_at").default(sql`now()`),
+});
+
+export const reportSignatures = pgTable("report_signatures", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reportId: varchar("report_id").notNull(),
+  signerUserId: varchar("signer_user_id").notNull(),
+  signerRole: text("signer_role").notNull(), // admin, employee, client
+  signerName: text("signer_name").notNull(),
+  signatureType: text("signature_type").notNull().default("typed"),
+  signedAt: text("signed_at").notNull(),
+  acknowledgementText: text("acknowledgement_text"),
+});
+
+export const reportActivityLog = pgTable("report_activity_log", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reportId: varchar("report_id").notNull(),
+  action: text("action").notNull(), // created, submitted, sent, viewed, signed, finalized, archived, reopened, updated
+  actionByUserId: varchar("action_by_user_id").notNull(),
+  actionByRole: text("action_by_role").notNull(),
+  metadata: text("metadata"), // JSON string
+  createdAt: text("created_at").default(sql`now()`),
+});
+
+export const insertReportSchema = createInsertSchema(reports).omit({ id: true });
+export const insertReportSignatureSchema = createInsertSchema(reportSignatures).omit({ id: true });
+export const insertReportActivityLogSchema = createInsertSchema(reportActivityLog).omit({ id: true });
+
+export type Report = typeof reports.$inferSelect;
+export type InsertReport = z.infer<typeof insertReportSchema>;
+export type ReportSignature = typeof reportSignatures.$inferSelect;
+export type InsertReportSignature = z.infer<typeof insertReportSignatureSchema>;
+export type ReportActivityLog = typeof reportActivityLog.$inferSelect;
+
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),

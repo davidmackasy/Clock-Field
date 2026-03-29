@@ -8,6 +8,10 @@ import {
   platformMessages, broadcastEmailDeliveries, welcomeEmailDeliveries,
   payRuns, payStubs, payStubEarnings, payStubDeductions, payStubAuditLog,
   passwordResetTokens,
+  reports, reportSignatures, reportActivityLog,
+  type Report, type InsertReport,
+  type ReportSignature, type InsertReportSignature,
+  type ReportActivityLog,
   type Company, type InsertCompany,
   type User, type InsertUser,
   type Client, type InsertClient,
@@ -203,6 +207,23 @@ export interface IStorage {
   getWorkSubmissionReviewBySubmissionId(submissionId: string): Promise<WorkSubmissionReview | undefined>;
   getWorkSubmissionReviewsByCompany(companyId: string): Promise<WorkSubmissionReview[]>;
   getSubmissionIdsWithReviews(companyId: string): Promise<Set<string>>;
+
+  // Reports
+  createReport(data: InsertReport): Promise<Report>;
+  getReport(id: string, companyId: string): Promise<Report | undefined>;
+  getReportsByCompany(companyId: string): Promise<Report[]>;
+  getReportsForEmployee(employeeId: string, companyId: string): Promise<Report[]>;
+  getReportsForClient(clientId: string, companyId: string): Promise<Report[]>;
+  getReportsCreatedBy(userId: string, companyId: string): Promise<Report[]>;
+  updateReport(id: string, companyId: string, data: Partial<InsertReport>): Promise<Report | undefined>;
+  deleteReport(id: string, companyId: string): Promise<void>;
+  // Report Signatures
+  createReportSignature(data: InsertReportSignature): Promise<ReportSignature>;
+  getReportSignatures(reportId: string): Promise<ReportSignature[]>;
+  getReportSignatureByUser(reportId: string, userId: string): Promise<ReportSignature | undefined>;
+  // Report Activity Log
+  createReportActivity(data: Omit<ReportActivityLog, "id">): Promise<ReportActivityLog>;
+  getReportActivity(reportId: string): Promise<ReportActivityLog[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -952,6 +973,88 @@ export class DatabaseStorage implements IStorage {
     await db.update(passwordResetTokens)
       .set({ usedAt: new Date() })
       .where(and(eq(passwordResetTokens.userId, userId), isNull(passwordResetTokens.usedAt)));
+  }
+
+  // ─── Reports ───────────────────────────────────────────────────────────────
+  async createReport(data: InsertReport): Promise<Report> {
+    const [row] = await db.insert(reports).values(data).returning();
+    return row;
+  }
+
+  async getReport(id: string, companyId: string): Promise<Report | undefined> {
+    const [row] = await db.select().from(reports)
+      .where(and(eq(reports.id, id), eq(reports.companyId, companyId)));
+    return row;
+  }
+
+  async getReportsByCompany(companyId: string): Promise<Report[]> {
+    return db.select().from(reports)
+      .where(eq(reports.companyId, companyId))
+      .orderBy(desc(reports.createdAt));
+  }
+
+  async getReportsForEmployee(employeeId: string, companyId: string): Promise<Report[]> {
+    return db.select().from(reports)
+      .where(and(
+        eq(reports.companyId, companyId),
+        eq(reports.assignedEmployeeId, employeeId),
+        eq(reports.sentToEmployee, true),
+      ))
+      .orderBy(desc(reports.createdAt));
+  }
+
+  async getReportsForClient(clientId: string, companyId: string): Promise<Report[]> {
+    return db.select().from(reports)
+      .where(and(
+        eq(reports.companyId, companyId),
+        eq(reports.assignedClientId, clientId),
+        eq(reports.sentToClient, true),
+      ))
+      .orderBy(desc(reports.createdAt));
+  }
+
+  async getReportsCreatedBy(userId: string, companyId: string): Promise<Report[]> {
+    return db.select().from(reports)
+      .where(and(eq(reports.companyId, companyId), eq(reports.createdByUserId, userId)))
+      .orderBy(desc(reports.createdAt));
+  }
+
+  async updateReport(id: string, companyId: string, data: Partial<InsertReport>): Promise<Report | undefined> {
+    const [row] = await db.update(reports)
+      .set({ ...data, updatedAt: new Date().toISOString() })
+      .where(and(eq(reports.id, id), eq(reports.companyId, companyId)))
+      .returning();
+    return row;
+  }
+
+  async deleteReport(id: string, companyId: string): Promise<void> {
+    await db.delete(reports).where(and(eq(reports.id, id), eq(reports.companyId, companyId)));
+  }
+
+  async createReportSignature(data: InsertReportSignature): Promise<ReportSignature> {
+    const [row] = await db.insert(reportSignatures).values(data).returning();
+    return row;
+  }
+
+  async getReportSignatures(reportId: string): Promise<ReportSignature[]> {
+    return db.select().from(reportSignatures).where(eq(reportSignatures.reportId, reportId));
+  }
+
+  async getReportSignatureByUser(reportId: string, userId: string): Promise<ReportSignature | undefined> {
+    const [row] = await db.select().from(reportSignatures)
+      .where(and(eq(reportSignatures.reportId, reportId), eq(reportSignatures.signerUserId, userId)));
+    return row;
+  }
+
+  async createReportActivity(data: Omit<ReportActivityLog, "id">): Promise<ReportActivityLog> {
+    const [row] = await db.insert(reportActivityLog).values(data as any).returning();
+    return row;
+  }
+
+  async getReportActivity(reportId: string): Promise<ReportActivityLog[]> {
+    return db.select().from(reportActivityLog)
+      .where(eq(reportActivityLog.reportId, reportId))
+      .orderBy(desc(reportActivityLog.createdAt));
   }
 }
 

@@ -3576,6 +3576,274 @@ Welcome again, and thank you for choosing ClockField.
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  // ─── Reports Module ─────────────────────────────────────────────────────────
+  // Helper to log report activity
+  async function logReportActivity(reportId: string, action: string, userId: string, role: string, metadata?: object) {
+    await storage.createReportActivity({
+      reportId,
+      action,
+      actionByUserId: userId,
+      actionByRole: role,
+      metadata: metadata ? JSON.stringify(metadata) : null,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  // List reports (role-aware)
+  app.get("/api/reports", requireAuth, async (req: any, res) => {
+    try {
+      const { user } = req;
+      const companyId = user.companyId;
+      let reps: any[];
+      if (user.role === "admin") {
+        reps = await storage.getReportsByCompany(companyId);
+      } else if (user.role === "employee") {
+        const [sent, created] = await Promise.all([
+          storage.getReportsForEmployee(user.id, companyId),
+          storage.getReportsCreatedBy(user.id, companyId),
+        ]);
+        const ids = new Set<string>();
+        reps = [...sent, ...created].filter(r => { if (ids.has(r.id)) return false; ids.add(r.id); return true; });
+      } else if (user.role === "client") {
+        const clientRecord = (await storage.getClientsByCompany(companyId)).find(c => c.userId === user.id);
+        if (!clientRecord) { res.json([]); return; }
+        const [sent, created] = await Promise.all([
+          storage.getReportsForClient(clientRecord.id, companyId),
+          storage.getReportsCreatedBy(user.id, companyId),
+        ]);
+        const ids = new Set<string>();
+        reps = [...sent, ...created].filter(r => { if (ids.has(r.id)) return false; ids.add(r.id); return true; });
+      } else {
+        reps = [];
+      }
+      res.json(reps);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Get single report (role-aware)
+  app.get("/api/reports/:id", requireAuth, async (req: any, res) => {
+    try {
+      const { user } = req;
+      const report = await storage.getReport(req.params.id, user.companyId);
+      if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+      // Permission check for non-admin
+      if (user.role === "employee") {
+        const isCreator = report.createdByUserId === user.id;
+        const isAssigned = report.assignedEmployeeId === user.id && report.sentToEmployee;
+        if (!isCreator && !isAssigned) { res.status(403).json({ message: "Access denied" }); return; }
+        // Mark viewed
+        if (isAssigned && !report.employeeViewedAt) {
+          await storage.updateReport(report.id, user.companyId, { employeeViewedAt: new Date().toISOString() });
+        }
+      } else if (user.role === "client") {
+        const clientRecord = (await storage.getClientsByCompany(user.companyId)).find(c => c.userId === user.id);
+        const isCreator = report.createdByUserId === user.id;
+        const isAssigned = clientRecord && report.assignedClientId === clientRecord.id && report.sentToClient;
+        if (!isCreator && !isAssigned) { res.status(403).json({ message: "Access denied" }); return; }
+        if (isAssigned && !report.clientViewedAt) {
+          await storage.updateReport(report.id, user.companyId, { clientViewedAt: new Date().toISOString() });
+        }
+      }
+      const [signatures, activity] = await Promise.all([
+        storage.getReportSignatures(report.id),
+        storage.getReportActivity(report.id),
+      ]);
+      res.json({ ...report, signatures, activity });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Create report
+  app.post("/api/reports", requireAuth, async (req: any, res) => {
+    try {
+      const { user } = req;
+      // Routing rule: clients and employees can only send to admin
+      if (user.role === "client" || user.role === "employee") {
+        const body = req.body;
+        if (body.assignedClientId && user.role === "employee") {
+          res.status(403).json({ message: "Employees cannot send reports to clients" }); return;
+        }
+        if (body.sentToEmployee || body.sentToClient) {
+          res.status(403).json({ message: "Only admins can send reports to employees or clients" }); return;
+        }
+      }
+      const now = new Date().toISOString();
+      const report = await storage.createReport({
+        ...req.body,
+        companyId: user.companyId,
+        createdByUserId: user.id,
+        createdByRole: user.role,
+        status: req.body.status || "draft",
+        createdAt: now,
+        updatedAt: now,
+      });
+      await logReportActivity(report.id, "created", user.id, user.role);
+      res.json(report);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Update report (admin can update freely; employee/client limited)
+  app.patch("/api/reports/:id", requireAuth, async (req: any, res) => {
+    try {
+      const { user } = req;
+      const report = await storage.getReport(req.params.id, user.companyId);
+      if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+      if (report.status === "finalized" && user.role !== "admin") {
+        res.status(403).json({ message: "Cannot edit a finalized report" }); return;
+      }
+      // Non-admin: only allowed to update their own statement/comments
+      let updateData = req.body;
+      if (user.role === "employee") {
+        const allowed: any = {};
+        if (updateData.employeeStatement !== undefined) allowed.employeeStatement = updateData.employeeStatement;
+        updateData = allowed;
+      } else if (user.role === "client") {
+        const allowed: any = {};
+        if (updateData.clientComments !== undefined) allowed.clientComments = updateData.clientComments;
+        updateData = allowed;
+      }
+      const updated = await storage.updateReport(req.params.id, user.companyId, updateData);
+      await logReportActivity(req.params.id, "updated", user.id, user.role, { fields: Object.keys(updateData) });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Send report to employee/client (admin only)
+  app.post("/api/reports/:id/send", requireRole("admin"), async (req: any, res) => {
+    try {
+      const { user } = req;
+      const report = await storage.getReport(req.params.id, user.companyId);
+      if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+      const { sendToEmployee, sendToClient } = req.body;
+      const updateData: any = { sentAt: new Date().toISOString(), status: "sent" };
+      if (sendToEmployee) updateData.sentToEmployee = true;
+      if (sendToClient) updateData.sentToClient = true;
+      const updated = await storage.updateReport(req.params.id, user.companyId, updateData);
+      await logReportActivity(req.params.id, "sent", user.id, user.role, { sendToEmployee, sendToClient });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Sign report
+  app.post("/api/reports/:id/sign", requireAuth, async (req: any, res) => {
+    try {
+      const { user } = req;
+      const report = await storage.getReport(req.params.id, user.companyId);
+      if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+      const existing = await storage.getReportSignatureByUser(req.params.id, user.id);
+      if (existing) { res.status(400).json({ message: "Already signed" }); return; }
+      const { signerName, acknowledgementText } = req.body;
+      if (!signerName) { res.status(400).json({ message: "Signer name is required" }); return; }
+      const now = new Date().toISOString();
+      const sig = await storage.createReportSignature({
+        reportId: req.params.id,
+        signerUserId: user.id,
+        signerRole: user.role,
+        signerName,
+        signatureType: "typed",
+        signedAt: now,
+        acknowledgementText: acknowledgementText || null,
+      });
+      await logReportActivity(req.params.id, "signed", user.id, user.role, { signerName });
+      // Update status if awaiting signature
+      if (report.status === "awaiting_signature") {
+        await storage.updateReport(req.params.id, user.companyId, { status: "in_review" });
+      }
+      res.json(sig);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Finalize report (admin only)
+  app.post("/api/reports/:id/finalize", requireRole("admin"), async (req: any, res) => {
+    try {
+      const { user } = req;
+      const report = await storage.getReport(req.params.id, user.companyId);
+      if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+      const updated = await storage.updateReport(req.params.id, user.companyId, {
+        status: "finalized",
+        finalizedAt: new Date().toISOString(),
+        ...req.body,
+      });
+      await logReportActivity(req.params.id, "finalized", user.id, user.role);
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Archive report (admin only)
+  app.post("/api/reports/:id/archive", requireRole("admin"), async (req: any, res) => {
+    try {
+      const { user } = req;
+      const updated = await storage.updateReport(req.params.id, user.companyId, {
+        status: "archived",
+        archivedAt: new Date().toISOString(),
+      });
+      await logReportActivity(req.params.id, "archived", user.id, user.role);
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Reopen report (admin only)
+  app.post("/api/reports/:id/reopen", requireRole("admin"), async (req: any, res) => {
+    try {
+      const { user } = req;
+      const updated = await storage.updateReport(req.params.id, user.companyId, { status: "in_review" });
+      await logReportActivity(req.params.id, "reopened", user.id, user.role);
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Delete report (admin only, draft only)
+  app.delete("/api/reports/:id", requireRole("admin"), async (req: any, res) => {
+    try {
+      const { user } = req;
+      const report = await storage.getReport(req.params.id, user.companyId);
+      if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+      await storage.deleteReport(req.params.id, user.companyId);
+      res.json({ message: "Deleted" });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Get report activity log
+  app.get("/api/reports/:id/activity", requireAuth, async (req: any, res) => {
+    try {
+      const { user } = req;
+      const report = await storage.getReport(req.params.id, user.companyId);
+      if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+      const activity = await storage.getReportActivity(req.params.id);
+      res.json(activity);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Upload attachment to report
+  app.post("/api/reports/:id/attachments", requireAuth, async (req: any, res) => {
+    try {
+      const { user } = req;
+      const report = await storage.getReport(req.params.id, user.companyId);
+      if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+      const { fileUrl, fileType, fileName } = req.body;
+      if (!fileUrl) { res.status(400).json({ message: "fileUrl required" }); return; }
+      const existing: any[] = report.attachments ? JSON.parse(report.attachments) : [];
+      const updated_attachments = [...existing, { url: fileUrl, type: fileType || "image", name: fileName || "attachment" }];
+      const updated = await storage.updateReport(req.params.id, user.companyId, {
+        attachments: JSON.stringify(updated_attachments),
+      });
+      await logReportActivity(req.params.id, "attachment_added", user.id, user.role, { fileName });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Submit report (employee/client → admin)
+  app.post("/api/reports/:id/submit", requireAuth, async (req: any, res) => {
+    try {
+      const { user } = req;
+      const report = await storage.getReport(req.params.id, user.companyId);
+      if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+      if (report.createdByUserId !== user.id) { res.status(403).json({ message: "Access denied" }); return; }
+      const updated = await storage.updateReport(req.params.id, user.companyId, { status: "submitted" });
+      await logReportActivity(req.params.id, "submitted", user.id, user.role);
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   // Run once at startup to migrate any /uploads/ imageUrls to base64 in DB
   void migrateUploadsToBase64();
   // Run once at startup to migrate any disk-based company logos to base64 in DB

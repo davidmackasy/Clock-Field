@@ -1,0 +1,388 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/lib/auth";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  FileText, Plus, Eye, Inbox, Send as SendIcon, CheckCircle2, PenLine,
+  ChevronRight, Clock, AlertTriangle, ArrowLeft
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+
+const REPORT_TYPES = [
+  { value: "incident", label: "Incident Report" },
+  { value: "issue", label: "Issue Report" },
+  { value: "damage", label: "Damage Report" },
+  { value: "general", label: "General Report" },
+];
+
+const STATUS_COLORS: Record<string, string> = {
+  draft: "bg-gray-100 text-gray-600",
+  submitted: "bg-blue-100 text-blue-700",
+  sent: "bg-indigo-100 text-indigo-700",
+  viewed: "bg-cyan-100 text-cyan-700",
+  awaiting_employee: "bg-yellow-100 text-yellow-700",
+  awaiting_signature: "bg-amber-100 text-amber-700",
+  in_review: "bg-purple-100 text-purple-700",
+  finalized: "bg-green-100 text-green-700",
+  archived: "bg-slate-100 text-slate-600",
+};
+
+function statusLabel(s: string) {
+  return s.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+}
+function reportId(id: string) { return `RPT-${id.slice(0, 8).toUpperCase()}`; }
+
+// ─── Submit Report Dialog ─────────────────────────────────────────────────────
+function SubmitReportDialog({ open, onClose }: any) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const [form, setForm] = useState({
+    reportType: "issue", title: "", summary: "",
+    incidentDate: "", incidentTime: "",
+    immediateAction: "", employeeStatement: "",
+  });
+
+  const createMut = useMutation({
+    mutationFn: async (data: any) => {
+      const report = await apiRequest("POST", "/api/reports", data);
+      if (report?.id) {
+        await apiRequest("POST", `/api/reports/${report.id}/submit`, {});
+      }
+      return report;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/reports"] });
+      toast({ title: "Report submitted to admin" });
+      onClose();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const set = (f: string, v: any) => setForm(prev => ({ ...prev, [f]: v }));
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileText className="w-5 h-5 text-primary" />
+            Submit Report to Admin
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label>Report Type</Label>
+            <Select value={form.reportType} onValueChange={v => set("reportType", v)}>
+              <SelectTrigger data-testid="select-report-type"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {REPORT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Title *</Label>
+            <Input
+              data-testid="input-report-title"
+              value={form.title}
+              onChange={e => set("title", e.target.value)}
+              placeholder="Brief title..."
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Incident Date</Label>
+              <Input type="date" data-testid="input-incident-date" value={form.incidentDate} onChange={e => set("incidentDate", e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Incident Time</Label>
+              <Input type="time" data-testid="input-incident-time" value={form.incidentTime} onChange={e => set("incidentTime", e.target.value)} />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Description *</Label>
+            <Textarea
+              data-testid="input-summary"
+              value={form.summary}
+              onChange={e => set("summary", e.target.value)}
+              placeholder="Describe what happened..."
+              rows={4}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Immediate Action Taken</Label>
+            <Textarea
+              data-testid="input-immediate-action"
+              value={form.immediateAction}
+              onChange={e => set("immediateAction", e.target.value)}
+              placeholder="What action did you take..."
+              rows={2}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Your Statement</Label>
+            <Textarea
+              data-testid="input-statement"
+              value={form.employeeStatement}
+              onChange={e => set("employeeStatement", e.target.value)}
+              placeholder="Your account of events..."
+              rows={3}
+            />
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose} data-testid="button-cancel">Cancel</Button>
+          <Button
+            onClick={() => createMut.mutate({ ...form, status: "draft", createdByRole: "employee" })}
+            disabled={!form.title || !form.summary || createMut.isPending}
+            data-testid="button-submit-report"
+          >
+            <SendIcon className="w-4 h-4 mr-1.5" />Submit to Admin
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Report View Dialog ────────────────────────────────────────────────────────
+function ReportViewDialog({ reportId: rptId, open, onClose }: any) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const [sigForm, setSigForm] = useState({ name: "", ack: false });
+
+  const { data: report, isLoading } = useQuery<any>({
+    queryKey: ["/api/reports", rptId],
+    queryFn: () => fetch(`/api/reports/${rptId}`).then(r => r.json()),
+    enabled: !!rptId && open,
+  });
+
+  const updateMut = useMutation({
+    mutationFn: (data: any) => apiRequest("PATCH", `/api/reports/${rptId}`, data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/reports", rptId] }); toast({ title: "Statement saved" }); },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const signMut = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", `/api/reports/${rptId}/sign`, data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/reports", rptId] }); toast({ title: "Report signed" }); setSigForm({ name: "", ack: false }); },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const rpt = report;
+  const mySignature = rpt?.signatures?.find((s: any) => s.signerUserId === user?.id);
+  const canSign = rpt && !mySignature && rpt.requiresEmployeeSignature;
+  const [statement, setStatement] = useState("");
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-40">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+          </div>
+        ) : rpt ? (
+          <>
+            <DialogHeader>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded", STATUS_COLORS[rpt.status] || "bg-gray-100 text-gray-600")}>
+                    {statusLabel(rpt.status)}
+                  </span>
+                  {rpt.severity && <span className="text-[10px] text-orange-600 font-semibold">{rpt.severity.toUpperCase()}</span>}
+                </div>
+                <DialogTitle className="text-base">{rpt.title}</DialogTitle>
+                <p className="text-xs text-muted-foreground">{reportId(rpt.id)}</p>
+              </div>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              {/* Incident Details */}
+              {(rpt.incidentDate || rpt.incidentTime || rpt.summary) && (
+                <div className="space-y-2 rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Incident Details</p>
+                  {rpt.incidentDate && <p className="text-sm"><span className="text-muted-foreground">Date:</span> {rpt.incidentDate}</p>}
+                  {rpt.incidentTime && <p className="text-sm"><span className="text-muted-foreground">Time:</span> {rpt.incidentTime}</p>}
+                  {rpt.summary && <p className="text-sm mt-2 whitespace-pre-wrap">{rpt.summary}</p>}
+                </div>
+              )}
+
+              {/* Immediate action */}
+              {rpt.immediateAction && (
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Immediate Action</p>
+                  <p className="text-sm">{rpt.immediateAction}</p>
+                </div>
+              )}
+
+              {/* My statement */}
+              {rpt.status !== "finalized" && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold uppercase tracking-wide">Your Statement</Label>
+                  <Textarea
+                    data-testid="input-my-statement"
+                    defaultValue={rpt.employeeStatement || ""}
+                    onChange={e => setStatement(e.target.value)}
+                    placeholder="Add your account of events..."
+                    rows={3}
+                  />
+                  <Button size="sm" variant="outline" onClick={() => updateMut.mutate({ employeeStatement: statement || rpt.employeeStatement })} disabled={updateMut.isPending} data-testid="button-save-statement">
+                    Save Statement
+                  </Button>
+                </div>
+              )}
+              {rpt.employeeStatement && rpt.status === "finalized" && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Your Statement</p>
+                  <p className="text-sm">{rpt.employeeStatement}</p>
+                </div>
+              )}
+
+              {/* Existing signatures */}
+              {rpt.signatures?.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Signatures</p>
+                  {rpt.signatures.map((sig: any) => (
+                    <div key={sig.id} className="flex items-center gap-2 p-2 rounded bg-green-50 border border-green-200 text-sm">
+                      <CheckCircle2 className="w-4 h-4 text-green-600" />
+                      <span className="font-medium">{sig.signerName}</span>
+                      <span className="text-muted-foreground text-xs">({sig.signerRole}) · {sig.signedAt ? format(new Date(sig.signedAt), "MMM d") : ""}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Sign form */}
+              {canSign && (
+                <div className="rounded-md border p-4 space-y-3 bg-amber-50 border-amber-200">
+                  <p className="text-sm font-semibold flex items-center gap-2">
+                    <PenLine className="w-4 h-4 text-amber-600" />
+                    Your signature is required
+                  </p>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Full name</Label>
+                    <Input data-testid="input-signer-name" value={sigForm.name} onChange={e => setSigForm(f => ({ ...f, name: e.target.value }))} placeholder="Type your full name..." />
+                  </div>
+                  <label className="flex items-start gap-2 text-sm cursor-pointer">
+                    <Checkbox checked={sigForm.ack} onCheckedChange={v => setSigForm(f => ({ ...f, ack: !!v }))} data-testid="check-acknowledge" />
+                    <span>I acknowledge that the information in this report is accurate to the best of my knowledge.</span>
+                  </label>
+                  <Button size="sm" disabled={!sigForm.name || !sigForm.ack || signMut.isPending} onClick={() => signMut.mutate({ signerName: sigForm.name, acknowledgementText: "I acknowledge this report is accurate." })} data-testid="button-sign">
+                    <PenLine className="w-3.5 h-3.5 mr-1.5" />Sign Report
+                  </Button>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="text-center py-8 text-muted-foreground">Report not found.</p>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Main Employee Reports Page ───────────────────────────────────────────────
+export default function EmployeeReports() {
+  const [submitOpen, setSubmitOpen] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [tab, setTab] = useState("all");
+
+  const { data: reports = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/reports"] });
+
+  const received = reports.filter(r => r.sentToEmployee && r.createdByRole === "admin");
+  const submitted = reports.filter(r => r.createdByRole === "employee");
+  const needsAction = reports.filter(r => r.requiresEmployeeSignature && !["finalized", "archived"].includes(r.status) && r.sentToEmployee);
+
+  const filtered = tab === "received" ? received
+    : tab === "submitted" ? submitted
+    : tab === "needs_action" ? needsAction
+    : reports;
+
+  return (
+    <div className="flex-1 overflow-auto pb-24">
+      {/* Header */}
+      <div className="sticky top-0 z-10 bg-background border-b px-4 py-3 flex items-center justify-between">
+        <div>
+          <h1 className="font-bold text-lg">Reports</h1>
+          <p className="text-xs text-muted-foreground">Your reports and those from admin</p>
+        </div>
+        <Button size="sm" onClick={() => setSubmitOpen(true)} data-testid="button-submit-report">
+          <Plus className="w-4 h-4 mr-1.5" />Submit
+        </Button>
+      </div>
+
+      {/* Tabs */}
+      <div className="px-4 pt-3 pb-2">
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList className="w-full">
+            <TabsTrigger value="all" className="flex-1 text-xs" data-testid="tab-all">All ({reports.length})</TabsTrigger>
+            <TabsTrigger value="received" className="flex-1 text-xs" data-testid="tab-received">
+              Received {received.length > 0 && <span className="ml-1 bg-primary/15 text-primary text-[10px] px-1 rounded-full">{received.length}</span>}
+            </TabsTrigger>
+            <TabsTrigger value="submitted" className="flex-1 text-xs" data-testid="tab-submitted">Submitted ({submitted.length})</TabsTrigger>
+            <TabsTrigger value="needs_action" className="flex-1 text-xs" data-testid="tab-needs-action">
+              Action {needsAction.length > 0 && <span className="ml-1 bg-amber-100 text-amber-700 text-[10px] px-1 rounded-full">{needsAction.length}</span>}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      {/* List */}
+      <div className="px-4 space-y-2">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-40">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
+            <FileText className="w-8 h-8 mb-2 opacity-40" />
+            <p className="text-sm font-medium">No reports here</p>
+            <p className="text-xs mt-1">Submit a report to admin if needed</p>
+          </div>
+        ) : (
+          filtered.map(r => (
+            <div
+              key={r.id}
+              className="border rounded-lg p-4 cursor-pointer hover:bg-muted/30 transition-colors"
+              onClick={() => setSelectedId(r.id)}
+              data-testid={`card-report-${r.id}`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded", STATUS_COLORS[r.status] || "bg-gray-100 text-gray-600")}>
+                      {statusLabel(r.status)}
+                    </span>
+                    {r.createdByRole === "admin" && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">From Admin</span>}
+                    {r.requiresEmployeeSignature && !["finalized", "archived"].includes(r.status) && (
+                      <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded flex items-center gap-1"><PenLine className="w-2.5 h-2.5" />Signature needed</span>
+                    )}
+                  </div>
+                  <p className="font-medium text-sm leading-snug truncate">{r.title}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{r.reportType?.replace(/_/g, " ")} · {r.createdAt ? format(new Date(r.createdAt), "MMM d, yyyy") : "—"}</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" />
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {submitOpen && <SubmitReportDialog open={submitOpen} onClose={() => setSubmitOpen(false)} />}
+      {selectedId && <ReportViewDialog reportId={selectedId} open={!!selectedId} onClose={() => setSelectedId(null)} />}
+    </div>
+  );
+}

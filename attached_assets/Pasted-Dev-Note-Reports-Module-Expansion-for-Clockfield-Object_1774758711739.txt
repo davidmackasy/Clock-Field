@@ -1,0 +1,1005 @@
+Dev Note: Reports Module Expansion for Clockfield
+
+Objective
+
+Build a new Reports system that allows structured reporting and document sharing between admin, cleaners/employees, and clients inside Clockfield.
+
+This feature must support more than only incident reports. It must become one central Reports page where users can create, receive, review, sign, download, print, and track different report types depending on their role and permissions.
+
+This implementation must be done carefully without breaking or affecting any currently working feature, flow, UI, database relation, request system, authentication, notifications, reports, payroll, tasks, clock-in/out, or client portal behavior.
+
+Critical instruction
+
+Do not touch, refactor, rename, remove, or alter any existing working logic unless it is directly required for this feature.
+
+Do not replace any existing current request flow yet unless explicitly approved.
+
+Do not change anything outside the scope of this dev note.
+
+If any change outside this scope becomes necessary, stop and ask for approval first.
+
+Main product goal
+
+Create one premium Reports page that works as a professional reporting hub.
+
+This page should support:
+
+Admin receiving reports from cleaners/employees
+Admin receiving reports from clients
+Admin sending reports to cleaners/employees
+Admin sending reports to clients
+Cleaner/employee sending reports only to admin
+Client sending reports only to admin
+Cleaner/employee must not be able to send incident reports directly to clients
+Client must not be able to send reports directly to cleaners/employees
+Admin controls and manages the report workflow between all sides
+
+This means admin acts as the control center for report routing.
+
+High-level product decision
+
+Do not destroy or hard-replace the existing Requests page logic immediately.
+
+Safer rollout:
+
+Phase 1
+Create a new Reports module/page and connect it cleanly.
+
+Phase 2
+Allow existing request-style issue submissions to also appear under Reports if needed through shared backend mapping or mirrored records.
+
+Phase 3
+Only after stable testing, decide whether Requests should later be renamed, merged, or redirected into Reports.
+
+This protects the current working app.
+
+Core concept
+
+The new Reports page should not only be a single report form.
+
+It should act like a reporting center with different report/document actions depending on the user role.
+
+Examples of what can live inside Reports:
+
+Incident Report
+Issue Report
+Damage Report
+Cleaner/Employee Statement
+Client Complaint Report
+Site Problem Report
+Health and Safety Report
+Lost and Found Report
+Corrective Action Report
+Warning / Acknowledgement Document
+General Admin Report
+Custom Document Template in the future
+
+This makes the Reports page flexible, premium, and expandable.
+
+Main UX requirement
+
+The Reports page should feel advanced and professional.
+
+It should not look like a simple message form.
+
+It should look like a document and reporting workspace with:
+
+report type cards or tabs
+filters by status and role
+sent reports
+received reports
+drafts
+action required
+signed / pending signature
+downloadable PDF
+printable version
+attachments and photo evidence
+
+Role rules and permissions
+
+Admin permissions
+
+Admin can:
+
+Create any report type
+Send reports to a cleaner/employee
+Send reports to a client
+Receive reports from cleaners/employees
+Receive reports from clients
+Review submissions
+Edit draft reports before sending
+Request signatures
+Finalize reports
+Download PDF
+Print report
+Mark status
+Add follow-up notes
+Archive report
+Assign a report to a client, site, cleaner, or internal record
+Add internal-only notes not visible to cleaner/client if needed
+Generate blank printable report template
+View report audit trail
+
+Cleaner/Employee permissions
+
+Cleaner/employee can:
+
+View reports sent to them by admin
+Receive incident reports or other report documents from admin
+Fill required sections if admin requested employee response
+Upload photos/evidence
+Add short statement
+Sign acknowledgement if required
+Download PDF
+Print report
+Create and send report only to admin
+View their own submitted reports and statuses
+
+Cleaner/employee cannot:
+
+Send incident report directly to client
+Send any direct report to client
+Change finalized report content after submission unless admin reopens it
+Edit admin-only notes
+Modify company branding or template structure
+
+Client permissions
+
+Client can:
+
+View reports sent to them by admin
+Submit issue reports to admin
+Submit complaint/problem reports to admin
+Upload photos/evidence
+Add statement or comment
+Sign reports sent by admin if acknowledgement is required
+Download PDF
+Print report
+View their own report history if allowed
+
+Client cannot:
+
+Send reports directly to cleaner/employee
+Reassign reports
+Edit finalized reports unless admin reopens
+Access internal employee/admin notes
+
+Main navigation and page structure
+
+New page/module name:
+Reports
+
+Do not remove Requests yet.
+
+Recommended navigation approach:
+Add Reports as a separate module in admin, cleaner, and client portals.
+
+Possible later future:
+Requests may be folded into Reports after approval and successful rollout.
+
+Reports page sections
+
+For Admin:
+
+Dashboard summary
+Create Report
+Incoming Reports
+Sent Reports
+Drafts
+Needs Signature
+Completed / Finalized
+Archived
+
+For Cleaner:
+
+My Reports
+Received
+Submitted
+Needs Action
+Signed / Completed
+
+For Client:
+
+My Reports
+Received
+Submitted
+Needs Action
+Signed / Completed
+
+Report types to support in V1
+
+Must support these types first:
+
+Incident Report
+Issue Report
+Damage Report
+Employee Statement
+Client Complaint Report
+General Report
+
+Keep architecture expandable so more types can be added later without rewriting the whole system.
+
+Primary priority in V1:
+Incident Report
+
+Incident Report purpose
+
+This is used when something serious or important happened at a site or during service.
+
+Examples:
+
+employee broke equipment or property
+flooding or water overflow
+damaged tap or fixture
+item was removed from site without proper reporting
+property damage
+safety concern
+missing item
+customer complaint tied to an event
+accidental misuse of supplies/equipment
+near miss or risky event
+
+Important business logic
+
+Incident reports must remain factual, structured, reusable, and professional.
+
+Do not design them as free-text emotional messages.
+
+Structure must be mostly fillable fields plus short description areas.
+
+Company branding requirement
+
+Every company in Clockfield is separate.
+
+The report must automatically pull company branding and company profile details from that company’s settings.
+
+The generated incident report and other official report documents must show:
+
+company logo
+company name
+company email if available
+company phone if available
+company address if available
+company contact/admin name if available
+
+If a company has uploaded a logo in settings, that exact saved logo must appear on the report.
+
+Do not hardcode a single global Clockfield logo for company reports.
+
+This must be tenant-safe and company-specific.
+
+Client/site linking requirement
+
+When creating a report, admin must be able to select:
+
+client
+site/location
+employee/cleaner involved
+report type
+date/time of incident or event
+
+The selected client should appear on the final report.
+
+The selected location/site should appear on the final report.
+
+The selected cleaner/employee should appear on the final report where applicable.
+
+Incident Report template fields
+
+Build a structured incident report template with these sections.
+
+Section 1: Header
+
+company logo
+company name
+report title
+report ID
+status
+date created
+created by
+
+Section 2: Incident Details
+
+incident date
+incident time
+report submission date
+report type
+incident category
+location/site
+client name
+service address
+area affected
+was client property affected yes/no
+was company equipment affected yes/no
+severity level
+immediate risk level
+
+Section 3: People Involved
+
+employee/cleaner involved
+employee role
+employee contact if needed
+witnesses
+client contact/person present
+reported by
+reviewed by admin
+
+Section 4: Incident Summary
+
+short title
+short factual description of what happened
+what was discovered
+what happened before the incident
+what happened after the incident
+immediate action taken
+was work stopped yes/no
+was customer informed yes/no
+
+Section 5: Property / Item / Equipment
+
+item or property affected
+item description
+quantity
+damage type
+estimated replacement or repair cost
+was item removed from site yes/no
+if yes, who removed it
+why was it removed
+was approval given yes/no
+
+Section 6: Supporting Evidence
+
+upload photos
+upload documents
+upload receipts
+upload signed handwritten copy if needed
+
+Section 7: Employee Statement
+
+employee written explanation
+acknowledgement checkbox
+signature
+signature date
+
+Section 8: Client Acknowledgement
+
+client comments
+acknowledgement checkbox
+signature
+signature date
+
+Section 9: Admin Review
+
+admin findings
+corrective action
+next steps
+internal notes
+final decision
+follow-up required yes/no
+follow-up due date
+
+Section 10: Final Sign-Off
+
+admin signature
+employee signature
+client signature
+finalized date
+
+Section 11: Audit Trail
+
+created at
+updated at
+sent at
+viewed at
+signed at
+downloaded at
+printed at if trackable
+reopened at
+finalized at
+
+Statuses
+
+Add clear status workflow for reports.
+
+Recommended statuses:
+
+Draft
+Submitted
+Sent
+Viewed
+Awaiting Employee Response
+Awaiting Client Response
+Awaiting Signature
+In Review
+Finalized
+Closed
+Archived
+Reopened
+
+Use status based on workflow and role.
+
+Example flows
+
+Flow A: Cleaner reports issue to admin
+
+Cleaner opens Reports
+Selects Issue Report or Incident Report
+Fills fields
+Uploads photos
+Submits to admin
+Admin receives under Incoming Reports
+Admin reviews
+Admin may convert it into formal incident report
+Admin sends formal report to employee and/or client if needed
+
+Flow B: Client reports problem to admin
+
+Client opens Reports
+Selects Issue Report or Complaint Report
+Uploads photos and description
+Sends to admin
+Admin receives and reviews
+Admin may escalate into incident/damage report
+Admin may send official report back to client and relevant cleaner
+
+Flow C: Admin creates incident report and sends to employee
+
+Admin clicks Create Report
+Chooses Incident Report
+Selects client, site, cleaner
+Fills structured fields
+Adds evidence
+Saves draft or sends
+Employee receives under My Reports
+Employee adds statement and signs
+Admin finalizes
+PDF can be downloaded or printed
+
+Flow D: Admin sends incident report to client
+
+Admin creates report
+Selects client and incident details
+Requests client acknowledgement
+Client receives report
+Client reviews and signs or comments
+Admin finalizes
+
+Flow E: Admin handles both client and cleaner for same report
+
+Admin creates one report record
+Admin assigns employee and client to same report
+Each side sees only allowed sections
+Employee fills employee statement section
+Client fills acknowledgement section
+Admin sees all sections and finalizes
+
+Important visibility rule
+
+Not every user should see every section.
+
+Need section-level visibility.
+
+Admin sees:
+everything
+
+Cleaner/employee sees:
+
+report details relevant to them
+employee statement
+evidence if permitted
+signature section
+final PDF if allowed
+
+Client sees:
+
+report details relevant to client
+client acknowledgement
+evidence if permitted
+signature section
+final PDF if allowed
+
+Internal-only admin notes must never be visible to cleaner or client.
+
+PDF and printable document requirements
+
+Every formal report must support:
+
+View online in app
+Download as PDF
+Print-friendly layout
+Blank printable template version if desired
+
+Two output modes
+
+Mode 1: Filled Report PDF
+Shows all completed information, signatures, logo, company details, attachments references, timestamps, and report ID.
+
+Mode 2: Blank Printable Form
+Shows the structured template without submitted values so businesses can print and fill by hand.
+
+The PDF must look professional enough for commercial clients.
+
+PDF layout must include:
+
+company logo
+company name
+report title
+report ID
+status
+branded clean header
+clear sections
+signature blocks
+page numbers
+date generated
+
+Do not make the PDF look like a basic browser print of random UI.
+
+Create a dedicated print/PDF layout.
+
+Signature requirements
+
+Support electronic acknowledgement/signature in app.
+
+Minimum V1 approach:
+
+typed full name
+checkbox acknowledging truth/receipt/review
+signed timestamp
+optional drawn signature if already supported elsewhere or easy to add safely
+
+If drawn signature is not already supported and would affect other systems, do not force it now.
+
+Safe V1:
+typed signature + timestamp + acknowledgement checkbox
+
+Possible signature labels:
+
+Prepared by
+Employee acknowledgement
+Client acknowledgement
+Approved by admin
+
+If a signature is missing, report should still show pending signature status.
+
+Do not block all workflow if one signature is not complete unless admin chooses to require it.
+
+Create report form behavior
+
+Admin create form should include:
+
+report type selector
+recipient selector
+client selector
+location/site selector
+employee selector
+severity
+description
+attachments
+signature requirement toggles
+due date for response if needed
+save draft
+send now
+generate PDF preview
+
+Cleaner/client submission forms should be simpler and role-limited.
+
+Cleaner/client self-submission forms should not expose all formal admin-only fields.
+
+They should be simpler:
+
+report type
+client/site if applicable
+short description
+date/time
+attachments
+optional statement
+submit to admin
+
+Admin can then convert or expand it into full formal documentation.
+
+Data model recommendation
+
+Add a dedicated reports system instead of hacking this into existing requests tables if that would risk instability.
+
+Recommended entities:
+
+reports
+
+id
+company_id
+report_type
+status
+created_by_user_id
+created_by_role
+assigned_client_id nullable
+assigned_location_id nullable
+assigned_employee_id nullable
+title
+summary
+incident_date
+incident_time
+severity
+risk_level
+description
+immediate_action
+internal_notes
+admin_findings
+corrective_action
+final_decision
+requires_employee_signature
+requires_client_signature
+requires_admin_signature
+finalized_at nullable
+archived_at nullable
+created_at
+updated_at
+
+report_recipients
+
+id
+report_id
+recipient_user_id
+recipient_role
+delivery_type
+viewed_at
+responded_at
+signed_at
+status
+
+report_attachments
+
+id
+report_id
+file_url
+file_type
+uploaded_by_user_id
+uploaded_at
+
+report_signatures
+
+id
+report_id
+signer_user_id
+signer_role
+signer_name
+signature_type
+signed_at
+acknowledgement_text
+ip/device metadata if already available and safe
+
+report_activity_log
+
+id
+report_id
+action
+action_by_user_id
+action_by_role
+metadata json
+created_at
+
+Optional specialized tables later if needed:
+incident_report_details
+damage_report_details
+complaint_report_details
+
+But V1 can start with a flexible shared schema plus JSON detail blocks if needed, as long as it stays maintainable.
+
+Routing and transaction rules
+
+Implement strict report routing rules.
+
+Allowed:
+
+admin -> cleaner
+admin -> client
+admin -> internal admin
+cleaner -> admin
+client -> admin
+
+Not allowed:
+
+cleaner -> client
+client -> cleaner
+cleaner -> client through incident report
+client -> cleaner through issue report
+
+Any attempt outside allowed flow should be blocked by role-based backend validation, not only frontend UI hiding.
+
+Do not rely only on frontend visibility.
+
+Backend API requirements
+
+Add dedicated report APIs.
+
+Examples:
+
+create report
+submit report
+list reports for role
+get report details
+update draft report
+send report to recipient
+upload report attachment
+add statement
+sign report
+finalize report
+archive report
+generate pdf
+get report activity log
+
+Every API must validate:
+
+company ownership
+role permissions
+recipient role rules
+linked client/site/employee belongs to same company
+safe access to only allowed report sections
+
+Do not expose one company’s reports to another company under any condition.
+
+UI/UX requirements
+
+This page must look premium and business-ready.
+
+Admin Reports page layout suggestion:
+
+page header with summary cards
+tabs or segmented filters:
+All
+Incoming
+Sent
+Drafts
+Needs Signature
+Completed
+Archived
+Create Report button
+search and filters
+report table or card list
+side panel or modal for quick preview
+full report view page for details
+action buttons:
+Send
+Request signature
+Download PDF
+Print
+Finalize
+Archive
+
+Cleaner/client layout:
+simpler but still premium
+
+My Reports
+Received
+Submitted
+Needs Action
+Download / Print
+Add statement
+Sign
+
+Attachment handling
+
+Support image and document uploads on reports.
+
+Common file types:
+
+jpg
+png
+pdf
+
+Optional later:
+doc/docx
+
+Display attachment thumbnails for images.
+
+Allow opening attachments from report detail page.
+
+Ensure uploads are stored in tenant-safe way and permissions are respected.
+
+Do not reuse unsafe public file logic if current system has more secure file patterns available.
+
+Notifications
+
+When report events happen, send in-app notifications.
+
+Examples:
+
+admin receives new report from cleaner
+admin receives new report from client
+cleaner receives incident report from admin
+client receives report from admin
+report requires signature
+report finalized
+
+Do not change or break current notification flows elsewhere.
+
+Only add scoped report-related notifications.
+
+If email notifications already exist and can be reused safely without affecting current behavior, use them carefully.
+
+If that is risky, keep V1 to in-app notifications only.
+
+Search and filtering
+
+Add filters:
+
+report type
+status
+client
+location
+employee
+date range
+created by
+awaiting signature
+finalized
+
+This is important for admin usability.
+
+Branding on report output
+
+Report PDF and print view must pull from company settings dynamically.
+
+Branding fields:
+
+logo
+company name
+phone
+email
+address
+
+If any field is missing, layout should stay clean and not break.
+
+Do not fail report generation because one branding field is missing.
+
+Logo persistence note
+
+Since logo consistency was already a concern in your app, do not use temporary or unstable logo references.
+
+Use the saved persistent company logo source already stored in company settings.
+
+Make sure report generation reads the current saved logo reliably.
+
+Do not create a second disconnected logo storage method for reports.
+
+Migration / rollout strategy
+
+Safe rollout plan:
+
+Step 1
+Create reports backend tables and APIs
+
+Step 2
+Create admin Reports page
+
+Step 3
+Create cleaner/client Reports pages with limited permissions
+
+Step 4
+Implement Incident Report first
+
+Step 5
+Implement Issue Report and General Report
+
+Step 6
+Implement PDF generation and print view
+
+Step 7
+Implement signatures
+
+Step 8
+Implement notifications
+
+Step 9
+Test role visibility and routing
+
+Step 10
+Only after all works, discuss whether Requests should later be merged or renamed
+
+Do not rename Requests to Reports in this first implementation unless explicitly approved.
+
+Future-ready architecture
+
+Design this in a way that later can support:
+
+warning letters
+disciplinary notice
+corrective action forms
+site inspection forms
+safety check reports
+custom client-facing forms
+multi-step approvals
+report analytics
+
+But do not build those now unless included in scope.
+
+Testing requirements
+
+Before marking complete, test all of these carefully:
+
+Admin tests
+
+admin creates draft report
+admin sends report to cleaner
+admin sends report to client
+admin receives client report
+admin receives cleaner report
+admin downloads PDF
+admin finalizes report
+admin sees logo and company info correctly
+admin internal notes stay hidden from client/cleaner
+
+Cleaner tests
+
+cleaner views report from admin
+cleaner submits report to admin
+cleaner adds statement
+cleaner signs report
+cleaner downloads PDF
+cleaner cannot send report directly to client
+
+Client tests
+
+client views report from admin
+client submits issue to admin
+client signs acknowledgement
+client downloads PDF
+client cannot send report directly to cleaner
+
+Security tests
+
+cross-company data isolation
+user cannot access another company’s report
+hidden sections remain hidden in API as well as UI
+invalid routing is blocked server-side
+finalized report cannot be changed by unauthorized users
+
+PDF tests
+
+logo renders correctly
+company name renders correctly
+client/site info renders correctly
+signatures appear correctly
+print layout is clean
+long descriptions wrap correctly
+
+Out of scope for now
+
+Do not do these unless approved:
+
+replacing entire Requests module
+deleting current request logic
+full legal e-sign platform
+OCR scanning of handwritten forms
+public external report sharing links unless approved
+automatic insurance/legal workflows
+changing unrelated settings system
+changing auth
+changing file storage architecture unless required and approved
+changing current client/cleaner dashboard structure beyond adding Reports entry point
+
+Final implementation instruction for the agent
+
+Only implement the Reports system described above.
+
+Focus on:
+
+new Reports module
+role-based reporting flows
+incident report template
+company-branded PDF generation
+client/cleaner/admin transaction rules
+signatures
+safe tenant-specific branding
+clean professional UI
+
+Do not touch anything else.
+Do not refactor unrelated code.
+Do not merge Requests yet.
+Do not rename existing modules yet unless approved.
+Do not alter working flows.
+If any additional change is needed outside this exact scope, ask for approval first.
+
+Suggested short product summary for internal reference
+
+Build a new Reports module for Clockfield that allows admin, client, and cleaner report exchange with strict routing rules. Admin is the central controller. The first priority is a professional Incident Report system with company branding, client/site/employee linking, signatures, downloadable PDF, printable format, and a premium report management UI. Keep all existing app features untouched and do not replace Requests yet.
+
+I can also turn this into a tighter agent-ready version with sections like Scope, Database, API, UI, Permissions, and Acceptance Criteria.
