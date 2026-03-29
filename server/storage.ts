@@ -8,10 +8,11 @@ import {
   platformMessages, broadcastEmailDeliveries, welcomeEmailDeliveries,
   payRuns, payStubs, payStubEarnings, payStubDeductions, payStubAuditLog,
   passwordResetTokens,
-  reports, reportSignatures, reportActivityLog,
+  reports, reportSignatures, reportActivityLog, reportAccessTokens,
   type Report, type InsertReport,
   type ReportSignature, type InsertReportSignature,
   type ReportActivityLog,
+  type ReportAccessToken, type InsertReportAccessToken,
   type Company, type InsertCompany,
   type User, type InsertUser,
   type Client, type InsertClient,
@@ -221,9 +222,15 @@ export interface IStorage {
   createReportSignature(data: InsertReportSignature): Promise<ReportSignature>;
   getReportSignatures(reportId: string): Promise<ReportSignature[]>;
   getReportSignatureByUser(reportId: string, userId: string): Promise<ReportSignature | undefined>;
+  getReportSignatureByToken(reportId: string, tokenId: string): Promise<ReportSignature | undefined>;
   // Report Activity Log
   createReportActivity(data: Omit<ReportActivityLog, "id">): Promise<ReportActivityLog>;
   getReportActivity(reportId: string): Promise<ReportActivityLog[]>;
+  // Report Access Tokens
+  createReportAccessToken(data: Omit<ReportAccessToken, "id">): Promise<ReportAccessToken>;
+  getReportAccessTokenByHash(tokenHash: string): Promise<ReportAccessToken | undefined>;
+  updateReportAccessToken(id: string, data: Partial<ReportAccessToken>): Promise<ReportAccessToken | undefined>;
+  revokeReportAccessTokensByReport(reportId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1046,6 +1053,12 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
+  async getReportSignatureByToken(reportId: string, tokenId: string): Promise<ReportSignature | undefined> {
+    const [row] = await db.select().from(reportSignatures)
+      .where(and(eq(reportSignatures.reportId, reportId), eq(reportSignatures.publicAccessTokenId, tokenId)));
+    return row;
+  }
+
   async createReportActivity(data: Omit<ReportActivityLog, "id">): Promise<ReportActivityLog> {
     const [row] = await db.insert(reportActivityLog).values(data as any).returning();
     return row;
@@ -1055,6 +1068,33 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(reportActivityLog)
       .where(eq(reportActivityLog.reportId, reportId))
       .orderBy(desc(reportActivityLog.createdAt));
+  }
+
+  // Report Access Tokens
+  async createReportAccessToken(data: Omit<ReportAccessToken, "id">): Promise<ReportAccessToken> {
+    const [row] = await db.insert(reportAccessTokens).values(data as any).returning();
+    return row;
+  }
+
+  async getReportAccessTokenByHash(tokenHash: string): Promise<ReportAccessToken | undefined> {
+    const [row] = await db.select().from(reportAccessTokens)
+      .where(eq(reportAccessTokens.tokenHash, tokenHash));
+    return row;
+  }
+
+  async updateReportAccessToken(id: string, data: Partial<ReportAccessToken>): Promise<ReportAccessToken | undefined> {
+    const [row] = await db.update(reportAccessTokens).set(data as any)
+      .where(eq(reportAccessTokens.id, id)).returning();
+    return row;
+  }
+
+  async revokeReportAccessTokensByReport(reportId: string): Promise<void> {
+    await db.update(reportAccessTokens)
+      .set({ revokedAt: new Date().toISOString() } as any)
+      .where(and(
+        eq(reportAccessTokens.reportId, reportId),
+        isNull(reportAccessTokens.revokedAt),
+      ));
   }
 }
 

@@ -1,0 +1,524 @@
+Dev note for agent
+
+Task
+
+Update the email report flow so that when a client or employee receives a report by email, the link opens a public secure report page directly. They must be able to review the report and sign it without being forced to log in.
+
+This applies only to reports sent through the email delivery flow.
+
+Do not break:
+
+* current in-app report delivery
+* current login-based account access
+* finalize flow
+* archive flow
+* print / PDF flow
+* current report generation
+* current report data structure
+* current admin flow
+* existing auth
+* anything else outside this feature
+
+Do not touch unrelated logic. Only extend the email report access flow and signature experience for emailed reports.
+
+Main goal
+
+When a report is sent by email:
+
+* recipient clicks View Report or Review and Sign
+* link opens a secure public report page
+* recipient can read the report without signing in
+* recipient can sign directly on that page
+* recipient can submit signature
+* signature is saved to the correct report
+* report updates properly after signing
+
+Important behavior difference
+
+Keep both flows:
+
+1. In-app flow
+   User logs in and sees reports in their account as usual
+
+2. Email flow
+   User clicks secure emailed link and is taken to a public secure report page with no login required
+
+Do not merge these in a way that breaks current account access.
+This is an added email-access route only.
+
+Public secure report link requirements
+
+Do not use an open public URL with raw IDs.
+Do not expose report data insecurely.
+
+Use a secure tokenized access link for emailed reports.
+
+Recommended pattern
+
+* generate one secure access token per recipient per report delivery
+* token should be long, random, unguessable
+* token should map to:
+
+  * report id
+  * recipient type
+  * recipient email
+  * intended permissions
+  * expiration or validity state if needed
+  * signature eligibility
+  * usage timestamps
+
+Recommended permissions for token
+
+* read report
+* download report PDF if allowed
+* sign report if signing is required
+* submit signature once authorized by token
+
+Do not expose other reports.
+Do not allow token reuse across unrelated reports.
+
+Suggested link example
+/public/reports/access/:token
+
+or
+
+/reports/public/:token
+
+Use whatever fits current routing without disrupting existing routes.
+
+Email CTA behavior
+
+Current issue
+The email should not redirect them to login before seeing the report.
+
+Required behavior
+If the user arrives through a valid public report token:
+
+* bypass login requirement for that specific report page
+* open report directly
+* allow review
+* allow signing if allowed
+
+If token invalid or expired:
+Show a clean message like:
+This report link is no longer available. Please contact the sender for a new link.
+
+Do not show raw backend errors.
+
+Public report page requirements
+
+Create or extend a dedicated public secure report view page for emailed recipients.
+
+This page should:
+
+* match Clockfield style
+* clearly show company/report branding
+* display report type
+* display report date
+* display report details
+* display sections in clean readable format
+* display attachments or photos if current report supports them
+* allow download if enabled
+* allow signing if required
+* allow submission without login
+
+This page must feel professional and not like an internal admin screen.
+
+Recommended page structure
+
+Header
+
+* company name or logo if available
+* report title
+* status badge such as Pending Signature or Signed
+
+Report details
+
+* date
+* location
+* report type
+* submitted by or assigned details if appropriate
+* summary sections
+
+Main content
+
+* full report content
+* images if included
+* notes if included
+
+Action area
+
+* Download PDF
+* Sign Report
+* Submit Signature
+
+Do not expose internal admin actions such as:
+
+* archive
+* finalize
+* edit internal fields
+* internal-only notes
+* admin-only actions
+
+Signature requirements
+
+This matters a lot.
+
+Do not make signature name-only unless that is only the typed signature mode.
+The signing experience must allow an actual signature.
+
+Support these signature methods on the public report page:
+
+* draw signature with finger or mouse on a signature pad
+* type name and render it as signature-style text
+* optional clear/reset button
+* save and submit signature
+
+Preferred implementation
+Support both:
+
+1. Draw signature
+2. Type signature
+
+Recommended UI tabs or toggle
+
+* Draw
+* Type
+
+Draw mode
+
+* signature pad canvas
+* works on mobile with finger
+* works on desktop with mouse
+* clear button
+* smooth strokes
+* proper sizing
+
+Type mode
+
+* recipient types full name
+* system renders it in a signature-style font preview
+* they confirm it before submit
+
+Do not use plain input text as the final visible signature.
+If typed, render it into a signature-style display before saving.
+
+Optional small agreement text
+By signing, you confirm you have reviewed this report.
+
+If current legal/compliance wording already exists, reuse it.
+
+Signature data to save
+
+When signature is submitted, store:
+
+* report id
+* recipient type
+* recipient email if from public token flow
+* signer name
+* signature method used
+* signature image or vector data for drawn signatures
+* typed signature rendered value if typed mode used
+* timestamp
+* IP or device metadata only if already acceptable in your system
+* token id or public-access record reference
+* signed status
+
+Do not overwrite unrelated signatures.
+If report supports multiple signers, preserve that model.
+
+Important
+If a client signs, it should save as client signature.
+If an employee signs, it should save as employee signature.
+Do not mix recipient roles.
+
+Signing rules
+
+Before allowing sign:
+
+* validate token
+* validate report exists
+* validate recipient type allowed to sign
+* validate report is signable
+* validate this signature has not already been finalized if one-time sign only
+
+After successful sign:
+
+* show clean success screen
+* optionally mark report status as signed or partially signed based on your existing logic
+* optionally email confirmation later if needed, but do not build that unless already easy
+
+Success page example
+Report signed successfully.
+Your signature has been recorded.
+
+Buttons:
+
+* Download PDF
+* Close page
+
+If already signed
+Show:
+This report has already been signed.
+
+Do not allow duplicate signing unless your report model explicitly supports re-signing.
+
+Security and token control
+
+Very important.
+
+The public email link must be secure.
+Do not make all reports public just because email sending exists.
+
+Recommended controls
+
+* recipient-scoped token
+* optional expiration window
+* revocation support if report is re-sent
+* signed/used tracking if needed
+* access only to that one report
+* only the allowed actions for that recipient
+
+Recommended backend data model idea
+
+report_public_access_tokens
+
+* id
+* report_id
+* recipient_type
+* recipient_email
+* token_hash
+* permissions
+* created_at
+* expires_at nullable
+* revoked_at nullable
+* last_accessed_at nullable
+* signed_at nullable
+* created_by admin id
+
+Never store raw token in plaintext if avoidable.
+Prefer storing hash and only emailing the raw one-time token.
+
+Email content update
+
+Update the email template so CTA buttons go to the public secure link, not login-gated account page.
+
+Recommended buttons
+
+* View Report
+* Review and Sign
+
+Both can point to the same public link if signing happens on the same page.
+
+Recommended email copy
+
+Hello [Name],
+
+A report has been shared with you through Clockfield.
+
+You can review this report directly using the secure link below. No login is required.
+
+[Review Report]
+[Review and Sign]
+
+If a signature is required, you will be able to sign it directly on the report page.
+
+Do not attach internal-only data.
+Do not expose admin notes.
+
+Public page visibility rules
+
+On the public report page, show only what the recipient should see.
+
+Allowed
+
+* report content intended for recipient
+* photos if part of shared report
+* signature area
+* download option if appropriate
+
+Not allowed
+
+* internal admin notes
+* admin actions
+* private audit history
+* hidden metadata
+* unrelated recipient data
+* internal database ids
+* system debug text
+
+PDF behavior
+
+Keep Print / PDF working exactly as it already does.
+
+For the public page:
+
+* allow PDF download only if the current report is allowed to be downloaded
+* if current infrastructure already generates PDFs, reuse it
+* do not rebuild print engine
+
+Recommended first version
+Public page includes:
+
+* View
+* Sign
+* Download PDF
+
+Do not force PDF download before signing.
+Signing should happen directly on page.
+
+UI requirements for signature section
+
+Keep it simple and clean.
+
+Suggested layout
+
+Signature
+Please review the report and sign below.
+
+Signature method
+[Draw] [Type]
+
+If Draw selected
+
+* signature pad
+* Clear button
+
+If Type selected
+
+* full name input
+* rendered signature preview below
+
+Buttons
+
+* Cancel
+* Submit Signature
+
+On mobile:
+
+* signature area must be large enough for finger signing
+* no zooming issues
+* no tiny canvas
+* buttons easy to tap
+
+On desktop:
+
+* mouse drawing works properly
+* typed preview looks professional
+
+Suggested styling
+
+* rounded bordered card
+* clean label hierarchy
+* subtle muted helper text
+* signature preview on light background
+* no clutter
+
+Routing behavior
+
+Keep current internal report route unchanged.
+
+Add a separate public route for emailed access.
+Do not weaken auth on internal routes.
+
+Recommended logic
+
+* if route is internal report page, auth behaves exactly as today
+* if route is public token route, token-based access is allowed without login
+
+That separation is very important.
+
+Suggested implementation order
+
+Step 1
+Locate current report email send flow and secure link generation
+
+Step 2
+Add recipient-scoped secure token generation for email delivery
+
+Step 3
+Create public report route and public report controller/service
+
+Step 4
+Build public report UI using existing report rendering pieces where possible
+
+Step 5
+Add signature module with:
+
+* draw signature pad
+* typed signature rendering
+
+Step 6
+Save signature to the correct report and recipient type
+
+Step 7
+Update email template CTA to point to public secure report link
+
+Step 8
+Add success, expired link, invalid token, and already signed states
+
+Step 9
+Test all current report flows to ensure nothing else breaks
+
+Testing requirements
+
+You must test all of this carefully.
+
+Access tests
+
+* emailed client link opens report without login
+* emailed employee link opens report without login
+* in-app report access still requires normal login as before
+* invalid token fails gracefully
+* expired token fails gracefully if expiration is enabled
+* revoked token fails gracefully
+
+Signing tests
+
+* client can draw signature on mobile
+* client can draw signature on desktop
+* client can type signature and see styled preview
+* employee can draw signature on mobile
+* employee can type signature
+* submitted signature saves correctly
+* signed state appears correctly afterward
+* duplicate sign attempt is handled correctly
+
+Visibility tests
+
+* internal admin notes are not shown on public page
+* report data shown matches what recipient should see
+* unrelated reports cannot be accessed
+
+Flow protection tests
+
+* finalize still works
+* archive still works
+* print / PDF still works
+* send to account still works
+* send to email still works
+* mixed delivery still works
+* current report pages are not broken
+* auth flow is not weakened globally
+
+Acceptance criteria
+
+This feature is complete only if all of the following are true:
+
+* emailed report links open directly without requiring login
+* access is secure and tokenized
+* report can be reviewed on a public secure page
+* recipient can sign directly on that page
+* signature supports finger/mouse draw
+* signature also supports typed signature rendered in signature style
+* signed result is saved to the correct report and signer role
+* no internal-only data is exposed
+* no unrelated flows are changed
+* current account-based report access still works exactly as before
+
+Final rule
+
+Do not touch anything else outside this feature.
+Do not modify unrelated auth behavior.
+Do not convert all reports into public reports.
+Only create a secure public email-access path for emailed reports, with direct review and signature capability.

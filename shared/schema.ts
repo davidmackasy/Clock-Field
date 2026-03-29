@@ -580,12 +580,29 @@ export const reports = pgTable("reports", {
 export const reportSignatures = pgTable("report_signatures", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   reportId: varchar("report_id").notNull(),
-  signerUserId: varchar("signer_user_id").notNull(),
+  signerUserId: varchar("signer_user_id"), // nullable for public token signers
   signerRole: text("signer_role").notNull(), // admin, employee, client
   signerName: text("signer_name").notNull(),
-  signatureType: text("signature_type").notNull().default("typed"),
+  signatureType: text("signature_type").notNull().default("typed"), // "typed" | "drawn"
   signedAt: text("signed_at").notNull(),
   acknowledgementText: text("acknowledgement_text"),
+  signatureDataUrl: text("signature_data_url"), // base64 PNG for drawn signatures
+  publicAccessTokenId: varchar("public_access_token_id"), // reference to access token if signed via public link
+});
+
+export const reportAccessTokens = pgTable("report_access_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reportId: varchar("report_id").notNull(),
+  recipientType: text("recipient_type").notNull(), // "employee" | "client"
+  recipientEmail: text("recipient_email").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  permissions: text("permissions").array().notNull().default(sql`ARRAY[]::text[]`),
+  createdAt: text("created_at").notNull().default(sql`now()::text`),
+  expiresAt: text("expires_at"),
+  revokedAt: text("revoked_at"),
+  lastAccessedAt: text("last_accessed_at"),
+  signedAt: text("signed_at"),
+  createdByUserId: varchar("created_by_user_id"),
 });
 
 export const reportActivityLog = pgTable("report_activity_log", {
@@ -601,12 +618,15 @@ export const reportActivityLog = pgTable("report_activity_log", {
 export const insertReportSchema = createInsertSchema(reports).omit({ id: true });
 export const insertReportSignatureSchema = createInsertSchema(reportSignatures).omit({ id: true });
 export const insertReportActivityLogSchema = createInsertSchema(reportActivityLog).omit({ id: true });
+export const insertReportAccessTokenSchema = createInsertSchema(reportAccessTokens).omit({ id: true });
 
 export type Report = typeof reports.$inferSelect;
 export type InsertReport = z.infer<typeof insertReportSchema>;
 export type ReportSignature = typeof reportSignatures.$inferSelect;
 export type InsertReportSignature = z.infer<typeof insertReportSignatureSchema>;
 export type ReportActivityLog = typeof reportActivityLog.$inferSelect;
+export type ReportAccessToken = typeof reportAccessTokens.$inferSelect;
+export type InsertReportAccessToken = z.infer<typeof insertReportAccessTokenSchema>;
 
 export const loginSchema = z.object({
   email: z.string().email(),

@@ -11,8 +11,8 @@ import { randomBytes } from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { isNotNull, eq } from "drizzle-orm";
-import { clientRequests, companies } from "@shared/schema";
+import { isNotNull, eq, and, isNull } from "drizzle-orm";
+import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations } from "@shared/schema";
 import { getPlan } from "./plans";
 import { generateReviewOgImage } from "./og-image";
 
@@ -3840,11 +3840,46 @@ Return a JSON object with these exact fields:
       // Track email delivery results for response
       const emailResults: Array<{ recipient: string; ok: boolean; error?: string }> = [];
 
+      // Helper: generate a secure access token for one recipient
+      async function issueReportToken(recipientType: string, recipientEmail: string, requiresSignature: boolean) {
+        // Revoke any existing unused tokens for this report + recipientType
+        const existing = await db.select().from(reportAccessTokens)
+          .where(and(
+            eq(reportAccessTokens.reportId, report.id),
+            eq(reportAccessTokens.recipientType, recipientType),
+            isNull(reportAccessTokens.revokedAt),
+            isNull(reportAccessTokens.signedAt),
+          )).limit(1);
+        for (const t of existing) {
+          await storage.updateReportAccessToken(t.id, { revokedAt: new Date().toISOString() });
+        }
+        const rawToken = randomBytes(32).toString("hex");
+        const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+        const perms: string[] = ["read", "download"];
+        if (requiresSignature) perms.push("sign");
+        await storage.createReportAccessToken({
+          reportId: report.id,
+          recipientType,
+          recipientEmail,
+          tokenHash,
+          permissions: perms,
+          createdAt: new Date().toISOString(),
+          expiresAt: null,
+          revokedAt: null,
+          lastAccessedAt: null,
+          signedAt: null,
+          createdByUserId: user.id,
+        });
+        return rawToken;
+      }
+
       // Send email to assigned employee
       if (sendToEmployeeEmail && report.assignedEmployeeId) {
         const empUser = await storage.getUser(report.assignedEmployeeId);
         if (empUser?.email) {
           try {
+            const rawToken = await issueReportToken("employee", empUser.email, !!report.requiresEmployeeSignature);
+            const reportUrl = `${appUrl}/public/reports/${rawToken}`;
             await sendReportEmail({
               to: empUser.email,
               recipientName: `${empUser.firstName} ${empUser.lastName}`.trim() || empUser.email,
@@ -3852,7 +3887,7 @@ Return a JSON object with these exact fields:
               reportTitle: report.title,
               reportDate: report.incidentDate || null,
               companyName,
-              reportsUrl: `${appUrl}/employee/reports`,
+              reportUrl,
               requiresSignature: !!report.requiresEmployeeSignature,
             });
             emailResults.push({ recipient: "employee", ok: true });
@@ -3873,6 +3908,8 @@ Return a JSON object with these exact fields:
         const clientEmail = clientRecord?.contactEmail;
         if (clientEmail) {
           try {
+            const rawToken = await issueReportToken("client", clientEmail, !!report.requiresClientSignature);
+            const reportUrl = `${appUrl}/public/reports/${rawToken}`;
             await sendReportEmail({
               to: clientEmail,
               recipientName: clientRecord?.contactName || clientRecord?.name || clientEmail,
@@ -3880,7 +3917,7 @@ Return a JSON object with these exact fields:
               reportTitle: report.title,
               reportDate: report.incidentDate || null,
               companyName,
-              reportsUrl: `${appUrl}/client/reports`,
+              reportUrl,
               requiresSignature: !!report.requiresClientSignature,
             });
             emailResults.push({ recipient: "client", ok: true });
@@ -4022,6 +4059,144 @@ Return a JSON object with these exact fields:
       await logReportActivity(req.params.id, "submitted", user.id, user.role);
       res.json(updated);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ─── Public Report Access (token-based, no auth required) ──────────────────
+  app.get("/api/public/reports/:token", async (req, res) => {
+    try {
+      const tokenHash = createHash("sha256").update(req.params.token).digest("hex");
+      const tokenRecord = await storage.getReportAccessTokenByHash(tokenHash);
+      if (!tokenRecord) {
+        res.status(404).json({ error: "invalid_token", message: "This report link is no longer available." });
+        return;
+      }
+      if (tokenRecord.revokedAt) {
+        res.status(410).json({ error: "revoked", message: "This report link has been revoked. Please contact the sender for a new link." });
+        return;
+      }
+      // Fetch the report — no companyId check since token proves access
+      const [reportRow] = await db.select().from(reports).where(eq(reports.id, tokenRecord.reportId)).limit(1);
+      if (!reportRow) {
+        res.status(404).json({ error: "not_found", message: "Report not found." });
+        return;
+      }
+      if (reportRow.status === "archived") {
+        res.status(410).json({ error: "archived", message: "This report is no longer available." });
+        return;
+      }
+      // Track last access
+      await storage.updateReportAccessToken(tokenRecord.id, { lastAccessedAt: new Date().toISOString() });
+      // Update report viewed_at for the recipient
+      if (tokenRecord.recipientType === "employee" && !reportRow.employeeViewedAt) {
+        await storage.updateReport(reportRow.id, reportRow.companyId, { employeeViewedAt: new Date().toISOString() });
+      } else if (tokenRecord.recipientType === "client" && !reportRow.clientViewedAt) {
+        await storage.updateReport(reportRow.id, reportRow.companyId, { clientViewedAt: new Date().toISOString() });
+      }
+      // Fetch related data for display
+      const [company, locationRow, employeeUser, clientRecord] = await Promise.all([
+        storage.getCompany(reportRow.companyId),
+        reportRow.assignedLocationId ? db.select().from(locations).where(eq(locations.id, reportRow.assignedLocationId)).limit(1).then(r => r[0]) : null,
+        reportRow.assignedEmployeeId ? storage.getUser(reportRow.assignedEmployeeId) : null,
+        reportRow.assignedClientId ? storage.getClient(reportRow.assignedClientId) : null,
+      ]);
+      const signatures = await storage.getReportSignatures(reportRow.id);
+      // Determine if this token has already signed
+      const alreadySigned = !!tokenRecord.signedAt;
+      // Strip admin-only fields from public response
+      const { internalNotes: _internalNotes, adminFindings: _adminFindings, ...publicReport } = reportRow as any;
+      res.json({
+        report: publicReport,
+        company: company ? { name: company.name, companyLogoUrl: (company as any).companyLogoUrl || null } : null,
+        location: locationRow ? { name: locationRow.name, address: locationRow.address } : null,
+        employee: employeeUser ? { firstName: employeeUser.firstName, lastName: employeeUser.lastName } : null,
+        client: clientRecord ? { name: clientRecord.name, contactName: clientRecord.contactName } : null,
+        signatures: signatures.map(s => ({
+          signerName: s.signerName,
+          signerRole: s.signerRole,
+          signedAt: s.signedAt,
+          signatureType: s.signatureType,
+          signatureDataUrl: s.signatureDataUrl || null,
+        })),
+        access: {
+          recipientType: tokenRecord.recipientType,
+          recipientEmail: tokenRecord.recipientEmail,
+          permissions: tokenRecord.permissions,
+          alreadySigned,
+        },
+      });
+    } catch (err: any) { res.status(500).json({ error: "server_error", message: "An error occurred. Please try again later." }); }
+  });
+
+  app.post("/api/public/reports/:token/sign", async (req, res) => {
+    try {
+      const tokenHash = createHash("sha256").update(req.params.token).digest("hex");
+      const tokenRecord = await storage.getReportAccessTokenByHash(tokenHash);
+      if (!tokenRecord) {
+        res.status(404).json({ error: "invalid_token", message: "This report link is no longer available." });
+        return;
+      }
+      if (tokenRecord.revokedAt) {
+        res.status(410).json({ error: "revoked", message: "This report link has been revoked." });
+        return;
+      }
+      if (tokenRecord.signedAt) {
+        res.status(409).json({ error: "already_signed", message: "This report has already been signed." });
+        return;
+      }
+      if (!tokenRecord.permissions.includes("sign")) {
+        res.status(403).json({ error: "not_allowed", message: "Signing is not allowed for this report." });
+        return;
+      }
+      const [reportRow] = await db.select().from(reports).where(eq(reports.id, tokenRecord.reportId)).limit(1);
+      if (!reportRow) { res.status(404).json({ error: "not_found", message: "Report not found." }); return; }
+      // Prevent duplicate signing via token
+      const existingTokenSig = await storage.getReportSignatureByToken(reportRow.id, tokenRecord.id);
+      if (existingTokenSig) {
+        res.status(409).json({ error: "already_signed", message: "This report has already been signed." });
+        return;
+      }
+      const { signerName, signatureType, signatureDataUrl, acknowledgementText } = req.body;
+      if (!signerName?.trim()) {
+        res.status(400).json({ error: "validation", message: "Signer name is required." });
+        return;
+      }
+      if (!["typed", "drawn"].includes(signatureType)) {
+        res.status(400).json({ error: "validation", message: "Invalid signature type." });
+        return;
+      }
+      if (signatureType === "drawn" && !signatureDataUrl) {
+        res.status(400).json({ error: "validation", message: "Signature drawing is required." });
+        return;
+      }
+      const now = new Date().toISOString();
+      const sig = await storage.createReportSignature({
+        reportId: reportRow.id,
+        signerUserId: null,
+        signerRole: tokenRecord.recipientType, // "employee" or "client"
+        signerName: signerName.trim(),
+        signatureType,
+        signedAt: now,
+        acknowledgementText: acknowledgementText || "I confirm I have reviewed this report.",
+        signatureDataUrl: signatureDataUrl || null,
+        publicAccessTokenId: tokenRecord.id,
+      });
+      // Mark token as signed
+      await storage.updateReportAccessToken(tokenRecord.id, { signedAt: now });
+      // Log the activity using a placeholder userId (the token's creator)
+      await storage.createReportActivity({
+        reportId: reportRow.id,
+        action: "signed",
+        actionByUserId: tokenRecord.createdByUserId || reportRow.createdByUserId,
+        actionByRole: tokenRecord.recipientType,
+        metadata: JSON.stringify({ signerName: signerName.trim(), via: "public_link", recipientType: tokenRecord.recipientType }),
+        createdAt: now,
+      });
+      // Update report status if awaiting signature
+      if (reportRow.status === "awaiting_signature" || reportRow.status === "sent") {
+        await storage.updateReport(reportRow.id, reportRow.companyId, { status: "in_review", updatedAt: now });
+      }
+      res.json({ ok: true, signedAt: now, signerName: signerName.trim() });
+    } catch (err: any) { res.status(500).json({ error: "server_error", message: "An error occurred. Please try again later." }); }
   });
 
   // Run once at startup to migrate any /uploads/ imageUrls to base64 in DB

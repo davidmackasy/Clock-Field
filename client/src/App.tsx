@@ -48,6 +48,7 @@ import ClientRequestsPage from "@/pages/client/requests";
 import ClientProfile from "@/pages/client/profile";
 import PublicWorkReport from "@/pages/public/work-report";
 import PublicReviewShare from "@/pages/public/review-share";
+import PublicReportAccess from "@/pages/public/report-access";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import LandingPage from "@/pages/landing";
@@ -183,6 +184,14 @@ function AppRouter() {
   const [location] = useLocation();
 
   // Public routes that bypass all guards
+  if (location.startsWith("/public/reports/")) {
+    return (
+      <Switch>
+        <Route path="/public/reports/:token" component={PublicReportAccess} />
+      </Switch>
+    );
+  }
+
   if (location.startsWith("/public/work-report/")) {
     return (
       <Switch>

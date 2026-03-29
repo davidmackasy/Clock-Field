@@ -186,7 +186,7 @@ export async function sendReportEmail(opts: {
   reportTitle: string;
   reportDate: string | null;
   companyName: string;
-  reportsUrl: string;
+  reportUrl: string;
   requiresSignature: boolean;
 }): Promise<void> {
   const { client, domain } = getClient();
@@ -213,24 +213,24 @@ export async function sendReportEmail(opts: {
 
   const bodyHtml = `
 <p style="margin:0 0 14px;color:#374151;">Hi <strong>${opts.recipientName}</strong>,</p>
-<p style="margin:0 0 14px;color:#374151;">A report has been shared with you through ClockField.</p>
+<p style="margin:0 0 14px;color:#374151;">A report has been shared with you by <strong>${opts.companyName}</strong> through ClockField.</p>
 <table style="width:100%;border-collapse:collapse;margin:16px 0 20px;border-radius:6px;border:1px solid #e5e7eb;overflow:hidden;">
   <tr><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:13px;width:120px;">Report type</td><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:600;">${typeLabel}</td></tr>
   <tr><td style="padding:10px 14px;${opts.reportDate ? "border-bottom:1px solid #e5e7eb;" : ""}color:#6b7280;font-size:13px;">Title</td><td style="padding:10px 14px;${opts.reportDate ? "border-bottom:1px solid #e5e7eb;" : ""}font-size:13px;">${opts.reportTitle}</td></tr>
   ${dateRow}
 </table>
-${sigNote}
-<p style="margin:0 0 14px;font-size:13px;color:#6b7280;">Click the button below to sign in and review the report.</p>`;
+<p style="margin:0 0 14px;color:#374151;font-size:14px;">You can review this report directly using the secure link below. No sign-in is required.</p>
+${sigNote}`;
 
   const html = buildEmailHtml({
     title: subject,
     bodyHtml,
     ctaLabel: opts.requiresSignature ? "Review &amp; Sign Report" : "View Report",
-    ctaUrl: opts.reportsUrl,
+    ctaUrl: opts.reportUrl,
     footerNote: `You are receiving this because a report was shared with you by ${opts.companyName} through ClockField.`,
   });
 
-  const textBody = `Hi ${opts.recipientName},\n\nA report has been shared with you through ClockField.\n\nReport type: ${typeLabel}\nTitle: ${opts.reportTitle}${opts.reportDate ? `\nDate: ${opts.reportDate}` : ""}\n\nView the report here: ${opts.reportsUrl}\n\nRegards,\n${opts.companyName}`;
+  const textBody = `Hi ${opts.recipientName},\n\nA report has been shared with you by ${opts.companyName} through ClockField. No sign-in is required.\n\nReport type: ${typeLabel}\nTitle: ${opts.reportTitle}${opts.reportDate ? `\nDate: ${opts.reportDate}` : ""}\n\nView the report here: ${opts.reportUrl}\n\nRegards,\n${opts.companyName}`;
 
   await client.messages.create(domain, {
     from,
