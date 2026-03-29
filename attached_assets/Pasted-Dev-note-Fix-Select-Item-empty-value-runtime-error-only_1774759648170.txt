@@ -1,0 +1,244 @@
+Dev note: Fix Select.Item empty value runtime error only
+
+Objective
+
+Fix the current runtime error:
+
+A <Select.Item /> must have a value prop that is not an empty string.
+
+This fix must be limited only to the Select component error.
+Do not touch anything else.
+Do not refactor unrelated code.
+Do not redesign the page.
+Do not change any working logic outside this exact issue.
+If anything else appears to need changes, ask for approval first.
+
+Critical instruction
+
+Only fix the Select.Item empty-string value issue.
+
+Do not:
+
+modify unrelated forms
+rename components
+change page structure
+change API behavior
+change styling unless absolutely required for this fix
+change database logic
+change report workflow logic
+change routing
+change any other working Selects unless they are directly causing this exact same error
+
+What is causing the error
+
+One or more Select items are using an empty string as the item value, like this:
+
+<SelectItem value="">Select something</SelectItem>
+
+This is invalid.
+
+In this Select system, empty string is reserved for clearing the current selection and showing the placeholder.
+That means every SelectItem must have a real non-empty value.
+
+Correct rule
+
+SelectItem must never use value=""
+placeholder text must be shown using SelectValue placeholder="..."
+unselected state can still use "" in component state if needed
+the dropdown options themselves must always use non-empty values
+
+What to search for
+
+Search only in the page/components involved in this runtime error first.
+
+Look for patterns like:
+
+<SelectItem value="">
+value={""}
+<option value="">
+
+Most likely locations:
+
+report type select
+client select
+cleaner/employee select
+severity select
+status select
+any new Reports page dropdowns
+
+Primary fix pattern
+
+Wrong:
+
+<Select value={reportType} onValueChange={setReportType}>
+  <SelectTrigger>
+    <SelectValue placeholder="Select report type" />
+  </SelectTrigger>
+  <SelectContent>
+    <SelectItem value="">Select report type</SelectItem>
+    <SelectItem value="incident">Incident Report</SelectItem>
+    <SelectItem value="issue">Issue Report</SelectItem>
+  </SelectContent>
+</Select>
+
+Correct:
+
+<Select value={reportType} onValueChange={setReportType}>
+  <SelectTrigger>
+    <SelectValue placeholder="Select report type" />
+  </SelectTrigger>
+  <SelectContent>
+    <SelectItem value="incident">Incident Report</SelectItem>
+    <SelectItem value="issue">Issue Report</SelectItem>
+  </SelectContent>
+</Select>
+
+Optional/unselected state pattern
+
+It is okay for the component state to be empty when nothing is selected.
+
+Example:
+
+const [reportType, setReportType] = useState("");
+
+Then:
+
+<Select value={reportType} onValueChange={setReportType}>
+  <SelectTrigger>
+    <SelectValue placeholder="Select report type" />
+  </SelectTrigger>
+  <SelectContent>
+    <SelectItem value="incident">Incident Report</SelectItem>
+    <SelectItem value="issue">Issue Report</SelectItem>
+    <SelectItem value="damage">Damage Report</SelectItem>
+  </SelectContent>
+</Select>
+
+If the state is "", the placeholder will show.
+That is correct.
+Do not create a fake empty SelectItem.
+
+If a “None” option is needed
+
+If the UI truly needs a user-visible “None” or “Unassigned” option, it must still use a non-empty value.
+
+Use something like:
+
+<SelectItem value="unassigned">Unassigned</SelectItem>
+
+or
+
+<SelectItem value="none">None</SelectItem>
+
+Then handle that explicitly in code.
+
+Example:
+
+onValueChange={(value) => {
+  setAssignedEmployee(value === "unassigned" ? "" : value);
+}}
+
+Important:
+Only do this if the UI actually needs an explicit selectable “None” option.
+Otherwise, rely on placeholder + empty state.
+
+Fix requirements
+
+Find the exact Select causing the overlay error
+Remove any SelectItem using empty string value
+Keep placeholder text in SelectValue placeholder="..."
+Preserve current behavior as much as possible
+Do not alter unrelated dropdown logic
+Do not change data flow unless required to map a non-empty fallback option like none or unassigned
+
+Safe implementation guidance
+
+For all affected selects, use this safe structure:
+
+<Select value={selectedValue} onValueChange={setSelectedValue}>
+  <SelectTrigger>
+    <SelectValue placeholder="Select an option" />
+  </SelectTrigger>
+  <SelectContent>
+    {options.map((option) => (
+      <SelectItem key={option.id} value={option.id}>
+        {option.label}
+      </SelectItem>
+    ))}
+  </SelectContent>
+</Select>
+
+If options are dynamic, validate them before rendering.
+Do not allow undefined, null, or empty-string values into SelectItem.
+
+Safe dynamic rendering example
+
+{options
+  .filter((option) => option.id && option.id.trim() !== "")
+  .map((option) => (
+    <SelectItem key={option.id} value={option.id}>
+      {option.label}
+    </SelectItem>
+  ))}
+
+Only add filtering if needed to stop bad dynamic values from being rendered.
+Do not rewrite the full data source unless necessary.
+
+If the issue is in static arrays
+
+Example wrong:
+
+const severityOptions = [
+  { value: "", label: "Select severity" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+];
+
+Correct:
+
+const severityOptions = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+];
+
+And use:
+
+<SelectValue placeholder="Select severity" />
+
+If the issue is in native select
+
+If any part of the page is using native HTML <option value="">, do not change it unless that exact element is part of the crashing component.
+This runtime error is specifically about Select.Item, so focus on the Radix/shadcn Select first.
+
+Testing checklist
+
+After the fix, verify only this scope:
+
+page loads without runtime overlay
+affected Select opens correctly
+placeholder shows before selection
+selecting an option works
+clearing behavior still works if supported by existing logic
+no unrelated UI changed
+no form submission logic broke
+no other report functionality was altered
+
+Acceptance criteria
+
+This task is complete only when:
+
+the runtime error is gone
+no SelectItem value="" remains in the affected component(s)
+placeholder still displays correctly
+selection still works
+nothing else was changed outside this fix
+
+Final instruction
+
+Do not expand scope.
+Do not “clean up” nearby code.
+Do not refactor surrounding components.
+Do not make any unrelated improvements.
+Fix only the invalid empty-string SelectItem value issue and leave everything else exactly as it is.

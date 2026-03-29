@@ -147,36 +147,36 @@ function CreateReportDialog({ open, onClose, employees, clients, locations }: an
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5"><User className="w-3 h-3" />Employee</Label>
-              <Select value={form.assignedEmployeeId} onValueChange={v => set("assignedEmployeeId", v)}>
+              <Select value={form.assignedEmployeeId || "none"} onValueChange={v => set("assignedEmployeeId", v === "none" ? "" : v)}>
                 <SelectTrigger data-testid="select-employee">
                   <SelectValue placeholder="Select employee" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                   {employees.map((e: any) => <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5"><Building2 className="w-3 h-3" />Client</Label>
-              <Select value={form.assignedClientId} onValueChange={v => set("assignedClientId", v)}>
+              <Select value={form.assignedClientId || "none"} onValueChange={v => set("assignedClientId", v === "none" ? "" : v)}>
                 <SelectTrigger data-testid="select-client">
                   <SelectValue placeholder="Select client" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                   {clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5"><MapPin className="w-3 h-3" />Location</Label>
-              <Select value={form.assignedLocationId} onValueChange={v => set("assignedLocationId", v)}>
+              <Select value={form.assignedLocationId || "none"} onValueChange={v => set("assignedLocationId", v === "none" ? "" : v)}>
                 <SelectTrigger data-testid="select-location">
                   <SelectValue placeholder="Select site" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                   {locations.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
                 </SelectContent>
               </Select>
