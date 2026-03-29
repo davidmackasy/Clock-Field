@@ -1077,25 +1077,31 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
   }
 
   return (
-    <div className="hidden print:block fixed inset-0 bg-white z-[9999] overflow-auto text-black" style={{ padding: "40px 48px", fontFamily: "Georgia, serif" }}>
+    <div className="hidden print:block fixed inset-0 bg-white z-[9999] overflow-auto text-black" style={{ padding: "48px 52px", fontFamily: "Georgia, serif" }}>
       <style>{`
         @media print {
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          @page { margin: 0.6in; }
+          @page { margin: 0; size: letter; }
+          nav, header, aside, .no-print, [data-testid="sidebar"], button { display: none !important; }
         }
       `}</style>
 
       {/* ── Document Header ── */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #1f2937", paddingBottom: "20px", marginBottom: "24px" }}>
         {/* Company identity */}
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: "14px" }}>
           {company?.companyLogoUrl && (
-            <img src={company.companyLogoUrl} alt="Company logo" style={{ height: "64px", width: "auto", objectFit: "contain" }} />
+            <img
+              src={company.companyLogoUrl}
+              alt="Company logo"
+              style={{ height: "60px", width: "auto", maxWidth: "160px", objectFit: "contain", flexShrink: 0 }}
+            />
           )}
-          <div>
-            <p style={{ fontSize: "18px", fontWeight: 700, color: "#111827", margin: 0 }}>{company?.name || "Company"}</p>
-            {company?.companyEmail && <p style={{ fontSize: "11px", color: "#6b7280", marginTop: "2px" }}>{company.companyEmail}</p>}
-            {company?.companyPhone && <p style={{ fontSize: "11px", color: "#6b7280" }}>{company.companyPhone}</p>}
+          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+            <p style={{ fontSize: "17px", fontWeight: 700, color: "#111827", margin: 0 }}>{company?.name || "Company"}</p>
+            {company?.address && <p style={{ fontSize: "10px", color: "#6b7280" }}>{company.address}</p>}
+            {company?.companyPhone && <p style={{ fontSize: "10px", color: "#6b7280" }}>{company.companyPhone}</p>}
+            {company?.companyEmail && <p style={{ fontSize: "10px", color: "#6b7280" }}>{company.companyEmail}</p>}
           </div>
         </div>
         {/* Document identity */}
@@ -1288,9 +1294,7 @@ export default function AdminReports() {
   const { data: employees = [] } = useQuery<any[]>({ queryKey: ["/api/employees"] });
   const { data: clients = [] } = useQuery<any[]>({ queryKey: ["/api/clients"] });
   const { data: locations = [] } = useQuery<any[]>({ queryKey: ["/api/locations"] });
-  const { data: companyRaw } = useQuery<any>({ queryKey: ["/api/auth/company"] });
-
-  const company = companyRaw;
+  const { data: company } = useQuery<any>({ queryKey: ["/api/company"] });
 
   // Tab counts
   const counts = {

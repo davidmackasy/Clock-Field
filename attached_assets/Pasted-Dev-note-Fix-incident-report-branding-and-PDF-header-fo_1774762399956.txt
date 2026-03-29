@@ -1,0 +1,388 @@
+Dev note: Fix incident report branding and PDF header/footer only
+
+Objective
+
+Improve the exported/print incident report so it looks professional and client-ready.
+
+This task is only about fixing the incident report branding and exported document presentation.
+
+Focus only on these issues:
+
+company logo from settings is not showing
+company address/details are missing
+raw platform/browser print text is appearing at the top
+raw Replit URL is appearing at the bottom
+exported incident report still looks unprofessional for client-facing use
+
+Critical instruction
+
+Do not touch anything else.
+
+Do not refactor unrelated report logic.
+Do not change the incident workflow.
+Do not change auth.
+Do not change settings behavior.
+Do not change public report logic except to reuse the exact same company branding source already working there.
+Do not change unrelated PDF/export behavior in other modules.
+Do not redesign the rest of the app.
+If anything outside this scope is needed, ask for approval first.
+
+Main problem summary
+
+From the screenshots, the exported incident report still has these issues:
+
+The company logo from admin settings is not rendering
+Only company name is shown, but not the address/contact details
+The browser print header is showing date/time and “ClockField” at the top
+A raw Replit URL is showing at the bottom of the printed/exported page
+The document still feels like a browser printout instead of a real branded incident report
+
+Main implementation goal
+
+Make the incident report export use the same branding source as the public cleaning report.
+
+That means:
+
+same stored company logo source
+same tenant/company-specific logo handling
+same company identity source from settings
+
+Do not invent a second branding path.
+Do not hardcode another logo field.
+Do not create another upload location.
+
+Use the same already-working branding logic from the public report.
+
+Scope of this fix
+
+Only improve the incident report exported/print document by doing these four things:
+
+pull and render the correct company logo from settings
+show company details cleanly under or beside the company name
+remove browser print headers/footers from the print/export output
+make the incident report look like a proper branded client document
+
+Required fixes
+
+Reuse the exact same logo source as the public report
+
+The incident report must use the same company logo source that already works on the public cleaning report.
+
+Agent instructions:
+
+find where the public cleaning report gets the company logo
+reuse that same data source and same fallback logic for incident report export
+do not create a duplicate companyLogo field for incident reports
+do not manually inject a different logo URL
+do not use temporary preview URLs
+
+The logo shown on incident report must be:
+
+company-specific
+persistent
+identical source logic to public report
+safe for multi-tenant use
+
+If the public report uses:
+
+company settings object
+company profile object
+tenant settings endpoint
+stored asset path
+then the incident report must pull from that exact same path/pipeline
+Show company business details properly
+
+Right now the incident report only shows company name, which looks incomplete.
+
+Add a clean company identity block in the incident report header.
+
+Recommended business identity block:
+
+company logo
+company name
+company address
+company phone if available
+company email if available
+
+Do not overcrowd it.
+Keep it professional.
+
+Header layout recommendation:
+Left side:
+
+company logo
+company name
+company address
+phone/email if available
+
+Right side:
+
+Incident Report
+optional subtitle: Confidential Business Record
+prepared date
+reference number in subtle text
+
+Do not bring back big loud status labels like “Submitted.”
+
+Remove browser print header/footer artifacts
+
+The screenshot shows browser-generated print artifacts:
+
+date/time in top margin
+“ClockField” in top margin
+raw Replit URL in bottom margin
+page number from browser footer
+
+This is not part of the report template.
+This is browser print metadata.
+
+Agent must fix the print stylesheet and export behavior so the incident report does not rely on raw browser default print output.
+
+Required print/export fix:
+
+use a dedicated print container or dedicated PDF print view
+hide browser-app chrome and unrelated surrounding UI
+ensure the printed/exported document itself has proper margins and layout
+prevent random app/page URL from appearing as part of the visible document body
+
+Important note:
+If the user is printing directly through the browser, some browser header/footer items are controlled by browser print settings. But the app must still:
+
+provide a clean print layout
+not include visible raw URLs in the page content itself
+not show any accidental footer text in the report body
+ideally offer a dedicated print/export view that minimizes those browser artifacts
+
+Agent must check whether the raw URL at bottom is:
+
+part of page body
+part of print template
+browser footer metadata
+
+If it is part of page body, remove it from the report template immediately.
+If it is browser print metadata, improve the print/export flow and add a proper print-friendly layout so the user is not depending on a messy full-page browser print.
+
+Make the incident report export look like a real document
+
+The report should look like a branded business document, not a screenshot of an app page.
+
+Clean layout requirements:
+
+proper header spacing
+logo aligned properly
+business information block present
+title aligned professionally
+subtle divider lines
+no raw app chrome
+no raw URL text
+no system clutter
+no oversized empty top/bottom print margin artifacts inside the content area
+
+Professional export structure
+
+Use this structure for the exported incident report:
+
+Header
+
+company logo
+company name
+company address/contact details
+Incident Report
+Confidential Business Record
+prepared date
+reference number
+
+Body
+
+incident title
+category
+incident overview
+incident description
+impact/property
+statements
+acknowledgement/signatures
+
+Footer
+
+company name
+Confidential
+prepared/generated date
+reference number
+optional small “Prepared using Clockfield”
+
+Do not show:
+
+raw URLs
+browser artifacts
+internal role labels like admin
+internal platform junk
+
+Logo rendering requirements
+
+The logo must:
+
+render at consistent size
+maintain aspect ratio
+not break layout if tall or wide
+have a fallback when missing
+
+Recommended fallback logic:
+
+if logo exists, show it
+if logo missing, show company name text only
+do not collapse the entire header
+do not break export
+
+Also make sure:
+
+logo loads in print/export mode
+logo asset is accessible in the print context
+logo is not blocked by relative URL issues
+logo is not lost due to auth token problems in print mode
+
+Very likely technical issue to check
+
+Since user said the public report already shows the logo correctly, but incident report does not, agent should compare:
+
+where public report gets company settings
+where incident report gets company settings
+whether incident report export is missing the logo field in its query/props
+whether print/export view is using a stripped data object without logo
+whether logo URL is present but hidden due to CSS or load failure
+whether the export template is running before company settings fully load
+
+Most likely causes:
+
+incident report template not receiving the full company branding object
+incident report using partial company data
+logo URL not passed into print component
+print component using stale or simplified company object
+CSS hiding the image area
+image path not resolving in print context
+
+Agent must compare public report branding pipeline vs incident report branding pipeline and align them.
+
+Recommended implementation approach
+
+Step 1
+Find the public cleaning report component and trace exactly how it loads:
+
+company logo
+company name
+address/contact info
+
+Step 2
+Use that same source in the incident report export view/template
+
+Step 3
+Update incident report header layout to include:
+
+logo
+company details
+
+Step 4
+Audit incident report template for any visible raw URL/footer text and remove it
+
+Step 5
+Create or improve print stylesheet for incident report export:
+
+only print the report container
+hide surrounding UI
+clean margins
+hide anything outside the report content
+
+Step 6
+Test print preview again
+
+Print stylesheet requirements
+
+Agent should add or fix incident-report-specific print CSS only.
+
+Goals:
+
+print only report content
+hide navigation and app wrapper
+remove extra visible page clutter
+keep typography readable
+keep header intact
+preserve borders and section spacing
+
+Examples of things to hide in print:
+
+app nav
+modal chrome if not part of report
+action buttons
+search/filter UI
+page background wrappers
+debug text
+visible URLs if accidentally rendered in DOM
+
+Important:
+Do not rewrite the entire global print CSS unless necessary.
+Keep this scoped to incident report/export print view.
+
+Company details block
+
+Under the company name, add a professional compact address block.
+
+Suggested order:
+
+street address
+city, province/state, postal code
+phone
+email
+
+Only show fields that exist.
+Do not show blank placeholders.
+Do not break layout if some fields are missing.
+
+Acceptance criteria
+
+This task is complete only when:
+
+incident report uses the same company logo source as the public report
+company logo shows correctly in the incident report export/print view
+company address/contact details appear cleanly in the header
+raw Replit URL is not visible in the report body/export template
+incident report looks professional enough to send to clients
+no unrelated app behavior was changed
+no unrelated report logic was touched
+
+Testing checklist
+
+Test only this scope:
+
+company with logo set in settings
+logo shows on incident report
+company name shows
+address/contact shows
+company without logo
+report still looks clean
+company name still shows
+layout does not break
+print preview
+no visible raw URL inside report body
+no app junk around the report
+report fills page cleanly
+header spacing looks professional
+compare with public report
+same logo source
+same company identity source
+no multi-tenant mixups
+regression
+public report still works
+incident report generation still works
+nothing else changed
+
+Final instruction to the agent
+
+Only fix the incident report branding and export presentation issues described above.
+
+Do not touch anything else.
+Do not refactor unrelated pages.
+Do not alter other report flows.
+Do not change settings storage.
+Reuse the same branding source already used on the public report.
+Remove visible raw URL/body clutter.
+Add company address/contact info to the report header.
+Make the export clean and professional for client-facing use.
