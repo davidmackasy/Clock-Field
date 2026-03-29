@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { setupAuth, hashPassword, comparePasswords, requireAuth, requireRole } from "./auth";
+import OpenAI from "openai";
 import { sendPasswordResetEmail } from "./mail";
 import { createHash } from "crypto";
 import passport from "passport";
@@ -3588,6 +3589,73 @@ Welcome again, and thank you for choosing ClockField.
       createdAt: new Date().toISOString(),
     });
   }
+
+  // AI Incident Report Refinement
+  app.post("/api/reports/refine-incident", requireAuth, async (req: any, res) => {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      res.status(503).json({ message: "AI refinement is not configured. Please add OPENAI_API_KEY to environment secrets." });
+      return;
+    }
+    try {
+      const { whatHappened, whatCaused, immediateAction, whoInvolved, whatAffected, incidentCategory, areaAffected } = req.body;
+      if (!whatHappened || whatHappened.trim().length < 10) {
+        res.status(400).json({ message: "Please describe what happened (at least 10 characters) before refining." });
+        return;
+      }
+      const openai = new OpenAI({ apiKey });
+      const prompt = `You are a professional incident report writer for a commercial cleaning and facility services company. A team member has described an incident in rough notes. Your job is to rewrite it into a clear, professional, client-safe business document.
+
+IMPORTANT RULES:
+- Only use facts provided. Do not invent injuries, damages, witnesses, or details not given.
+- If information is missing, note it in the confidence_note field instead of guessing.
+- Write in factual, neutral, non-accusatory tone.
+- Never use "admin" as a role label.
+
+Incident details provided:
+- Incident type/category: ${incidentCategory || "Not specified"}
+- Area affected: ${areaAffected || "Not specified"}
+- What happened: ${whatHappened}
+- Cause (if known): ${whatCaused || "Not provided"}
+- Immediate action taken: ${immediateAction || "Not provided"}
+- Who was involved/present: ${whoInvolved || "Not provided"}
+- What item/area was affected: ${whatAffected || "Not provided"}
+
+Return a JSON object with these exact fields:
+{
+  "title": "A professional 5-10 word incident title",
+  "refined_description": "A clear 2-4 sentence factual description of what occurred",
+  "sequence_of_events": "A brief numbered or prose sequence of what happened step by step",
+  "immediate_action": "Professional description of immediate actions taken",
+  "probable_causes": "Possible contributing factors, if determinable from the given facts",
+  "follow_up_recommendations": "Recommended follow-up steps and prevention measures",
+  "confidence_note": "Note any missing details that would strengthen the report, or 'Report details appear sufficient.' if the input was adequate"
+}`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+        max_tokens: 800,
+      });
+
+      const raw = completion.choices[0]?.message?.content || "{}";
+      let parsed: any = {};
+      try { parsed = JSON.parse(raw); } catch { parsed = {}; }
+
+      res.json({
+        title: parsed.title || "",
+        refinedDescription: parsed.refined_description || "",
+        sequenceOfEvents: parsed.sequence_of_events || "",
+        immediateAction: parsed.immediate_action || "",
+        probableCauses: parsed.probable_causes || "",
+        followUpRecommendations: parsed.follow_up_recommendations || "",
+        confidenceNote: parsed.confidence_note || "",
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "AI refinement failed" });
+    }
+  });
 
   // List reports (role-aware)
   app.get("/api/reports", requireAuth, async (req: any, res) => {

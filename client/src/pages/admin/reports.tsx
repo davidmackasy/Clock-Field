@@ -16,10 +16,36 @@ import {
   FileText, Plus, Search, Filter, Eye, Send, CheckCircle2, Archive,
   RotateCcw, Printer, Download, ChevronRight, AlertTriangle, Clock,
   Inbox, FolderOpen, PenLine, X, User, Building2, MapPin, Calendar,
-  ClipboardList, Shield, ChevronDown, ChevronUp
+  ClipboardList, Shield, ChevronDown, ChevronUp, Sparkles, Loader2,
+  Info
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+
+const INCIDENT_CATEGORIES = [
+  { value: "broke_client_property", label: "Broke client property", title: "Damage to client property" },
+  { value: "damaged_equipment", label: "Damaged equipment", title: "Company equipment damage" },
+  { value: "water_overflow", label: "Water overflow / flooding", title: "Water overflow incident" },
+  { value: "chemical_spill", label: "Chemical spill", title: "Chemical spill incident" },
+  { value: "missed_area", label: "Missed area caused issue", title: "Missed area — service issue" },
+  { value: "removed_item", label: "Removed item from site", title: "Item removal from client site" },
+  { value: "lost_item", label: "Lost item", title: "Lost item report" },
+  { value: "safety_concern", label: "Safety concern", title: "Safety concern identified" },
+  { value: "slip_trip", label: "Slip / trip / near miss", title: "Slip, trip, or near-miss incident" },
+  { value: "client_complaint", label: "Client complaint", title: "Client complaint related incident" },
+  { value: "other", label: "Other", title: "" },
+];
+
+const INCIDENT_AREAS = [
+  "Washroom", "Kitchen", "Office", "Hallway", "Lobby",
+  "Storage room", "Mechanical room", "Loading area", "Stairwell", "Other",
+];
+
+const IMMEDIATE_ACTION_OPTIONS = [
+  "Area secured", "Client notified", "Supervisor notified",
+  "Item removed from service", "Work paused", "Photos taken",
+  "Cleanup completed", "Awaiting review",
+];
 
 const REPORT_TYPES = [
   { value: "incident", label: "Incident Report", color: "bg-red-100 text-red-700 border-red-200" },
@@ -66,10 +92,30 @@ function reportId(id: string) {
   return `RPT-${id.slice(0, 8).toUpperCase()}`;
 }
 
+// ─── Chip Button ─────────────────────────────────────────────────────────────
+function ChipButton({ active, onClick, children, testId }: any) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid={testId}
+      className={cn(
+        "px-2.5 py-1 rounded-full text-xs border transition-all",
+        active
+          ? "bg-primary text-primary-foreground border-primary"
+          : "bg-background text-foreground border-border hover:border-primary/50 hover:bg-muted/50"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 // ─── Create Report Dialog ─────────────────────────────────────────────────────
 function CreateReportDialog({ open, onClose, employees, clients, locations }: any) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
   const [form, setForm] = useState({
     reportType: "incident", title: "", summary: "",
     incidentDate: "", incidentTime: "", severity: "medium", riskLevel: "medium",
@@ -78,9 +124,82 @@ function CreateReportDialog({ open, onClose, employees, clients, locations }: an
     workStopped: false, customerInformed: false,
     assignedClientId: "", assignedLocationId: "", assignedEmployeeId: "",
     requiresEmployeeSignature: false, requiresClientSignature: false, requiresAdminSignature: false,
-    immediateAction: "", internalNotes: "",
+    immediateAction: "", internalNotes: "", nextSteps: "", correctiveAction: "",
     status: "draft",
   });
+
+  // Structured incident writing fields
+  const [whatHappened, setWhatHappened] = useState("");
+  const [whatCaused, setWhatCaused] = useState("");
+  const [immediateActionText, setImmediateActionText] = useState("");
+  const [whoInvolved, setWhoInvolved] = useState("");
+  const [whatAffected, setWhatAffected] = useState("");
+  const [selectedActions, setSelectedActions] = useState<string[]>([]);
+
+  // AI refinement state
+  const [aiRefining, setAiRefining] = useState(false);
+  const [aiResult, setAiResult] = useState<any>(null);
+
+  const set = (field: string, val: any) => setForm(f => ({ ...f, [field]: val }));
+
+  const handleCategorySelect = (catValue: string) => {
+    set("incidentCategory", catValue);
+    const cat = INCIDENT_CATEGORIES.find(c => c.value === catValue);
+    if (cat?.title && !form.title) set("title", cat.title);
+  };
+
+  const toggleAction = (action: string) => {
+    setSelectedActions(prev => {
+      const next = prev.includes(action) ? prev.filter(a => a !== action) : [...prev, action];
+      const combined = next.join("; ");
+      setImmediateActionText(combined);
+      set("immediateAction", combined);
+      return next;
+    });
+  };
+
+  const refineWithAI = async () => {
+    if (!whatHappened || whatHappened.trim().length < 10) {
+      toast({ title: "Please describe what happened first (at least a sentence).", variant: "destructive" });
+      return;
+    }
+    setAiRefining(true);
+    setAiResult(null);
+    try {
+      const res = await apiRequest("POST", "/api/reports/refine-incident", {
+        whatHappened,
+        whatCaused,
+        immediateAction: immediateActionText,
+        whoInvolved,
+        whatAffected,
+        incidentCategory: form.incidentCategory,
+        areaAffected: form.areaAffected,
+      });
+      const result = await res.json();
+      setAiResult(result);
+      if (result.title) set("title", result.title);
+      if (result.refinedDescription) set("summary", result.refinedDescription);
+      if (result.immediateAction) {
+        setImmediateActionText(result.immediateAction);
+        set("immediateAction", result.immediateAction);
+      }
+      if (result.followUpRecommendations) set("nextSteps", result.followUpRecommendations);
+    } catch (e: any) {
+      toast({ title: "AI refinement unavailable", description: e.message, variant: "destructive" });
+    } finally {
+      setAiRefining(false);
+    }
+  };
+
+  const buildSubmitData = (status: string) => {
+    const isIncident = form.reportType === "incident";
+    const summary = form.summary || (isIncident
+      ? [whatHappened, whatCaused ? `Cause: ${whatCaused}` : ""].filter(Boolean).join("\n\n")
+      : "");
+    const immediateAction = form.immediateAction || immediateActionText;
+    const witnesses = form.witnesses || whoInvolved;
+    return { ...form, summary, immediateAction, witnesses, status };
+  };
 
   const createMut = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/reports", data),
@@ -92,11 +211,11 @@ function CreateReportDialog({ open, onClose, employees, clients, locations }: an
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const set = (field: string, val: any) => setForm(f => ({ ...f, [field]: val }));
+  const isIncident = form.reportType === "incident";
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
             <FileText className="w-5 h-5 text-primary" />
@@ -105,200 +224,414 @@ function CreateReportDialog({ open, onClose, employees, clients, locations }: an
         </DialogHeader>
 
         <div className="space-y-5 py-2">
-          {/* Type + Status */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Report Type *</Label>
-              <Select value={form.reportType} onValueChange={v => set("reportType", v)}>
-                <SelectTrigger data-testid="select-report-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {REPORT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Initial Status</Label>
-              <Select value={form.status} onValueChange={v => set("status", v)}>
-                <SelectTrigger data-testid="select-status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="submitted">Submitted</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Title */}
+          {/* Report Type */}
           <div className="space-y-1.5">
-            <Label>Report Title *</Label>
-            <Input
-              data-testid="input-report-title"
-              value={form.title}
-              onChange={e => set("title", e.target.value)}
-              placeholder="Brief title describing the report..."
-            />
+            <Label>Report Type *</Label>
+            <Select value={form.reportType} onValueChange={v => set("reportType", v)}>
+              <SelectTrigger data-testid="select-report-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {REPORT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Linked entities */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5"><User className="w-3 h-3" />Employee</Label>
-              <Select value={form.assignedEmployeeId || "none"} onValueChange={v => set("assignedEmployeeId", v === "none" ? "" : v)}>
-                <SelectTrigger data-testid="select-employee">
-                  <SelectValue placeholder="Select employee" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {employees.map((e: any) => <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5"><Building2 className="w-3 h-3" />Client</Label>
-              <Select value={form.assignedClientId || "none"} onValueChange={v => set("assignedClientId", v === "none" ? "" : v)}>
-                <SelectTrigger data-testid="select-client">
-                  <SelectValue placeholder="Select client" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5"><MapPin className="w-3 h-3" />Location</Label>
-              <Select value={form.assignedLocationId || "none"} onValueChange={v => set("assignedLocationId", v === "none" ? "" : v)}>
-                <SelectTrigger data-testid="select-location">
-                  <SelectValue placeholder="Select site" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {locations.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          {/* ── INCIDENT-SPECIFIC ENHANCED FORM ── */}
+          {isIncident && (
+            <>
+              {/* Incident Category chips */}
+              <div className="space-y-2">
+                <Label>Incident Category</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {INCIDENT_CATEGORIES.map(cat => (
+                    <ChipButton
+                      key={cat.value}
+                      active={form.incidentCategory === cat.value}
+                      onClick={() => handleCategorySelect(cat.value)}
+                      testId={`chip-cat-${cat.value}`}
+                    >
+                      {cat.label}
+                    </ChipButton>
+                  ))}
+                </div>
+              </div>
 
-          {/* Date/time + severity */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5"><Calendar className="w-3 h-3" />Incident Date</Label>
-              <Input type="date" data-testid="input-incident-date" value={form.incidentDate} onChange={e => set("incidentDate", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Incident Time</Label>
-              <Input type="time" data-testid="input-incident-time" value={form.incidentTime} onChange={e => set("incidentTime", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5"><AlertTriangle className="w-3 h-3" />Severity</Label>
-              <Select value={form.severity} onValueChange={v => set("severity", v)}>
-                <SelectTrigger data-testid="select-severity"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {SEVERITIES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Summary */}
-          <div className="space-y-1.5">
-            <Label>Summary / Description</Label>
-            <Textarea
-              data-testid="input-summary"
-              value={form.summary}
-              onChange={e => set("summary", e.target.value)}
-              placeholder="Describe what happened..."
-              rows={4}
-            />
-          </div>
-
-          {/* Immediate action */}
-          <div className="space-y-1.5">
-            <Label>Immediate Action Taken</Label>
-            <Textarea
-              data-testid="input-immediate-action"
-              value={form.immediateAction}
-              onChange={e => set("immediateAction", e.target.value)}
-              placeholder="What action was taken immediately..."
-              rows={2}
-            />
-          </div>
-
-          {/* Checkboxes */}
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { field: "clientPropertyAffected", label: "Client property affected" },
-              { field: "companyEquipmentAffected", label: "Company equipment affected" },
-              { field: "workStopped", label: "Work was stopped" },
-              { field: "customerInformed", label: "Customer was informed" },
-            ].map(item => (
-              <label key={item.field} className="flex items-center gap-2 text-sm cursor-pointer">
-                <Checkbox
-                  checked={(form as any)[item.field]}
-                  onCheckedChange={v => set(item.field, !!v)}
-                  data-testid={`check-${item.field}`}
+              {/* Title */}
+              <div className="space-y-1.5">
+                <Label>Report Title *</Label>
+                <Input
+                  data-testid="input-report-title"
+                  value={form.title}
+                  onChange={e => set("title", e.target.value)}
+                  placeholder="Brief title describing the incident..."
                 />
-                {item.label}
-              </label>
-            ))}
-          </div>
+              </div>
 
-          {/* Internal notes */}
-          <div className="space-y-1.5">
-            <Label className="flex items-center gap-1.5 text-muted-foreground">
-              <Shield className="w-3 h-3" />
-              Internal Notes (Admin-only, not visible to employee/client)
-            </Label>
-            <Textarea
-              data-testid="input-internal-notes"
-              value={form.internalNotes}
-              onChange={e => set("internalNotes", e.target.value)}
-              placeholder="Internal admin notes..."
-              rows={2}
-            />
-          </div>
+              {/* Date / Time / Severity */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5"><Calendar className="w-3 h-3" />Incident Date</Label>
+                  <Input type="date" data-testid="input-incident-date" value={form.incidentDate} onChange={e => set("incidentDate", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Incident Time</Label>
+                  <Input type="time" data-testid="input-incident-time" value={form.incidentTime} onChange={e => set("incidentTime", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5"><AlertTriangle className="w-3 h-3" />Severity</Label>
+                  <div className="flex gap-1.5">
+                    {[{v:"low",l:"Low"},{v:"medium",l:"Med"},{v:"high",l:"High"}].map(s => (
+                      <ChipButton key={s.v} active={form.severity === s.v} onClick={() => set("severity", s.v)} testId={`chip-sev-${s.v}`}>{s.l}</ChipButton>
+                    ))}
+                  </div>
+                </div>
+              </div>
 
-          {/* Signature requirements */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Signature Requirements</Label>
-            <div className="flex gap-4 flex-wrap">
-              {[
-                { field: "requiresEmployeeSignature", label: "Employee signature" },
-                { field: "requiresClientSignature", label: "Client signature" },
-                { field: "requiresAdminSignature", label: "Admin signature" },
-              ].map(item => (
-                <label key={item.field} className="flex items-center gap-2 text-sm cursor-pointer">
-                  <Checkbox
-                    checked={(form as any)[item.field]}
-                    onCheckedChange={v => set(item.field, !!v)}
-                    data-testid={`check-sig-${item.field}`}
+              {/* Area affected */}
+              <div className="space-y-2">
+                <Label>Area Affected</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {INCIDENT_AREAS.map(area => (
+                    <ChipButton
+                      key={area}
+                      active={form.areaAffected === area}
+                      onClick={() => set("areaAffected", form.areaAffected === area ? "" : area)}
+                      testId={`chip-area-${area.replace(/\s/g, "-").toLowerCase()}`}
+                    >
+                      {area}
+                    </ChipButton>
+                  ))}
+                </div>
+              </div>
+
+              {/* Assignment */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5"><User className="w-3 h-3" />Employee</Label>
+                  <Select value={form.assignedEmployeeId || "none"} onValueChange={v => set("assignedEmployeeId", v === "none" ? "" : v)}>
+                    <SelectTrigger data-testid="select-employee"><SelectValue placeholder="Select employee" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {employees.map((e: any) => <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5"><Building2 className="w-3 h-3" />Client</Label>
+                  <Select value={form.assignedClientId || "none"} onValueChange={v => set("assignedClientId", v === "none" ? "" : v)}>
+                    <SelectTrigger data-testid="select-client"><SelectValue placeholder="Select client" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5"><MapPin className="w-3 h-3" />Location</Label>
+                  <Select value={form.assignedLocationId || "none"} onValueChange={v => set("assignedLocationId", v === "none" ? "" : v)}>
+                    <SelectTrigger data-testid="select-location"><SelectValue placeholder="Select site" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {locations.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div className="border-t pt-2">
+                <p className="text-sm font-semibold text-foreground mb-3">What Happened?</p>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">1. What happened?</Label>
+                    <Textarea
+                      data-testid="input-what-happened"
+                      value={whatHappened}
+                      onChange={e => setWhatHappened(e.target.value)}
+                      placeholder="Describe the incident in your own words..."
+                      rows={3}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">2. What caused it, if known?</Label>
+                    <Textarea
+                      data-testid="input-what-caused"
+                      value={whatCaused}
+                      onChange={e => setWhatCaused(e.target.value)}
+                      placeholder="Contributing factors or known cause..."
+                      rows={2}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">3. Who was involved or present?</Label>
+                    <Input
+                      data-testid="input-who-involved"
+                      value={whoInvolved}
+                      onChange={e => setWhoInvolved(e.target.value)}
+                      placeholder="Employee name, client contact, witnesses..."
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">4. What item or property was affected?</Label>
+                    <Input
+                      data-testid="input-what-affected"
+                      value={whatAffected}
+                      onChange={e => setWhatAffected(e.target.value)}
+                      placeholder="Specific item, equipment, or area..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">5. Immediate action taken</Label>
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {IMMEDIATE_ACTION_OPTIONS.map(opt => (
+                        <ChipButton
+                          key={opt}
+                          active={selectedActions.includes(opt)}
+                          onClick={() => toggleAction(opt)}
+                          testId={`chip-action-${opt.replace(/\s/g, "-").toLowerCase()}`}
+                        >
+                          {opt}
+                        </ChipButton>
+                      ))}
+                    </div>
+                    <Textarea
+                      data-testid="input-immediate-action"
+                      value={immediateActionText}
+                      onChange={e => { setImmediateActionText(e.target.value); set("immediateAction", e.target.value); }}
+                      placeholder="Or describe in your own words..."
+                      rows={2}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* AI Refinement */}
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-primary" />
+                    <p className="text-sm font-semibold">Refine with AI</p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={refineWithAI}
+                    disabled={aiRefining}
+                    data-testid="button-refine-ai"
+                    className="border-primary/30"
+                  >
+                    {aiRefining ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1.5" />}
+                    {aiRefining ? "Refining…" : "Refine with AI"}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">AI will rewrite your rough notes into a professional, factual incident description. You can review and edit everything before saving.</p>
+
+                {aiResult && (
+                  <div className="space-y-3 pt-1 border-t border-primary/10">
+                    {aiResult.confidenceNote && aiResult.confidenceNote !== "Report details appear sufficient." && (
+                      <div className="flex gap-2 bg-amber-50 border border-amber-200 rounded p-2 text-xs text-amber-700">
+                        <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                        <span>{aiResult.confidenceNote}</span>
+                      </div>
+                    )}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Refined Title (editable)</Label>
+                      <Input value={form.title} onChange={e => set("title", e.target.value)} data-testid="input-refined-title" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Professional Description (editable)</Label>
+                      <Textarea value={form.summary} onChange={e => set("summary", e.target.value)} rows={4} data-testid="input-refined-description" />
+                    </div>
+                    {aiResult.probableCauses && (
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Probable Causes</p>
+                        <p className="text-xs text-foreground">{aiResult.probableCauses}</p>
+                      </div>
+                    )}
+                    {aiResult.followUpRecommendations && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">Follow-Up Recommendations (editable)</Label>
+                        <Textarea value={form.nextSteps} onChange={e => set("nextSteps", e.target.value)} rows={2} data-testid="input-refined-followup" />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Impact checkboxes */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Impact</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { field: "clientPropertyAffected", label: "Client property affected" },
+                    { field: "companyEquipmentAffected", label: "Company equipment affected" },
+                    { field: "workStopped", label: "Work was stopped" },
+                    { field: "customerInformed", label: "Customer was informed" },
+                  ].map(item => (
+                    <label key={item.field} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox checked={(form as any)[item.field]} onCheckedChange={v => set(item.field, !!v)} data-testid={`check-${item.field}`} />
+                      {item.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Options */}
+              <div className="border-t pt-3 space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Signature Requirements</Label>
+                  <div className="flex gap-4 flex-wrap">
+                    {[
+                      { field: "requiresEmployeeSignature", label: "Employee signature" },
+                      { field: "requiresClientSignature", label: "Client signature" },
+                    ].map(item => (
+                      <label key={item.field} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <Checkbox checked={(form as any)[item.field]} onCheckedChange={v => set(item.field, !!v)} data-testid={`check-sig-${item.field}`} />
+                        {item.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5 text-muted-foreground text-xs">
+                    <Shield className="w-3 h-3" />
+                    Internal Notes (not visible to employee or client)
+                  </Label>
+                  <Textarea
+                    data-testid="input-internal-notes"
+                    value={form.internalNotes}
+                    onChange={e => set("internalNotes", e.target.value)}
+                    placeholder="Internal admin notes..."
+                    rows={2}
                   />
-                  {item.label}
-                </label>
-              ))}
-            </div>
-          </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ── STANDARD FORM (non-incident) ── */}
+          {!isIncident && (
+            <>
+              <div className="space-y-1.5">
+                <Label>Report Title *</Label>
+                <Input data-testid="input-report-title" value={form.title} onChange={e => set("title", e.target.value)} placeholder="Brief title describing the report..." />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5"><User className="w-3 h-3" />Employee</Label>
+                  <Select value={form.assignedEmployeeId || "none"} onValueChange={v => set("assignedEmployeeId", v === "none" ? "" : v)}>
+                    <SelectTrigger data-testid="select-employee"><SelectValue placeholder="Select employee" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {employees.map((e: any) => <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5"><Building2 className="w-3 h-3" />Client</Label>
+                  <Select value={form.assignedClientId || "none"} onValueChange={v => set("assignedClientId", v === "none" ? "" : v)}>
+                    <SelectTrigger data-testid="select-client"><SelectValue placeholder="Select client" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5"><MapPin className="w-3 h-3" />Location</Label>
+                  <Select value={form.assignedLocationId || "none"} onValueChange={v => set("assignedLocationId", v === "none" ? "" : v)}>
+                    <SelectTrigger data-testid="select-location"><SelectValue placeholder="Select site" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {locations.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5"><Calendar className="w-3 h-3" />Date</Label>
+                  <Input type="date" data-testid="input-incident-date" value={form.incidentDate} onChange={e => set("incidentDate", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Time</Label>
+                  <Input type="time" data-testid="input-incident-time" value={form.incidentTime} onChange={e => set("incidentTime", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Severity</Label>
+                  <Select value={form.severity} onValueChange={v => set("severity", v)}>
+                    <SelectTrigger data-testid="select-severity"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {SEVERITIES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Summary / Description</Label>
+                <Textarea data-testid="input-summary" value={form.summary} onChange={e => set("summary", e.target.value)} placeholder="Describe what happened..." rows={4} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Immediate Action Taken</Label>
+                <Textarea data-testid="input-immediate-action" value={form.immediateAction} onChange={e => set("immediateAction", e.target.value)} placeholder="What action was taken immediately..." rows={2} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { field: "clientPropertyAffected", label: "Client property affected" },
+                  { field: "companyEquipmentAffected", label: "Company equipment affected" },
+                  { field: "workStopped", label: "Work was stopped" },
+                  { field: "customerInformed", label: "Customer was informed" },
+                ].map(item => (
+                  <label key={item.field} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <Checkbox checked={(form as any)[item.field]} onCheckedChange={v => set(item.field, !!v)} data-testid={`check-${item.field}`} />
+                    {item.label}
+                  </label>
+                ))}
+              </div>
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1.5 text-muted-foreground text-xs">
+                  <Shield className="w-3 h-3" />
+                  Internal Notes (Admin-only)
+                </Label>
+                <Textarea data-testid="input-internal-notes" value={form.internalNotes} onChange={e => set("internalNotes", e.target.value)} placeholder="Internal admin notes..." rows={2} />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Signature Requirements</Label>
+                <div className="flex gap-4 flex-wrap">
+                  {[
+                    { field: "requiresEmployeeSignature", label: "Employee signature" },
+                    { field: "requiresClientSignature", label: "Client signature" },
+                    { field: "requiresAdminSignature", label: "Management signature" },
+                  ].map(item => (
+                    <label key={item.field} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox checked={(form as any)[item.field]} onCheckedChange={v => set(item.field, !!v)} data-testid={`check-sig-${item.field}`} />
+                      {item.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onClose} data-testid="button-cancel-report">Cancel</Button>
           <Button
             variant="outline"
-            onClick={() => createMut.mutate({ ...form, status: "draft" })}
+            onClick={() => createMut.mutate(buildSubmitData("draft"))}
             disabled={!form.title || createMut.isPending}
             data-testid="button-save-draft"
           >
             Save as Draft
           </Button>
           <Button
-            onClick={() => createMut.mutate({ ...form, status: "submitted" })}
+            onClick={() => createMut.mutate(buildSubmitData("submitted"))}
             disabled={!form.title || createMut.isPending}
             data-testid="button-create-report"
           >
+            {createMut.isPending ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : null}
             Create Report
           </Button>
         </DialogFooter>
@@ -719,86 +1052,183 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
   const assignedClient = rpt.assignedClientId ? clients.find((c: any) => c.id === rpt.assignedClientId) : null;
   const assignedLocation = rpt.assignedLocationId ? locations.find((l: any) => l.id === rpt.assignedLocationId) : null;
   const typeInfo = getTypeInfo(rpt.reportType);
+  const preparedDate = rpt.createdAt ? format(new Date(rpt.createdAt), "MMMM d, yyyy") : format(new Date(), "MMMM d, yyyy");
+
+  // For incident category, find the human-readable label
+  const incidentCatLabel = rpt.incidentCategory
+    ? INCIDENT_CATEGORIES.find(c => c.value === rpt.incidentCategory)?.label || rpt.incidentCategory
+    : null;
+
+  function PrintField({ label, value }: { label: string; value: any }) {
+    if (!value && value !== false && value !== 0) return null;
+    return (
+      <div>
+        <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280", marginBottom: "2px" }}>{label}</p>
+        <p style={{ fontSize: "12px", color: "#111827" }}>{typeof value === "boolean" ? (value ? "Yes" : "No") : value}</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="hidden print:block fixed inset-0 bg-white p-8 z-[9999] overflow-auto text-black">
-      <style>{`@media print { body { -webkit-print-color-adjust: exact; } }`}</style>
-      {/* Header */}
-      <div className="flex items-start justify-between border-b-2 border-gray-800 pb-4 mb-6">
-        <div className="flex items-center gap-4">
+    <div className="hidden print:block fixed inset-0 bg-white z-[9999] overflow-auto text-black" style={{ padding: "40px 48px", fontFamily: "Georgia, serif" }}>
+      <style>{`
+        @media print {
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          @page { margin: 0.6in; }
+        }
+      `}</style>
+
+      {/* ── Document Header ── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #1f2937", paddingBottom: "20px", marginBottom: "24px" }}>
+        {/* Company identity */}
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
           {company?.companyLogoUrl && (
-            <img src={company.companyLogoUrl} alt="Logo" className="h-16 w-auto object-contain" />
+            <img src={company.companyLogoUrl} alt="Company logo" style={{ height: "64px", width: "auto", objectFit: "contain" }} />
           )}
           <div>
-            <h1 className="text-xl font-bold text-gray-900">{company?.name || "Company"}</h1>
-            {company?.companyEmail && <p className="text-sm text-gray-600">{company.companyEmail}</p>}
-            {company?.companyPhone && <p className="text-sm text-gray-600">{company.companyPhone}</p>}
+            <p style={{ fontSize: "18px", fontWeight: 700, color: "#111827", margin: 0 }}>{company?.name || "Company"}</p>
+            {company?.companyEmail && <p style={{ fontSize: "11px", color: "#6b7280", marginTop: "2px" }}>{company.companyEmail}</p>}
+            {company?.companyPhone && <p style={{ fontSize: "11px", color: "#6b7280" }}>{company.companyPhone}</p>}
           </div>
         </div>
-        <div className="text-right">
-          <h2 className="text-lg font-bold text-gray-900">{typeInfo?.label}</h2>
-          <p className="text-sm text-gray-500">ID: {reportId(rpt.id)}</p>
-          <p className="text-sm text-gray-500">Status: {rpt.status?.replace(/_/g, " ").toUpperCase()}</p>
-          <p className="text-sm text-gray-500">Date: {rpt.createdAt ? format(new Date(rpt.createdAt), "MMMM d, yyyy") : "—"}</p>
+        {/* Document identity */}
+        <div style={{ textAlign: "right" }}>
+          <p style={{ fontSize: "20px", fontWeight: 700, color: "#111827", margin: 0 }}>{typeInfo?.label || "Report"}</p>
+          <p style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px", fontStyle: "italic" }}>Confidential Business Record</p>
+          <p style={{ fontSize: "10px", color: "#9ca3af", marginTop: "6px" }}>Ref: {reportId(rpt.id)}</p>
+          <p style={{ fontSize: "10px", color: "#9ca3af" }}>Prepared: {preparedDate}</p>
         </div>
       </div>
 
-      {/* Title */}
-      <h3 className="text-xl font-bold text-gray-900 mb-6">{rpt.title}</h3>
+      {/* ── Report Title ── */}
+      <div style={{ marginBottom: "28px" }}>
+        <h1 style={{ fontSize: "18px", fontWeight: 700, color: "#111827", margin: "0 0 4px 0" }}>{rpt.title}</h1>
+        {incidentCatLabel && <p style={{ fontSize: "11px", color: "#6b7280" }}>Category: {incidentCatLabel}</p>}
+      </div>
 
-      {/* Grid sections */}
-      <div className="space-y-6">
-        {/* Incident Details */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+
+        {/* ── Incident Overview ── */}
         <section>
-          <h4 className="font-bold text-gray-800 border-b border-gray-300 pb-1 mb-3">Incident Details</h4>
-          <div className="grid grid-cols-3 gap-4 text-sm">
-            {[
-              ["Date", rpt.incidentDate], ["Time", rpt.incidentTime], ["Severity", rpt.severity],
-              ["Risk Level", rpt.riskLevel], ["Category", rpt.incidentCategory], ["Area Affected", rpt.areaAffected],
-              ["Client Property", rpt.clientPropertyAffected ? "Yes" : "No"], ["Company Equipment", rpt.companyEquipmentAffected ? "Yes" : "No"],
-              ["Work Stopped", rpt.workStopped ? "Yes" : "No"], ["Customer Informed", rpt.customerInformed ? "Yes" : "No"],
-            ].filter(([, v]) => v !== null && v !== undefined && v !== "").map(([l, v]) => (
-              <div key={l as string}>
-                <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{l as string}</p>
-                <p className="text-gray-900">{String(v)}</p>
+          <h2 style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#374151", borderBottom: "1px solid #d1d5db", paddingBottom: "4px", marginBottom: "12px" }}>
+            Incident Overview
+          </h2>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px 24px" }}>
+            <PrintField label="Incident Date" value={rpt.incidentDate} />
+            <PrintField label="Incident Time" value={rpt.incidentTime} />
+            <PrintField label="Severity" value={rpt.severity ? rpt.severity.charAt(0).toUpperCase() + rpt.severity.slice(1) : null} />
+            <PrintField label="Area Affected" value={rpt.areaAffected} />
+            {assignedClient && <PrintField label="Client" value={assignedClient.name} />}
+            {assignedLocation && <PrintField label="Service Location" value={assignedLocation.name} />}
+            {assignedEmployee && <PrintField label="Employee Involved" value={`${assignedEmployee.firstName} ${assignedEmployee.lastName}`} />}
+            {rpt.witnesses && <PrintField label="Witnesses / Others Present" value={rpt.witnesses} />}
+          </div>
+        </section>
+
+        {/* ── Incident Description ── */}
+        {(rpt.summary || rpt.immediateAction) && (
+          <section>
+            <h2 style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#374151", borderBottom: "1px solid #d1d5db", paddingBottom: "4px", marginBottom: "12px" }}>
+              Incident Description
+            </h2>
+            {rpt.summary && (
+              <div style={{ marginBottom: "12px" }}>
+                <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280", marginBottom: "4px" }}>Summary of Events</p>
+                <p style={{ fontSize: "12px", color: "#111827", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>{rpt.summary}</p>
               </div>
-            ))}
-          </div>
-        </section>
+            )}
+            {rpt.immediateAction && (
+              <div>
+                <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280", marginBottom: "4px" }}>Immediate Action Taken</p>
+                <p style={{ fontSize: "12px", color: "#111827", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>{rpt.immediateAction}</p>
+              </div>
+            )}
+          </section>
+        )}
 
-        {/* People */}
-        <section>
-          <h4 className="font-bold text-gray-800 border-b border-gray-300 pb-1 mb-3">People Involved</h4>
-          <div className="grid grid-cols-3 gap-4 text-sm">
-            {assignedEmployee && <div><p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Employee</p><p>{assignedEmployee.firstName} {assignedEmployee.lastName}</p></div>}
-            {assignedClient && <div><p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Client</p><p>{assignedClient.name}</p></div>}
-            {assignedLocation && <div><p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Location</p><p>{assignedLocation.name}</p></div>}
-            {rpt.witnesses && <div><p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Witnesses</p><p>{rpt.witnesses}</p></div>}
-          </div>
-        </section>
+        {/* ── Impact / Property ── */}
+        {(rpt.clientPropertyAffected || rpt.companyEquipmentAffected || rpt.workStopped || rpt.customerInformed || rpt.itemAffected) && (
+          <section>
+            <h2 style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#374151", borderBottom: "1px solid #d1d5db", paddingBottom: "4px", marginBottom: "12px" }}>
+              Impact &amp; Property
+            </h2>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px 24px" }}>
+              {rpt.clientPropertyAffected && <PrintField label="Client Property Affected" value="Yes" />}
+              {rpt.companyEquipmentAffected && <PrintField label="Company Equipment Affected" value="Yes" />}
+              {rpt.workStopped && <PrintField label="Work Stopped" value="Yes" />}
+              {rpt.customerInformed && <PrintField label="Customer Informed" value="Yes" />}
+              <PrintField label="Item Affected" value={rpt.itemAffected} />
+              <PrintField label="Damage Type" value={rpt.damageType} />
+              <PrintField label="Estimated Cost" value={rpt.estimatedCost ? `$${rpt.estimatedCost}` : null} />
+            </div>
+          </section>
+        )}
 
-        {/* Summary */}
-        <section>
-          <h4 className="font-bold text-gray-800 border-b border-gray-300 pb-1 mb-3">Incident Summary</h4>
-          {rpt.summary && <div className="mb-3"><p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-1">Summary</p><p className="text-sm text-gray-900 whitespace-pre-wrap">{rpt.summary}</p></div>}
-          {rpt.immediateAction && <div className="mb-3"><p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-1">Immediate Action</p><p className="text-sm text-gray-900 whitespace-pre-wrap">{rpt.immediateAction}</p></div>}
-          {rpt.employeeStatement && <div className="mb-3"><p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-1">Employee Statement</p><p className="text-sm text-gray-900 whitespace-pre-wrap">{rpt.employeeStatement}</p></div>}
-          {rpt.clientComments && <div className="mb-3"><p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-1">Client Comments</p><p className="text-sm text-gray-900 whitespace-pre-wrap">{rpt.clientComments}</p></div>}
-        </section>
+        {/* ── Employee / Client Statements ── */}
+        {(rpt.employeeStatement || rpt.clientComments) && (
+          <section>
+            <h2 style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#374151", borderBottom: "1px solid #d1d5db", paddingBottom: "4px", marginBottom: "12px" }}>
+              Statements
+            </h2>
+            {rpt.employeeStatement && (
+              <div style={{ marginBottom: "12px" }}>
+                <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280", marginBottom: "4px" }}>Employee Statement</p>
+                <p style={{ fontSize: "12px", color: "#111827", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>{rpt.employeeStatement}</p>
+              </div>
+            )}
+            {rpt.clientComments && (
+              <div>
+                <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280", marginBottom: "4px" }}>Client Comments</p>
+                <p style={{ fontSize: "12px", color: "#111827", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>{rpt.clientComments}</p>
+              </div>
+            )}
+          </section>
+        )}
 
-        {/* Signatures */}
+        {/* ── Corrective Action / Follow-Up ── */}
+        {(rpt.correctiveAction || rpt.nextSteps || rpt.finalDecision) && (
+          <section>
+            <h2 style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#374151", borderBottom: "1px solid #d1d5db", paddingBottom: "4px", marginBottom: "12px" }}>
+              Corrective Action &amp; Follow-Up
+            </h2>
+            {rpt.correctiveAction && (
+              <div style={{ marginBottom: "10px" }}>
+                <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280", marginBottom: "4px" }}>Corrective Action</p>
+                <p style={{ fontSize: "12px", color: "#111827", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>{rpt.correctiveAction}</p>
+              </div>
+            )}
+            {rpt.nextSteps && (
+              <div style={{ marginBottom: "10px" }}>
+                <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280", marginBottom: "4px" }}>Follow-Up Recommendations</p>
+                <p style={{ fontSize: "12px", color: "#111827", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>{rpt.nextSteps}</p>
+              </div>
+            )}
+            {rpt.finalDecision && (
+              <div>
+                <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280", marginBottom: "4px" }}>Management Comments</p>
+                <p style={{ fontSize: "12px", color: "#111827", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>{rpt.finalDecision}</p>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── Digital Signatures (already signed) ── */}
         {rpt.signatures?.length > 0 && (
           <section>
-            <h4 className="font-bold text-gray-800 border-b border-gray-300 pb-1 mb-3">Signatures</h4>
-            <div className="grid grid-cols-3 gap-6">
+            <h2 style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#374151", borderBottom: "1px solid #d1d5db", paddingBottom: "4px", marginBottom: "12px" }}>
+              Acknowledgement &amp; Signatures
+            </h2>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
               {rpt.signatures.map((sig: any) => (
-                <div key={sig.id} className="border border-gray-300 rounded p-3">
-                  <p className="font-semibold text-sm">{sig.signerName}</p>
-                  <p className="text-xs text-gray-500 capitalize">{sig.signerRole}</p>
-                  <p className="text-xs text-gray-500">{sig.signedAt ? format(new Date(sig.signedAt), "MMM d, yyyy") : ""}</p>
-                  <div className="mt-3 pt-2 border-t border-gray-300">
-                    <p className="text-[10px] text-gray-400">Digital Signature (Typed)</p>
-                    <p className="text-sm font-serif italic text-gray-700">{sig.signerName}</p>
+                <div key={sig.id} style={{ border: "1px solid #d1d5db", borderRadius: "6px", padding: "12px" }}>
+                  <p style={{ fontSize: "12px", fontWeight: 700, color: "#111827", margin: "0 0 2px 0" }}>{sig.signerName}</p>
+                  <p style={{ fontSize: "10px", color: "#6b7280", textTransform: "capitalize" }}>
+                    {sig.signerRole === "admin" ? "Management" : sig.signerRole}
+                  </p>
+                  <p style={{ fontSize: "10px", color: "#6b7280" }}>{sig.signedAt ? format(new Date(sig.signedAt), "MMMM d, yyyy") : ""}</p>
+                  <div style={{ borderTop: "1px solid #e5e7eb", marginTop: "10px", paddingTop: "8px" }}>
+                    <p style={{ fontSize: "9px", color: "#9ca3af" }}>Acknowledged</p>
+                    <p style={{ fontSize: "13px", fontFamily: "Georgia, serif", fontStyle: "italic", color: "#374151" }}>{sig.signerName}</p>
                   </div>
                 </div>
               ))}
@@ -806,25 +1236,32 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
           </section>
         )}
 
-        {/* Signature blocks if not signed */}
+        {/* ── Sign-Off Blocks (blank lines for unsigned) ── */}
         <section>
-          <h4 className="font-bold text-gray-800 border-b border-gray-300 pb-1 mb-3">Sign-Off</h4>
-          <div className="grid grid-cols-3 gap-6">
-            {["Prepared By (Admin)", "Employee Acknowledgement", "Client Acknowledgement"].map(label => (
-              <div key={label} className="border border-gray-300 rounded p-3 min-h-[80px]">
-                <p className="text-xs text-gray-500 mb-2">{label}</p>
-                <div className="border-b border-gray-400 mt-8" />
-                <p className="text-[10px] text-gray-400 mt-1">Signature &amp; Date</p>
+          <h2 style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#374151", borderBottom: "1px solid #d1d5db", paddingBottom: "4px", marginBottom: "12px" }}>
+            {rpt.signatures?.length > 0 ? "Additional Sign-Off" : "Acknowledgement"}
+          </h2>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
+            {[
+              { label: "Prepared By", sub: "Company Representative" },
+              { label: "Employee Acknowledgement", sub: "Acknowledging accuracy of report" },
+              { label: "Client Acknowledgement", sub: "Acknowledging receipt of report" },
+            ].map(block => (
+              <div key={block.label} style={{ border: "1px solid #d1d5db", borderRadius: "6px", padding: "12px", minHeight: "90px" }}>
+                <p style={{ fontSize: "10px", fontWeight: 600, color: "#374151", margin: "0 0 2px 0" }}>{block.label}</p>
+                <p style={{ fontSize: "9px", color: "#9ca3af", marginBottom: "16px" }}>{block.sub}</p>
+                <div style={{ borderBottom: "1px solid #9ca3af", marginTop: "24px" }} />
+                <p style={{ fontSize: "9px", color: "#9ca3af", marginTop: "4px" }}>Name, Signature &amp; Date</p>
               </div>
             ))}
           </div>
         </section>
 
-        {/* Footer */}
-        <div className="border-t border-gray-300 pt-3 text-[10px] text-gray-400 flex justify-between">
-          <span>{company?.name} — Confidential</span>
-          <span>Generated {format(new Date(), "MMMM d, yyyy 'at' h:mm a")}</span>
-          <span>Report ID: {reportId(rpt.id)}</span>
+        {/* ── Footer ── */}
+        <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: "12px", display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#9ca3af" }}>
+          <span>{company?.name || "Company"} · Confidential</span>
+          <span>Prepared using Clockfield</span>
+          <span>Generated {format(new Date(), "MMMM d, yyyy")} · {reportId(rpt.id)}</span>
         </div>
       </div>
     </div>

@@ -1,0 +1,637 @@
+Dev Note: Professional Incident Report Redesign and AI-Assisted Incident Writing for Clockfield
+
+Objective
+
+Redesign the Incident Report experience so it looks professional, client-ready, branded per company, easier to fill out, and smarter to generate.
+
+This is not just a visual cleanup.
+This is a product-quality incident reporting upgrade.
+
+The current exported report is not professional enough for client-facing use because it exposes internal wording like “admin,” shows “submitted” status, shows internal-style metadata too prominently, and includes an unprofessional footer link. The uploaded reference text also points to the core pieces incident reports should include: date/time/location, clear factual description, witnesses, action taken, and prevention recommendations.
+
+Critical instruction
+
+Do not touch or break anything else.
+
+Do not refactor unrelated pages.
+Do not change unrelated report flows.
+Do not alter current auth, billing, tasks, submissions, client reports, payroll, notifications, logo storage, or settings logic unless directly required for this exact feature.
+Do not change anything outside the incident report experience unless approval is given first.
+
+If any extra change outside this scope is needed, stop and ask for approval first.
+
+Main goals
+
+Make the incident report export and print layout look like a real business document
+Remove internal wording that looks unprofessional to clients
+Pull the correct company branding automatically from that company’s saved settings
+Add guided autofill inputs and dropdowns so incident reports are faster to create
+Add AI refinement so poor raw descriptions can be rewritten into a professional factual incident summary before final generation
+Keep internal-only fields visible only inside the platform, not in client-facing PDF/export
+Preserve multi-tenant behavior so every company gets its own logo and company details
+
+What is wrong in the current sample
+
+From the sample shown:
+
+“Status: SUBMITTED” should not appear prominently on a client-facing exported document
+“Prepared By (Admin)” is internal wording and should never be shown in a document that goes to a client
+“Employee Acknowledgement” and “Client Acknowledgement” are okay as concepts, but the labels need to be cleaner and more formal
+The footer showing a raw Replit URL is not professional and must be removed from the exported PDF
+The document needs better structure, better naming, and stronger separation between internal workflow fields and external/client-facing fields
+The correct company logo is missing or not being rendered reliably
+The report content needs better autofill helpers and better writing quality
+
+Reference guidance from the uploaded text
+
+The uploaded reference text is useful for the structure of a good work incident report. It highlights that a strong report should include accurate event details, a factual description, names of affected parties and witnesses, incident causes, action taken, and follow-up recommendations. It also stresses clear step-by-step explanation and proofreading before submission.
+
+Product decision
+
+Separate platform workflow language from client-facing document language.
+
+Inside Clockfield:
+it is okay to use internal workflow terms like draft, submitted, in review, awaiting signature, internal notes, admin review.
+
+In exported PDF / print document:
+use professional business wording only.
+
+Examples:
+
+“Prepared by admin” → replace with “Prepared by” or “Prepared by Company Representative”
+“Admin Review” → replace with “Management Review” or “Office Use Only”
+“Submitted” → do not show on client-facing PDF header unless there is a business reason; if needed, use small “Document Date” or “Prepared Date” instead
+internal IDs should be secondary and subtle, not dominant
+
+Scope of this task
+
+Focus only on improving the Incident Report experience:
+
+incident report creation form
+incident report autofill helpers
+incident report AI refinement flow
+incident report PDF/export/print layout
+company logo and company branding rendering on incident reports
+visibility rules between internal platform view and client-facing exported document
+
+Do not redesign all report types yet.
+Build this in a way that can later be reused by other report templates.
+
+New incident report design direction
+
+The report should look like a formal service/business incident record.
+
+It should feel appropriate for:
+
+commercial cleaning companies
+property management clients
+office/facility clients
+internal documentation
+external acknowledgement
+
+Recommended client-facing report title:
+Incident Report
+
+Optional subtitle:
+Confidential Business Record
+
+Header structure for exported report
+
+Top-left:
+
+company logo from company settings
+company name
+company contact details if available
+
+Top-right:
+
+document title: Incident Report
+prepared date
+reference number in smaller text if desired
+
+Do not prominently show:
+
+internal status labels like submitted
+internal role labels like admin
+raw internal URLs
+system-only metadata
+
+Optional small platform branding:
+A subtle line at the bottom or near the footer:
+“Prepared using Clockfield”
+No raw URL on the PDF.
+Keep this subtle and professional.
+
+Branding requirements
+
+Use the same saved company branding source already used successfully in public cleaning reports.
+
+The incident report must dynamically pull:
+
+company logo
+company name
+company email if available
+company phone if available
+company address if available
+
+This must be company-specific and tenant-safe.
+
+Do not create a second disconnected logo system.
+Do not hardcode Clockfield branding as the main company identity.
+Clockfield can appear as a subtle platform note only.
+
+If the company logo exists in settings, it must render in the incident report.
+If it does not exist, fall back gracefully to company name text only.
+Do not break report generation if a logo is missing.
+
+Professional section structure for the new incident report
+
+Client-facing / printable version should use these sections:
+
+Report Header
+company logo
+company name
+Incident Report
+prepared date
+reference number
+Incident Overview
+incident type
+date
+time
+location/site
+client name
+service address
+employee involved
+person reporting
+Incident Description
+short incident title
+factual summary of what happened
+sequence of events
+immediate action taken
+Impact / Property / Equipment
+item/property involved
+client property affected yes/no
+company equipment affected yes/no
+damage/loss summary
+repair or replacement notes if applicable
+Witnesses / Parties Involved
+employee involved
+witnesses
+client contact present if applicable
+Corrective Action / Follow-Up
+follow-up actions
+prevention recommendations
+management comments if appropriate
+Acknowledgement / Signatures
+prepared by
+employee acknowledgement
+client acknowledgement
+date lines
+
+Internal platform-only sections
+
+These can exist inside Clockfield but should not appear the same way on the exported client-facing report:
+
+internal status
+internal workflow stage
+internal notes
+admin-only notes
+audit trail
+created by role labels
+reopen/finalize metadata
+hidden operational tags
+
+Recommended internal wording updates
+
+Replace internal labels with cleaner terminology.
+
+Inside the platform:
+
+Admin Review → Management Review
+Prepared by Admin → Prepared by
+Internal Notes → Office Notes
+Admin Findings → Management Findings
+
+In exported PDF:
+
+Office Use Only can appear only in a limited section if absolutely needed
+Avoid the word “admin”
+Prefer actual person name or company role label
+
+Example:
+Instead of:
+Prepared By (Admin)
+
+Use:
+Prepared By
+
+And then fill:
+David Mackasy
+Operations Manager
+
+Or:
+MackasyInc Representative
+
+Use actual name or actual business-facing role.
+Do not expose the generic system role “admin.”
+
+AI-assisted writing requirement
+
+Add AI refinement for incident text using OpenAI.
+
+The purpose is not to fabricate facts.
+The purpose is to rewrite rough user input into a cleaner, factual, professional incident description.
+
+OpenAI’s platform supports structured outputs and JSON-schema-constrained responses, which is useful here because the app can ask the model to return specific fields like refined title, factual summary, likely causes, immediate action, and follow-up recommendations in a predictable format.
+
+AI behavior requirements
+
+The AI must:
+
+preserve the facts the user provided
+improve grammar and clarity
+remove emotional or blame-heavy language
+rewrite into factual business tone
+suggest a professional incident title
+suggest a concise sequence-of-events paragraph
+suggest possible follow-up recommendations
+never invent injuries, damages, witnesses, or admissions the user did not provide
+ask for more detail in the UI if the input is too weak instead of hallucinating
+
+Recommended AI outputs
+
+When the user enters rough notes, the AI should generate:
+
+Incident title
+Refined incident description
+Contributing factors or probable cause wording
+Immediate action taken summary
+Follow-up recommendation text
+Optional shorter client-facing summary
+Optional internal management summary
+
+Suggested UX:
+Button label:
+Refine with AI
+
+Flow:
+
+user types rough incident notes
+user clicks Refine with AI
+model returns polished structured text
+user can review and edit before saving
+nothing is auto-finalized without user review
+
+Important:
+AI must be assistive, not automatic final authority.
+
+Suggested OpenAI integration pattern
+
+Use a server-side OpenAI call only.
+Do not expose API keys on the client.
+Use structured output with a strict JSON response shape so the returned content maps safely into the incident report sections. The OpenAI API documentation explicitly supports schema-based structured outputs for this kind of constrained generation.
+
+Suggested response schema shape
+
+title
+refined_description
+sequence_of_events
+immediate_action
+probable_causes
+follow_up_recommendations
+confidence_or_missing_details_note
+
+If the raw input is weak, the model should return something like:
+“More detail needed about location, item affected, and immediate action.”
+
+Do not generate fake specifics.
+
+Autofill and speed-entry requirements
+
+Make incident creation faster with guided inputs.
+
+Add dropdowns, chips, or quick-select options for common cleaning/business incident types.
+
+Suggested incident type quick options:
+
+Broke client property
+Damaged equipment
+Water overflow / flooding
+Chemical spill
+Missed area caused issue
+Removed item from site
+Lost item
+Safety concern
+Slip / trip / near miss
+Client complaint related incident
+Other
+
+Suggested area/location quick options:
+
+Washroom
+Kitchen
+Office
+Hallway
+Lobby
+Storage room
+Mechanical room
+Loading area
+Stairwell
+Other
+
+Suggested immediate action quick options:
+
+Area secured
+Client notified
+Supervisor notified
+Item removed from service
+Work paused
+Photos taken
+Cleanup completed
+Awaiting review
+
+Suggested severity options:
+
+Low
+Moderate
+High
+
+Suggested property impact options:
+
+Client property affected
+Company equipment affected
+No physical damage observed
+Replacement required
+Repair required
+
+Suggested title helper behavior
+
+If user selects “Broke client property,” prefill a title suggestion such as:
+Damage to client property
+
+If user selects “Water overflow / flooding,” prefill:
+Water overflow incident
+
+Then allow editing.
+
+Incident description UX
+
+Use a structured fill pattern:
+
+Field 1:
+What happened?
+
+Field 2:
+What caused it, if known?
+
+Field 3:
+What did you do right away?
+
+Field 4:
+Who was involved or present?
+
+Field 5:
+What item or area was affected?
+
+Then:
+Refine with AI
+
+This is better than one blank large box.
+
+Export and print redesign requirements
+
+The PDF/export must be rebuilt as a dedicated professional template.
+
+Remove:
+
+raw Replit URL
+visible internal role names like admin
+loud status block like “SUBMITTED”
+any ugly debug/footer artifacts
+
+Add:
+
+consistent document margins
+stronger typography hierarchy
+structured sections
+company logo
+company identity
+subtle reference number
+clean signature lines
+clean footer with page number and generated date only
+
+Recommended footer:
+
+company name
+Confidential
+generated date
+page number
+
+Optional:
+Prepared using Clockfield
+
+No raw platform URL.
+
+Signature section redesign
+
+Current labels are too internal and stiff.
+
+Replace with:
+
+Prepared By
+Employee Acknowledgement
+Client Acknowledgement
+
+Optional under each block:
+Name, signature, date
+
+If digital signature is not yet implemented fully, use:
+
+typed name
+date
+acknowledgement checkbox
+optional signature line in print mode
+
+For client-facing document, the signature section should feel like a formal acknowledgement block, not a system form.
+
+Internal vs exported view rules
+
+Inside Clockfield full detail view:
+show internal workflow and management tools
+
+In exported PDF / print:
+hide or soften internal-only items
+
+Examples hidden from export:
+
+submitted
+draft
+internal status pipeline
+admin-only notes
+audit events
+created by admin
+system URLs
+
+Examples shown in export:
+
+prepared date
+prepared by actual name or representative name
+report reference
+professional incident details
+signatures
+
+Data and logic requirements
+
+Do not break current report saving logic.
+If current incident report object already stores some values, reuse safely.
+
+If new fields are needed, add only those needed for:
+
+refined_title
+refined_description
+probable_causes
+immediate_action
+follow_up_recommendations
+selected incident category
+selected incident area
+selected impact tags
+
+Keep backward compatibility with existing incident reports if any exist.
+
+If older reports do not have refined fields, the export should gracefully fall back to base text.
+
+Safe fallback rules
+
+If no company logo:
+show company name text only
+
+If no prepared-by actual name:
+show company representative or leave as blank fill line
+
+If no AI refinement used:
+use the raw text fields
+
+If no client signature required:
+hide or collapse that section cleanly
+
+If no witnesses:
+do not show empty witness clutter
+
+UI requirements for the creation form
+
+Improve the form without changing the rest of the app.
+
+Recommended creation form sections:
+
+Incident Basics
+incident type dropdown
+title
+date
+time
+location/site
+client
+employee
+Quick Details
+area affected dropdown
+severity
+property affected
+equipment affected
+What Happened
+structured text inputs
+rough notes field
+Refine with AI button
+editable refined output preview
+Supporting Evidence
+photos
+receipts/documents if needed
+Follow-Up
+immediate action
+recommendations
+notify client yes/no
+request employee acknowledgement yes/no
+request client acknowledgement yes/no
+Export Preview
+clean preview of final PDF layout
+download / print
+
+Professional wording guide for the agent
+
+Use this tone in templates:
+
+factual
+neutral
+specific
+professional
+non-accusatory
+client-safe
+
+Avoid:
+
+blame-heavy wording
+slang
+emotional wording
+generic internal terms like admin
+raw technical labels
+
+Examples
+
+Bad:
+I broke a kaffe
+
+Better title:
+Damage to coffee machine
+
+Better description:
+During routine cleaning at the client site, the coffee machine was accidentally damaged while being handled. The issue was identified immediately, the area was checked for any additional impact, and the incident was documented for follow-up and client notification.
+
+Only refine facts actually given.
+Do not invent detail unless clearly marked as a suggestion.
+
+Testing requirements
+
+Test only this scope.
+
+company logo from settings appears correctly on incident report
+same company branding source works as public cleaning report source
+no raw Replit URL appears in exported PDF
+exported PDF does not show “admin”
+exported PDF does not show loud internal status labels like submitted
+prepared-by section uses actual name / representative wording
+AI refinement rewrites rough text professionally
+AI does not invent facts
+dropdown quick options work
+reports still save and export correctly
+old incident reports do not break
+client-facing output looks professional
+internal-only notes stay internal
+if no logo exists, export still works cleanly
+
+Acceptance criteria
+
+This task is complete only when:
+
+Incident report PDF/export looks like a professional client-safe business document
+Internal system wording is removed from exported layout
+Company logo and company name load from the correct saved settings source
+Autofill/dropdown helpers make report creation faster
+OpenAI-powered refinement helps users turn rough notes into polished factual report language
+Nothing outside this scope was changed or broken
+
+Final instruction to the agent
+
+Only improve the Incident Report experience described above.
+
+Do not touch anything else.
+Do not redesign unrelated report types.
+Do not alter other pages unless required for this exact feature.
+Do not refactor the wider app.
+Do not change existing working flows outside this task.
+If any additional unrelated change becomes necessary, ask for approval first.
+
+Technical implementation note
+
+For the AI refine feature, use the OpenAI API server-side with structured output so the response maps cleanly into incident report fields, and keep user review before final save. OpenAI’s docs support schema-based structured outputs for this exact pattern.
+
+Reference basis used
+
+The structure above is based on the incident-report elements in your uploaded reference, including factual event details, witness information, actions taken, and prevention recommendations.
