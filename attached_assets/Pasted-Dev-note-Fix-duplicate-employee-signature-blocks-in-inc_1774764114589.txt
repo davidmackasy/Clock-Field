@@ -1,0 +1,327 @@
+Dev note: Fix duplicate employee signature blocks in incident report export only
+
+Objective
+
+Fix the incident report display/export logic so the employee does not appear to sign twice.
+
+Right now, when an admin sends a report to an employee, and the employee signs it in their account and adds a statement, the final admin print/download view still shows extra employee sign-off boxes at the bottom. That makes the report look repetitive and unprofessional.
+
+This task is only about the incident report signature rendering logic and export layout for already-signed employee reports.
+
+Critical instruction
+
+Do not touch anything else.
+
+Do not change report creation flow.
+Do not change AI refinement.
+Do not change branding.
+Do not change logo behavior.
+Do not change unrelated PDF logic.
+Do not change routing.
+Do not change permissions outside this exact signature display issue.
+Do not refactor unrelated report code.
+
+If anything outside this exact scope is needed, ask for approval first.
+
+Main problem
+
+Current behavior is wrong when this flow happens:
+
+Admin creates incident report
+Admin sends it to employee
+Employee opens it in their account
+Employee adds statement
+Employee signs it in-app
+Report comes back to admin
+Admin prints/downloads it
+Final exported report still shows:
+the signed employee acknowledgement block
+plus another employee acknowledgement placeholder/sign box at the bottom
+
+That makes it look like the employee must sign twice.
+
+Expected behavior
+
+If the employee already signed the report in-app, the exported incident report must show only one employee acknowledgement/signature representation.
+
+It should not show:
+
+a signed employee block at the top
+and another extra employee sign box at the bottom
+
+Only the signed version should remain.
+
+The remaining bottom sign-off area should only show the signatures that are still actually needed.
+
+Required business rule
+
+Employee signature rendering rule:
+
+Case A
+Employee has already signed in-app:
+
+show the completed employee acknowledgement/signature once
+remove/hide the extra employee acknowledgement placeholder box in the additional sign-off section
+
+Case B
+Employee has not signed in-app:
+
+show the employee acknowledgement placeholder/sign box in the additional sign-off section
+do not show a completed signed employee block because none exists yet
+
+This logic must apply to the final printable/downloadable incident report.
+
+Secondary display issue
+
+The current signed block at the top is also not labeled professionally enough.
+
+It should not just show the employee’s name at the top as if that is the section title.
+
+Instead, the block should clearly read something like:
+
+Employee Acknowledgement
+
+Then inside the block:
+
+signed by employee name
+signed date
+acknowledgement status
+optional short line like “Signed electronically in Clockfield”
+
+The section label should lead, not the employee name.
+
+Professional display rule for signed employee section
+
+If employee already signed in-app, show a formal signed acknowledgement block like this:
+
+Employee Acknowledgement
+
+Signed by: Mackasy
+Role: Employee
+Date: March 29, 2026
+Status: Acknowledged
+
+Or similar clean wording.
+
+Do not make the employee’s name the section heading.
+Do not duplicate that same employee in another blank sign box below.
+
+Main implementation goal
+
+Change the incident report signature rendering logic so the exported document conditionally shows only the necessary signature blocks based on actual signing status.
+
+Only show unresolved placeholders for parties who still need to sign.
+
+Scope of this fix
+
+Only fix:
+
+signature block conditional rendering
+signed employee block labeling
+export/print presentation for duplicate employee acknowledgement
+
+Do not change:
+
+who is allowed to sign
+report sending flow
+employee statement flow
+admin/client workflow
+database structure unless absolutely necessary for this condition check
+unrelated report sections
+
+Recommended logic
+
+Determine signature state from existing report signature data.
+
+Likely data points:
+
+employee signature exists
+employee signed_at exists
+employee signer_name exists
+report recipient response marked signed/acknowledged
+
+Use the actual stored signing state, not guessed UI state.
+
+Suggested rendering logic
+
+Pseudo behavior:
+
+If employeeSignatureExists:
+
+render one completed Employee Acknowledgement block
+do not render employee placeholder in Additional Sign-Off
+
+If employeeSignatureDoesNotExist:
+
+do not render completed employee signature block
+render employee placeholder in Additional Sign-Off
+
+Client and prepared-by boxes should remain based on their own states.
+
+Signature block behavior by role
+
+Prepared By
+
+show placeholder unless there is already a real prepared-by signature flow implemented
+if this is informational only, keep as one clean box
+
+Employee Acknowledgement
+
+if employee signed already, show signed block only once
+remove duplicate placeholder box
+
+Client Acknowledgement
+
+keep placeholder if client still has not signed
+if client signed in future, same rule should apply there too
+
+Best implementation approach
+
+Apply the same logic generically for all signature boxes:
+
+completed signatures show completed blocks
+incomplete signatures show placeholder blocks
+never show both completed and placeholder versions for the same signer role
+
+This will make the system more professional and future-safe.
+
+Suggested export layout logic
+
+Section: Acknowledgement & Signatures
+
+Inside this section:
+
+Render completed signature cards first for already-signed parties
+Render placeholder cards only for parties still pending
+Exclude duplicate role cards
+
+Example final output if employee already signed but client has not:
+
+Employee Acknowledgement
+Signed by Mackasy
+Date March 29, 2026
+Prepared By
+placeholder if still needed
+Client Acknowledgement
+placeholder because still pending
+
+Do not also show another blank Employee Acknowledgement box.
+
+Labeling requirements
+
+Update the signed employee card so it uses professional wording.
+
+Bad:
+mackasy
+
+Better:
+Employee Acknowledgement
+
+Inside:
+
+Signed by: Mackasy
+Role: Employee
+Date: March 29, 2026
+Status: Acknowledged
+
+Or equivalent clean format.
+
+Do not change the meaning.
+Just make the presentation professional.
+
+Visual requirements
+
+The signed employee acknowledgement should visually match the rest of the report:
+
+same card style
+same typography hierarchy
+same spacing
+no duplicate role blocks
+no confusing repeated signature areas
+
+Potential technical issue to check
+
+The current export may be rendering:
+
+one signature block from signed response data
+one static placeholder block from the template
+
+That means the signed block and the default placeholder are both rendering at the same time.
+
+Agent must find where:
+
+completed signatures are rendered
+placeholder sign-off blocks are rendered
+
+Then add role-based exclusion logic so a role only appears once.
+
+Likely implementation rule
+
+Example:
+
+const hasEmployeeSignature = signatures.some(
+  (sig) => sig.role === "employee" && sig.signedAt
+);
+
+Then:
+
+if hasEmployeeSignature is true, do not render employee placeholder block
+if false, render employee placeholder block
+
+Do similar checks cleanly without rewriting unrelated logic.
+
+Testing checklist
+
+Test only this scope.
+
+Test 1
+Employee not signed yet
+
+employee placeholder box appears at bottom
+no completed employee signature block appears
+
+Test 2
+Employee signed in-app
+
+completed employee acknowledgement block appears once
+extra employee placeholder box does not appear
+
+Test 3
+Employee signed and client not signed
+
+employee signed block appears
+client placeholder box still appears
+no duplicate employee box
+
+Test 4
+Admin downloads/prints report
+
+same clean result in preview and PDF
+no double employee signature sections
+
+Test 5
+Regression
+
+employee statement still shows
+report export still works
+nothing else changed
+
+Acceptance criteria
+
+This task is complete only when:
+
+employee does not appear to sign twice
+already-signed employee reports show only one employee acknowledgement block
+pending signature boxes only show for parties who still need to sign
+signed employee block is labeled professionally
+nothing else in the app was changed
+
+Final instruction to the agent
+
+Only fix the incident report signature rendering logic for duplicate employee acknowledgement/signature blocks.
+
+Do not touch anything else.
+Do not redesign unrelated report sections.
+Do not alter the workflow.
+If the employee already signed in-app, replace the bottom employee placeholder/sign box with the signed state and do not show both.
+Keep only the remaining pending sign boxes that are still needed.

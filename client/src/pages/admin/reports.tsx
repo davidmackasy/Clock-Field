@@ -1236,50 +1236,65 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
           </section>
         )}
 
-        {/* ── Digital Signatures (already signed) ── */}
-        {rpt.signatures?.length > 0 && (
-          <section className="print-section">
-            <h2 className="print-section-heading" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#374151", borderBottom: "1px solid #d1d5db", paddingBottom: "4px", marginBottom: "12px" }}>
-              Acknowledgement &amp; Signatures
-            </h2>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
-              {rpt.signatures.map((sig: any) => (
-                <div key={sig.id} className="print-section" style={{ border: "1px solid #d1d5db", borderRadius: "6px", padding: "12px" }}>
-                  <p style={{ fontSize: "12px", fontWeight: 700, color: "#111827", margin: "0 0 2px 0" }}>{sig.signerName}</p>
-                  <p style={{ fontSize: "10px", color: "#6b7280", textTransform: "capitalize" }}>
-                    {sig.signerRole === "admin" ? "Management" : sig.signerRole}
-                  </p>
-                  <p style={{ fontSize: "10px", color: "#6b7280" }}>{sig.signedAt ? format(new Date(sig.signedAt), "MMMM d, yyyy") : ""}</p>
-                  <div style={{ borderTop: "1px solid #e5e7eb", marginTop: "10px", paddingTop: "8px" }}>
-                    <p style={{ fontSize: "9px", color: "#9ca3af" }}>Acknowledged</p>
-                    <p style={{ fontSize: "13px", fontFamily: "Georgia, serif", fontStyle: "italic", color: "#374151" }}>{sig.signerName}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+        {/* ── Acknowledgement & Signatures ── */}
+        {(() => {
+          const sigs: any[] = rpt.signatures || [];
+          const signedRoles = new Set(sigs.map((s: any) => s.signerRole));
 
-        {/* ── Sign-Off Blocks (blank lines for unsigned) ── */}
-        <section className="print-section">
-          <h2 className="print-section-heading" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#374151", borderBottom: "1px solid #d1d5db", paddingBottom: "4px", marginBottom: "12px" }}>
-            {rpt.signatures?.length > 0 ? "Additional Sign-Off" : "Acknowledgement"}
-          </h2>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
-            {[
-              { label: "Prepared By", sub: "Company Representative" },
-              { label: "Employee Acknowledgement", sub: "Acknowledging accuracy of report" },
-              { label: "Client Acknowledgement", sub: "Acknowledging receipt of report" },
-            ].map(block => (
-              <div key={block.label} className="print-section" style={{ border: "1px solid #d1d5db", borderRadius: "6px", padding: "12px", minHeight: "90px" }}>
-                <p style={{ fontSize: "10px", fontWeight: 600, color: "#374151", margin: "0 0 2px 0" }}>{block.label}</p>
-                <p style={{ fontSize: "9px", color: "#9ca3af", marginBottom: "16px" }}>{block.sub}</p>
-                <div style={{ borderBottom: "1px solid #9ca3af", marginTop: "24px" }} />
-                <p style={{ fontSize: "9px", color: "#9ca3af", marginTop: "4px" }}>Name, Signature &amp; Date</p>
+          const roleLabel = (role: string) =>
+            role === "admin" ? "Management Acknowledgement"
+            : role === "employee" ? "Employee Acknowledgement"
+            : role === "client" ? "Client Acknowledgement"
+            : role;
+
+          const pendingBlocks = [
+            { role: "admin-prepared", label: "Prepared By", sub: "Company Representative" },
+            { role: "employee", label: "Employee Acknowledgement", sub: "Acknowledging accuracy of report" },
+            { role: "client", label: "Client Acknowledgement", sub: "Acknowledging receipt of report" },
+          ].filter(b => b.role === "admin-prepared" || !signedRoles.has(b.role));
+
+          const allCards = [
+            ...sigs.map((sig: any) => ({ type: "signed" as const, sig })),
+            ...pendingBlocks.map(b => ({ type: "pending" as const, block: b })),
+          ];
+
+          if (allCards.length === 0) return null;
+
+          return (
+            <section className="print-section">
+              <h2 className="print-section-heading" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#374151", borderBottom: "1px solid #d1d5db", paddingBottom: "4px", marginBottom: "12px" }}>
+                Acknowledgement &amp; Signatures
+              </h2>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
+                {allCards.map((card, i) => {
+                  if (card.type === "signed") {
+                    const sig = card.sig;
+                    return (
+                      <div key={sig.id} className="print-section" style={{ border: "1px solid #d1d5db", borderRadius: "6px", padding: "12px", background: "#f9fafb" }}>
+                        <p style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#374151", margin: "0 0 8px 0" }}>{roleLabel(sig.signerRole)}</p>
+                        <p style={{ fontSize: "11px", color: "#111827", margin: "0 0 2px 0" }}><span style={{ color: "#6b7280" }}>Signed by:</span> {sig.signerName}</p>
+                        <p style={{ fontSize: "10px", color: "#6b7280", margin: "0 0 2px 0" }}><span>Date:</span> {sig.signedAt ? format(new Date(sig.signedAt), "MMMM d, yyyy") : "—"}</p>
+                        <p style={{ fontSize: "10px", color: "#6b7280", margin: "0 0 8px 0" }}><span>Status:</span> Acknowledged</p>
+                        <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: "6px" }}>
+                          <p style={{ fontSize: "9px", color: "#9ca3af" }}>Signed electronically in Clockfield</p>
+                        </div>
+                      </div>
+                    );
+                  }
+                  const block = card.block;
+                  return (
+                    <div key={block.label} className="print-section" style={{ border: "1px solid #d1d5db", borderRadius: "6px", padding: "12px", minHeight: "90px" }}>
+                      <p style={{ fontSize: "10px", fontWeight: 600, color: "#374151", margin: "0 0 2px 0" }}>{block.label}</p>
+                      <p style={{ fontSize: "9px", color: "#9ca3af", marginBottom: "16px" }}>{block.sub}</p>
+                      <div style={{ borderBottom: "1px solid #9ca3af", marginTop: "24px" }} />
+                      <p style={{ fontSize: "9px", color: "#9ca3af", marginTop: "4px" }}>Name, Signature &amp; Date</p>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-        </section>
+            </section>
+          );
+        })()}
 
         {/* ── Footer ── */}
         <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: "12px", display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#9ca3af" }}>
