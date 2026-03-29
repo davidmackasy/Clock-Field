@@ -3594,7 +3594,8 @@ Welcome again, and thank you for choosing ClockField.
   app.post("/api/reports/refine-incident", requireAuth, async (req: any, res) => {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      res.status(503).json({ message: "AI refinement is not configured. Please add OPENAI_API_KEY to environment secrets." });
+      console.warn("[reports] AI refinement requested but OPENAI_API_KEY is not configured.");
+      res.status(503).json({ message: "AI refinement is temporarily unavailable." });
       return;
     }
     try {

@@ -175,6 +175,13 @@ function CreateReportDialog({ open, onClose, employees, clients, locations }: an
         incidentCategory: form.incidentCategory,
         areaAffected: form.areaAffected,
       });
+      if (!res.ok) {
+        const userMessage = res.status === 503 || res.status === 500
+          ? "AI writing assistance is not available right now. You can continue and edit the report manually."
+          : "AI refinement could not be completed. Please try again.";
+        toast({ title: "AI unavailable", description: userMessage, variant: "destructive" });
+        return;
+      }
       const result = await res.json();
       setAiResult(result);
       if (result.title) set("title", result.title);
@@ -184,8 +191,8 @@ function CreateReportDialog({ open, onClose, employees, clients, locations }: an
         set("immediateAction", result.immediateAction);
       }
       if (result.followUpRecommendations) set("nextSteps", result.followUpRecommendations);
-    } catch (e: any) {
-      toast({ title: "AI refinement unavailable", description: e.message, variant: "destructive" });
+    } catch {
+      toast({ title: "AI unavailable", description: "AI writing assistance is not available right now. You can continue and edit the report manually.", variant: "destructive" });
     } finally {
       setAiRefining(false);
     }

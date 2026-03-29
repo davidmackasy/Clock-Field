@@ -1,0 +1,227 @@
+Dev note: Fix AI refinement configuration only
+
+Objective
+
+Fix the Incident Report “Refine with AI” feature so it works properly.
+
+Current error:
+AI refinement unavailable
+503: “AI refinement is not configured. Please add OPENAI_API_KEY to environment secrets.”
+
+This task is only to fix the AI refinement configuration and its user-facing error handling.
+Do not touch anything else.
+Do not refactor unrelated code.
+Do not redesign unrelated report flows.
+If anything outside this scope is needed, ask for approval first.
+
+Critical instruction
+
+Only focus on:
+
+making AI refinement work
+securing the OpenAI API key properly
+improving the error handling so users do not see a raw ugly config error
+
+Do not:
+
+change other report logic
+change export logic
+change auth
+change billing
+change unrelated UI
+change unrelated API routes
+change any working report flow outside this AI refine feature
+
+What is happening
+
+The frontend is calling the AI refinement endpoint, but the backend does not have the OpenAI API key configured.
+OpenAI’s official docs say API keys must be kept secret, must not be exposed client-side, and should be securely loaded from an environment variable on the server.
+
+Required fix
+
+Add the OpenAI API key to server environment secrets
+Ensure the backend AI refine route reads that key from the server environment
+Ensure the frontend never tries to call OpenAI directly
+Replace the raw config error toast with a clean professional fallback message
+Keep the rest of the incident report flow unchanged
+
+Environment configuration
+
+Add this environment secret on the server:
+
+OPENAI_API_KEY=your_openai_api_key_here
+
+Do not hardcode the key in code.
+Do not place the key in client-side environment variables.
+Do not expose the key in browser code, logs, or network responses.
+
+OpenAI docs explicitly say the API key is a secret and should be securely loaded from a server-side environment variable or key management service.
+
+Backend requirements
+
+Locate the incident report AI refinement route or service.
+It likely does something like:
+
+receives rough incident notes
+calls OpenAI
+returns refined structured text
+
+Fix it so that:
+
+It checks for process.env.OPENAI_API_KEY
+If missing, it returns a controlled internal error response
+It uses the OpenAI API only from the server
+It does not leak raw internal setup details to the user
+
+Safe backend logic
+
+Pseudo logic:
+
+const apiKey = process.env.OPENAI_API_KEY;
+
+if (!apiKey) {
+  return res.status(503).json({
+    message: "AI refinement is temporarily unavailable."
+  });
+}
+
+Then initialize the OpenAI client server-side only.
+
+If using the current OpenAI SDK, keep the call server-side and use a structured response shape so the refined incident fields come back predictably. OpenAI supports structured outputs with JSON schema, which is the right pattern for incident title, refined description, causes, and follow-up fields.
+
+Frontend requirements
+
+Do not show this raw message to users:
+
+“Please add OPENAI_API_KEY to environment secrets.”
+
+That is internal setup language and looks unprofessional.
+
+Replace with a user-safe message such as:
+
+“AI refinement is temporarily unavailable. Please try again shortly.”
+
+Or:
+
+“AI writing assistance is not available right now. You can still continue and edit the report manually.”
+
+The frontend should still allow the user to continue filling out the incident report manually.
+Do not block report creation just because AI refinement failed.
+
+UI behavior requirements
+
+When AI refine is clicked:
+
+show loading state
+call backend refine endpoint
+if success, populate refined fields
+if failure, show clean non-technical toast
+keep all user-entered text intact
+do not clear the form
+do not crash modal or report creation flow
+
+Required fallback behavior
+
+If OpenAI is not configured or the request fails:
+
+keep the rough notes untouched
+show a clean message
+allow manual editing
+do not close the modal
+do not lose inputs
+do not show raw stack trace, provider error, or secret names
+
+Recommended response structure from backend
+
+Success:
+
+{
+  "success": true,
+  "data": {
+    "title": "Damage to client property",
+    "refined_description": "...",
+    "sequence_of_events": "...",
+    "immediate_action": "...",
+    "probable_causes": "...",
+    "follow_up_recommendations": "..."
+  }
+}
+
+Failure:
+
+{
+  "success": false,
+  "message": "AI refinement is temporarily unavailable."
+}
+
+Do not return:
+
+raw OpenAI SDK error objects
+secret names
+stack traces
+internal config instructions
+
+Logging requirements
+
+Server logs can include controlled internal diagnostics such as:
+
+missing OPENAI_API_KEY
+OpenAI request failed
+status code
+response parsing failure
+
+But logs must not print the actual API key.
+Do not expose those logs to the user.
+
+Recommended prompt behavior
+
+The refine action should:
+
+preserve facts only
+improve grammar
+improve professionalism
+avoid inventing details
+avoid blaming language
+output factual business wording
+
+This part stays the same.
+The immediate issue is configuration and graceful failure handling.
+
+Suggested implementation checklist
+
+Find the backend refine endpoint
+Check whether it reads OPENAI_API_KEY
+Add the missing environment secret in the server/project secrets
+Confirm server restart/redeploy picks up the env variable
+Make one successful test call
+Update frontend toast/error message to be clean and non-technical
+Verify manual editing still works if AI fails
+Verify nothing else changed
+
+Testing checklist
+
+After the fix, verify:
+
+Clicking “Refine with AI” no longer shows raw config error
+AI refinement works when OPENAI_API_KEY is present
+User input remains intact during loading and on failure
+If the key is missing, user sees only a clean fallback message
+No API key appears in frontend code or browser network payload
+No unrelated report behavior changed
+
+Acceptance criteria
+
+This task is complete only when:
+
+the AI refine feature works with a valid server-side OpenAI key
+the key is stored only in environment secrets
+the frontend no longer exposes raw technical config errors
+users can still continue manually if AI is unavailable
+nothing else was touched
+
+Final instruction
+
+Only fix the AI refinement configuration and error handling for the Incident Report flow.
+Do not touch anything else.
+Do not expand scope.
+If any unrelated change is needed, ask for approval first.
