@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
+import { localToday } from "@/lib/timezone";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,12 @@ export default function EmployeeHome() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [elapsed, setElapsed] = useState(0);
+
+  const { data: tzData } = useQuery<{ timezone: string }>({
+    queryKey: ["/api/settings/timezone"],
+    staleTime: Infinity,
+  });
+  const tz = tzData?.timezone || "UTC";
 
   const { data: activeEntry, isLoading: entryLoading } = useQuery<any>({
     queryKey: ["/api/time-entries/active"],
@@ -67,7 +74,7 @@ export default function EmployeeHome() {
     return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = localToday(tz);
   const todayShifts = (myShifts || []).filter(s => s.shiftDate === today && s.status === "scheduled");
   const upcomingShifts = (myShifts || []).filter(s => s.shiftDate > today && s.status === "scheduled").slice(0, 3);
 

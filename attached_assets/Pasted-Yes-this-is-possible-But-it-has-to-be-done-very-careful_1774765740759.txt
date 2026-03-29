@@ -1,0 +1,498 @@
+Yes, this is possible.
+
+But it has to be done very carefully.
+
+You are right to be cautious because timezone work can break schedules, attendance, payroll summaries, date grouping, and “today / tomorrow” logic if it is done the wrong way.
+
+The safe answer is this:
+
+You should not switch the whole app blindly from “global time” to “local time” everywhere at once.
+
+The correct way is to keep one stable source of truth for stored timestamps, then convert and display them using the company’s selected timezone. That way, attendance records and existing data stay safe, while schedule display and day boundaries become correct for each business.
+
+Best safe approach
+
+Keep stored timestamps consistent in the database
+Use UTC for storage if that is already how the system works.
+Add a company-level timezone setting
+Example:
+America/Winnipeg
+America/Vancouver
+America/Toronto
+Use that selected company timezone only for:
+schedule creation
+schedule display
+“today” and “tomorrow” grouping
+day-start and day-end logic
+report display dates where appropriate
+Do not rewrite old attendance math blindly
+Attendance and worked-hours calculations should continue using stored timestamps, but the displayed day bucket should be interpreted in the company timezone.
+
+That is the safe way.
+
+Why the current issue is happening
+
+What you described means the app is likely using either:
+
+UTC directly in the UI
+server timezone
+browser timezone inconsistently
+or a fixed/global timezone for day grouping
+
+So at around 7 PM to 9 PM local time, the app is likely already rolling into the next calendar day in another timezone.
+
+That causes:
+
+cleaners seeing tomorrow’s schedule too early
+admins seeing wrong “today”
+confusion around late-evening shifts
+wrong grouping by day even if the actual hour is saved correctly
+
+What should be fixed
+
+The main thing to fix is not “attendance storage.”
+
+The main thing to fix is:
+all schedule and date grouping logic must use the selected company timezone.
+
+That includes:
+
+schedule calendar day
+today’s shifts
+tomorrow’s shifts
+upcoming shifts
+late evening cutoff
+dashboard counts based on day
+report day display where relevant
+
+What should not be touched carelessly
+
+Do not blindly change:
+
+raw attendance timestamps
+stored clock-in and clock-out values
+payroll duration calculations
+historical records
+old reports
+audit logs
+
+Those should stay stable.
+
+Instead, fix:
+
+timezone interpretation
+display formatting
+date boundary calculations
+schedule creation parsing
+
+My honest answer
+
+Yes, it can be done safely.
+
+But only if the agent follows a controlled timezone migration plan.
+
+If someone just starts replacing date logic everywhere, it can absolutely break attendance and payroll.
+
+So this should be done as a controlled, scoped fix.
+
+Here is the dev note you can give your agent.
+
+Dev Note: Safe company-local timezone implementation for schedules and date display
+
+Objective
+
+Fix the timezone confusion in Clockfield so schedules, “today / tomorrow” grouping, and related date-based views respect the company’s selected local timezone.
+
+This must be done without breaking attendance, hours, payroll, historical records, or existing working flows.
+
+Critical instruction
+
+Do not touch or rewrite attendance logic blindly.
+Do not mass-convert historical records.
+Do not change payroll calculations unless it is strictly required for date grouping display and approved.
+Do not change existing timestamps in the database.
+Do not refactor unrelated modules.
+Do not change anything outside this timezone scope.
+If any risky schema or logic change is required outside this scope, stop and ask for approval first.
+
+Main problem
+
+The app is currently using a global or inconsistent timezone interpretation, which causes day-boundary confusion.
+
+Example problem:
+At 7 PM to 9 PM local time, users may already see tomorrow’s schedule or incorrect “today” grouping because the app is interpreting dates using another timezone instead of the business’s actual local timezone.
+
+This is confusing for:
+
+admins creating schedules
+cleaners viewing shifts
+businesses in different provinces/timezones
+late-day and evening scheduling
+
+Main goal
+
+Use the company’s selected timezone as the display and scheduling timezone.
+
+That means:
+
+schedules are created in company local time
+schedule lists use company local date boundaries
+“today,” “tomorrow,” “this week” use company local timezone
+attendance timestamps remain stable and safe
+payroll and worked hours are not broken
+
+Safe design rule
+
+Use one source of truth for storage.
+Use company timezone for interpretation and display.
+
+Recommended rule:
+
+Store timestamps in UTC
+Store company timezone as IANA timezone string
+Convert timestamps to company timezone for display and day grouping
+
+Examples of valid timezone values:
+
+America/Winnipeg
+America/Vancouver
+America/Edmonton
+America/Toronto
+
+Do not use weak labels like:
+
+PST
+CST
+EST
+
+Use full IANA timezone values only.
+
+Scope of this task
+
+Fix only these timezone-sensitive areas first:
+
+Company timezone setting
+Schedule creation
+Schedule display
+“Today / Tomorrow / Upcoming” grouping
+Dashboard date grouping tied to schedules
+Attendance display dates if applicable
+Shift start/end display formatting
+Any report date display directly tied to schedule day
+
+Do not rewrite payroll math or attendance storage unless absolutely necessary.
+
+Required implementation
+
+Part 1: Add or confirm company timezone setting
+
+Each company must have one selected timezone.
+
+Use the company/account settings as the source.
+
+If a timezone setting already exists:
+
+verify it is stored properly
+verify it uses IANA timezone format
+
+If it does not exist:
+
+add a company-level timezone field
+default it safely based on current business setup or a safe fallback
+do not guess silently for existing companies without review
+
+Suggested field:
+company.timezone
+
+Examples:
+
+America/Winnipeg
+America/Vancouver
+
+This must be tenant-specific, not global.
+
+Part 2: Keep stored timestamps stable
+
+Do not convert existing stored attendance or schedule timestamps in-place unless the system currently stores naive local times and a safe migration is approved.
+
+Preferred safe rule:
+
+keep storage as UTC timestamps
+convert only at display and date-boundary logic level
+
+If the current app already stores UTC:
+good, keep it that way.
+
+If the current app stores naive local datetimes:
+do not attempt a mass migration yet without auditing all schedule, attendance, and payroll logic first.
+
+Part 3: Fix schedule creation flow
+
+When admin creates a schedule using local date and time, that input must be interpreted in the company timezone.
+
+Example:
+Admin in BC selects:
+March 29
+5:00 PM
+
+That must be treated as:
+March 29 5:00 PM in America/Vancouver
+
+Then saved consistently.
+
+Important:
+Do not let browser timezone or server timezone silently reinterpret the entered date/time.
+
+The schedule create/edit form must explicitly use company timezone as the meaning of the selected local date and time.
+
+Part 4: Fix schedule display flow
+
+Wherever schedules are shown, they must display in company local time.
+
+This includes:
+
+schedule list
+cleaner schedule page
+admin schedule page
+shift cards
+daily schedule widgets
+“today” and “tomorrow” sections
+
+If company timezone is America/Vancouver, then the day should not roll over early because of server or UTC interpretation.
+
+Part 5: Fix day-boundary logic
+
+This is the most important part.
+
+All logic that decides:
+
+what counts as today
+what counts as tomorrow
+what counts as this week
+which shifts belong to which day
+
+must use company local timezone.
+
+Do not use:
+new Date() comparisons alone
+server-local date
+browser-local date
+UTC calendar date directly
+
+Use company-local date boundary calculations.
+
+Example:
+If company timezone is America/Vancouver, then “today” ends at midnight Vancouver time, not midnight UTC or server time.
+
+Part 6: Protect attendance logic
+
+Do not break attendance.
+
+Attendance must remain stable.
+
+Safe rule:
+
+keep actual clock-in and clock-out timestamps unchanged
+only convert them for display and daily grouping where needed
+do not alter duration math unless the current logic is clearly wrong and separately approved
+
+Important:
+Worked-hour calculation should still be based on actual timestamps, not string-based local display conversions.
+
+Example:
+Duration = clockOutUtc - clockInUtc
+Display = converted into company timezone for viewing
+
+This avoids breaking hours.
+
+Part 7: Protect payroll logic
+
+Do not rewrite payroll logic unless necessary.
+
+If payroll groups records by day or pay period, then the grouping boundaries should eventually respect company timezone, but do not refactor payroll calculation flow broadly in this task unless clearly isolated and tested.
+
+For this task:
+
+do not break existing payroll amounts
+do not change estimators broadly
+only adjust date grouping if needed and only after validating no regression
+
+Part 8: Use a shared timezone utility
+
+Do not scatter ad hoc date conversions across the app.
+
+Create one shared timezone utility layer for:
+
+parse company local input
+convert UTC to company local display
+determine startOfDay in company timezone
+determine endOfDay in company timezone
+get today/tomorrow in company timezone
+format schedule times consistently
+
+Use one trusted library and one shared helper pattern.
+
+Recommended modern safe options:
+
+date-fns-tz
+or
+Luxon
+
+Do not mix multiple timezone strategies.
+
+Part 9: Fallback behavior
+
+If company timezone is missing:
+
+use a safe fallback temporarily
+show a clear prompt in settings for admin to confirm timezone
+do not silently keep inconsistent behavior forever
+
+Safe fallback could be:
+existing known company timezone
+or a current app default
+
+But long term, each company should explicitly have a timezone set.
+
+Part 10: UI wording
+
+In settings, add or verify a clear timezone label.
+
+Example:
+Timezone
+Used for schedules, daily views, and local date/time display
+
+This helps admins understand why it matters.
+
+What should be updated first
+
+Priority order:
+
+company timezone setting
+schedule create/edit parsing
+schedule display pages
+today/tomorrow grouping
+cleaner schedule page
+admin schedule page
+dashboard widgets tied to schedules
+attendance display only if needed
+payroll grouping only if needed and safe
+
+Do not try to change everything at once.
+
+What should not be changed in this task
+
+Do not:
+
+migrate all old records blindly
+rewrite attendance engine
+rewrite payroll engine
+rewrite reporting engine
+change audit logs
+convert all database timestamps manually
+use browser local timezone as source of truth
+use server timezone as source of truth
+
+Technical checks the agent must do first
+
+Before implementing, audit these areas:
+
+how schedules are stored now
+UTC timestamp?
+date string + time string?
+naive local datetime?
+server-generated date?
+how attendance timestamps are stored now
+how “today” and “tomorrow” are currently computed
+whether current UI relies on browser timezone
+whether server APIs group by UTC date instead of company local date
+
+Do not start coding until this audit is understood.
+
+Safe implementation strategy
+
+Phase 1
+Read-only audit of current schedule, attendance, and date-grouping logic
+
+Phase 2
+Add or validate company timezone field
+
+Phase 3
+Fix schedule create/edit timezone parsing
+
+Phase 4
+Fix schedule display timezone formatting
+
+Phase 5
+Fix today/tomorrow grouping using company timezone
+
+Phase 6
+Regression test attendance and payroll without changing their core math
+
+Testing requirements
+
+This must be tested very carefully.
+
+Test case 1
+Company timezone: America/Winnipeg
+
+at 8 PM local, cleaner still sees today’s correct schedule until local midnight
+
+Test case 2
+Company timezone: America/Vancouver
+
+same shift appears on correct local day
+no early rollover because of another timezone
+
+Test case 3
+Schedule created at 5 PM local
+
+saves correctly
+displays correctly for admin and cleaner
+
+Test case 4
+Late evening shifts
+
+shifts near midnight stay on the correct intended local date
+
+Test case 5
+Attendance record display
+
+clock-in/out still render correctly
+no broken hours
+
+Test case 6
+Payroll and timesheet summary
+
+durations remain unchanged
+no accidental day misassignment in visible summary
+
+Test case 7
+Existing historical schedules
+
+still visible
+not corrupted
+not shifted by mistake
+
+Acceptance criteria
+
+This task is complete only when:
+
+schedules respect the company’s selected local timezone
+today/tomorrow grouping uses company local day boundaries
+late-evening schedule confusion is resolved
+attendance is not broken
+payroll hours are not broken
+existing records are not corrupted
+nothing outside this scope was changed
+
+Final instruction to the agent
+
+Only implement safe company-local timezone support for schedule and date display logic.
+
+Do not touch anything else.
+Do not rewrite attendance.
+Do not rewrite payroll.
+Do not migrate historical records blindly.
+Use company timezone as the display and grouping timezone, while keeping stored timestamps stable.
+If the current architecture makes this unsafe without a broader migration, stop and report that before making risky changes.

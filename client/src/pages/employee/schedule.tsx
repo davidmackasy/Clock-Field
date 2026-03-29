@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
+import { localToday, localWeekDates } from "@/lib/timezone";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +11,13 @@ import { Calendar, Clock, MapPin, ChevronRight } from "lucide-react";
 
 export default function EmployeeSchedule() {
   const { user } = useAuth();
+
+  const { data: tzData } = useQuery<{ timezone: string }>({
+    queryKey: ["/api/settings/timezone"],
+    staleTime: Infinity,
+  });
+  const tz = tzData?.timezone || "UTC";
+
   const { data: shifts, isLoading } = useQuery<any[]>({
     queryKey: ["/api/shifts", user?.id],
     queryFn: async () => {
@@ -20,24 +28,10 @@ export default function EmployeeSchedule() {
     enabled: !!user?.id,
   });
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = localToday(tz);
   const todayShifts = (shifts || []).filter(s => s.shiftDate === today);
 
-  const getWeekDates = () => {
-    const now = new Date();
-    const day = now.getDay();
-    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-    const monday = new Date(now.setDate(diff));
-    const dates: string[] = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      dates.push(d.toISOString().split("T")[0]);
-    }
-    return dates;
-  };
-
-  const weekDates = getWeekDates();
+  const weekDates = localWeekDates(tz);
   const weekShifts = (shifts || []).filter(s => weekDates.includes(s.shiftDate));
   const upcomingShifts = (shifts || []).filter(s => s.shiftDate > today).sort((a, b) => a.shiftDate.localeCompare(b.shiftDate)).slice(0, 10);
 

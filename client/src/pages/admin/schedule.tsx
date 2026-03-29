@@ -20,12 +20,20 @@ import {
 } from "lucide-react";
 import { format, startOfWeek, endOfWeek, addDays, subDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, addWeeks, subWeeks } from "date-fns";
 import { cn } from "@/lib/utils";
+import { localToday } from "@/lib/timezone";
 
 type ViewMode = "day" | "week" | "month";
 
 export default function AdminSchedule() {
   const { toast } = useToast();
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
+
+  const { data: tzData } = useQuery<{ timezone: string }>({
+    queryKey: ["/api/settings/timezone"],
+    staleTime: Infinity,
+  });
+  const tz = tzData?.timezone || "UTC";
+
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toLocaleDateString("en-CA", { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }));
   const [viewMode, setViewMode] = useState<ViewMode>("day");
   const [open, setOpen] = useState(false);
   
@@ -519,7 +527,7 @@ export default function AdminSchedule() {
           <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => navigateDate(1)} data-testid="button-next-day">
             <ChevronRight className="w-4 h-4" />
           </Button>
-          <Button variant="outline" size="sm" className="h-8" onClick={() => setSelectedDate(new Date().toISOString().split("T")[0])} data-testid="button-today">
+          <Button variant="outline" size="sm" className="h-8" onClick={() => setSelectedDate(localToday(tz))} data-testid="button-today">
             Today
           </Button>
         </div>

@@ -90,6 +90,11 @@ function buildAttendanceFlags(opts: {
   return flags;
 }
 
+/** Returns today's date string YYYY-MM-DD in the given IANA timezone */
+function todayInTz(tz: string): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: tz || "UTC" });
+}
+
 const upload = multer({
   dest: UPLOADS_DIR,
   limits: { fileSize: 10 * 1024 * 1024, files: 3 },
@@ -943,7 +948,8 @@ Welcome again, and thank you for choosing ClockField.
   app.get("/api/dashboard/stats", requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
-      const today = new Date().toISOString().split("T")[0];
+      const company = await storage.getCompany(user.companyId);
+      const today = todayInTz(company?.timezone || "UTC");
       const [employees, todayShifts, allEntries, openRequests] = await Promise.all([
         storage.getEmployeesByCompany(user.companyId),
         storage.getShiftsByDate(user.companyId, today),
@@ -951,17 +957,28 @@ Welcome again, and thank you for choosing ClockField.
         storage.getClientRequestsByCompany(user.companyId),
       ]);
       const activeEntries = allEntries.filter(e => e.status === "active");
+      const tz = company?.timezone || "UTC";
       const now = Date.now();
       // lateToday: time entries with late_clock_in flag from today — exactly what the attendance
       // page shows when filtered to Today + Late Clock-in, so dashboard and click-through match.
-      const todayEntries = allEntries.filter(e => e.clockInAt.startsWith(today));
+      // We convert each clockInAt timestamp into company-local date to avoid UTC day-boundary skew.
+      const todayEntries = allEntries.filter(e => {
+        try {
+          return new Date(e.clockInAt).toLocaleDateString("en-CA", { timeZone: tz }) === today;
+        } catch { return false; }
+      });
       const lateToday = todayEntries.filter(e =>
         Array.isArray(e.flags) && e.flags.includes("late_clock_in")
       ).length;
       // missedToday: scheduled shifts today where no clock-in has occurred and the shift start
       // is more than 30 minutes in the past (prevents premature counting).
       const MISSED_THRESHOLD_MS = 30 * 60 * 1000;
-      const clockedInShiftIds = new Set(allEntries.filter(e => e.clockInAt.startsWith(today)).map(e => e.shiftId).filter(Boolean));
+      const clockedInShiftIds = new Set(
+        allEntries.filter(e => {
+          try { return new Date(e.clockInAt).toLocaleDateString("en-CA", { timeZone: tz }) === today; }
+          catch { return false; }
+        }).map(e => e.shiftId).filter(Boolean)
+      );
       const missedToday = todayShifts.filter(s => {
         if (s.status === "missed" || s.status === "no_show") return true;
         if (s.status !== "scheduled") return false;
@@ -1705,7 +1722,8 @@ Welcome again, and thank you for choosing ClockField.
       const user = req.user as any;
       const target = await storage.getRecurringSchedule(req.params.id);
       if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      const today = new Date().toISOString().split("T")[0];
+      const company = await storage.getCompany(user.companyId);
+      const today = todayInTz(company?.timezone || "UTC");
       const futureShifts = (await storage.getShiftsByRecurringSchedule(req.params.id))
         .filter(s => s.shiftDate >= today && s.status === "scheduled");
       for (const s of futureShifts) await storage.deleteShift(s.id);
@@ -1839,11 +1857,21 @@ Welcome again, and thank you for choosing ClockField.
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  // ── Public timezone endpoint (any authenticated user) ─────────────────────
+  app.get("/api/settings/timezone", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const company = await storage.getCompany(user.companyId);
+      res.json({ timezone: company?.timezone || "UTC" });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   // ── Employee locations (for work submission location selection) ───────────
   app.get("/api/employee/locations", requireRole("employee"), async (req, res) => {
     try {
       const user = req.user as any;
-      const today = new Date().toISOString().split("T")[0];
+      const company = await storage.getCompany(user.companyId);
+      const today = todayInTz(company?.timezone || "UTC");
       const myShifts = await storage.getShiftsByEmployee(user.id);
       const todayShifts = myShifts.filter((s: any) => s.shiftDate === today && s.locationId);
       const locationIds = [...new Set(todayShifts.map((s: any) => s.locationId).filter(Boolean))];
