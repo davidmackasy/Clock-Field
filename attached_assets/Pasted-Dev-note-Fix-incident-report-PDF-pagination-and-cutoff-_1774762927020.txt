@@ -1,0 +1,267 @@
+Dev note: Fix incident report PDF pagination and cutoff only
+
+Objective
+
+Fix the incident report export so content flows correctly across multiple pages.
+
+Right now, when an admin generates an incident report, the content is being cut off near the bottom instead of continuing naturally onto page 2, page 3, and so on. This must be fixed so the report prints and exports like a normal A4 document.
+
+This task is only about pagination and page overflow in the incident report export.
+
+Critical instruction
+
+Do not touch anything else.
+
+Do not redesign the report.
+Do not change report fields.
+Do not change branding logic.
+Do not change logo logic.
+Do not change AI refinement logic.
+Do not change report workflow.
+Do not change signatures behavior.
+Do not change unrelated PDF or print behavior in other parts of the app.
+Do not refactor unrelated components.
+
+If anything outside this exact scope is needed, ask for approval first.
+
+Main problem
+
+The incident report content is longer than one A4 page, but the export/print layout is trying to keep too much content inside one fixed page height.
+
+Because of that:
+
+lower sections get cut off
+signature sections are partially hidden
+content does not continue naturally to the next page
+the final export looks broken and unprofessional
+
+Expected behavior
+
+The incident report must behave like a real document.
+
+If content fits on one page, keep it on one page.
+If content does not fit, continue automatically onto page 2, page 3, and so on.
+
+Nothing should be visually cut off.
+
+Main implementation goal
+
+Fix the incident report export/print layout so it supports true multi-page flow for A4 output.
+
+The report should:
+
+respect A4 page height
+allow vertical overflow to continue onto additional pages
+keep section layout clean
+avoid splitting signature boxes or titles awkwardly when possible
+preserve readability and professional spacing
+
+Most likely cause
+
+The export layout is probably using one of these broken patterns:
+
+fixed page/container height
+overflow hidden
+absolute positioning for footer or body blocks
+print container forced to one page size without page breaking
+modal-based or viewport-based height instead of print/document height
+CSS that visually clips content inside a single page wrapper
+
+Agent must inspect the incident report export component and remove anything that forces a single fixed-height page for long content.
+
+Required fixes
+
+Remove fixed-height clipping from the report body
+
+Check for styles like:
+
+fixed height
+max-height
+overflow hidden
+viewport-height based sizing
+absolute bottom-anchored sections inside the printable page
+
+Any of those can cause content to be cut off.
+
+The printable/exported report content must be allowed to grow naturally and break across pages.
+
+Use print-safe page breaking
+
+Apply proper print CSS so the report flows across multiple pages.
+
+Use page-break-safe styling for sections.
+
+For modern CSS / print support, check and use rules such as:
+
+break-inside: avoid
+page-break-inside: avoid
+break-before
+page-break-before
+
+Use these carefully on important blocks such as:
+
+section headers
+signature cards
+acknowledgement section
+grouped detail blocks
+
+Goal:
+avoid cutting a section header at the bottom of a page and leaving the section content stranded awkwardly on the next page.
+
+Do not force everything into one A4 wrapper
+
+If the current export uses a single .a4-page or similar wrapper with a hardcoded height, that is likely the core problem.
+
+Agent should either:
+
+let the document flow naturally in print mode
+or
+use a proper paginated print layout that creates additional pages automatically
+
+Do not keep one fixed page box and hope all content fits inside it.
+
+Keep signature section readable
+
+The signature / acknowledgement area is especially important.
+
+Make sure:
+
+it is not cut in half
+it moves to the next page if there is not enough space
+signature cards/boxes stay intact when possible
+
+Use print rules so signature blocks avoid breaking across pages.
+
+Example intent:
+If there is not enough room for the acknowledgement section at the bottom of page 1, it should start cleanly on page 2 instead of being partially clipped.
+
+Keep header and footer professional across pages
+
+If the report spans multiple pages:
+
+header should still look clean on page 1
+footer should not overlap content
+content must not run behind a fixed footer
+
+If there is a footer inside the template, it must not be absolutely positioned in a way that overlaps long content.
+
+If page numbers are supported, fine.
+If not, do not force it right now unless already easy and safe.
+
+Scope boundaries
+
+Fix only:
+
+incident report print/export pagination
+page overflow
+multi-page continuation
+section break behavior
+signature cutoff
+
+Do not change:
+
+wording
+logo behavior
+header branding
+data fields
+AI text
+permissions
+routing
+report saving logic
+
+Recommended technical direction
+
+Agent should inspect:
+
+printable report wrapper
+print stylesheet
+export container
+PDF generation method if used
+any CSS classes that simulate A4 height visually
+
+Key things to look for:
+
+height: 1122px or similar
+max-height
+overflow: hidden
+position: absolute on footer blocks
+flex layouts that do not print well
+containers using screen layout instead of print layout
+
+Safer print layout strategy
+
+For print/export mode:
+
+use width constraints for A4
+avoid hard height constraints on the total document
+let content flow vertically
+add page-break control only where helpful
+use margins/padding appropriate for print
+
+Section-level print rules
+
+Apply non-breaking behavior to these areas where possible:
+
+section heading + first content row
+acknowledgement/signature block
+compact info cards
+grouped statement sections
+
+Do not over-apply no-break rules everywhere, because that can also cause layout issues.
+Only protect important grouped blocks.
+
+Testing requirements
+
+Test only this scope.
+
+Test case 1
+Short report
+
+must stay on one page
+must not create extra blank pages
+
+Test case 2
+Medium report
+
+should flow cleanly onto page 2 if needed
+no cutoff
+
+Test case 3
+Long report with many sections
+
+should continue onto page 2 or 3 naturally
+no overlapping
+no missing content
+
+Test case 4
+Long acknowledgement/signature area
+
+should move cleanly if needed
+should not be partially clipped
+
+Test case 5
+Print preview and exported PDF
+
+same behavior
+content visible and complete
+A4-friendly layout
+
+Acceptance criteria
+
+This task is complete only when:
+
+incident reports no longer cut off at the bottom
+long reports continue onto page 2/page 3 automatically
+signature/acknowledgement section remains readable
+no content is hidden due to fixed-height layout
+nothing else in the app was changed
+
+Final instruction to the agent
+
+Only fix the incident report pagination and cutoff issue.
+
+Do not touch anything else.
+Do not redesign the report.
+Do not change unrelated logic.
+Do not adjust other modules.
+Make the incident report export behave like a proper A4 multi-page document, where content continues naturally onto additional pages instead of being cut off.

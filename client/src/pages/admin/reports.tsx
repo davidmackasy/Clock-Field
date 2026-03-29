@@ -1077,12 +1077,14 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
   }
 
   return (
-    <div className="hidden print:block fixed inset-0 bg-white z-[9999] overflow-auto text-black" style={{ padding: "48px 52px", fontFamily: "Georgia, serif" }}>
+    <div className="hidden print:block bg-white text-black" style={{ padding: "48px 52px", fontFamily: "Georgia, serif", width: "100%" }}>
       <style>{`
         @media print {
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           @page { margin: 0; size: letter; }
           nav, header, aside, .no-print, [data-testid="sidebar"], button { display: none !important; }
+          .print-section { break-inside: avoid; page-break-inside: avoid; }
+          .print-section-heading { break-after: avoid; page-break-after: avoid; }
         }
       `}</style>
 
@@ -1227,13 +1229,13 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
 
         {/* ── Digital Signatures (already signed) ── */}
         {rpt.signatures?.length > 0 && (
-          <section>
-            <h2 style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#374151", borderBottom: "1px solid #d1d5db", paddingBottom: "4px", marginBottom: "12px" }}>
+          <section className="print-section">
+            <h2 className="print-section-heading" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#374151", borderBottom: "1px solid #d1d5db", paddingBottom: "4px", marginBottom: "12px" }}>
               Acknowledgement &amp; Signatures
             </h2>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
               {rpt.signatures.map((sig: any) => (
-                <div key={sig.id} style={{ border: "1px solid #d1d5db", borderRadius: "6px", padding: "12px" }}>
+                <div key={sig.id} className="print-section" style={{ border: "1px solid #d1d5db", borderRadius: "6px", padding: "12px" }}>
                   <p style={{ fontSize: "12px", fontWeight: 700, color: "#111827", margin: "0 0 2px 0" }}>{sig.signerName}</p>
                   <p style={{ fontSize: "10px", color: "#6b7280", textTransform: "capitalize" }}>
                     {sig.signerRole === "admin" ? "Management" : sig.signerRole}
@@ -1250,8 +1252,8 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
         )}
 
         {/* ── Sign-Off Blocks (blank lines for unsigned) ── */}
-        <section>
-          <h2 style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#374151", borderBottom: "1px solid #d1d5db", paddingBottom: "4px", marginBottom: "12px" }}>
+        <section className="print-section">
+          <h2 className="print-section-heading" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#374151", borderBottom: "1px solid #d1d5db", paddingBottom: "4px", marginBottom: "12px" }}>
             {rpt.signatures?.length > 0 ? "Additional Sign-Off" : "Acknowledgement"}
           </h2>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
@@ -1260,7 +1262,7 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
               { label: "Employee Acknowledgement", sub: "Acknowledging accuracy of report" },
               { label: "Client Acknowledgement", sub: "Acknowledging receipt of report" },
             ].map(block => (
-              <div key={block.label} style={{ border: "1px solid #d1d5db", borderRadius: "6px", padding: "12px", minHeight: "90px" }}>
+              <div key={block.label} className="print-section" style={{ border: "1px solid #d1d5db", borderRadius: "6px", padding: "12px", minHeight: "90px" }}>
                 <p style={{ fontSize: "10px", fontWeight: 600, color: "#374151", margin: "0 0 2px 0" }}>{block.label}</p>
                 <p style={{ fontSize: "9px", color: "#9ca3af", marginBottom: "16px" }}>{block.sub}</p>
                 <div style={{ borderBottom: "1px solid #9ca3af", marginTop: "24px" }} />
