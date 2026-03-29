@@ -1211,7 +1211,7 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
       <style>{`
         @media print {
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; visibility: hidden !important; }
-          @page { margin: 0.62in 0.68in 0.80in 0.68in; size: letter; }
+          @page { margin: 0; size: letter; }
           .print-report-container {
             display: block !important;
             visibility: visible !important;
@@ -1219,12 +1219,17 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
             top: 0;
             left: 0;
             width: 100%;
-            padding: 0;
+            padding: 0.62in 0.68in 0.80in 0.68in;
+            box-sizing: border-box;
           }
           .print-report-container * { visibility: visible !important; }
           .print-section { break-inside: avoid; page-break-inside: avoid; }
           .print-section-heading { break-after: avoid; page-break-after: avoid; }
-          .print-sig-section { break-inside: avoid; page-break-inside: avoid; }
+          .print-sig-section {
+            break-inside: avoid;
+            page-break-inside: avoid;
+            padding-top: 0.62in;
+          }
           .print-footer { break-inside: avoid; page-break-inside: avoid; }
         }
       `}</style>
@@ -1282,7 +1287,7 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
         </section>
 
         {/* ── Incident Description ── */}
-        {(rpt.summary || rpt.immediateAction) && (
+        {(rpt.summary || rpt.employeeStatement || rpt.immediateAction) && (
           <section>
             <h2 style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#374151", borderBottom: "1px solid #d1d5db", paddingBottom: "4px", marginBottom: "12px" }}>
               Incident Description
@@ -1293,22 +1298,18 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
                 <p style={{ fontSize: "12px", color: "#111827", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>{rpt.summary}</p>
               </div>
             )}
+            {rpt.employeeStatement && (
+              <div style={{ marginBottom: "12px" }}>
+                <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#4b5563", marginBottom: "4px" }}>Employee Statement</p>
+                <p style={{ fontSize: "12px", color: "#111827", lineHeight: "1.7", whiteSpace: "pre-wrap" }}>{rpt.employeeStatement}</p>
+              </div>
+            )}
             {rpt.immediateAction && (
               <div>
                 <p style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#4b5563", marginBottom: "4px" }}>Immediate Action Taken</p>
                 <p style={{ fontSize: "12px", color: "#111827", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>{rpt.immediateAction}</p>
               </div>
             )}
-          </section>
-        )}
-
-        {/* ── Employee Statement ── */}
-        {rpt.employeeStatement && (
-          <section>
-            <h2 style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#374151", borderBottom: "1px solid #d1d5db", paddingBottom: "4px", marginBottom: "12px" }}>
-              Employee Statement
-            </h2>
-            <p style={{ fontSize: "12px", color: "#111827", lineHeight: "1.7", whiteSpace: "pre-wrap" }}>{rpt.employeeStatement}</p>
           </section>
         )}
 

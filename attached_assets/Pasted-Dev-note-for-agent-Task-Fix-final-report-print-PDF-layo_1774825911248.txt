@@ -1,0 +1,248 @@
+Dev note for agent
+
+Task
+
+Fix final report print/PDF layout issues that are still broken:
+
+* browser header (date/time + ClockField) still showing
+* page 2 still not respecting proper top spacing
+* content slightly misaligned on left
+* ensure employee statement is included properly
+
+Do not touch anything else.
+
+---
+
+CRITICAL ISSUES TO FIX
+
+1. REMOVE BROWSER PRINT HEADER (DATE + CLOCKFIELD)
+
+Problem
+Top of each page still shows:
+
+* date/time (left)
+* ClockField (center)
+
+This is NOT part of your app UI.
+This is the browser print header.
+
+Fix
+
+You MUST disable browser headers/footers in the print output.
+
+This cannot be fixed with normal CSS alone if using native print.
+
+Do ONE of the following (preferred order):
+
+Option A (BEST)
+Use a controlled PDF/print rendering method instead of raw browser print:
+
+* server-side PDF (puppeteer / playwright)
+* or client print config that disables headers
+
+Option B (if staying with browser print)
+Force print styles and instruct print config:
+
+Add:
+@page {
+margin: 0;
+}
+
+Then create your own internal page padding container.
+
+Also ensure:
+
+* no default header/footer is enabled in print settings
+* if your print trigger uses window.print(), ensure UI disables headers where possible
+
+Important
+The final PDF MUST NOT show:
+
+* date/time at top
+* ClockField at top
+
+---
+
+2. FIX PAGE 2 TOP SPACING (MAIN ISSUE)
+
+Problem
+Page 2 starts too high.
+No top breathing room.
+
+Root cause
+Content is flowing across pages without a repeated page container.
+
+Fix (DO THIS PROPERLY)
+
+You need a TRUE printable page container.
+
+Structure:
+
+.report-page {
+padding-top: 40px;
+padding-bottom: 40px;
+padding-left: 40px;
+padding-right: 40px;
+box-sizing: border-box;
+}
+
+Then enforce page behavior:
+
+.report-page {
+page-break-after: always;
+}
+
+.report-page:last-child {
+page-break-after: auto;
+}
+
+Key rule
+
+Every page must render inside .report-page
+NOT just one long flowing container.
+
+---
+
+If you are NOT using page wrappers (current issue)
+
+Then apply:
+
+@media print {
+body {
+margin: 0;
+}
+
+.report-container {
+padding: 40px 40px;
+}
+}
+
+AND MOST IMPORTANT:
+
+Force spacing for elements that start a new page:
+
+.acknowledgement-section {
+page-break-before: always;
+padding-top: 40px;
+}
+
+This ensures when it moves to page 2:
+
+* it does NOT start at top edge
+* it has consistent spacing
+
+---
+
+3. FIX LEFT ALIGNMENT SHIFT
+
+Problem
+Content slightly too close to the left (seen in screenshot)
+
+Fix
+
+Ensure main container has consistent horizontal padding:
+
+.report-container {
+padding-left: 40px;
+padding-right: 40px;
+}
+
+Do NOT rely on browser margins.
+
+---
+
+4. KEEP SIGNATURE SECTION CLEAN
+
+Already correct direction. Just ensure:
+
+.acknowledgement-section {
+margin-top: 30px;
+padding-top: 20px;
+}
+
+.signature-grid {
+break-inside: avoid;
+page-break-inside: avoid;
+}
+
+Do NOT let signature cards split.
+
+---
+
+5. EMPLOYEE STATEMENT (MANDATORY)
+
+Add this section BEFORE "IMMEDIATE ACTION TAKEN"
+
+Structure:
+
+if (employeeStatement exists):
+
+Render:
+
+EMPLOYEE STATEMENT
+
+[employee statement text]
+
+Rules:
+
+* preserve line breaks
+* no rewriting
+* same styling as other sections
+* proper spacing above and below
+
+If no statement:
+
+* do not render anything
+
+---
+
+6. FINAL LAYOUT RULES (NON-NEGOTIABLE)
+
+Every page must:
+
+* have top spacing
+* have bottom spacing
+* have equal left/right padding
+* not rely on browser margins
+* not show browser headers
+* not cut sections awkwardly
+
+---
+
+7. DO NOT BREAK
+
+Do not touch:
+
+* report logic
+* signature saving
+* email sending
+* public report links
+* auth
+* anything outside print template
+
+---
+
+ACCEPTANCE CHECKLIST
+
+Must ALL pass:
+
+* page 1 clean
+* page 2 has SAME top spacing as page 1
+* NO date/time at top
+* NO ClockField at top
+* left/right spacing consistent
+* signature section not glued to top
+* employee statement appears when exists
+* PDF matches preview
+* no layout shifting between pages
+
+---
+
+FINAL INSTRUCTION
+
+Stop patching individual sections.
+
+Fix the root:
+→ enforce a real print layout system with consistent page padding.
+
+Only then everything will stop breaking.
