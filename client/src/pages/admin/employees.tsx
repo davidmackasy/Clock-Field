@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { parseApiError } from "@/lib/parse-error";
 import { Plus, Search, Mail, Phone, DollarSign, KeyRound, UserCheck, UserX, RefreshCw, Copy, Users, Calendar, Clock, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -152,7 +153,8 @@ export default function AdminEmployees() {
         setOpen(false);
         setUpgradeReason(limitReason);
       } else {
-        toast({ title: "Error", description: err.message, variant: "destructive" });
+        const { title, description } = parseApiError(err);
+        toast({ title, description, variant: "error" } as any);
       }
     },
   });

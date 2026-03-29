@@ -1,0 +1,169 @@
+Dev note for agent
+
+Task
+Improve only the UI/UX of this error message so it looks professional and matches the app.
+
+Important
+Do not change auth flow.
+Do not change signup logic.
+Do not change backend validation logic.
+Do not change database behavior.
+Do not touch anything else outside the error display layer unless approval is given.
+This task is UI-only plus safe client-side error mapping for display text.
+
+Problem
+The current error toast looks unprofessional because:
+
+* it uses a harsh red block
+* it exposes raw backend/server text
+* the message overflows and looks broken
+* it shows technical database details to the user
+
+Current bad example
+500: {"message":"duplicate key value violates unique constraint "users_email_unique""}
+
+What needs to happen
+Replace the raw error toast with a polished app-style notification/modal/toast that:
+
+* matches the app design
+* has clean spacing
+* uses readable typography
+* has controlled width
+* wraps text properly
+* never exposes database or server internals to the user
+
+Expected user-facing message
+For this specific error, show something like:
+
+Title:
+Account already exists
+
+Body:
+An account with this email already exists. Please sign in instead, or use a different email.
+
+Optional secondary line:
+If you already signed up before, try logging in with that same email.
+
+UI requirements
+Use the same design language as the rest of the app.
+Do not use the bright raw red background unless it is already part of the brand system and toned properly.
+Prefer:
+
+* soft error background
+* subtle border
+* rounded corners
+* small icon
+* proper padding
+* readable font size
+* max width so text stays inside
+* smooth entrance and exit animation
+
+Recommended structure
+Toast or alert card:
+
+* error icon on the left
+* title on top
+* short clean description below
+* close button aligned properly
+* auto-dismiss after a few seconds, but allow manual close
+
+Suggested styling direction
+
+* background: light danger tint or app-themed surface
+* border: subtle error border
+* text: dark readable text
+* title: semibold
+* description: smaller muted text
+* shadow: soft, not heavy
+* border radius: consistent with app cards/modals
+
+Behavior rules
+
+1. Never show raw backend JSON to end users.
+2. Never show SQL/database constraint names.
+3. Never allow message overflow outside the toast/container.
+4. Keep the error box responsive on desktop and mobile.
+5. If message is long, wrap neatly and keep line height readable.
+6. Make sure close button stays visible and aligned.
+7. Keep current error handling working. Only improve presentation and user-safe message mapping.
+
+Safe mapping logic
+Add a frontend error parser/helper only for display purposes.
+
+Examples:
+If backend message contains:
+
+* duplicate key
+* users_email_unique
+* email already exists
+
+Show:
+Account already exists
+An account with this email already exists. Please sign in instead, or use a different email.
+
+Fallback for unknown errors
+Title:
+Something went wrong
+
+Body:
+We could not complete your request right now. Please try again.
+
+Do not expose:
+
+* 500
+* raw JSON
+* stack traces
+* SQL errors
+* internal constraint names
+
+Implementation guidance
+Look for the shared toast, alert, snackbar, or error rendering component used by this screen.
+Update only that presentation path for this case.
+If there is a global error handler already in place, do not rewrite it fully.
+Only add safe display mapping and style cleanup where this specific message is rendered.
+
+If the app uses a toast library
+Update:
+
+* max width
+* whitespace wrapping
+* padding
+* title/body layout
+* icon alignment
+* close button position
+* color palette
+* shadow
+* border radius
+
+If the app uses a custom component
+Make sure it supports:
+
+* title
+* message
+* type
+* dismiss
+* icon
+* responsive layout
+
+Acceptance criteria
+
+* No raw backend error appears to users
+* The duplicate email case shows a clean professional message
+* The error stays inside the container with proper wrapping
+* The component matches the app UI
+* Mobile and desktop both look good
+* No auth, backend, or database logic is changed
+* No unrelated files or flows are modified
+
+Suggested final user message on screen
+Account already exists
+An account with this email already exists. Please sign in instead, or use a different email.
+
+Optional UX improvement
+If there is already a sign-in route/button nearby, include a subtle action:
+Sign in
+
+Only add that if it already fits naturally into the current flow. Do not redesign the page.
+
+Final restriction
+Do not touch anything else. Do not refactor unrelated forms, auth, or API logic. Only improve the error display and safe user-facing messaging for this case.
