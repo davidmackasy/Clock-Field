@@ -585,6 +585,13 @@ Welcome again, and thank you for choosing ClockField.
       const target = await storage.getUser(req.params.id);
       if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       const { password: _p, tempPin: _t, employeeId: _e, accountStatus: _a, loginEnabled: _l, mustChangePassword: _m, ...allowedFields } = req.body;
+      const toNum = (v: any) => {
+        if (v === "" || v === undefined || v === null) return null;
+        const n = Number(v);
+        return isNaN(n) ? null : n;
+      };
+      if ("hourlyRate" in allowedFields) allowedFields.hourlyRate = toNum(allowedFields.hourlyRate);
+      if ("overtimeRate" in allowedFields) allowedFields.overtimeRate = toNum(allowedFields.overtimeRate);
       const employee = await storage.updateUser(req.params.id, allowedFields);
       if (!employee) return res.status(404).json({ message: "Not found" });
       const { password: _, tempPin: __, ...safe } = employee;

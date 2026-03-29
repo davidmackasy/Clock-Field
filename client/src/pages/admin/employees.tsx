@@ -509,7 +509,21 @@ export default function AdminEmployees() {
 
                       <Button
                         className="w-full"
-                        onClick={() => updateMutation.mutate(editData)}
+                        onClick={() => {
+                          const rateRaw = editData.hourlyRate;
+                          let hourlyRate: number | null;
+                          if (rateRaw === "" || rateRaw === undefined || rateRaw === null) {
+                            hourlyRate = null;
+                          } else {
+                            const n = Number(rateRaw);
+                            if (isNaN(n)) {
+                              toast({ title: "Invalid hourly rate", description: "Please enter a valid number or leave it blank.", variant: "destructive" });
+                              return;
+                            }
+                            hourlyRate = n;
+                          }
+                          updateMutation.mutate({ ...editData, hourlyRate: hourlyRate as any });
+                        }}
                         disabled={updateMutation.isPending}
                       >
                         {updateMutation.isPending ? "Saving..." : "Save Changes"}

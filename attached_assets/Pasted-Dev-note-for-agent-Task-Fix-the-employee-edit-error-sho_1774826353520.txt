@@ -1,0 +1,214 @@
+Dev note for agent
+
+Task
+
+Fix the employee edit error shown when saving employee information.
+
+Focus only on this issue.
+Do not touch anything else.
+
+Do not touch
+
+* attendance
+* payroll calculations
+* reports
+* client accounts
+* email flow
+* auth
+* scheduling
+* notifications
+* employee creation flow unless needed for this exact fix
+* any unrelated UI or backend code
+
+Problem
+
+When editing an employee, saving fails with:
+
+500: {"message":"invalid input syntax for type numeric: """}
+
+This strongly points to a numeric field being sent as an empty string instead of null or a real number.
+
+Most likely field
+Hourly Rate ($)
+
+In the screenshot, Hourly Rate is blank.
+The backend/database numeric column is probably receiving:
+""
+instead of:
+null
+or
+0
+or
+a valid numeric value
+
+Root cause to fix
+
+The employee update flow is sending empty string values for numeric fields.
+Postgres numeric columns cannot accept an empty string.
+
+Required fix
+
+Make the employee edit/update flow safely normalize numeric inputs before sending to the backend and before writing to the database.
+
+Main rule
+
+For numeric fields in employee edit:
+
+* if the field is blank, send null
+* if the field has a value, convert it to a proper number
+* never send empty string to a numeric DB column
+
+What to check
+
+1. Frontend form state
+   Check the employee edit form values for fields like:
+
+* hourlyRate
+* any other numeric employee fields
+
+If input is blank, do not keep it as "" when building the payload.
+
+Required frontend normalization example
+
+* "" -> null
+* "25" -> 25
+* "25.50" -> 25.5
+
+2. Submit payload builder
+   Before calling the update API, sanitize the payload.
+
+Example logic
+
+* trim string inputs
+* for numeric fields:
+
+  * if value === "" or value is undefined, convert to null
+  * else convert to Number(value)
+  * only send valid numbers or null
+
+3. Backend validation/schema
+   Also protect this on the server side.
+   Do not rely only on frontend cleanup.
+
+On the employee update endpoint:
+
+* if numeric field arrives as ""
+* convert it to null before DB update
+  or reject it cleanly before query building
+
+Preferred
+Normalize server-side too, so the API is safe even if the client sends bad data.
+
+4. Database update query
+   Make sure the update query is writing:
+
+* numeric value
+  or
+* null
+
+Never pass empty string to numeric columns.
+
+Likely fix target
+
+The main failing field appears to be:
+Hourly Rate ($)
+
+So fix this exact behavior first:
+
+* admin can leave hourly rate blank and still save employee edits successfully
+
+Expected behavior after fix
+
+If hourly rate is blank:
+
+* employee info saves successfully
+* database stores null if that field is optional
+
+If hourly rate has a valid number:
+
+* save successfully as numeric
+
+If hourly rate is invalid text:
+
+* do not send broken payload
+* show a clean validation message like:
+  Hourly rate must be a valid number
+
+Do not show raw 500 errors to users.
+
+UI error handling
+
+Replace the raw server error toast for this case with a clean message.
+
+Bad
+500: {"message":"invalid input syntax for type numeric: """}
+
+Good
+Could not save employee details. Please enter a valid hourly rate or leave it blank.
+
+But only if needed.
+The main goal is to prevent the error entirely.
+
+Implementation guidance
+
+Frontend
+
+* inspect employee edit form default values
+* inspect controlled input for hourly rate
+* inspect submit handler
+* convert blank numeric input to null before API call
+
+Backend
+
+* inspect employee update route/controller
+* inspect validation schema
+* normalize empty string numeric fields to null
+* ensure DB update uses proper numeric/null values only
+
+Do not change the DB schema unless absolutely required.
+This looks like a payload normalization bug, not a schema problem.
+
+Acceptance criteria
+
+This is complete only if all of these are true:
+
+* editing employee info no longer throws numeric syntax error
+* blank hourly rate saves successfully if field is optional
+* valid hourly rate saves successfully
+* invalid text in hourly rate is handled cleanly
+* no raw DB error is shown to the user
+* no unrelated employee flows are changed
+* nothing outside employee edit is affected
+
+Test cases
+
+Test all of these:
+
+1. Edit employee with hourly rate left blank
+
+* save succeeds
+
+2. Edit employee with hourly rate set to 20
+
+* save succeeds
+
+3. Edit employee with hourly rate set to 20.50
+
+* save succeeds
+
+4. Edit employee with hourly rate changed from number to blank
+
+* save succeeds and stores null if optional
+
+5. Edit employee with invalid hourly rate like abc
+
+* save blocked with clean validation message
+
+6. Edit only name/email/phone while hourly rate is blank
+
+* save succeeds
+
+Final instruction
+
+Do not touch anything else.
+Fix only the employee edit/update flow so blank numeric fields, especially hourly rate, are handled properly and do not crash saving.
