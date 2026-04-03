@@ -4348,16 +4348,17 @@ Return a JSON object with these exact fields:
       const session = await storage.getFieldNotesSession(req.params.sessionId);
       if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       if (user.role === "employee" && session.createdByUserId !== user.id) return res.status(403).json({ message: "Forbidden" });
-      const { rawText, chunkIndex, startedAt } = req.body;
+      const { rawText, chunkIndex, startedAt, endedAt } = req.body;
       if (!rawText) return res.status(400).json({ message: "rawText required" });
       const now = new Date().toISOString();
       const chunk = await storage.addFieldNotesTranscriptChunk({
         sessionId: session.id,
         chunkIndex: chunkIndex ?? 0,
         startedAt: startedAt || now,
+        endedAt: endedAt || null,
         rawText,
         createdAt: now,
-      });
+      } as any);
       res.json(chunk);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -4461,102 +4462,182 @@ Return a JSON object with these exact fields:
     ]);
     const fullTranscript = chunks.map(c => c.rawText).join(" ").trim();
     if (!fullTranscript && assets.length === 0) {
-      await storage.updateFieldNotesSession(sessionId, {
-        status: "ready",
-        aiStatus: "done",
-        aiSummary: "No transcript or photos captured.",
-        clientSafeSummary: "Site visit recorded.",
-      });
+      await storage.updateFieldNotesSession(sessionId, { status: "ready", aiStatus: "done", aiSummary: "No transcript or photos captured.", clientSafeSummary: "Site visit recorded." });
       return;
     }
     let locationName = "";
-    if (session.locationId) {
-      const loc = await storage.getLocation(session.locationId);
-      locationName = loc?.name ?? "";
-    }
-    const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const prompt = {
-      sessionType: session.sessionType,
-      locationName,
-      photoCount: assets.length,
-      transcript: fullTranscript || "(no voice recording)",
-      photoDescriptions: assets.map((a, i) => `Photo ${i + 1}: ${a.caption || "No caption"} at ${a.capturedAt}`),
-    };
-    const completion = await openaiClient.chat.completions.create({
-      model: "gpt-4o",
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content: `You are a professional cleaning site documentation assistant. Analyze the field visit transcript and photo info, then produce structured field notes in JSON.
+    if (session.locationId) { const loc = await storage.getLocation(session.locationId); locationName = loc?.name ?? ""; }
 
-Return ONLY valid JSON with this exact structure:
+    // ── Step 1: Link photos to transcript chunks by timestamp ──────────────────
+    function linkPhotoToChunk(capturedAt: string | null) {
+      if (!capturedAt || chunks.length === 0) return null;
+      const capturedMs = new Date(capturedAt).getTime();
+      if (isNaN(capturedMs)) return null;
+      let best: any = null; let bestScore = Infinity;
+      for (const chunk of chunks) {
+        if (!chunk.startedAt) continue;
+        const startMs = new Date(chunk.startedAt).getTime();
+        const endMs = (chunk as any).endedAt ? new Date((chunk as any).endedAt).getTime() : startMs + 30000;
+        if (capturedMs >= startMs - 2000 && capturedMs <= endMs + 3000) return chunk; // active match
+        const diff = capturedMs < startMs ? startMs - capturedMs : capturedMs - endMs;
+        if (diff <= 15000 && diff < bestScore) { best = chunk; bestScore = diff; }
+      }
+      return best;
+    }
+    const photoLinks = assets.map((asset, idx) => ({
+      asset,
+      idx,
+      chunk: linkPhotoToChunk(asset.capturedAt),
+    }));
+
+    // ── Step 2: Build fallback entries (used if AI fails) ──────────────────────
+    async function saveFallbackEntries() {
+      for (const { asset, idx, chunk } of photoLinks) {
+        const relTx = chunk?.rawText ?? null;
+        await storage.createFieldNotesEntry({
+          sessionId,
+          entryType: "observation",
+          areaName: null,
+          title: `Photo ${idx + 1}` + (relTx ? ` — ${relTx.slice(0, 40)}${relTx.length > 40 ? "…" : ""}` : ""),
+          body: relTx ?? "Photo captured during site visit.",
+          clientSafeSummary: null,
+          priority: "normal",
+          sortOrder: idx,
+          photoIndexes: JSON.stringify([idx]),
+          assetIds: JSON.stringify([asset.id]),
+          relatedTranscript: relTx,
+          issueDetected: false,
+          recommendedAction: null,
+          createdByAi: false,
+          createdAt: now, updatedAt: now,
+        } as any);
+      }
+      if (assets.length === 0 && fullTranscript) {
+        await storage.createFieldNotesEntry({
+          sessionId, entryType: "general_note", areaName: null,
+          title: "Voice Recording", body: fullTranscript,
+          clientSafeSummary: null, priority: "normal", sortOrder: 0,
+          photoIndexes: null, assetIds: null, relatedTranscript: fullTranscript,
+          issueDetected: false, recommendedAction: null, createdByAi: false,
+          createdAt: now, updatedAt: now,
+        } as any);
+      }
+    }
+
+    // ── Step 3: Build AI prompt with linked photo-transcript data ──────────────
+    const linkedPhotos = photoLinks.map(({ asset, idx, chunk }) => ({
+      photo_id: asset.id,
+      photo_index: idx,
+      captured_at: asset.capturedAt,
+      linked_transcript: chunk?.rawText ?? null,
+    }));
+
+    // ── Step 4: Call OpenAI ───────────────────────────────────────────────────
+    let entryList: any[] = [];
+    let sessionSummary = "";
+    let clientSafe = "";
+    try {
+      const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const completion = await openaiClient.chat.completions.create({
+        model: "gpt-4o",
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: `You are a professional cleaning site documentation assistant. You receive linked photo-transcript data from a field recording session and produce structured field notes as a JSON document.
+
+Each photo has an ID and a voice note said around the time of capture. Generate one documentation entry per photo or logical group, preserving capture order.
+
+Return ONLY valid JSON:
 {
-  "session_summary": "2-3 sentence summary of the visit",
-  "client_safe_summary": "1-2 sentence client-facing summary",
+  "session_summary": "2-4 sentence summary covering all areas visited",
+  "client_safe_summary": "1-2 sentence professional client-facing overview",
   "entries": [
     {
+      "sort_order": 0,
       "entry_type": "observation|issue|cleaning_scope|damage|risk|supply_note|before_condition|after_condition|general_note",
       "area_name": "area name or null",
-      "title": "short title",
-      "body": "detailed note",
+      "title": "short descriptive title",
+      "body": "detailed professional note",
       "client_safe_summary": "client-friendly version or null",
       "priority": "low|normal|high|critical",
       "issue_detected": true or false,
-      "recommended_action": "action or null",
-      "tags": ["tag1", "tag2"],
-      "photo_indexes": [0, 1]
+      "recommended_action": "specific action or null",
+      "photo_ids": ["photo-uuid-here"],
+      "related_transcript": "exact or cleaned transcript text",
+      "tags": ["tag1", "tag2"]
     }
   ]
 }
 
-Produce 3-8 entries based on the content. Focus on actionable, specific observations.`,
-        },
-        { role: "user", content: JSON.stringify(prompt) },
-      ],
-    });
-    const raw = completion.choices[0]?.message?.content ?? "{}";
-    let parsed: any = {};
-    try { parsed = JSON.parse(raw); } catch { parsed = {}; }
-    const sessionSummary = parsed.session_summary || "Field notes processed.";
-    const clientSafe = parsed.client_safe_summary || "Site visit completed.";
-    const entryList: any[] = Array.isArray(parsed.entries) ? parsed.entries : [];
-    for (let i = 0; i < entryList.length; i++) {
-      const e = entryList[i];
-      const entry = await storage.createFieldNotesEntry({
-        sessionId,
-        entryType: e.entry_type || "observation",
-        areaName: e.area_name || null,
-        title: e.title || "Note",
-        body: e.body || "",
-        clientSafeSummary: e.client_safe_summary || null,
-        priority: e.priority || "normal",
-        sortOrder: i,
-        photoIndexes: Array.isArray(e.photo_indexes) ? JSON.stringify(e.photo_indexes) : null,
-        issueDetected: !!e.issue_detected,
-        recommendedAction: e.recommended_action || null,
-        createdByAi: true,
-        createdAt: now,
-        updatedAt: now,
+IMPORTANT:
+- photo_ids must use the exact UUID strings provided in photo_id fields
+- sort_order must match photo capture sequence
+- Every photo should appear in at least one entry
+- If no transcript linked, still create an entry from the area context
+- Focus on actionable, professional observations`,
+          },
+          {
+            role: "user",
+            content: JSON.stringify({
+              session_type: session.sessionType,
+              location_name: locationName || "Unnamed location",
+              full_transcript: fullTranscript || "(no voice recording)",
+              linked_photos: linkedPhotos,
+            }),
+          },
+        ],
       });
-      if (Array.isArray(e.tags)) {
-        for (const tag of e.tags) {
-          await db.insert(fieldNotesEntryTags).values({
-            entryId: entry.id,
-            sessionId,
-            tagName: String(tag),
-            createdAt: now,
-          });
+      const raw = completion.choices[0]?.message?.content ?? "{}";
+      let parsed: any = {};
+      try { parsed = JSON.parse(raw); } catch { parsed = {}; }
+      sessionSummary = parsed.session_summary || "";
+      clientSafe = parsed.client_safe_summary || "";
+      entryList = Array.isArray(parsed.entries) ? parsed.entries : [];
+    } catch (aiErr: any) {
+      console.error("[FieldNotes] AI call failed:", aiErr.message);
+    }
+
+    // ── Step 5: Save entries (or fallback) ────────────────────────────────────
+    if (entryList.length === 0) {
+      console.log("[FieldNotes] AI returned no entries — using fallback");
+      await saveFallbackEntries();
+      sessionSummary = sessionSummary || (fullTranscript ? fullTranscript.slice(0, 200) : "Site visit documented.");
+      clientSafe = clientSafe || "Site visit completed.";
+    } else {
+      entryList.sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999));
+      for (let i = 0; i < entryList.length; i++) {
+        const e = entryList[i];
+        const entry = await storage.createFieldNotesEntry({
+          sessionId,
+          entryType: e.entry_type || "observation",
+          areaName: e.area_name || null,
+          title: e.title || `Note ${i + 1}`,
+          body: e.body || "",
+          clientSafeSummary: e.client_safe_summary || null,
+          priority: e.priority || "normal",
+          sortOrder: i,
+          photoIndexes: Array.isArray(e.photo_ids) ? JSON.stringify(e.photo_ids.map((id: string) => assets.findIndex(a => a.id === id)).filter((n: number) => n >= 0)) : null,
+          assetIds: Array.isArray(e.photo_ids) ? JSON.stringify(e.photo_ids) : null,
+          relatedTranscript: e.related_transcript || null,
+          issueDetected: !!e.issue_detected,
+          recommendedAction: e.recommended_action || null,
+          createdByAi: true,
+          createdAt: now, updatedAt: now,
+        } as any);
+        if (Array.isArray(e.tags)) {
+          for (const tag of e.tags) {
+            await db.insert(fieldNotesEntryTags).values({ entryId: entry.id, sessionId, tagName: String(tag), createdAt: now });
+          }
         }
       }
     }
     await storage.updateFieldNotesSession(sessionId, {
-      status: "ready",
-      aiStatus: "done",
-      aiSummary: sessionSummary,
-      clientSafeSummary: clientSafe,
+      status: "ready", aiStatus: "done",
+      aiSummary: sessionSummary || "Field notes processed.",
+      clientSafeSummary: clientSafe || "Site visit completed.",
     });
-    console.log(`[FieldNotes] AI processing complete for session ${sessionId}: ${entryList.length} entries`);
+    console.log(`[FieldNotes] Processing complete for ${sessionId}: ${entryList.length} entries`);
   }
 
   // Run once at startup to migrate any /uploads/ imageUrls to base64 in DB

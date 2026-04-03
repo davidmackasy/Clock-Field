@@ -1,0 +1,544 @@
+DEVNOTE: UPDATE FIELD NOTES MOBILE RECORDING UI, PHOTO-TO-TRANSCRIPT LINKING, AI NOTES OUTPUT, AND PROJECT-BASED SESSION ORGANIZATION
+
+Main instruction
+
+Do not break anything else.
+Do not touch unrelated backend logic.
+Do not change attendance.
+Do not change payroll.
+Do not change scheduling.
+Do not change the active client report flow.
+Do not refactor existing project logic outside what is strictly required for Field Notes display and grouping.
+Do not replace current upload or photo preview behavior if it is already working.
+Only fix and improve the Field Notes experience exactly as described below.
+
+Goal
+
+Improve the new Field Notes flow so it works like a real documented site-visit tool.
+
+Right now there are three main problems:
+
+1. During recording, the voice controls and stop button are hidden or not fitting properly on mobile.
+2. The transcript and photos are not being tied together in a meaningful way.
+3. AI Notes is not producing a usable structured result after processing.
+4. Sessions need to feel like their own organized documentation record under the project so users can come back later and review everything clearly.
+
+This update should make Field Notes feel like a proper visual document, where each photo is tied to what was said around the moment it was taken, and the final output reads like a clean inspection or site-visit document.
+
+PART 1: FIX MOBILE RECORDING LAYOUT
+
+Problem
+
+On the live recording screen, the recording controls are being hidden while the user is recording. The user must always be able to see:
+the timer
+the record state
+the photo count
+the capture photo button
+the voice state
+the stop button
+
+Required update
+
+Rework the mobile recording layout so the controls always fit within the visible screen area while recording.
+
+Required mobile layout behavior
+
+Top bar must always stay visible:
+Back
+recording indicator
+elapsed time
+photo count
+
+The recording controls must remain pinned and visible at the bottom or lower-middle of the screen.
+Do not allow them to be pushed below the fold.
+Do not let the image preview area consume the full screen if it causes the controls to disappear.
+
+Recommended mobile recording structure
+
+Top fixed header:
+Back
+red recording dot
+timer
+photo count
+
+Middle camera/photo preview area:
+large live preview
+optional last photo thumbnail
+do not let this section grow so large that controls disappear
+
+Bottom fixed action area:
+photo button
+voice state indicator
+pause or resume if applicable
+stop session button
+
+Important UI rule
+
+The stop button must always be visible during recording.
+The user must never need to scroll to stop recording.
+
+If needed:
+reduce preview height
+compress spacing
+use sticky bottom controls
+reduce unnecessary white space
+keep the top timer fixed
+
+Do not redesign unrelated navigation.
+Just fix the Field Notes live recording screen.
+
+PART 2: LINK EACH PHOTO TO WHAT THE USER SAID AROUND THAT PHOTO
+
+Problem
+
+Right now the photos and transcript are separate.
+That is not the intended experience.
+
+The user wants this behavior:
+They speak while documenting the space.
+They take a photo.
+That photo should later show the note or transcript segment that matches what they were saying around that moment.
+
+Example:
+“This is the kitchen and the counters need deep cleaning.”
+Then the picture is taken.
+That kitchen image should later display that related transcript or AI note with it.
+
+Required update
+
+Each photo captured during a recording session must be linked to the transcript window around the time the photo was taken.
+
+Required logic
+
+When a photo is taken:
+store the photo timestamp exactly
+
+When transcript chunks are created:
+store transcript start and end times exactly
+
+Then assign each photo to the transcript chunk or transcript window nearest to that capture time.
+
+Recommended correlation logic
+
+For each image:
+find the transcript chunk active at that timestamp
+if none exists exactly, use the nearest chunk before and after within a small time window
+merge nearby spoken context into one linked note if needed
+
+Suggested time-link window:
+primary match = transcript active at photo timestamp
+fallback = nearest transcript within about 5 to 12 seconds before photo
+secondary fallback = nearest transcript within about 3 to 8 seconds after photo
+
+Do not use random matching.
+Do not match one transcript block to all photos.
+Do not keep them fully separate.
+
+Expected output behavior in Session Detail
+
+For every photo card or photo block:
+show the image
+show a short title generated from the related speech
+show the related transcript snippet
+show the AI-cleaned note for that image
+
+Example visual structure
+
+Photo 1
+Area: Kitchen
+Spoken note: “This is the kitchen and these counters need deep cleaning.”
+AI note: Kitchen counters require deep cleaning and wipe-down. Check edges and backsplash area.
+
+Photo 2
+Area: Washroom
+Spoken note: “This bathroom floor needs extra attention.”
+AI note: Washroom floor requires detailed scrubbing and disinfecting.
+
+This is one of the most important updates.
+The pictures and speech must feel tied together.
+
+PART 3: CHANGE THE OUTPUT SO IT FEELS LIKE A DOCUMENT, NOT SEPARATE TABS ONLY
+
+Problem
+
+The current result view feels split into separate Photos, Transcript, and AI Notes tabs without enough connection between them.
+The final output should read like a clean organized document.
+
+Required update
+
+Keep the tabs if needed, but the main default result should be a unified documentation view.
+
+Required session detail structure
+
+When a session finishes processing, the default view should show:
+
+Session header
+Session title
+project name
+date
+time
+duration
+captured by
+status
+
+AI summary section
+short overview of the visit
+main areas covered
+main issues or cleaning scope
+
+Documentation body
+A vertically organized sequence of documented items
+
+Each documented item should include:
+photo
+area title
+spoken note
+AI cleaned note
+optional tags
+optional timestamp
+
+This should read like:
+image + explanation + cleaned result
+
+Not:
+all photos in one place
+all transcript in another place
+all notes in another place
+
+You can still keep supporting tabs:
+Overview
+Document View
+Photos
+Transcript
+
+But the main selected tab after processing should be:
+Document View
+or
+AI Notes
+
+And that view must merge the photo and related note together.
+
+PART 4: FIX AI NOTES NOT SHOWING ANYTHING
+
+Problem
+
+AI Notes currently shows zero or empty after processing.
+That means one of these is happening:
+AI processing is not returning structured data
+AI data is not being saved
+UI is not reading the saved result
+AI is running before enough transcript/photo data exists
+data mapping is failing
+
+Required update
+
+Fix the end-to-end AI Notes generation flow so every completed recording produces structured output.
+
+Required minimum AI output
+
+For each completed session, AI should generate:
+session summary
+list of documented items
+each documented item tied to one or more photos
+cleaned note per documented item
+optional action needed
+optional area name
+
+Required minimum fields per generated documented item
+
+item_title
+area_name
+photo_ids
+related_transcript_text
+cleaned_note
+sort_order
+timestamp_reference
+
+Do not let the UI depend on a giant freeform blob only.
+Do not show empty AI Notes if photos and transcript exist.
+
+Fallback rule
+
+If AI structuring fails for any reason:
+still generate a basic note entry per photo using:
+nearest transcript snippet
+raw transcript text
+photo order
+capture timestamp
+
+This means even if GPT processing fails, the user should still see something useful instead of an empty AI Notes screen.
+
+Fallback example
+
+Photo 1
+Raw linked transcript: “This is the kitchen and it needs deep cleaning.”
+
+Photo 2
+Raw linked transcript: “This floor needs scrubbing near the corner.”
+
+Then later AI can refine it.
+But never show a blank result if data exists.
+
+PART 5: EACH RECORDING SESSION MUST BE CLEARLY TIED TO A PROJECT
+
+Problem
+
+The user wants each recording to live clearly under its project, so later the admin or user can return and review what happened that day.
+
+Required update
+
+Each Field Notes session must be treated as a project-linked documentation record.
+
+Important clarification
+
+Do not create a brand new project in the system for every recording if that would break the existing project model.
+Instead:
+each recording session should belong to one existing project
+and inside that project it should behave like its own structured documentation entry or visit record
+
+Recommended model
+
+Project
+└── Field Notes Sessions
+├── Site Visit - Apr 2, 2026 - 9:46 PM
+├── Pre-Clean Walkthrough - Apr 3, 2026 - 8:15 AM
+├── Post-Clean Review - Apr 3, 2026 - 6:45 PM
+
+This is the correct behavior.
+
+Required project detail behavior
+
+Inside a project, add a Field Notes section or tab showing all sessions for that project.
+Each session card should show:
+title
+date
+time
+photo count
+processing state
+created by
+
+Clicking a session opens the full detail document.
+
+Required main Field Notes page behavior
+
+The global Field Notes page should also group by project and date so users can find documentation easily.
+
+Grouping example
+
+Project: Miller House
+Apr 2, 2026
+Site Visit
+5 photos
+1 summary
+created by Admin
+
+Project: Office Downtown
+Apr 1, 2026
+Post-Clean Review
+8 photos
+2 key notes
+created by Cleaner John
+
+This makes it easier to maneuver later.
+
+PART 6: PHOTO PREVIEW MUST STAY WORKING
+
+Problem
+
+The user wants the photo preview behavior to stay easy and clean.
+
+Required update
+
+Do not remove the existing tap-to-preview image behavior.
+Keep it working as it currently does.
+
+But add this improvement:
+when previewing a photo from a session, the preview screen should also optionally show the related note or transcript snippet for that photo.
+
+Recommended preview enhancement
+
+On image preview:
+full image
+timestamp
+linked note
+linked transcript line
+position within session, such as Photo 2 of 5
+
+Do not overcrowd the photo preview.
+Keep it simple and readable.
+
+PART 7: REQUIRED SESSION DETAIL PAGE STRUCTURE
+
+Update the session detail page to this structure:
+
+Header block
+Back to Field Notes
+Session title
+edit icon if allowed
+date and time
+duration
+processing state
+project name
+created by
+
+Processing banner
+If processing:
+“AI is analyzing your photos and voice notes...”
+This can stay, but once processing is done it must disappear automatically.
+
+Main tabs
+Document
+Photos
+Transcript
+
+Document tab
+This should be the main tab once ready.
+It shows:
+AI summary
+documented items in order
+each item with photo + linked speech + AI note
+
+Photos tab
+Grid of images
+Each image card should show:
+timestamp
+optional area title
+linked note snippet
+tap to preview
+
+Transcript tab
+Full transcript in chronological order
+Show markers where photos were taken
+
+Example transcript marker:
+[Photo 2 captured]
+“This is the bathroom floor and it needs a deep scrub.”
+
+That makes the transcript easier to follow.
+
+PART 8: ADD PHOTO MARKERS INSIDE TRANSCRIPT VIEW
+
+Problem
+
+If transcript and photos are connected, the transcript should reflect where photos happened.
+
+Required update
+
+In the transcript tab, insert visual markers wherever a photo was taken.
+
+Example
+
+00:04
+“This is the kitchen.”
+
+[Photo 1 captured]
+
+00:09
+“The counters need deep cleaning.”
+
+This makes the recording readable like a timeline.
+
+If possible, make the photo marker tappable so it jumps to that photo.
+
+PART 9: SORT EVERYTHING IN CAPTURE ORDER
+
+All content inside one session must be shown in the same real-world order the user created it.
+
+Sort order should be:
+by photo capture time
+or by linked timestamp order
+not random
+not AI-generated order detached from capture sequence
+
+The document should feel like a walkthrough from beginning to end.
+
+PART 10: UI IMPROVEMENTS FOR MOBILE SESSION DETAIL
+
+The session detail mobile view should feel cleaner and tighter.
+
+Update these:
+reduce unnecessary top spacing
+keep the session header compact
+make the processing banner shorter in height
+make the tabs more readable
+ensure the selected tab is obvious
+ensure image cards have clean spacing
+keep the bottom navigation untouched unless absolutely necessary
+
+Do not rebuild the whole mobile app layout.
+Only refine this screen.
+
+PART 11: DO NOT CHANGE UNRELATED BACKEND FLOWS
+
+This is critical.
+
+You said not to affect backend or anything else.
+So follow this exactly:
+
+Do not rewrite global project logic.
+Do not modify current submission logic.
+Do not modify current reports flow.
+Do not alter attendance models.
+Do not change user role behavior globally.
+Do not refactor unrelated APIs.
+
+Only make targeted updates required for:
+Field Notes recording screen layout
+Field Notes session-to-project organization
+photo-to-transcript correlation
+AI Notes generation and display
+session detail rendering
+
+If any backend adjustment is required, keep it isolated to Field Notes only.
+
+PART 12: SAFE IMPLEMENTATION PLAN
+
+Step 1
+Fix the live recording mobile layout first.
+Make timer and stop button always visible.
+
+Step 2
+Add exact timestamp linking between photos and transcript chunks.
+
+Step 3
+Update session detail UI so the default result is document-style.
+
+Step 4
+Fix AI Notes generation and saving so it never stays empty when source data exists.
+
+Step 5
+Add project-linked grouping and project-level session listing.
+
+Step 6
+Enhance transcript with photo markers.
+
+Step 7
+Keep photo preview intact and add linked note context.
+
+PART 13: ACCEPTANCE CHECKLIST
+
+The update is complete only if all of this works:
+
+1. On mobile recording screen, timer is visible.
+2. On mobile recording screen, stop button is visible at all times.
+3. User can record and take photos without controls disappearing.
+4. Each captured photo is linked to what the user said around that moment.
+5. Session detail shows document-style output, not just disconnected tabs.
+6. AI Notes no longer shows blank when transcript and photos exist.
+7. If AI fails, fallback basic per-photo notes still appear.
+8. Each session clearly belongs to a project.
+9. Inside a project, user can see past Field Notes sessions for that project.
+10. Transcript view shows markers for when photos were taken.
+11. Tapping a photo still previews it cleanly.
+12. Nothing else in the app is broken or altered.
+
+FINAL INSTRUCTION TO THE AGENT
+
+Only improve Field Notes.
+Do not change anything else.
+Do not break anything else.
+Do not refactor unrelated systems.
+Do not touch active flows outside this feature.
+
+The goal is simple:
+make Field Notes work like a proper site-visit document where photos, speech, and AI notes all connect together in one clean project-based record.

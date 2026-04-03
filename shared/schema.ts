@@ -702,6 +702,7 @@ export const fieldNotesTranscriptChunks = pgTable("field_notes_transcript_chunks
   sessionId: varchar("session_id").notNull(),
   chunkIndex: integer("chunk_index").notNull().default(0),
   startedAt: text("started_at"),
+  endedAt: text("ended_at"),
   rawText: text("raw_text").notNull(),
   createdAt: text("created_at").notNull(),
 });
@@ -717,6 +718,8 @@ export const fieldNotesEntries = pgTable("field_notes_entries", {
   priority: text("priority").notNull().default("normal"),
   sortOrder: integer("sort_order").notNull().default(0),
   photoIndexes: text("photo_indexes"),
+  assetIds: text("asset_ids"),
+  relatedTranscript: text("related_transcript"),
   issueDetected: boolean("issue_detected").notNull().default(false),
   recommendedAction: text("recommended_action"),
   createdByAi: boolean("created_by_ai").notNull().default(true),
