@@ -12,7 +12,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { isNotNull, eq, and, isNull, inArray } from "drizzle-orm";
-import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, fieldNotesAssets, fieldNotesEntryTags } from "@shared/schema";
+import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments } from "@shared/schema";
 import { getPlan } from "./plans";
 import { generateReviewOgImage } from "./og-image";
 
@@ -4250,10 +4250,18 @@ Return a JSON object with these exact fields:
       ]);
       const userMap = Object.fromEntries(allUsers.map((u: any) => [u.id, u]));
       const locationMap = Object.fromEntries(allLocations.map((l: any) => [l.id, l]));
+      // Fetch photo counts per session
+      const sessionIds = sessions.map(s => s.id);
+      const assetRows = sessionIds.length
+        ? await db.select().from(fieldNotesAssets).where(inArray(fieldNotesAssets.sessionId, sessionIds))
+        : [];
+      const photoCountMap: Record<string, number> = {};
+      for (const a of assetRows) { photoCountMap[a.sessionId] = (photoCountMap[a.sessionId] || 0) + 1; }
       const enriched = sessions.map(s => ({
         ...s,
         createdByName: userMap[s.createdByUserId] ? `${userMap[s.createdByUserId].firstName} ${userMap[s.createdByUserId].lastName}` : "Unknown",
         locationName: s.locationId && locationMap[s.locationId] ? locationMap[s.locationId].name : null,
+        photoCount: photoCountMap[s.id] ?? 0,
       }));
       res.json(enriched);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
@@ -4283,7 +4291,12 @@ Return a JSON object with these exact fields:
         const loc = await storage.getLocation(session.locationId);
         locationName = loc?.name ?? null;
       }
-      res.json({ ...session, locationName, assets, transcriptChunks: chunks, entries: entriesWithTags });
+      // Enrich with creator name
+      const [creator] = await db.select().from(users).where(eq(users.id, session.createdByUserId));
+      const createdByName = creator ? `${creator.firstName} ${creator.lastName}` : "Unknown";
+      // Check if public share exists
+      const [publicDoc] = await db.select().from(fieldNotesPublicDocuments).where(eq(fieldNotesPublicDocuments.sessionId, session.id));
+      res.json({ ...session, createdByName, locationName, assets, transcriptChunks: chunks, entries: entriesWithTags, publicDoc: publicDoc ?? null });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
@@ -4431,6 +4444,80 @@ Return a JSON object with these exact fields:
       });
       if (!updated) return res.status(404).json({ message: "Not found" });
       res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // POST /api/field-notes/sessions/:id/share — generate public share link
+  app.post("/api/field-notes/sessions/:id/share", fnAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const session = await storage.getFieldNotesSession(req.params.id);
+      if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (user.role === "employee" && session.createdByUserId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      const { title, showTimestamps, showInternalNotes } = req.body;
+      const now = new Date().toISOString();
+      // Check if one already exists
+      const [existing] = await db.select().from(fieldNotesPublicDocuments).where(eq(fieldNotesPublicDocuments.sessionId, session.id));
+      if (existing) {
+        const updated = await db.update(fieldNotesPublicDocuments)
+          .set({ isEnabled: true, title: title ?? existing.title, showTimestamps: !!showTimestamps, showInternalNotes: !!showInternalNotes, updatedAt: now })
+          .where(eq(fieldNotesPublicDocuments.id, existing.id)).returning();
+        return res.json({ ...updated[0], rawToken: existing.shareToken });
+      }
+      const rawToken = randomBytes(24).toString("hex");
+      const [doc] = await db.insert(fieldNotesPublicDocuments).values({
+        sessionId: session.id,
+        companyId: user.companyId,
+        shareToken: rawToken,
+        title: title || session.title || null,
+        isEnabled: true,
+        showTimestamps: !!showTimestamps,
+        showInternalNotes: !!showInternalNotes,
+        createdByUserId: user.id,
+        createdAt: now, updatedAt: now,
+      }).returning();
+      res.json({ ...doc, rawToken });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // DELETE /api/field-notes/sessions/:id/share — disable public share
+  app.delete("/api/field-notes/sessions/:id/share", fnAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const session = await storage.getFieldNotesSession(req.params.id);
+      if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const now = new Date().toISOString();
+      await db.update(fieldNotesPublicDocuments).set({ isEnabled: false, updatedAt: now })
+        .where(eq(fieldNotesPublicDocuments.sessionId, session.id));
+      res.json({ ok: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // GET /api/public/field-notes/:token — public view (no auth)
+  app.get("/api/public/field-notes/:token", async (req, res) => {
+    try {
+      const [doc] = await db.select().from(fieldNotesPublicDocuments).where(eq(fieldNotesPublicDocuments.shareToken, req.params.token));
+      if (!doc || !doc.isEnabled) return res.status(404).json({ message: "Not found or disabled" });
+      const session = await storage.getFieldNotesSession(doc.sessionId);
+      if (!session) return res.status(404).json({ message: "Session not found" });
+      const [companyRow] = await db.select().from(companies).where(eq(companies.id, session.companyId));
+      const [creator] = await db.select().from(users).where(eq(users.id, session.createdByUserId));
+      const createdByName = creator ? `${creator.firstName} ${creator.lastName}` : "Unknown";
+      let locationName = null;
+      if (session.locationId) { const loc = await storage.getLocation(session.locationId); locationName = loc?.name ?? null; }
+      const [assets, entries] = await Promise.all([
+        storage.getFieldNotesAssets(session.id),
+        storage.getFieldNotesEntries(session.id),
+      ]);
+      // Filter: only show client-safe entries unless showInternalNotes is on
+      const publicEntries = entries.filter(e => doc.showInternalNotes || e.clientSafeSummary || e.body);
+      res.json({
+        session: { ...session, createdByName, locationName },
+        company: { name: companyRow?.name, companyLogoUrl: (companyRow as any)?.companyLogoUrl ?? null },
+        entries: publicEntries,
+        assets: assets.map(a => ({ id: a.id, fileUrl: a.fileUrl, capturedAt: a.capturedAt })),
+        publicDoc: doc,
+      });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

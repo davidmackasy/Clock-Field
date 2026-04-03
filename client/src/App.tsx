@@ -8,7 +8,8 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import { AdminSidebar } from "@/components/admin-sidebar";
 import { AdminMobileNav } from "@/components/admin-mobile-nav";
 import { SuperAdminSidebar } from "@/components/super-admin-sidebar";
-import { MobileNav, employeeNavItems, employeeCenterAction, clientNavItems } from "@/components/mobile-nav";
+import { MobileNav } from "@/components/mobile-nav";
+import { employeeNavItems, employeeCenterAction, clientNavItems } from "@/lib/nav-config";
 import { FeatureGate } from "@/components/feature-gate";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -53,6 +54,7 @@ import ClientProfile from "@/pages/client/profile";
 import PublicWorkReport from "@/pages/public/work-report";
 import PublicReviewShare from "@/pages/public/review-share";
 import PublicReportAccess from "@/pages/public/report-access";
+import PublicFieldNote from "@/pages/public/field-note";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import LandingPage from "@/pages/landing";
@@ -214,6 +216,14 @@ function AppRouter() {
     return (
       <Switch>
         <Route path="/public/reviews/:token" component={PublicReviewShare} />
+      </Switch>
+    );
+  }
+
+  if (location.startsWith("/public/field-notes/")) {
+    return (
+      <Switch>
+        <Route path="/public/field-notes/:token" component={PublicFieldNote} />
       </Switch>
     );
   }

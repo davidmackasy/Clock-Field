@@ -1,0 +1,567 @@
+DEVNOTE: UPDATE FIELD NOTES CLEANER ENTRY, DOCUMENT GENERATION, PUBLIC SHARE LINK, AND ADMIN GRID LAYOUT
+
+Main instruction
+
+Do not break anything else.
+Do not change anything outside the exact scope below.
+Do not touch attendance.
+Do not touch payroll.
+Do not touch schedule.
+Do not touch the current native cleaner bottom navigation.
+Do not replace the current standard work submission flow.
+Do not refactor unrelated admin pages.
+Do not modify any existing active public report flow unless a brand new Field Notes public link route is being added in isolation.
+If anything outside this exact scope is required, ask for approval first.
+
+Goal
+
+Fix and complete the Field Notes experience in these exact ways:
+
+1. On cleaner mobile, do not show Field Notes as a separate visible native button or tab.
+2. Keep the native plus button exactly as it is.
+3. When the cleaner taps the plus button, show a small action chooser with two options:
+   Start Work
+   Field Note
+4. If cleaner chooses Start Work, send them into the normal existing work submission flow.
+5. If cleaner chooses Field Note, send them into the Field Notes recording flow.
+6. Cleaner Field Notes submissions must appear on the admin Field Notes page under the correct project and must clearly show the cleaner’s name.
+7. Fix the document generation so the transcript, photos, and AI notes actually produce a usable document.
+8. Add an option to generate a public share link for the completed Field Notes document so it can be sent to a client.
+9. Change the admin Field Notes listing layout from one long vertical list into a more visual grid layout.
+
+This update is only for Field Notes and the cleaner entry point into Field Notes. Nothing else should be changed.
+
+PART 1: CLEANER SIDE ENTRY MUST STAY UNDER THE PLUS BUTTON
+
+Problem
+
+On cleaner mobile, Field Notes should not appear as its own separate visible native menu button or permanent tab.
+The native bottom nav should remain unchanged.
+
+Required behavior
+
+Keep the cleaner mobile bottom navigation exactly as it is now.
+Do not add a new native button.
+Do not replace the plus button.
+
+When cleaner taps the plus button, open a small clean action sheet, bottom sheet, or modal with exactly two primary options:
+
+Start Work
+Field Note
+
+Option behavior
+
+If cleaner taps Start Work:
+go to the existing normal work submission flow exactly as it already works
+do not alter current work submission fields or structure unless already approved elsewhere
+
+If cleaner taps Field Note:
+open the Field Notes session start flow
+allow project selection if needed
+allow session type if needed
+then take cleaner into the recording plus photo capture experience
+
+Important
+
+Do not change the native button design.
+Do not move the plus button.
+Do not redesign the bottom nav.
+Only intercept the plus click and show the chooser.
+
+Recommended cleaner action sheet content
+
+Title:
+Choose Action
+
+Options:
+Start Work
+Continue with the regular work submission flow
+
+Field Note
+Record voice and photos for a site note or walkthrough
+
+Optional cancel button:
+Cancel
+
+This action sheet should be simple, fast, and mobile-friendly.
+
+PART 2: CLEANER FIELD NOTE FLOW MUST SUBMIT TO ADMIN FIELD NOTES
+
+Problem
+
+Cleaner-created Field Notes must show up in admin Field Notes properly and clearly.
+
+Required behavior
+
+When a cleaner completes a Field Note session:
+all recorded audio/transcript
+all captured photos
+all AI-generated notes
+all session metadata
+must be saved under Field Notes and visible from the admin side
+
+Admin must see:
+project name
+session title
+session type
+created by cleaner name
+date and time
+photo count
+processing status
+document status
+
+Cleaner submissions must not get lost.
+Cleaner submissions must not stay only on the cleaner device.
+Cleaner submissions must not go into the normal work log unless that is explicitly part of a safe linked adapter.
+
+Display requirement on admin side
+
+Every cleaner-submitted Field Note card must clearly show the cleaner name.
+Example:
+Created by: John Smith
+or
+Submitted by: John Smith
+
+This must be visible in both:
+the admin Field Notes feed
+the session detail page
+
+If planners have access, planners should also be able to see this inside Field Notes for their allowed projects.
+
+PART 3: KEEP NORMAL WORK FLOW SEPARATE
+
+This is very important.
+
+Start Work and Field Note are not the same thing.
+
+Start Work must continue to use the existing normal submission flow.
+Field Note must use the separate Field Notes recording flow.
+
+Do not merge them into one.
+Do not replace one with the other.
+Do not confuse users by mixing the forms.
+
+Correct behavior
+
+Cleaner taps plus
+Chooses Start Work
+Goes to existing work submission with current picture and area flow
+
+Cleaner taps plus
+Chooses Field Note
+Goes to Field Notes recording session with voice plus photos plus transcript plus document generation
+
+This separation must remain clear.
+
+PART 4: FIX DOCUMENT GENERATION SO IT ACTUALLY WORKS
+
+Problem
+
+The document generation is currently not working correctly.
+The AI Notes and the final document are not reliably generating.
+
+Required outcome
+
+When a Field Notes session is finished, the system must generate a real usable documentation output that includes:
+title
+summary
+ordered sections
+linked images
+linked transcript snippets
+cleaned AI notes
+final structured document view
+
+The finished result should look like a proper site document, not just raw photos or raw transcript.
+
+Important instruction
+
+Do not just show “processing” forever.
+Do not allow blank AI Notes when photos and transcript exist.
+Do not allow empty documents if raw session data exists.
+
+Required generation pipeline
+
+Step 1
+Save all photos with exact timestamps
+
+Step 2
+Save transcript chunks with exact timestamps
+
+Step 3
+Link each photo to the nearest transcript segment based on capture time
+
+Step 4
+Send structured data to OpenAI for document generation
+
+Step 5
+Save structured returned content
+
+Step 6
+Render the document in the session detail page
+
+Minimum required generated output fields
+
+document_title
+session_summary
+document_sections
+
+Each section must include at minimum:
+section_title
+photo_ids
+related_transcript
+cleaned_note
+sort_order
+
+Optional but recommended:
+recommended_action
+area_name
+tag_list
+client_safe_note
+
+Required fallback behavior
+
+If OpenAI structured generation fails for any reason:
+do not leave the screen blank
+generate a fallback document using:
+photo order
+nearest transcript snippet
+timestamps
+basic grouped note blocks
+
+That means every completed session must produce at least a basic document.
+
+Fallback example
+
+Section 1
+Photo 1
+Transcript: “This is the kitchen and it needs deep cleaning.”
+
+Section 2
+Photo 2
+Transcript: “This washroom floor needs extra scrubbing.”
+
+Even without AI cleanup, the user must still see a usable document.
+
+PART 5: CHECK OPENAI INTEGRATION INSIDE FIELD NOTES ONLY
+
+Problem
+
+The user wants the transcription and document generation to actually work.
+If OpenAI is failing, the Field Notes flow becomes useless.
+
+Required implementation review
+
+Check the Field Notes OpenAI pipeline only.
+Do not touch unrelated AI flows unless they are shared and clearly broken for this exact feature.
+
+Verify all of these in the Field Notes flow:
+transcript generation is actually being triggered
+audio is actually being sent correctly
+transcript result is actually saved
+document generation prompt is actually running
+returned structured content is actually parsed
+generated content is actually saved
+UI is actually reading the saved data correctly
+
+Also verify:
+environment variable exists and is read in the Field Notes service
+request errors are logged
+OpenAI failures do not silently fail
+timeouts do not leave the UI stuck forever
+processing status updates to ready or failed correctly
+
+Important scope rule
+
+Do not make random billing changes globally.
+Do not reconfigure unrelated OpenAI systems.
+Only ensure the Field Notes pipeline is properly wired, using the current configured OpenAI setup.
+If the key, billing, or usage state is externally invalid, surface that clearly in logs and safe admin error states.
+Do not break other features while trying to “fix billing.”
+
+PART 6: GENERATE A CLIENT-FACING PUBLIC LINK FOR FIELD NOTES DOCUMENTS
+
+Problem
+
+The user wants a completed Field Notes document to be shareable with a client through a public link.
+
+Required behavior
+
+On a completed Field Notes session, add an action such as:
+Generate Public Link
+or
+Share Document
+
+This must create a new isolated public Field Notes document link.
+Do not use or alter the current existing public report system unless this new route can safely coexist completely separately.
+
+Required public link behavior
+
+Public page should show:
+company branding
+document title
+project name
+date
+prepared by
+summary
+document sections
+linked photos
+clean notes
+optional timestamps if enabled
+
+It should read like a clean professional report or walkthrough summary.
+
+Public page must be read-only.
+
+Admin or allowed planner should control:
+whether public link is enabled
+title of public document
+which sections are visible
+which photos are visible
+whether timestamps show
+whether internal transcript is hidden
+whether only cleaned notes show
+
+Important
+
+Do not expose raw internal-only notes unless explicitly selected.
+Default public mode should show client-safe content only.
+
+Recommended actions on session detail page
+
+Generate Public Link
+Copy Link
+Disable Link
+Preview Public View
+
+Public link data model recommendation
+
+Add isolated storage for Field Notes public documents, for example:
+field_notes_public_documents
+id
+session_id
+project_id
+title
+share_token
+status
+settings_json
+created_by_user_id
+created_at
+updated_at
+
+Do not tie this directly into the current public client report tables unless that already supports isolated extension safely.
+
+PART 7: FIELD NOTES ADMIN LIST SHOULD BE A GRID, NOT A SINGLE LONG LIST
+
+Problem
+
+The admin Field Notes page currently stacks items one per line.
+The user wants a more visual grouped layout.
+
+Required behavior
+
+Within each project section and date grouping, display session cards in a responsive grid.
+
+Do not render one full-width row per item by default anymore.
+
+Recommended desktop layout
+
+Project heading
+Date grouping
+Then session cards in a grid:
+3 across on standard desktop
+4 across on larger desktop if space allows
+2 across on tablet widths
+1 across on narrow screens
+
+The exact column count can be responsive, but it must feel like a grid of cards rather than one long list.
+
+Recommended card content
+
+Session title
+status badge
+session type
+time
+created by
+photo count
+document status
+optional project chip if on global page
+
+Card click opens session detail.
+
+Project grouping behavior
+
+Keep project grouping.
+Example:
+No Project
+Riverside Building A
+Other Project Name
+
+Inside each project group, render cards in grid form.
+
+Date grouping behavior
+
+Inside each project group, keep date separation such as:
+Today
+Yesterday
+Earlier
+
+But under each date heading, the cards should appear in a grid.
+
+Example concept
+
+Riverside Building A
+Today
+[Card 1] [Card 2] [Card 3]
+[Card 4] [Card 5] [Card 6]
+
+This is the desired behavior.
+
+PART 8: FIELD NOTES SESSION CARD IMPROVEMENTS
+
+Update each card so it gives better quick context.
+
+Each card should show:
+session title
+status badge
+session type
+time
+submitted by name
+photo count
+whether document is ready or still processing
+
+Optional:
+small thumbnail preview if available
+
+Examples
+
+Site Visit
+Ready
+9:46 PM
+Submitted by David Mackasy
+5 photos
+Document Ready
+
+Post-Clean Review
+Processing
+6:15 PM
+Submitted by Sarah Johnson
+8 photos
+Generating Document
+
+This makes the grid actually useful.
+
+PART 9: PROJECT LINKING RULE
+
+Important clarification
+
+Do not create a brand new system project every time.
+Each Field Notes session must belong to an existing project when possible.
+
+If a cleaner or user starts a Field Note without selecting a project, then it may fall under No Project temporarily.
+But if project selection is available, encourage or require it before submission.
+
+Recommended behavior
+
+If launched from inside a project context:
+preselect that project automatically
+
+If launched from generic plus button:
+show project selector before starting the Field Note session
+or allow No Project only if explicitly permitted
+
+This keeps the admin page clean and useful.
+
+PART 10: DOCUMENT VIEW SHOULD LOOK LIKE A REAL DOCUMENT
+
+The finished session detail view should not feel fragmented.
+The default main view after generation should be document-style.
+
+Recommended session detail tabs
+
+Document
+Photos
+Transcript
+
+Default tab after processing:
+Document
+
+Document tab structure
+
+Document title
+summary
+then ordered sections
+
+Each section should show:
+photo
+section title
+related spoken/transcribed context
+cleaned AI note
+optional recommended action
+
+This must read like an actual job document or site walkthrough report.
+
+The public share version should be based on this structured document view.
+
+PART 11: SAFE IMPLEMENTATION PLAN
+
+Step 1
+Update cleaner plus button behavior to open a two-option action sheet without changing the native nav.
+
+Step 2
+Keep Start Work routed to the current existing work submission flow exactly as it is.
+
+Step 3
+Route Field Note to the Field Notes start flow.
+
+Step 4
+Ensure cleaner Field Note submissions save properly and appear on admin Field Notes with cleaner identity shown clearly.
+
+Step 5
+Fix transcript generation and document generation pipeline inside Field Notes only.
+
+Step 6
+Add fallback document rendering if AI generation fails.
+
+Step 7
+Add public document link generation for completed Field Notes sessions.
+
+Step 8
+Convert admin Field Notes listing into a responsive project-grouped grid.
+
+Step 9
+Improve session cards with status, creator, and document state.
+
+PART 12: ACCEPTANCE CHECKLIST
+
+This update is complete only if all of these are true:
+
+1. Cleaner mobile bottom nav remains visually unchanged.
+2. Cleaner taps plus and sees exactly two choices:
+   Start Work
+   Field Note
+3. Start Work still opens the current normal submission flow.
+4. Field Note opens the Field Notes flow.
+5. Cleaner Field Notes sessions appear on admin Field Notes page.
+6. Admin can clearly see which cleaner submitted each Field Note.
+7. Transcript generation works for completed Field Notes sessions.
+8. Document generation works and produces a usable structured document.
+9. If AI generation fails, a fallback document still appears.
+10. Completed sessions can generate a public share link.
+11. Public link opens a read-only client-safe Field Notes document.
+12. Admin Field Notes page uses a grid layout under project groupings.
+13. No unrelated system flow is changed or broken.
+
+FINAL INSTRUCTION TO THE AGENT
+
+Only do the following:
+hide Field Notes from being a direct cleaner-side visible native button
+show it as an option under the existing plus button
+keep Start Work and Field Note as two separate flows
+make cleaner Field Notes flow send data into admin Field Notes
+fix transcript and document generation
+add public share link generation for Field Notes documents
+change admin Field Notes listing into a responsive grid
+
+Do not touch anything else.
+Do not break anything else.
+Do not change anything else unless approval is given first.

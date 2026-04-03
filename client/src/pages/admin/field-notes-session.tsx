@@ -8,12 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
-  ChevronLeft, MapPin, User, Clock, Camera, Mic,
+  ChevronLeft, MapPin, Clock, Camera, Mic,
   Loader2, Edit3, X, Check, Images, FileText,
-  Sparkles, ChevronDown, ChevronUp, AlertTriangle, NotebookPen, RefreshCw
+  Sparkles, ChevronDown, ChevronUp, NotebookPen,
+  Share2, Copy, Link as LinkIcon, EyeOff, User
 } from "lucide-react";
 import { format, parseISO, differenceInMinutes } from "date-fns";
 
@@ -40,6 +43,91 @@ const ENTRY_ICON: Record<string, string> = {
   issue: "⚠️", damage: "🚨", risk: "⚡", observation: "👁️", cleaning_scope: "🧹",
   before_condition: "📸", after_condition: "✅", supply_note: "📦", general_note: "📝",
 };
+
+// ── Share Panel ───────────────────────────────────────────────────────────────
+function SharePanel({ session, publicDoc, sessionId }: { session: any; publicDoc: any; sessionId: string }) {
+  const { toast } = useToast();
+  const [shareTitle, setShareTitle] = useState(publicDoc?.title || session.title || "");
+  const [showTimestamps, setShowTimestamps] = useState(publicDoc?.showTimestamps ?? false);
+  const [showInternalNotes, setShowInternalNotes] = useState(publicDoc?.showInternalNotes ?? false);
+  const [shareUrl, setShareUrl] = useState<string | null>(
+    publicDoc?.isEnabled ? `${window.location.origin}/public/field-notes/${publicDoc.shareToken}` : null
+  );
+
+  const shareMutation = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/field-notes/sessions/${sessionId}/share`, {
+      title: shareTitle || null, showTimestamps, showInternalNotes,
+    }).then(r => r.json()),
+    onSuccess: (data) => {
+      const url = `${window.location.origin}/public/field-notes/${data.rawToken || data.shareToken}`;
+      setShareUrl(url);
+      queryClient.invalidateQueries({ queryKey: ["/api/field-notes/sessions", sessionId] });
+      toast({ title: "Public link generated" });
+    },
+    onError: () => toast({ title: "Failed to generate link", variant: "destructive" }),
+  });
+
+  const disableMutation = useMutation({
+    mutationFn: () => apiRequest("DELETE", `/api/field-notes/sessions/${sessionId}/share`).then(r => r.json()),
+    onSuccess: () => {
+      setShareUrl(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/field-notes/sessions", sessionId] });
+      toast({ title: "Public link disabled" });
+    },
+    onError: () => toast({ title: "Failed to disable link", variant: "destructive" }),
+  });
+
+  const copyLink = () => {
+    if (!shareUrl) return;
+    navigator.clipboard.writeText(shareUrl);
+    toast({ title: "Link copied to clipboard" });
+  };
+
+  return (
+    <div className="bg-muted/40 border rounded-xl p-4 space-y-3">
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Client Share Link</p>
+
+      <div className="space-y-2.5">
+        <div>
+          <Label className="text-xs mb-1 block">Document Title (optional)</Label>
+          <Input value={shareTitle} onChange={e => setShareTitle(e.target.value)} placeholder="Site Visit Report…" className="h-7 text-xs" data-testid="input-share-title" />
+        </div>
+        <div className="flex items-center justify-between">
+          <Label className="text-xs">Show timestamps</Label>
+          <Switch data-testid="switch-share-timestamps" checked={showTimestamps} onCheckedChange={setShowTimestamps} />
+        </div>
+        <div className="flex items-center justify-between">
+          <Label className="text-xs">Include internal notes</Label>
+          <Switch data-testid="switch-share-internal" checked={showInternalNotes} onCheckedChange={setShowInternalNotes} />
+        </div>
+      </div>
+
+      {shareUrl ? (
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5 bg-background rounded-lg border px-2.5 py-1.5">
+            <LinkIcon className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+            <span className="text-[10px] text-muted-foreground truncate flex-1">{shareUrl}</span>
+          </div>
+          <div className="flex gap-2">
+            <Button data-testid="button-copy-share-link" size="sm" variant="outline" className="flex-1 gap-1.5 h-7 text-xs" onClick={copyLink}>
+              <Copy className="w-3 h-3" /> Copy Link
+            </Button>
+            <Button data-testid="button-disable-share" size="sm" variant="ghost" className="gap-1.5 h-7 text-xs text-destructive hover:text-destructive" onClick={() => disableMutation.mutate()} disabled={disableMutation.isPending}>
+              {disableMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <EyeOff className="w-3 h-3" />} Disable
+            </Button>
+            <Button data-testid="button-update-share" size="sm" variant="outline" className="gap-1.5 h-7 text-xs" onClick={() => shareMutation.mutate()} disabled={shareMutation.isPending}>
+              {shareMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Update
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button data-testid="button-generate-share-link" size="sm" onClick={() => shareMutation.mutate()} disabled={shareMutation.isPending} className="w-full gap-1.5 h-7 text-xs">
+          {shareMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Share2 className="w-3 h-3" />} Generate Public Link
+        </Button>
+      )}
+    </div>
+  );
+}
 
 // ── Document Entry Card ────────────────────────────────────────────────────────
 function DocumentCard({ entry, assets, sessionId, onPhotoClick }: {
@@ -71,24 +159,18 @@ function DocumentCard({ entry, assets, sessionId, onPhotoClick }: {
 
   return (
     <div className={cn("rounded-xl border-l-4 border border-l-current bg-card overflow-hidden", PRIORITY_COLORS[entry.priority] ?? PRIORITY_COLORS.normal)}>
-      {/* Photo row */}
       {linkedAssets.length > 0 && (
         <div className="flex gap-2 p-3 pb-0 overflow-x-auto">
           {linkedAssets.map((asset: any, i: number) => (
-            <div
-              key={asset.id}
-              data-testid={`img-doc-photo-${asset.id}`}
+            <div key={asset.id} data-testid={`img-doc-photo-${asset.id}`}
               className="flex-shrink-0 w-32 h-24 sm:w-40 sm:h-28 rounded-lg overflow-hidden bg-muted cursor-pointer hover:opacity-90 transition-opacity"
-              onClick={() => onPhotoClick(asset.fileUrl, entry)}
-            >
+              onClick={() => onPhotoClick(asset.fileUrl, entry)}>
               <img src={asset.fileUrl} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
             </div>
           ))}
         </div>
       )}
-
       <div className="p-3 space-y-2">
-        {/* Header row */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -126,25 +208,17 @@ function DocumentCard({ entry, assets, sessionId, onPhotoClick }: {
             )}
           </div>
         </div>
-
-        {/* Related transcript */}
         {expanded && entry.relatedTranscript && (
           <div className="bg-black/5 dark:bg-white/5 rounded-lg px-3 py-2 border-l-2 border-muted-foreground/30">
             <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Spoken Note</p>
             <p className="text-xs text-muted-foreground italic">"{entry.relatedTranscript}"</p>
           </div>
         )}
-
-        {/* AI note body */}
-        {expanded && (
-          editing ? (
-            <Textarea data-testid="textarea-entry-body" value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))} rows={3} className="text-sm" />
-          ) : (
-            <p className="text-sm text-foreground/80 leading-relaxed">{entry.body}</p>
-          )
-        )}
-
-        {/* Recommended action */}
+        {expanded && (editing ? (
+          <Textarea data-testid="textarea-entry-body" value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))} rows={3} className="text-sm" />
+        ) : (
+          <p className="text-sm text-foreground/80 leading-relaxed">{entry.body}</p>
+        ))}
         {expanded && (editing ? (
           <Input data-testid="input-entry-action" value={form.recommendedAction} onChange={e => setForm(f => ({ ...f, recommendedAction: e.target.value }))} placeholder="Recommended action…" className="text-sm h-7" />
         ) : entry.recommendedAction ? (
@@ -161,50 +235,40 @@ function DocumentCard({ entry, assets, sessionId, onPhotoClick }: {
 // ── Transcript with photo markers ──────────────────────────────────────────────
 function TranscriptWithMarkers({ chunks, assets }: { chunks: any[]; assets: any[] }) {
   const [lightbox, setLightbox] = useState<string | null>(null);
-
-  // Build a timeline of events sorted by timestamp
   type Event = { ms: number; type: "chunk" | "photo"; data: any };
   const events: Event[] = [
     ...chunks.map(c => ({ ms: c.startedAt ? new Date(c.startedAt).getTime() : 0, type: "chunk" as const, data: c })),
     ...assets.map(a => ({ ms: a.capturedAt ? new Date(a.capturedAt).getTime() : 0, type: "photo" as const, data: a })),
   ].sort((a, b) => a.ms - b.ms);
-
   const sessionStart = events[0]?.ms ?? 0;
   const fmtElapsed = (ms: number) => {
     const diff = Math.max(0, ms - sessionStart);
     const s = Math.floor(diff / 1000);
     return `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
   };
-
   if (events.length === 0) return (
     <div className="text-center py-16 text-muted-foreground">
       <Mic className="w-10 h-10 mx-auto mb-3 opacity-30" />
       <p className="font-medium">No voice recording</p>
     </div>
   );
-
   return (
     <div className="space-y-3">
-      {events.map((ev, i) =>
-        ev.type === "photo" ? (
-          <div key={i} className="flex items-center gap-3 py-1">
-            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono w-10">{fmtElapsed(ev.ms)}</div>
-            <div
-              className="flex items-center gap-2 bg-muted/60 rounded-lg px-2.5 py-1.5 cursor-pointer hover:bg-muted transition-colors"
-              onClick={() => setLightbox(ev.data.fileUrl)}
-            >
-              <Camera className="w-3.5 h-3.5 text-muted-foreground" />
-              <img src={ev.data.fileUrl} alt="" className="w-8 h-8 rounded object-cover" />
-              <span className="text-xs text-muted-foreground">Photo {assets.indexOf(ev.data) + 1} captured</span>
-            </div>
+      {events.map((ev, i) => ev.type === "photo" ? (
+        <div key={i} className="flex items-center gap-3 py-1">
+          <div className="text-[10px] text-muted-foreground font-mono w-10 flex-shrink-0">{fmtElapsed(ev.ms)}</div>
+          <div className="flex items-center gap-2 bg-muted/60 rounded-lg px-2.5 py-1.5 cursor-pointer hover:bg-muted transition-colors" onClick={() => setLightbox(ev.data.fileUrl)}>
+            <Camera className="w-3.5 h-3.5 text-muted-foreground" />
+            <img src={ev.data.fileUrl} alt="" className="w-8 h-8 rounded object-cover" />
+            <span className="text-xs text-muted-foreground">Photo {assets.indexOf(ev.data) + 1}</span>
           </div>
-        ) : (
-          <div key={i} className="flex gap-3">
-            <div className="text-[10px] text-muted-foreground font-mono w-10 pt-1 flex-shrink-0">{fmtElapsed(ev.ms)}</div>
-            <p className="text-sm text-muted-foreground leading-relaxed flex-1 bg-muted/30 rounded-lg px-3 py-2">{ev.data.rawText}</p>
-          </div>
-        )
-      )}
+        </div>
+      ) : (
+        <div key={i} className="flex gap-3">
+          <div className="text-[10px] text-muted-foreground font-mono w-10 pt-1 flex-shrink-0">{fmtElapsed(ev.ms)}</div>
+          <p className="text-sm text-muted-foreground leading-relaxed flex-1 bg-muted/30 rounded-lg px-3 py-2">{ev.data.rawText}</p>
+        </div>
+      ))}
       {lightbox && (
         <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={() => setLightbox(null)}>
           <img src={lightbox} className="max-w-full max-h-full rounded-lg" alt="" />
@@ -226,6 +290,7 @@ export default function AdminFieldNotesSession() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [lightboxPhoto, setLightboxPhoto] = useState<{ url: string; entry?: any } | null>(null);
+  const [showShare, setShowShare] = useState(false);
 
   const { data: session, isLoading } = useQuery<any>({
     queryKey: ["/api/field-notes/sessions", sessionId],
@@ -263,22 +328,18 @@ export default function AdminFieldNotesSession() {
   const chunks: any[] = session.transcriptChunks ?? [];
   const isProcessing = session.status === "processing" || session.status === "uploading";
   const isReady = session.status === "ready";
-
-  const defaultTab = isReady && entries.length > 0 ? "document" : isProcessing ? "photos" : "document";
+  const defaultTab = isReady && entries.length > 0 ? "document" : "document";
+  const canShare = isReady && (entries.length > 0 || assets.length > 0);
 
   return (
     <div className="flex flex-col h-full">
       {/* ── Header ── */}
       <div className="border-b bg-background px-4 md:px-6 pt-3 pb-3">
-        <button
-          data-testid="button-back-session"
+        <button data-testid="button-back-session"
           className="flex items-center gap-1 text-muted-foreground hover:text-foreground text-xs mb-2"
-          onClick={() => navigate(backPath)}
-        >
+          onClick={() => navigate(backPath)}>
           <ChevronLeft className="w-3.5 h-3.5" /> Field Notes
         </button>
-
-        {/* Title row */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             {editingTitle ? (
@@ -298,21 +359,37 @@ export default function AdminFieldNotesSession() {
             <div className="flex items-center gap-2.5 mt-0.5 text-[11px] text-muted-foreground flex-wrap">
               {session.locationName && <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3" />{session.locationName}</span>}
               <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" />{format(parseISO(session.startedAt), "MMM d h:mm a")}{duration !== null ? ` · ${duration}m` : ""}</span>
+              {session.createdByName && (
+                <span className="flex items-center gap-0.5"><User className="w-3 h-3" />{session.createdByName}</span>
+              )}
               <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                 {isProcessing && <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />}
                 {session.status}
               </Badge>
             </div>
           </div>
-          {(session.aiStatus === "failed" || (isReady && entries.length === 0)) && (
-            <Button data-testid="button-retry-ai" size="sm" variant="outline" onClick={() => processMutation.mutate()} disabled={processMutation.isPending} className="gap-1 text-xs h-7 shrink-0">
-              {processMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} Process AI
-            </Button>
-          )}
+          <div className="flex gap-1.5 flex-shrink-0 flex-wrap justify-end">
+            {canShare && (
+              <Button data-testid="button-share-doc" size="sm" variant={showShare ? "default" : "outline"} className="gap-1 text-xs h-7" onClick={() => setShowShare(s => !s)}>
+                <Share2 className="w-3 h-3" /> Share
+              </Button>
+            )}
+            {(session.aiStatus === "failed" || (isReady && entries.length === 0)) && (
+              <Button data-testid="button-retry-ai" size="sm" variant="outline" onClick={() => processMutation.mutate()} disabled={processMutation.isPending} className="gap-1 text-xs h-7">
+                {processMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} Process AI
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Processing banner */}
+      {/* Share panel */}
+      {showShare && canShare && (
+        <div className="border-b px-4 md:px-6 py-3">
+          <SharePanel session={session} publicDoc={session.publicDoc} sessionId={sessionId!} />
+        </div>
+      )}
+
       {isProcessing && (
         <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 px-4 py-2 flex items-center gap-2 text-xs text-blue-700 dark:text-blue-300">
           <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
@@ -320,7 +397,6 @@ export default function AdminFieldNotesSession() {
         </div>
       )}
 
-      {/* AI Summary strip */}
       {session.aiSummary && isReady && (
         <div className="bg-muted/50 border-b px-4 py-2.5">
           <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">Summary</p>
@@ -343,14 +419,11 @@ export default function AdminFieldNotesSession() {
             </TabsTrigger>
           </TabsList>
 
-          {/* Document tab */}
           <TabsContent value="document" className="flex-1 overflow-y-auto px-4 md:px-6 py-3 space-y-3 mt-0">
             {entries.length === 0 ? (
               <div className="text-center py-14 text-muted-foreground">
                 <Sparkles className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                <p className="font-medium text-sm">
-                  {isProcessing ? "Generating document…" : "No notes yet"}
-                </p>
+                <p className="font-medium text-sm">{isProcessing ? "Generating document…" : "No notes yet"}</p>
                 {!isProcessing && (
                   <p className="text-xs mt-1 max-w-xs mx-auto">
                     {assets.length > 0 || chunks.length > 0
@@ -359,20 +432,11 @@ export default function AdminFieldNotesSession() {
                   </p>
                 )}
               </div>
-            ) : (
-              entries.map((entry: any) => (
-                <DocumentCard
-                  key={entry.id}
-                  entry={entry}
-                  assets={assets}
-                  sessionId={sessionId!}
-                  onPhotoClick={(url, e) => setLightboxPhoto({ url, entry: e })}
-                />
-              ))
-            )}
+            ) : entries.map((entry: any) => (
+              <DocumentCard key={entry.id} entry={entry} assets={assets} sessionId={sessionId!} onPhotoClick={(url, e) => setLightboxPhoto({ url, entry: e })} />
+            ))}
           </TabsContent>
 
-          {/* Photos tab */}
           <TabsContent value="photos" className="flex-1 overflow-y-auto px-4 md:px-6 py-3 mt-0">
             {assets.length === 0 ? (
               <div className="text-center py-14 text-muted-foreground">
@@ -386,19 +450,14 @@ export default function AdminFieldNotesSession() {
                     try { const ids = JSON.parse(e.assetIds || "[]"); return ids.includes(asset.id); } catch { return false; }
                   });
                   return (
-                    <div
-                      key={asset.id}
-                      data-testid={`img-photo-${asset.id}`}
+                    <div key={asset.id} data-testid={`img-photo-${asset.id}`}
                       className="rounded-xl overflow-hidden bg-muted border cursor-pointer hover:shadow-md transition-shadow"
-                      onClick={() => setLightboxPhoto({ url: asset.fileUrl, entry: linkedEntry })}
-                    >
+                      onClick={() => setLightboxPhoto({ url: asset.fileUrl, entry: linkedEntry })}>
                       <img src={asset.fileUrl} alt={`Photo ${i + 1}`} className="w-full aspect-square object-cover" />
                       {linkedEntry && (
                         <div className="p-2 border-t">
                           <p className="text-[11px] font-medium truncate">{linkedEntry.areaName || linkedEntry.title}</p>
-                          {linkedEntry.relatedTranscript && (
-                            <p className="text-[10px] text-muted-foreground truncate italic">"{linkedEntry.relatedTranscript}"</p>
-                          )}
+                          {linkedEntry.relatedTranscript && <p className="text-[10px] text-muted-foreground truncate italic">"{linkedEntry.relatedTranscript}"</p>}
                         </div>
                       )}
                       <div className="px-2 pb-2">
@@ -411,7 +470,6 @@ export default function AdminFieldNotesSession() {
             )}
           </TabsContent>
 
-          {/* Transcript tab */}
           <TabsContent value="transcript" className="flex-1 overflow-y-auto px-4 md:px-6 py-3 mt-0">
             <TranscriptWithMarkers chunks={chunks} assets={assets} />
           </TabsContent>
@@ -427,12 +485,8 @@ export default function AdminFieldNotesSession() {
           {lightboxPhoto.entry && (
             <div className="bg-black/80 px-4 py-3 flex-none" onClick={e => e.stopPropagation()}>
               <p className="text-white font-semibold text-sm">{lightboxPhoto.entry.title}</p>
-              {lightboxPhoto.entry.relatedTranscript && (
-                <p className="text-white/60 text-xs mt-0.5 italic">"{lightboxPhoto.entry.relatedTranscript}"</p>
-              )}
-              {lightboxPhoto.entry.body && (
-                <p className="text-white/80 text-xs mt-1">{lightboxPhoto.entry.body}</p>
-              )}
+              {lightboxPhoto.entry.relatedTranscript && <p className="text-white/60 text-xs mt-0.5 italic">"{lightboxPhoto.entry.relatedTranscript}"</p>}
+              {lightboxPhoto.entry.body && <p className="text-white/80 text-xs mt-1">{lightboxPhoto.entry.body}</p>}
             </div>
           )}
           <button className="absolute top-4 right-4 text-white/70 hover:text-white" onClick={() => setLightboxPhoto(null)}>

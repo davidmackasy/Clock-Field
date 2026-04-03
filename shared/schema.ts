@@ -735,6 +735,20 @@ export const fieldNotesEntryTags = pgTable("field_notes_entry_tags", {
   createdAt: text("created_at").notNull(),
 });
 
+export const fieldNotesPublicDocuments = pgTable("field_notes_public_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  shareToken: varchar("share_token").notNull(),
+  title: text("title"),
+  isEnabled: boolean("is_enabled").notNull().default(true),
+  showTimestamps: boolean("show_timestamps").notNull().default(false),
+  showInternalNotes: boolean("show_internal_notes").notNull().default(false),
+  createdByUserId: varchar("created_by_user_id").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export const insertFieldNotesSessionSchema = createInsertSchema(fieldNotesSessions).omit({ id: true });
 export const insertFieldNotesAssetSchema = createInsertSchema(fieldNotesAssets).omit({ id: true });
 export const insertFieldNotesEntrySchema = createInsertSchema(fieldNotesEntries).omit({ id: true });

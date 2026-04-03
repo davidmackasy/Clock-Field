@@ -11,15 +11,16 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
-  NotebookPen, Plus, Search, Camera, Clock,
-  MapPin, ChevronRight, Loader2, Images, Sparkles
+  NotebookPen, Plus, Search, Camera, Clock, MapPin,
+  ChevronRight, Loader2, User, FileCheck, FileClock, AlertCircle
 } from "lucide-react";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
 
 type Session = {
   id: string; title: string | null; locationId: string | null; locationName: string | null;
-  createdByUserId: string; createdByName: string; sessionType: string; status: string;
-  aiStatus: string; aiSummary: string | null; startedAt: string; endedAt: string | null;
+  createdByUserId: string; createdByName: string; createdByRole: string;
+  sessionType: string; status: string; aiStatus: string; aiSummary: string | null;
+  startedAt: string; endedAt: string | null; photoCount: number;
 };
 
 const SESSION_TYPES = [
@@ -31,49 +32,79 @@ const SESSION_TYPES = [
   { value: "maintenance", label: "Maintenance" },
 ];
 
-const STATUS_DOT: Record<string, string> = {
-  recording: "bg-red-500 animate-pulse",
-  uploading: "bg-yellow-500",
-  processing: "bg-blue-500 animate-pulse",
-  ready: "bg-green-500",
-  failed: "bg-gray-400",
+const STATUS_CONFIG: Record<string, { dot: string; badge: string }> = {
+  recording: { dot: "bg-red-500 animate-pulse", badge: "bg-red-100 text-red-700 border-red-200" },
+  uploading: { dot: "bg-yellow-500 animate-pulse", badge: "bg-yellow-100 text-yellow-700" },
+  processing: { dot: "bg-blue-500 animate-pulse", badge: "bg-blue-100 text-blue-700" },
+  ready: { dot: "bg-green-500", badge: "bg-green-100 text-green-700 border-green-200" },
+  failed: { dot: "bg-gray-400", badge: "bg-gray-100 text-gray-500" },
 };
 
-const STATUS_BADGE: Record<string, string> = {
-  recording: "bg-red-100 text-red-700 border-red-200",
-  uploading: "bg-yellow-100 text-yellow-700",
-  processing: "bg-blue-100 text-blue-700",
-  ready: "bg-green-100 text-green-700 border-green-200",
-  failed: "bg-gray-100 text-gray-500",
-};
+function DocStatusIcon({ aiStatus, status }: { aiStatus: string; status: string }) {
+  if (status === "recording") return <span className="text-[10px] text-muted-foreground">In progress…</span>;
+  if (aiStatus === "processing" || status === "processing") return (
+    <span className="flex items-center gap-1 text-[10px] text-blue-600"><FileClock className="w-3 h-3" /> Generating doc…</span>
+  );
+  if (aiStatus === "done") return (
+    <span className="flex items-center gap-1 text-[10px] text-green-600"><FileCheck className="w-3 h-3" /> Document Ready</span>
+  );
+  if (aiStatus === "failed") return (
+    <span className="flex items-center gap-1 text-[10px] text-orange-500"><AlertCircle className="w-3 h-3" /> Needs AI retry</span>
+  );
+  return <span className="text-[10px] text-muted-foreground">—</span>;
+}
 
 function SessionCard({ s, onClick }: { s: Session; onClick: () => void }) {
   const label = SESSION_TYPES.find(t => t.value === s.sessionType)?.label ?? s.sessionType;
+  const cfg = STATUS_CONFIG[s.status] ?? STATUS_CONFIG.failed;
+
   return (
     <div
       data-testid={`card-field-note-${s.id}`}
-      className="rounded-xl border bg-card p-3.5 cursor-pointer hover:shadow-md transition-shadow flex items-start gap-3"
+      className="group rounded-xl border bg-card cursor-pointer hover:shadow-md hover:border-primary/20 transition-all duration-150 flex flex-col overflow-hidden"
       onClick={onClick}
     >
-      <div className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT[s.status] ?? "bg-gray-300"}`} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium text-sm truncate">{s.title || label}</span>
-          <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${STATUS_BADGE[s.status] ?? ""}`}>
+      {/* Color bar top */}
+      <div className={`h-1 w-full ${s.status === "ready" ? "bg-green-400" : s.status === "processing" ? "bg-blue-400" : s.status === "recording" ? "bg-red-400" : "bg-gray-200"}`} />
+
+      <div className="p-3.5 flex flex-col gap-2 flex-1">
+        {/* Title + status */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-sm truncate leading-tight">{s.title || label}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{label}</p>
+          </div>
+          <div className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${cfg.dot}`} />
+        </div>
+
+        {/* Meta row */}
+        <div className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+          <span className="flex items-center gap-1 min-w-0">
+            <Clock className="w-3 h-3 flex-shrink-0" />
+            <span className="truncate">{format(parseISO(s.startedAt), "h:mm a")}</span>
+          </span>
+          <span className="flex items-center gap-1 min-w-0">
+            <User className="w-3 h-3 flex-shrink-0" />
+            <span className="truncate">{s.createdByName}</span>
+          </span>
+          {s.photoCount > 0 && (
+            <span className="flex items-center gap-1">
+              <Camera className="w-3 h-3 flex-shrink-0" />
+              <span>{s.photoCount} photo{s.photoCount !== 1 ? "s" : ""}</span>
+            </span>
+          )}
+        </div>
+
+        {/* Status badges */}
+        <div className="flex flex-wrap items-center gap-1 mt-auto pt-1 border-t">
+          <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${cfg.badge}`}>
             {s.status === "processing" && <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />}
             {s.status}
           </Badge>
-          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{label}</Badge>
+          <div className="flex-1" />
+          <DocStatusIcon aiStatus={s.aiStatus} status={s.status} />
         </div>
-        <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground flex-wrap">
-          <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" />{format(parseISO(s.startedAt), "h:mm a")}</span>
-          <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3 shrink-0" />{s.createdByName}</span>
-        </div>
-        {s.aiSummary && s.status === "ready" && (
-          <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 italic">"{s.aiSummary}"</p>
-        )}
       </div>
-      <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" />
     </div>
   );
 }
@@ -108,8 +139,10 @@ export default function AdminFieldNotes() {
     return matchSearch && (filterStatus === "all" || s.status === filterStatus) && (filterType === "all" || s.sessionType === filterType);
   });
 
-  // Group by project (locationName) then by date
-  const byProject: Record<string, Record<string, Session[]>> = {};
+  // Group by project then by date
+  type DateGroup = Record<string, Session[]>;
+  type ProjectGroup = Record<string, DateGroup>;
+  const byProject: ProjectGroup = {};
   for (const s of filtered) {
     const proj = s.locationName ?? "No Project";
     const d = parseISO(s.startedAt);
@@ -139,7 +172,7 @@ export default function AdminFieldNotes() {
       <div className="px-4 md:px-6 py-2.5 border-b flex flex-wrap gap-2 items-center bg-muted/30">
         <div className="relative flex-1 min-w-[160px]">
           <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-muted-foreground" />
-          <Input data-testid="input-search-field-notes" className="pl-8 h-7 text-xs" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
+          <Input data-testid="input-search-field-notes" className="pl-8 h-7 text-xs" placeholder="Search by title, project, or person…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger data-testid="select-filter-status" className="h-7 w-28 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
@@ -161,9 +194,11 @@ export default function AdminFieldNotes() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 space-y-6">
+      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 space-y-8">
         {isLoading ? (
-          <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {[1, 2, 3, 4, 5, 6].map(i => <Skeleton key={i} className="h-36 w-full rounded-xl" />)}
+          </div>
         ) : Object.keys(byProject).length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <NotebookPen className="w-12 h-12 text-muted-foreground/40 mb-3" />
@@ -174,26 +209,31 @@ export default function AdminFieldNotes() {
         ) : (
           Object.entries(byProject).map(([project, dateGroups]) => (
             <div key={project}>
-              {/* Project header */}
-              <div className="flex items-center gap-2 mb-3">
-                <MapPin className="w-3.5 h-3.5 text-primary" />
-                <h2 className="text-sm font-semibold">{project}</h2>
+              {/* Project heading */}
+              <div className="flex items-center gap-2 mb-4">
+                <MapPin className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                <h2 className="text-sm font-bold">{project}</h2>
                 <div className="flex-1 h-px bg-border" />
-                <span className="text-[10px] text-muted-foreground">{Object.values(dateGroups).flat().length} session{Object.values(dateGroups).flat().length !== 1 ? "s" : ""}</span>
+                <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                  {Object.values(dateGroups).flat().length} session{Object.values(dateGroups).flat().length !== 1 ? "s" : ""}
+                </span>
               </div>
 
-              <div className="space-y-4 pl-1">
-                {Object.entries(dateGroups).map(([date, list]) => (
-                  <div key={date}>
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 pl-1">{date}</p>
-                    <div className="space-y-2">
-                      {list.map(s => (
-                        <SessionCard key={s.id} s={s} onClick={() => navigate(`/admin/field-notes/session/${s.id}`)} />
-                      ))}
-                    </div>
+              {Object.entries(dateGroups).map(([date, list]) => (
+                <div key={date} className="mb-5">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2 pl-1">{date}</p>
+                  {/* Responsive grid: 1 on mobile, 2 on sm, 3 on lg, 4 on xl */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                    {list.map(s => (
+                      <SessionCard
+                        key={s.id}
+                        s={s}
+                        onClick={() => navigate(`/admin/field-notes/session/${s.id}`)}
+                      />
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
           ))
         )}
