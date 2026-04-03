@@ -661,3 +661,86 @@ export const ACCOUNT_STATUS = {
   ACTIVE: "active",
   DISABLED: "disabled",
 } as const;
+
+// ── Field Notes Module ────────────────────────────────────────────────────────
+export const fieldNotesSessions = pgTable("field_notes_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  locationId: varchar("location_id"),
+  createdByUserId: varchar("created_by_user_id").notNull(),
+  createdByRole: text("created_by_role").notNull().default("admin"),
+  sessionType: text("session_type").notNull().default("site_visit"),
+  title: text("title"),
+  status: text("status").notNull().default("recording"),
+  startedAt: text("started_at").notNull(),
+  endedAt: text("ended_at"),
+  locationLat: text("location_lat"),
+  locationLng: text("location_lng"),
+  locationText: text("location_text"),
+  deviceType: text("device_type"),
+  aiStatus: text("ai_status").notNull().default("pending"),
+  aiSummary: text("ai_summary"),
+  clientSafeSummary: text("client_safe_summary"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const fieldNotesAssets = pgTable("field_notes_assets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").notNull(),
+  uploadedByUserId: varchar("uploaded_by_user_id").notNull(),
+  assetType: text("asset_type").notNull().default("photo"),
+  fileUrl: text("file_url").notNull(),
+  sequenceIndex: integer("sequence_index").notNull().default(0),
+  capturedAt: text("captured_at").notNull(),
+  caption: text("caption"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const fieldNotesTranscriptChunks = pgTable("field_notes_transcript_chunks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").notNull(),
+  chunkIndex: integer("chunk_index").notNull().default(0),
+  startedAt: text("started_at"),
+  rawText: text("raw_text").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const fieldNotesEntries = pgTable("field_notes_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").notNull(),
+  entryType: text("entry_type").notNull().default("observation"),
+  areaName: text("area_name"),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  clientSafeSummary: text("client_safe_summary"),
+  priority: text("priority").notNull().default("normal"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  photoIndexes: text("photo_indexes"),
+  issueDetected: boolean("issue_detected").notNull().default(false),
+  recommendedAction: text("recommended_action"),
+  createdByAi: boolean("created_by_ai").notNull().default(true),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const fieldNotesEntryTags = pgTable("field_notes_entry_tags", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  entryId: varchar("entry_id").notNull(),
+  sessionId: varchar("session_id").notNull(),
+  tagName: text("tag_name").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertFieldNotesSessionSchema = createInsertSchema(fieldNotesSessions).omit({ id: true });
+export const insertFieldNotesAssetSchema = createInsertSchema(fieldNotesAssets).omit({ id: true });
+export const insertFieldNotesEntrySchema = createInsertSchema(fieldNotesEntries).omit({ id: true });
+
+export type FieldNotesSession = typeof fieldNotesSessions.$inferSelect;
+export type InsertFieldNotesSession = z.infer<typeof insertFieldNotesSessionSchema>;
+export type FieldNotesAsset = typeof fieldNotesAssets.$inferSelect;
+export type InsertFieldNotesAsset = z.infer<typeof insertFieldNotesAssetSchema>;
+export type FieldNotesTranscriptChunk = typeof fieldNotesTranscriptChunks.$inferSelect;
+export type FieldNotesEntry = typeof fieldNotesEntries.$inferSelect;
+export type InsertFieldNotesEntry = z.infer<typeof insertFieldNotesEntrySchema>;
+export type FieldNotesEntryTag = typeof fieldNotesEntryTags.$inferSelect;

@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, and, desc, sql, inArray, or, isNull, gte } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, or, isNull, gte, asc } from "drizzle-orm";
 import {
   companies, users, clients, locations, recurringSchedules, shifts, timeEntries, clientRequests, payrollDeductions,
   requestMessages, requestAttachments,
@@ -9,6 +9,7 @@ import {
   payRuns, payStubs, payStubEarnings, payStubDeductions, payStubAuditLog,
   passwordResetTokens,
   reports, reportSignatures, reportActivityLog, reportAccessTokens,
+  fieldNotesSessions, fieldNotesAssets, fieldNotesTranscriptChunks, fieldNotesEntries, fieldNotesEntryTags,
   type Report, type InsertReport,
   type ReportSignature, type InsertReportSignature,
   type ReportActivityLog,
@@ -36,6 +37,11 @@ import {
   type PayStubEarning, type InsertPayStubEarning,
   type PayStubDeduction, type InsertPayStubDeduction,
   type PayStubAuditLog,
+  type FieldNotesSession, type InsertFieldNotesSession,
+  type FieldNotesAsset, type InsertFieldNotesAsset,
+  type FieldNotesTranscriptChunk,
+  type FieldNotesEntry, type InsertFieldNotesEntry,
+  type FieldNotesEntryTag,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -1095,6 +1101,79 @@ export class DatabaseStorage implements IStorage {
         eq(reportAccessTokens.reportId, reportId),
         isNull(reportAccessTokens.revokedAt),
       ));
+  }
+
+  // ── Field Notes ─────────────────────────────────────────────────────────────
+  async createFieldNotesSession(data: InsertFieldNotesSession): Promise<FieldNotesSession> {
+    const [row] = await db.insert(fieldNotesSessions).values(data as any).returning();
+    return row;
+  }
+
+  async getFieldNotesSession(id: string): Promise<FieldNotesSession | undefined> {
+    const [row] = await db.select().from(fieldNotesSessions).where(eq(fieldNotesSessions.id, id));
+    return row;
+  }
+
+  async getFieldNotesSessions(companyId: string, filters?: { locationId?: string; userId?: string; status?: string }): Promise<FieldNotesSession[]> {
+    const conditions = [eq(fieldNotesSessions.companyId, companyId)];
+    if (filters?.locationId) conditions.push(eq(fieldNotesSessions.locationId, filters.locationId));
+    if (filters?.userId) conditions.push(eq(fieldNotesSessions.createdByUserId, filters.userId));
+    if (filters?.status) conditions.push(eq(fieldNotesSessions.status, filters.status));
+    return db.select().from(fieldNotesSessions)
+      .where(and(...conditions))
+      .orderBy(desc(fieldNotesSessions.startedAt));
+  }
+
+  async updateFieldNotesSession(id: string, data: Partial<FieldNotesSession>): Promise<FieldNotesSession | undefined> {
+    const [row] = await db.update(fieldNotesSessions)
+      .set({ ...data, updatedAt: new Date().toISOString() } as any)
+      .where(eq(fieldNotesSessions.id, id)).returning();
+    return row;
+  }
+
+  async addFieldNotesAsset(data: InsertFieldNotesAsset): Promise<FieldNotesAsset> {
+    const [row] = await db.insert(fieldNotesAssets).values(data as any).returning();
+    return row;
+  }
+
+  async getFieldNotesAssets(sessionId: string): Promise<FieldNotesAsset[]> {
+    return db.select().from(fieldNotesAssets)
+      .where(eq(fieldNotesAssets.sessionId, sessionId))
+      .orderBy(asc(fieldNotesAssets.sequenceIndex));
+  }
+
+  async addFieldNotesTranscriptChunk(data: Omit<FieldNotesTranscriptChunk, "id">): Promise<FieldNotesTranscriptChunk> {
+    const [row] = await db.insert(fieldNotesTranscriptChunks).values(data as any).returning();
+    return row;
+  }
+
+  async getFieldNotesTranscriptChunks(sessionId: string): Promise<FieldNotesTranscriptChunk[]> {
+    return db.select().from(fieldNotesTranscriptChunks)
+      .where(eq(fieldNotesTranscriptChunks.sessionId, sessionId))
+      .orderBy(asc(fieldNotesTranscriptChunks.chunkIndex));
+  }
+
+  async createFieldNotesEntry(data: InsertFieldNotesEntry): Promise<FieldNotesEntry> {
+    const [row] = await db.insert(fieldNotesEntries).values(data as any).returning();
+    return row;
+  }
+
+  async getFieldNotesEntries(sessionId: string): Promise<FieldNotesEntry[]> {
+    return db.select().from(fieldNotesEntries)
+      .where(eq(fieldNotesEntries.sessionId, sessionId))
+      .orderBy(asc(fieldNotesEntries.sortOrder));
+  }
+
+  async updateFieldNotesEntry(id: string, data: Partial<FieldNotesEntry>): Promise<FieldNotesEntry | undefined> {
+    const [row] = await db.update(fieldNotesEntries)
+      .set({ ...data, updatedAt: new Date().toISOString() } as any)
+      .where(eq(fieldNotesEntries.id, id)).returning();
+    return row;
+  }
+
+  async getFieldNotesEntryTags(sessionId: string): Promise<FieldNotesEntryTag[]> {
+    return db.select().from(fieldNotesEntryTags)
+      .where(eq(fieldNotesEntryTags.sessionId, sessionId));
   }
 }
 

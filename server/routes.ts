@@ -11,8 +11,8 @@ import { randomBytes } from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { isNotNull, eq, and, isNull } from "drizzle-orm";
-import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations } from "@shared/schema";
+import { isNotNull, eq, and, isNull, inArray } from "drizzle-orm";
+import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, fieldNotesAssets, fieldNotesEntryTags } from "@shared/schema";
 import { getPlan } from "./plans";
 import { generateReviewOgImage } from "./og-image";
 
@@ -4220,6 +4220,344 @@ Return a JSON object with these exact fields:
       res.json({ ok: true, signedAt: now, signerName: signerName.trim() });
     } catch (err: any) { res.status(500).json({ error: "server_error", message: "An error occurred. Please try again later." }); }
   });
+
+  // ── Field Notes Module ──────────────────────────────────────────────────────
+  const fnAuth = (req: Request, res: Response, next: NextFunction) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const role = (req.user as any)?.role;
+    if (role !== "admin" && role !== "employee") return res.status(403).json({ message: "Forbidden" });
+    next();
+  };
+
+  // GET /api/field-notes — list sessions for company
+  app.get("/api/field-notes", fnAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { locationId, userId, status } = req.query as any;
+      const filters: any = {};
+      if (locationId) filters.locationId = locationId;
+      if (status) filters.status = status;
+      // Employees only see their own sessions
+      if (user.role === "employee") filters.userId = user.id;
+      else if (userId) filters.userId = userId;
+      const sessions = await storage.getFieldNotesSessions(user.companyId, filters);
+      // Enrich with creator name and location name
+      const userIds = [...new Set(sessions.map(s => s.createdByUserId))];
+      const locationIds = [...new Set(sessions.map(s => s.locationId).filter(Boolean))];
+      const [allUsers, allLocations] = await Promise.all([
+        userIds.length ? db.select().from(users).where(inArray(users.id, userIds)) : Promise.resolve([]),
+        locationIds.length ? db.select().from(locations).where(inArray(locations.id, locationIds as string[])) : Promise.resolve([]),
+      ]);
+      const userMap = Object.fromEntries(allUsers.map((u: any) => [u.id, u]));
+      const locationMap = Object.fromEntries(allLocations.map((l: any) => [l.id, l]));
+      const enriched = sessions.map(s => ({
+        ...s,
+        createdByName: userMap[s.createdByUserId] ? `${userMap[s.createdByUserId].firstName} ${userMap[s.createdByUserId].lastName}` : "Unknown",
+        locationName: s.locationId && locationMap[s.locationId] ? locationMap[s.locationId].name : null,
+      }));
+      res.json(enriched);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // GET /api/field-notes/sessions/:sessionId — get session detail
+  app.get("/api/field-notes/sessions/:sessionId", fnAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const session = await storage.getFieldNotesSession(req.params.sessionId);
+      if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (user.role === "employee" && session.createdByUserId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      const [assets, chunks, entries, tags] = await Promise.all([
+        storage.getFieldNotesAssets(session.id),
+        storage.getFieldNotesTranscriptChunks(session.id),
+        storage.getFieldNotesEntries(session.id),
+        storage.getFieldNotesEntryTags(session.id),
+      ]);
+      // Attach tags to entries
+      const entriesWithTags = entries.map(e => ({
+        ...e,
+        tags: tags.filter(t => t.entryId === e.id).map(t => t.tagName),
+      }));
+      // Get location name
+      let locationName = null;
+      if (session.locationId) {
+        const loc = await storage.getLocation(session.locationId);
+        locationName = loc?.name ?? null;
+      }
+      res.json({ ...session, locationName, assets, transcriptChunks: chunks, entries: entriesWithTags });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // POST /api/field-notes/sessions — start new session
+  app.post("/api/field-notes/sessions", fnAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { locationId, sessionType, title, deviceType, locationLat, locationLng, locationText } = req.body;
+      const now = new Date().toISOString();
+      const session = await storage.createFieldNotesSession({
+        companyId: user.companyId,
+        locationId: locationId || null,
+        createdByUserId: user.id,
+        createdByRole: user.role,
+        sessionType: sessionType || "site_visit",
+        title: title || null,
+        status: "recording",
+        startedAt: now,
+        endedAt: null,
+        locationLat: locationLat ? String(locationLat) : null,
+        locationLng: locationLng ? String(locationLng) : null,
+        locationText: locationText || null,
+        deviceType: deviceType || null,
+        aiStatus: "pending",
+        aiSummary: null,
+        clientSafeSummary: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+      res.json(session);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // POST /api/field-notes/sessions/:sessionId/photo — upload photo
+  app.post("/api/field-notes/sessions/:sessionId/photo", fnAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const session = await storage.getFieldNotesSession(req.params.sessionId);
+      if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (user.role === "employee" && session.createdByUserId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      const { fileUrl, caption, sequenceIndex } = req.body;
+      if (!fileUrl) return res.status(400).json({ message: "fileUrl required" });
+      const now = new Date().toISOString();
+      const asset = await storage.addFieldNotesAsset({
+        sessionId: session.id,
+        uploadedByUserId: user.id,
+        assetType: "photo",
+        fileUrl,
+        sequenceIndex: sequenceIndex ?? 0,
+        capturedAt: now,
+        caption: caption || null,
+        createdAt: now,
+      });
+      res.json(asset);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // POST /api/field-notes/sessions/:sessionId/transcript — add transcript chunk
+  app.post("/api/field-notes/sessions/:sessionId/transcript", fnAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const session = await storage.getFieldNotesSession(req.params.sessionId);
+      if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (user.role === "employee" && session.createdByUserId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      const { rawText, chunkIndex, startedAt } = req.body;
+      if (!rawText) return res.status(400).json({ message: "rawText required" });
+      const now = new Date().toISOString();
+      const chunk = await storage.addFieldNotesTranscriptChunk({
+        sessionId: session.id,
+        chunkIndex: chunkIndex ?? 0,
+        startedAt: startedAt || now,
+        rawText,
+        createdAt: now,
+      });
+      res.json(chunk);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // POST /api/field-notes/sessions/:sessionId/stop — stop session
+  app.post("/api/field-notes/sessions/:sessionId/stop", fnAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const session = await storage.getFieldNotesSession(req.params.sessionId);
+      if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (user.role === "employee" && session.createdByUserId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      const now = new Date().toISOString();
+      const updated = await storage.updateFieldNotesSession(session.id, {
+        status: "uploading",
+        endedAt: now,
+      });
+      // Kick off AI processing asynchronously
+      processFieldNoteSession(session.id, user.companyId).catch(err => {
+        console.error("[FieldNotes] AI processing error:", err.message);
+        storage.updateFieldNotesSession(session.id, { aiStatus: "failed", status: "ready" });
+      });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // POST /api/field-notes/sessions/:sessionId/process — retry AI processing
+  app.post("/api/field-notes/sessions/:sessionId/process", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const session = await storage.getFieldNotesSession(req.params.sessionId);
+      if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      await storage.updateFieldNotesSession(session.id, { aiStatus: "processing" });
+      processFieldNoteSession(session.id, user.companyId).catch(err => {
+        console.error("[FieldNotes] AI retry error:", err.message);
+        storage.updateFieldNotesSession(session.id, { aiStatus: "failed", status: "ready" });
+      });
+      res.json({ ok: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // PATCH /api/field-notes/sessions/:sessionId — update session title/notes
+  app.patch("/api/field-notes/sessions/:sessionId", fnAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const session = await storage.getFieldNotesSession(req.params.sessionId);
+      if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (user.role === "employee" && session.createdByUserId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      const { title, aiSummary, clientSafeSummary } = req.body;
+      const updated = await storage.updateFieldNotesSession(session.id, {
+        ...(title !== undefined && { title }),
+        ...(aiSummary !== undefined && { aiSummary }),
+        ...(clientSafeSummary !== undefined && { clientSafeSummary }),
+      });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // PATCH /api/field-notes/entries/:entryId — edit AI entry
+  app.patch("/api/field-notes/entries/:entryId", fnAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { title, body, areaName, priority, recommendedAction, clientSafeSummary } = req.body;
+      const updated = await storage.updateFieldNotesEntry(req.params.entryId, {
+        ...(title !== undefined && { title }),
+        ...(body !== undefined && { body }),
+        ...(areaName !== undefined && { areaName }),
+        ...(priority !== undefined && { priority }),
+        ...(recommendedAction !== undefined && { recommendedAction }),
+        ...(clientSafeSummary !== undefined && { clientSafeSummary }),
+      });
+      if (!updated) return res.status(404).json({ message: "Not found" });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // GET /api/field-notes/assets/:assetId/image — serve photo
+  app.get("/api/field-notes/assets/:assetId/image", fnAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const [asset] = await db.select().from(fieldNotesAssets)
+        .where(eq(fieldNotesAssets.id, req.params.assetId));
+      if (!asset) return res.status(404).end();
+      const session = await storage.getFieldNotesSession(asset.sessionId);
+      if (!session || session.companyId !== user.companyId) return res.status(403).end();
+      const base64 = asset.fileUrl.replace(/^data:image\/\w+;base64,/, "");
+      const buf = Buffer.from(base64, "base64");
+      const ct = asset.fileUrl.match(/^data:(image\/\w+);base64,/)?.[1] ?? "image/jpeg";
+      res.set("Content-Type", ct).set("Cache-Control", "private, max-age=86400").send(buf);
+    } catch (err: any) { res.status(500).end(); }
+  });
+
+  // ── Field Notes AI Processing ────────────────────────────────────────────────
+  async function processFieldNoteSession(sessionId: string, companyId: string) {
+    const now = new Date().toISOString();
+    await storage.updateFieldNotesSession(sessionId, { status: "processing", aiStatus: "processing" });
+    const session = await storage.getFieldNotesSession(sessionId);
+    if (!session) return;
+    const [chunks, assets] = await Promise.all([
+      storage.getFieldNotesTranscriptChunks(sessionId),
+      storage.getFieldNotesAssets(sessionId),
+    ]);
+    const fullTranscript = chunks.map(c => c.rawText).join(" ").trim();
+    if (!fullTranscript && assets.length === 0) {
+      await storage.updateFieldNotesSession(sessionId, {
+        status: "ready",
+        aiStatus: "done",
+        aiSummary: "No transcript or photos captured.",
+        clientSafeSummary: "Site visit recorded.",
+      });
+      return;
+    }
+    let locationName = "";
+    if (session.locationId) {
+      const loc = await storage.getLocation(session.locationId);
+      locationName = loc?.name ?? "";
+    }
+    const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const prompt = {
+      sessionType: session.sessionType,
+      locationName,
+      photoCount: assets.length,
+      transcript: fullTranscript || "(no voice recording)",
+      photoDescriptions: assets.map((a, i) => `Photo ${i + 1}: ${a.caption || "No caption"} at ${a.capturedAt}`),
+    };
+    const completion = await openaiClient.chat.completions.create({
+      model: "gpt-4o",
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: `You are a professional cleaning site documentation assistant. Analyze the field visit transcript and photo info, then produce structured field notes in JSON.
+
+Return ONLY valid JSON with this exact structure:
+{
+  "session_summary": "2-3 sentence summary of the visit",
+  "client_safe_summary": "1-2 sentence client-facing summary",
+  "entries": [
+    {
+      "entry_type": "observation|issue|cleaning_scope|damage|risk|supply_note|before_condition|after_condition|general_note",
+      "area_name": "area name or null",
+      "title": "short title",
+      "body": "detailed note",
+      "client_safe_summary": "client-friendly version or null",
+      "priority": "low|normal|high|critical",
+      "issue_detected": true or false,
+      "recommended_action": "action or null",
+      "tags": ["tag1", "tag2"],
+      "photo_indexes": [0, 1]
+    }
+  ]
+}
+
+Produce 3-8 entries based on the content. Focus on actionable, specific observations.`,
+        },
+        { role: "user", content: JSON.stringify(prompt) },
+      ],
+    });
+    const raw = completion.choices[0]?.message?.content ?? "{}";
+    let parsed: any = {};
+    try { parsed = JSON.parse(raw); } catch { parsed = {}; }
+    const sessionSummary = parsed.session_summary || "Field notes processed.";
+    const clientSafe = parsed.client_safe_summary || "Site visit completed.";
+    const entryList: any[] = Array.isArray(parsed.entries) ? parsed.entries : [];
+    for (let i = 0; i < entryList.length; i++) {
+      const e = entryList[i];
+      const entry = await storage.createFieldNotesEntry({
+        sessionId,
+        entryType: e.entry_type || "observation",
+        areaName: e.area_name || null,
+        title: e.title || "Note",
+        body: e.body || "",
+        clientSafeSummary: e.client_safe_summary || null,
+        priority: e.priority || "normal",
+        sortOrder: i,
+        photoIndexes: Array.isArray(e.photo_indexes) ? JSON.stringify(e.photo_indexes) : null,
+        issueDetected: !!e.issue_detected,
+        recommendedAction: e.recommended_action || null,
+        createdByAi: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+      if (Array.isArray(e.tags)) {
+        for (const tag of e.tags) {
+          await db.insert(fieldNotesEntryTags).values({
+            entryId: entry.id,
+            sessionId,
+            tagName: String(tag),
+            createdAt: now,
+          });
+        }
+      }
+    }
+    await storage.updateFieldNotesSession(sessionId, {
+      status: "ready",
+      aiStatus: "done",
+      aiSummary: sessionSummary,
+      clientSafeSummary: clientSafe,
+    });
+    console.log(`[FieldNotes] AI processing complete for session ${sessionId}: ${entryList.length} entries`);
+  }
 
   // Run once at startup to migrate any /uploads/ imageUrls to base64 in DB
   void migrateUploadsToBase64();

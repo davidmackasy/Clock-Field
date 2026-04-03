@@ -1,0 +1,714 @@
+Field NotesI think this is the best name. So can you now write a fully detailed DevNotes to implement this page or feature or whatever, but it should be like a page page. Or maybe you can put it as a bubble floating on mobile, and then on the desktop for it, you'll be able to see it. Make sure it's linked together with the planner's account as well. So can you write the fully detailed DevNotes properly and smooth, and also emphasize the agent, do not break, do not break, do not change or affect anything else, just focus on that.
+Thought for 12s
+
+DEVNOTE: BUILD NEW “FIELD NOTES” PAGE AND MOBILE FLOATING ENTRY FOR AI VOICE + PHOTO JOBSITE DOCUMENTATION
+
+Project goal
+
+Build a brand new page called Field Notes for the cleaning platform. This is a new feature for admins, planners, and cleaners to document site visits, walkthroughs, before-and-after observations, and work-log style photo records by speaking while taking pictures. The system must use GPT-5.4 to turn voice plus photos into organized field documentation. The output must be structured, searchable, grouped by project and date, and easy to review later. This should feel similar in concept to CompanyCam’s project feed, timelines, and AI walkthrough flow, where users can snap photos, talk through what they see, keep everything tied to the project, and generate shareable documentation from that field activity.
+
+Critical instruction
+
+Do not break anything.
+Do not refactor unrelated pages.
+Do not modify current attendance.
+Do not modify payroll.
+Do not modify current task workflow.
+Do not modify the existing client report flow.
+Do not replace current work-log submission logic.
+Do not touch any active submission or public report feature unless a new adapter is required only to mirror data into Field Notes.
+This work must be isolated as a new module, new routes, new tables, new services, and new UI surfaces.
+
+Core idea
+
+Field Notes is not chat.
+Field Notes is not a note-taking page.
+Field Notes is a project-based visual documentation hub.
+
+The user should be able to:
+open a project
+start a live session
+talk naturally
+take photos while walking the site
+stop the session
+let AI organize everything into structured notes tied to those photos
+
+The final result must be an organized project feed with:
+photos
+date
+time
+location
+captured by
+AI-organized notes
+session summaries
+cleaner submissions
+optional premium public reports
+
+CompanyCam’s public material confirms the main pattern we are using as inspiration: project-based photo organization, recent project feed updates, timelines and galleries, AI voice-based job documentation, and AI-generated shareable summaries and reports.
+
+Recommended product naming
+
+Primary feature name:
+Field Notes
+
+Related labels:
+Field Notes Feed
+Start Field Note
+New Walkthrough
+Session Detail
+Public Walkthrough Report
+
+Main surfaces to build
+
+New desktop page: /field-notes
+This is the full main page.
+It should be accessible from the main app navigation for admin and planner users.
+Cleaner access should be limited to their allowed project scope and a simplified view.
+New project-level page: /projects/:projectId/field-notes
+This shows notes only for that project.
+New mobile floating action entry
+On mobile, add a floating bubble or floating action button for authorized users to quickly start a Field Notes session from anywhere relevant in the app.
+This should not appear in places where it causes confusion.
+Best placement:
+project pages
+planner view
+cleaner assigned project view
+admin dashboard project context
+Do not show globally on unrelated billing, settings, or payroll screens.
+New live capture screen
+A dedicated full-screen mobile-first capture experience for voice + photos.
+New session detail page
+A dedicated page to inspect one completed Field Notes session.
+New premium public report flow
+Separate from the current public client report.
+This must be a new report type built only from Field Notes data.
+
+Roles and access
+
+Admin
+Full access to all Field Notes across the company.
+Can start sessions, edit generated notes, view cleaner sessions, create public reports, and manage visibility.
+
+Planner
+Must be linked.
+Planner users need access because they also do walkthroughs, scheduling, and planning. They must be able to create and review Field Notes tied to the projects they manage.
+Planner should be able to:
+start sessions
+review sessions
+search sessions
+generate reports if permission allows
+view cleaner submissions tied to their projects
+
+Cleaner
+Simplified access only for assigned projects or allowed jobs.
+Cleaner can:
+start Field Notes session
+take photos
+record voice
+submit session
+view their own recent sessions if allowed
+Cleaner cannot manage company-wide feed settings or change report templates unless explicitly allowed.
+
+Critical linking requirement
+
+Field Notes must be linked to planner accounts as a first-class role.
+Do not treat this as admin-only.
+Any permission matrix for new routes, APIs, and UI must include planner access where relevant.
+
+Main user experience
+
+Desktop experience
+
+Field Notes desktop should look like a professional project documentation feed.
+The screenshot the user shared is the layout inspiration for density and organization:
+filter bar at the top
+project-based content
+date-grouped photo feed
+clickable cards to open detail
+
+Desktop layout should include:
+left navigation or project context panel
+top filter row
+main feed grouped by date
+session and photo cards
+quick detail drawer or full-page detail view
+
+Top filters:
+start date
+end date
+projects
+users
+groups or teams
+tags
+source type
+before / after / walkthrough / cleaner submission
+
+Feed cards should show:
+thumbnail
+project name
+timestamp
+captured by
+entry type
+short AI title
+short AI summary
+location if available
+tag chips
+
+Mobile experience
+
+Mobile is where this feature becomes powerful.
+
+There should be a floating Field Notes bubble or action button for quick launch.
+Tap opens a lightweight pre-start panel:
+select project
+select session type
+optional voice note title
+start session
+
+Once session starts, the UI should be clean and fast:
+big camera button
+clear recording indicator
+elapsed timer
+live transcript preview
+horizontal filmstrip of captured photos
+pause / resume / stop controls
+
+This must not feel like a chat screen.
+This must feel like a field documentation camera.
+
+Session types
+
+Support these session types from day one:
+Site Visit
+Pre-Clean Walkthrough
+Post-Clean Walkthrough
+Issue Documentation
+Cleaner Work Log
+Follow-Up Review
+Inspection
+
+These types should help AI structure notes and help filters later.
+
+Data flow
+
+Step 1
+User starts a Field Notes session under a selected project.
+
+Step 2
+System begins:
+voice capture
+transcript capture with timestamps
+photo capture with timestamps
+location capture if permission granted
+user role tracking
+project linking
+
+Step 3
+As user talks and takes photos, store raw assets immediately.
+Do not block the UI on AI generation.
+
+Step 4
+On session stop, or in timed background-safe chunks, process transcript + photos.
+
+Step 5
+Use GPT-5.4 to convert raw transcript and ordered photos into structured entries:
+areas
+issues
+observations
+recommended cleaning actions
+material or supply needs
+damage or risks
+before-cleaning notes
+after-cleaning notes
+client-safe summary
+
+Step 6
+Save structured records to dedicated Field Notes tables.
+
+Step 7
+Render them in feed view, session detail view, and optional public report builder.
+
+Very important implementation rule
+
+Photo capture and transcript capture must always be prioritized over AI processing.
+No heavy AI task should freeze the live capture experience.
+Capture first.
+Process second.
+Render third.
+
+AI behavior
+
+GPT-5.4 must not be used as a loose text generator only.
+It must be used in a structured output workflow.
+
+Use GPT-5.4 for:
+cleaning transcript
+extracting clear observations
+mapping spoken context to nearby photos
+categorizing areas
+tag generation
+summary generation
+client-safe report wording
+report section organization
+
+Do not store only one giant blob of AI text.
+Store normalized data.
+
+AI input should include:
+project metadata
+session metadata
+ordered photos with timestamps
+transcript chunks with timestamps
+user role
+session type
+
+AI output should be strict structured JSON:
+session_summary
+entry_list[]
+
+Each entry should include:
+title
+area_name
+entry_type
+cleaned_note
+issue_detected
+recommended_action
+priority
+tags
+photo_indexes
+client_safe_summary
+
+Recommended entry types:
+observation
+issue
+cleaning_scope
+damage
+risk
+supply_note
+before_condition
+after_condition
+general_note
+
+Storage model
+
+Create new isolated data structures.
+Do not overload existing work-log or report tables unless a safe reference link is needed.
+
+Recommended tables
+
+field_notes_sessions
+id
+company_id
+project_id
+created_by_user_id
+created_by_role
+session_type
+title
+status
+started_at
+ended_at
+location_lat
+location_lng
+location_text
+device_type
+ai_status
+ai_summary
+client_safe_summary
+created_at
+updated_at
+
+field_notes_assets
+id
+session_id
+project_id
+uploaded_by_user_id
+asset_type
+file_url
+thumbnail_url
+sequence_index
+captured_at
+gps_lat
+gps_lng
+location_text
+source_type
+width
+height
+duration
+metadata_json
+created_at
+
+field_notes_transcript_chunks
+id
+session_id
+chunk_index
+started_at
+ended_at
+raw_text
+clean_text
+speaker_role
+processing_status
+created_at
+
+field_notes_entries
+id
+session_id
+project_id
+entry_type
+area_name
+title
+body
+client_safe_summary
+priority
+confidence_score
+sort_order
+created_by_ai
+created_at
+updated_at
+
+field_notes_entry_assets
+id
+entry_id
+asset_id
+sort_order
+
+field_notes_tags
+id
+entry_id
+tag_name
+
+field_notes_public_reports
+id
+company_id
+project_id
+session_id
+title
+report_type
+share_token
+status
+published_at
+created_by_user_id
+settings_json
+
+field_notes_source_links
+id
+session_id
+source_module
+source_record_id
+link_type
+created_at
+
+Source linking
+
+Field Notes must be able to display content from cleaner submissions and similar workflows without replacing the original records.
+
+That means:
+keep the original source data where it already lives
+mirror or reference it into Field Notes through a source linking layer
+show it in the Field Notes feed as a source type
+never rewrite historical submission logic
+
+Suggested source types:
+field_note_live_session
+field_note_manual_upload
+cleaner_submission_mirror
+admin_upload
+planner_walkthrough
+post_clean_review
+
+API endpoints
+
+Add isolated endpoints only.
+
+Recommended endpoints:
+GET /api/field-notes
+GET /api/field-notes/projects/:projectId
+GET /api/field-notes/sessions/:sessionId
+POST /api/field-notes/sessions/start
+POST /api/field-notes/sessions/:sessionId/photo
+POST /api/field-notes/sessions/:sessionId/transcript-chunk
+POST /api/field-notes/sessions/:sessionId/stop
+POST /api/field-notes/sessions/:sessionId/process
+PATCH /api/field-notes/sessions/:sessionId
+PATCH /api/field-notes/entries/:entryId
+GET /api/field-notes/public-reports/:reportId
+POST /api/field-notes/public-reports
+PATCH /api/field-notes/public-reports/:reportId
+POST /api/field-notes/source-sync/cleaner-submissions
+
+All endpoints must be permission-aware by company, role, and project access.
+
+UI requirements
+
+Desktop Field Notes page
+
+Top section:
+Page title: Field Notes
+Subtext: Organized jobsite photos, walkthroughs, and AI notes by project
+
+Actions:
+New Field Note
+Upload Photos
+Generate Report
+
+Filter bar:
+start date
+end date
+project
+user
+role
+session type
+tags
+source type
+location
+
+Main feed:
+group by date
+cards or rows with thumbnail-first design
+fast lazy loading
+infinite scroll or paginated load
+click row to open session detail
+
+Session detail page
+
+Header:
+project name
+session title
+created by
+role
+date and time
+location
+session type
+AI processing status
+
+Sections:
+Overview
+Areas Documented
+Issues Found
+Cleaning Needed
+Before Photos
+After Photos
+Cleaner Submissions Linked
+Full Notes
+Full Transcript
+
+Every section must be collapsible.
+Every photo must open in a clean lightbox.
+There should be edit controls for admins and planners if allowed.
+
+Mobile live capture screen
+
+Header:
+project name
+session type
+recording state
+
+Main body:
+camera preview or photo launcher
+big photo capture button
+voice recording status
+timer
+live transcript strip
+recent image strip
+
+Bottom actions:
+pause
+resume
+stop
+add tag
+switch camera if needed
+
+Do not overload the live screen with too much text.
+
+Floating bubble behavior on mobile
+
+Add a floating bubble or FAB labeled with a notes icon.
+Tap behavior:
+If inside a project, preselect that project.
+If not inside a project, open a project picker first.
+Bubble should only appear for allowed roles and only in work-related screens.
+It should not cover important buttons or break current mobile layouts.
+
+Search and filtering
+
+Field Notes must support search by:
+project
+date
+time
+captured by
+role
+location
+tags
+session type
+keywords from transcript
+keywords from AI-generated notes
+
+Field teams need retrieval later.
+That is one of the main reasons tools like CompanyCam are useful: photos and updates stay organized by project, feed, tags, and timeline instead of being lost in the camera roll.
+
+Public report requirement
+
+Build a new premium public report type from Field Notes.
+This must be separate from the existing public client report.
+Do not touch the active report flow.
+
+Suggested new report types:
+Walkthrough Report
+Pre-Clean Summary
+Post-Clean Summary
+Inspection Summary
+
+Public report builder should let the user choose:
+report title
+which entries to include
+which photos to include
+whether to show timestamps
+whether to show location
+whether to show before/after sections
+company logo and branding
+
+Public link should be read-only.
+Use a separate report template and route.
+Keep this fully isolated.
+
+Planner account linking
+
+This is mandatory.
+
+Planners must be able to:
+access Field Notes for projects they manage
+create sessions
+review admin and cleaner sessions where permission allows
+generate reports if permitted
+search notes by project and date
+view linked cleaner submissions
+
+If the app currently has planner project assignment logic, reuse that permission scope only.
+Do not alter planner permissions globally.
+Extend only what is needed for Field Notes.
+
+Cleaner app integration
+
+Cleaner app needs a simplified version.
+
+Cleaner flow:
+open assigned project
+tap Field Notes
+start session
+take photos
+talk through work
+stop session
+submit
+
+Admin and planner side should then see cleaner Field Notes in the main feed with clear source labeling.
+Do not merge this into the current work-log submission UI directly unless using a safe adapter.
+This should feel connected, not replaced.
+
+Processing strategy
+
+Use staged processing:
+
+Stage A
+Store raw media and raw transcript immediately.
+
+Stage B
+Queue AI processing after stop, or in small chunks if safe.
+
+Stage C
+Persist normalized entries and summary.
+
+Stage D
+Render updated UI.
+
+Need clear states:
+recording
+uploading
+processing
+ready
+failed
+
+If AI processing fails, raw photos and transcript must still be saved.
+User must never lose the captured data.
+
+Editing behavior
+
+Admins and planners should be able to:
+rename session title
+edit AI summary
+edit entry wording
+remove bad tags
+select which entries go into public report
+
+Cleaner should have limited editing, ideally before final submit only, unless business rules say otherwise.
+
+Non-functional requirements
+
+Keep uploads reliable.
+Compress images safely for mobile.
+Store originals plus thumbnails if needed.
+Do not slow down the app’s main navigation.
+Do not run large synchronous GPT jobs on the request cycle if that hurts responsiveness.
+Add logging for:
+session start
+session stop
+photo upload
+transcript save
+AI processing start
+AI processing finish
+AI processing failure
+public report generation
+
+Security and privacy
+
+Field Notes data is company data.
+Respect current company scoping.
+Public reports must use secure share tokens.
+Raw internal notes should not be exposed in public report unless explicitly selected.
+Support location capture only if user grants permission.
+
+Suggested rollout phases
+
+Phase 1
+Build the Field Notes data layer, routes, permissions, desktop page shell, feed UI, session detail UI, and manual photo upload path.
+
+Phase 2
+Build mobile floating bubble, live capture session, transcript capture, timestamped photo capture, and session stop flow.
+
+Phase 3
+Add GPT-5.4 processing, structured entries, AI summaries, and search.
+
+Phase 4
+Add cleaner app sync and planner-first workflows.
+
+Phase 5
+Add premium public report generator and report sharing.
+
+Testing requirements
+
+Test admin flow end to end.
+Test planner flow end to end.
+Test cleaner flow end to end.
+Test project scoping.
+Test mobile session recovery if app closes mid-session.
+Test slow network upload.
+Test AI failure with raw data preserved.
+Test public report isolation from existing report system.
+Test permission leaks.
+Test date grouping and time zone correctness.
+Test source links from cleaner submission mirror data.
+
+Final instruction to the agent
+
+Build Field Notes as a new isolated project documentation module.
+Do not break anything else.
+Do not touch current active report logic.
+Do not touch attendance.
+Do not touch payroll.
+Do not touch unrelated planner permissions.
+Do not replace current cleaner submission flow.
+Only extend where necessary through new adapters, new routes, new tables, and new UI components.
+
+Success state
+
+When finished, an admin, planner, or cleaner should be able to walk a site, talk while taking photos, stop the session, and later open a clean project-based Field Notes feed where everything is organized by date, time, project, user, and AI-structured documentation. That matches the core value shown in CompanyCam’s public product positioning: project-based photo capture, project feed visibility, timeline organization, AI voice-driven field documentation, and shareable summaries and reports.
+
+I can also turn this into a stricter handoff version with exact frontend file suggestions, backend service names, and DB migration naming.

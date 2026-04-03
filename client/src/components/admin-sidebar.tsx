@@ -20,7 +20,7 @@ import {
   LayoutDashboard, Users, Calendar, ClipboardList,
   DollarSign, Building2,
   Settings, LogOut, Clock, ShieldCheck, BookOpen,
-  CreditCard, Bell, ShieldAlert, ChevronRight, FolderOpen
+  CreditCard, Bell, ShieldAlert, ChevronRight, FolderOpen, NotebookPen
 } from "lucide-react";
 
 const navItems = [
@@ -33,6 +33,7 @@ const navItems = [
   { title: "Admins", url: "/admin/admins", icon: ShieldCheck },
   { title: "Reports", url: "/admin/reports", icon: FolderOpen },
   { title: "Work Log", url: "/admin/work-log", icon: BookOpen },
+  { title: "Field Notes", url: "/admin/field-notes", icon: NotebookPen },
   { title: "Settings", url: "/admin/settings", icon: Settings },
 ];
 
