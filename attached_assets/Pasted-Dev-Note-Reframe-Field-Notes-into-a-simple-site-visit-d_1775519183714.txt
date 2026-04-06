@@ -1,0 +1,411 @@
+Dev Note: Reframe Field Notes into a simple site-visit document with optional quotation mode
+
+You are right. The current version still sounds too AI-written and too formal in the wrong way. It reads like a generic compliance summary instead of a simple site-visit document the client can understand.
+
+Also, the colored follow-up boxes should be removed. That is not the point of this page.
+
+What this page should become
+
+Field Notes should become one simple, professional walkthrough document.
+
+Its main job is:
+
+* show the photos taken during the site visit
+* explain in plain language what was seen
+* group the important things that need attention
+* optionally turn the same walkthrough into a quotation/proposal
+
+That matches how commercial cleaning bidding usually works: walkthrough details, measurements, photos, scope notes, then a professional bid or proposal built from that information. Good janitorial bid workflows emphasize taking measurements and pictures during the walkthrough, documenting room-specific details, and then turning that into a clear proposal with pricing and scope. Janitorial Manager also markets built-in bid calculation tied to facility details and ISSA-based standards, while Housecall Pro emphasizes polished estimates with line items, photos, signatures, and customer approval. ([Janitorial Manager][1])
+
+New direction
+
+Do not make Field Notes sound like:
+“Several areas have been identified for updates to meet standards.”
+
+Make it sound like a simple letter or walkthrough summary:
+“These are the photos taken during the site visit. Based on the walkthrough, the main areas to focus on are the carpets, corner areas, and public-facing spaces.”
+
+That is the tone.
+
+Core content rules
+
+Do not hard-rephrase what was spoken.
+Do not inflate the language.
+Do not create command-style follow-up boxes.
+Do not add unnecessary “standards,” “compliance,” or “updates required” wording unless that was actually said or clearly intended.
+
+Do this instead:
+
+* keep the original meaning
+* clean the grammar lightly
+* turn rough speech into readable paragraphs
+* keep the wording simple
+* make it feel like a real note a company would send to a client
+
+The document should read like:
+
+* site visit summary
+* what we saw
+* what needs attention
+* what may be included in service
+* optional quote/proposal details if quotation mode is turned on
+
+Field Notes should support two modes
+
+1. Site Visit Report mode
+   This is the plain walkthrough document.
+   Used to show:
+
+* what was seen
+* what was photographed
+* what areas need attention
+* what the team is noting for internal review or client review
+
+2. Quotation mode
+   This uses the same walkthrough but adds pricing and scope structure.
+   Used to show:
+
+* service scope
+* property details
+* frequency
+* pricing basis
+* monthly / weekly / bi-weekly quote
+* optional acceptance step
+
+This should be a toggle on the admin side:
+
+* Standard Field Note
+* Turn into Quote / Proposal
+
+Do not make quotation mode a separate unrelated feature. It should grow naturally from the walkthrough, because that is exactly what the walkthrough is for.
+
+New document structure
+
+For one site visit, render one document only.
+
+Do not break it into fake mini-documents.
+
+The new structure should be:
+
+Document header
+
+* Company name
+* Client/site name
+* Document type:
+
+  * Site Visit Notes
+  * Walkthrough Summary
+  * Quote Proposal
+* Visit date
+* Prepared by
+* Optional location
+
+Opening paragraph
+Simple and human.
+Example structure:
+“These are the notes and photos taken during the site visit on [date]. The purpose of this walkthrough was to review the space, document visible areas that need attention, and outline the main items to focus on.”
+
+This section should not sound robotic.
+
+Property summary section
+This is where the walkthrough details live.
+Fields should support:
+
+* square footage
+* number of rooms
+* number of offices
+* number of washrooms
+* number of kitchens/break rooms
+* number of hallways
+* number of entrances
+* number of floors
+* upstairs/downstairs presence
+* garage / warehouse / lobby / common areas
+* special surfaces such as carpet, tile, VCT, glass, etc.
+
+This is important because the user wants the walkthrough to become a quote later, and cleaning estimate tools usually depend on facility-specific details, room counts, and service scope to build accurate proposals. ([Janitorial Manager][2])
+
+Main observations section
+
+Do not use:
+
+* Follow-up
+* Recommendation box
+* High/critical tags everywhere
+* Too many colored labels
+
+Instead, write clean paragraph sections.
+
+Example structure:
+Area observed
+Plain paragraph explaining what was seen in that area.
+If needed, a second short paragraph explaining what should be focused on.
+
+Example tone:
+“The carpeted areas appear to need regular attention. During the walkthrough, these sections were noted as areas that may require vacuuming more than once per week depending on traffic.”
+
+Or:
+“The corner areas shown in the photos were pointed out during the visit as spaces that need extra attention during service.”
+
+Simple. Clear. Useful.
+
+Photos section behavior
+
+Do not dump all photos first and then disconnected notes after.
+
+Instead, inside the document:
+
+* show a short opening section
+* then group photos with the matching paragraph or section
+* if four photos belong to one area, keep them under that area
+* if a photo has spoken context, keep that text with that photo group
+
+The photos tab can still exist as a clean gallery.
+But the document tab and public link must place photos in context.
+
+Admin document tab redesign
+
+The Document tab should feel like one readable document, not stacked AI cards.
+
+Inside Document:
+
+* one full document layout
+* paragraph-based sections
+* grouped photos
+* property summary
+* service-focus notes
+* optional pricing section when quotation mode is on
+
+Remove from the document experience:
+
+* hard follow-up banners
+* noisy observation chips
+* excessive colored category tags
+* multiple fake “documents” for one site visit
+
+Transcript tab redesign
+
+Transcript should stay available, but it should be clearly labeled as source transcript, not the final document.
+
+Transcript tab should become:
+
+* readable paragraphs
+* ordered by capture sequence
+* timestamps if available
+* clean spacing
+* optional photo references beside transcript chunk if matched
+
+This helps the admin verify what was actually said without making the public link look messy.
+
+Voice-to-data extraction for walkthrough
+
+Add structured extraction from spoken walkthrough notes.
+
+If the person says things like:
+
+* “the square footage is 16 by 70”
+* “there are 6 offices upstairs”
+* “there is one kitchen in the back”
+* “the carpets need vacuuming twice a week”
+
+the system should try to detect and populate structured quote fields automatically.
+
+That means the Field Note workflow should support extraction for:
+
+* measurements
+* square footage
+* room counts
+* service frequency
+* floor type
+* special tasks
+* service notes
+
+This should not replace manual editing.
+The admin must still be able to review and adjust those fields before sending to client.
+
+Quotation mode details
+
+When quotation mode is turned on, add a quotation section below the walkthrough summary.
+
+Suggested quotation block:
+
+* Service frequency
+* Scope summary
+* Included areas
+* Extra attention items
+* Pricing basis
+* Monthly price
+* Weekly / bi-weekly option
+* Add-ons
+* Notes
+* Acceptance / approval area
+
+This matches what estimate software commonly does: present a professional estimate with line items, service descriptions, images, branding, and approval flow. ([Housecall Pro][3])
+
+Quotation mode should also allow the admin to input or adjust:
+
+* square footage
+* number of rooms/offices
+* service frequency
+* carpet care frequency
+* floor waxing frequency
+* restroom service frequency
+* trash service
+* kitchen cleaning
+* extra services
+* monthly amount
+* one-time deep clean amount
+* notes for client
+
+This should feel like a production quoting tool, not an AI summary page.
+
+Public link redesign
+
+The public link must become client-ready.
+
+It should look like:
+
+* a professional walkthrough summary
+* or a quote proposal if quote mode is on
+
+Public link should be simple:
+
+* title
+* company
+* site/client
+* date
+* prepared by
+* short summary paragraph
+* grouped photo sections with plain-language notes
+* optional service scope section
+* optional pricing section
+* optional acceptance area
+
+The public link should read like a clean document somebody can open and understand in one pass.
+
+Tone rules for the generated writing
+
+Use language like:
+
+* “These are the photos taken during the walkthrough.”
+* “The main areas to focus on are…”
+* “Based on the site visit, attention should be given to…”
+* “The carpets, hallways, and corner areas were noted during the visit.”
+* “This quote is based on the information gathered during the walkthrough.”
+
+Avoid language like:
+
+* “meet standards”
+* “compliance risk”
+* “critical update required”
+* “follow-up action”
+  unless those ideas were actually stated and truly necessary.
+
+The result should sound like a business letter, not an AI warning system.
+
+UI style changes
+
+Make the page feel like a document.
+
+Remove:
+
+* heavy colored recommendation bars
+* too many labels
+* alert-style cards for normal notes
+* fragmented mini sections that interrupt reading
+
+Use:
+
+* wider paragraph sections
+* calm typography
+* clean spacing
+* photo groups between paragraphs
+* subtle dividers
+* quote table or pricing card only when quote mode is on
+
+Admin-side controls to add
+
+Inside Field Note editor/review:
+
+* Toggle: Standard Note / Quote Proposal
+* Property details panel
+* Service scope panel
+* Pricing panel
+* AI extracted details review panel
+
+The AI extracted details review panel should show things it found from speech, such as:
+
+* square footage
+* room counts
+* service frequencies
+* special needs
+
+Admin can edit before publishing.
+
+Suggested final page sections
+
+Standard mode:
+
+* Header
+* Site visit summary
+* Property details
+* Main observations
+* Photos by section
+* Service focus / areas to watch
+* Closing note
+
+Quote mode:
+
+* Header
+* Site visit summary
+* Property details
+* Main observations
+* Photos by section
+* Proposed service scope
+* Service frequency
+* Pricing summary
+* Optional acceptance / next step
+
+Do not do these
+
+Do not add follow-up banners.
+Do not over-color the page.
+Do not over-summarize into vague statements.
+Do not split one walkthrough into multiple fake documents.
+Do not make the writing sound legal, robotic, or compliance-heavy.
+Do not change any other module outside Field Notes and its public link / document presentation.
+
+What to improve first
+
+First priority:
+make the public link and document view feel like a real document.
+
+Second priority:
+make the wording simple and paragraph-based.
+
+Third priority:
+add optional quotation mode with editable property and pricing fields.
+
+Fourth priority:
+add AI extraction from spoken walkthrough details into quote fields.
+
+Final instruction
+
+This page should become a walkthrough-to-quote tool.
+
+It starts as a field note.
+It can stay as a plain report.
+Or it can be turned into a quotation/proposal.
+
+That is the real production direction.
+
+Keep it simple.
+Keep it readable.
+Keep the original meaning.
+Keep the photos aligned with the notes.
+Make it client-ready.
+Do not touch anything else.
+
+[1]: https://www.janitorialmanager.com/blog/how-to-find-bid-on-cleaning-contracts-in-your-area/?utm_source=chatgpt.com "How To Find & Bid On Commercial Cleaning Contracts"
+[2]: https://www.janitorialmanager.com/work-management-system/janitorial-bidding-software/?utm_source=chatgpt.com "Janitorial Bidding Software | Cleaning Estimate Software"
+[3]: https://www.housecallpro.com/features/estimating-software/?utm_source=chatgpt.com "Job Estimate Software & Mobile App for Service Contractors"

@@ -4643,11 +4643,13 @@ Return a JSON object with these exact fields:
       const session = await storage.getFieldNotesSession(req.params.sessionId);
       if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       if (user.role === "employee" && session.createdByUserId !== user.id) return res.status(403).json({ message: "Forbidden" });
-      const { title, aiSummary, clientSafeSummary } = req.body;
+      const { title, aiSummary, clientSafeSummary, documentMode, quoteData } = req.body;
       const updated = await storage.updateFieldNotesSession(session.id, {
         ...(title !== undefined && { title }),
         ...(aiSummary !== undefined && { aiSummary }),
         ...(clientSafeSummary !== undefined && { clientSafeSummary }),
+        ...(documentMode !== undefined && { documentMode }),
+        ...(quoteData !== undefined && { quoteData: typeof quoteData === "string" ? quoteData : JSON.stringify(quoteData) }),
       });
       res.json(updated);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
@@ -4855,44 +4857,74 @@ Return a JSON object with these exact fields:
         messages: [
           {
             role: "system",
-            content: `You are a professional site documentation assistant helping field teams produce clear, accurate field notes from recording sessions.
+            content: `You are a field notes assistant helping produce simple, readable site visit documents for commercial cleaning and facility service businesses.
 
-CRITICAL CONTENT RULES — read carefully:
-1. PRESERVE original meaning. Do NOT replace specific observations with vague generalizations.
-   BAD: "Several areas need updates to meet current standards."
-   GOOD: "The corner areas and public-facing sections observed during this visit were found to be below standard and require corrective attention."
-2. Stay grounded in what the transcript actually says. If the person said "corner areas need cleaning", write about corner areas needing cleaning — do not turn it into generic language.
-3. Only improve grammar and readability. Never change the core observation.
-4. If transcript is sparse or vague, stay close to the original wording rather than inventing polished-sounding but meaningless text.
-5. Tie each entry's body directly to the linked transcript text for that photo group.
+TONE — this is the most important rule:
+Write like a person summarizing a walkthrough in plain, professional language. Think of a business letter, not a compliance report.
+
+GOOD examples of tone:
+"These are the photos taken during the walkthrough on [date]. The main areas we looked at were the common hallways, the washrooms, and the kitchen area at the back."
+"The carpeted sections near the entrance were noted during the visit as areas that will need regular attention."
+"Based on what was seen during the walkthrough, the corner areas and public-facing spaces are the main focus for the cleaning scope."
+
+BAD examples — never write like this:
+"Several areas have been identified for updates to meet current standards."
+"Critical compliance risk detected in Zone 3."
+"Recommended follow-up action required to address regulatory requirements."
+"A comprehensive site visit was conducted to assess facility conditions."
+
+CONTENT RULES:
+1. Keep the original meaning from what was spoken. Do not replace specific observations with vague generalizations.
+2. Lightly clean grammar and turn rough speech into readable paragraphs — do not inflate or formalize the language.
+3. If the transcript says "corner areas need cleaning", write that — do not turn it into "areas were found to require remediation."
+4. Session summary: 2–3 simple sentences. Say what areas were visited and what the walkthrough was for. Grounded in the actual transcript.
+5. No "standards", "compliance", "critical update required", "follow-up action" wording unless it was explicitly stated.
 
 GROUPING:
-- Group related photos (same area, same issue) into ONE entry rather than one card per photo.
-- Aim for 2–6 meaningful observation sections for a typical session, not one card per photo.
-- Use the area name from the transcript when available — prefer specific names.
+- Group related photos (same area or topic) into ONE entry — not one card per photo.
+- Aim for 2–6 sections for a typical walkthrough session.
+- Use actual area names from the transcript (e.g., "Upstairs hallway", "Main washroom", "Back kitchen").
 
-SESSION SUMMARY:
-- Write a genuine 2–4 sentence introduction paragraph covering what was reviewed, what areas were visited, and what the note covers.
-- Use the actual transcript content, not generic filler like "a comprehensive site visit was conducted."
+STRUCTURED DETAIL EXTRACTION:
+Look for any of the following in the transcript and extract if found. Use null if not mentioned:
+- Square footage or dimensions (e.g., "16 by 70", "1,200 square feet")
+- Number of floors, offices, washrooms, kitchens, hallways, entrances
+- Special surfaces (carpet, tile, VCT, hardwood, glass)
+- Service frequency mentioned (e.g., "twice a week", "three times per week")
+- Carpet care or floor care frequency
+- Any pricing or budget amounts mentioned
 
 Return ONLY valid JSON:
 {
-  "session_summary": "2-4 sentence intro paragraph grounded in what was actually observed. Specific, not generic.",
-  "client_safe_summary": "1-2 sentence professional client-facing overview",
+  "session_summary": "2-3 plain sentence intro grounded in the actual walkthrough. What areas, what was seen, what the visit was for.",
+  "client_safe_summary": "1-2 sentence plain overview for the client",
+  "extracted_details": {
+    "square_footage": "string or null",
+    "num_floors": "string or null",
+    "num_offices": "string or null",
+    "num_washrooms": "string or null",
+    "num_kitchens": "string or null",
+    "num_hallways": "string or null",
+    "num_entrances": "string or null",
+    "special_surfaces": "string or null",
+    "service_frequency": "string or null",
+    "carpet_frequency": "string or null",
+    "other_notes": "string or null"
+  },
   "entries": [
     {
       "sort_order": 0,
-      "entry_type": "observation|issue|cleaning_scope|damage|risk|supply_note|before_condition|after_condition|general_note",
+      "entry_type": "observation|issue|cleaning_scope|general_note",
       "area_name": "specific area name from transcript, or null",
-      "title": "short specific title using actual area/issue names from transcript",
-      "body": "Professional paragraph preserving the specific observation. Must reflect what was actually said in the linked transcript. Do not generalize or replace specifics with broad statements.",
-      "client_safe_summary": "client-friendly version or null",
+      "title": "short plain title — e.g. 'Upstairs hallway', 'Main washrooms', 'Entrance and lobby'",
+      "body": "Plain paragraph describing what was seen in this area. Write like a person, not a report generator. Stay close to what was actually said.",
+      "client_safe_summary": null,
       "priority": "low|normal|high|critical",
-      "issue_detected": true or false,
-      "recommended_action": "specific actionable follow-up tied to the actual observation, or null",
+      "issue_detected": false,
+      "recommended_action": "Only if something specific needs attention — plain language like 'These carpets will need vacuuming twice per week.' or null",
       "photo_ids": ["photo-uuid-here"],
-      "related_transcript": "exact or lightly cleaned transcript text",
-      "tags": ["tag1", "tag2"]
+      "related_transcript": "lightly cleaned transcript text for this section",
+      "tags": []
     }
   ]
 }
@@ -4901,8 +4933,8 @@ RULES:
 - photo_ids must use exact UUID strings from the photo_id fields provided
 - sort_order must follow photo capture sequence
 - Every photo must appear in at least one entry
-- If no transcript is linked to a photo, describe what type of photo it appears to be from context
-- Preserve specificity always — vague generalization is worse than leaving the original transcript text`,
+- If no transcript linked to a photo, describe what the photo shows based on context clues
+- Preserve specificity — a specific simple note is always better than a vague polished one`,
           },
           {
             role: "user",
@@ -4921,6 +4953,18 @@ RULES:
       sessionSummary = parsed.session_summary || "";
       clientSafe = parsed.client_safe_summary || "";
       entryList = Array.isArray(parsed.entries) ? parsed.entries : [];
+      // Store any extracted property details into quoteData (only if session has none yet)
+      if (parsed.extracted_details && typeof parsed.extracted_details === "object") {
+        const det = parsed.extracted_details;
+        const hasAny = Object.values(det).some(v => v !== null && v !== "" && v !== undefined);
+        if (hasAny) {
+          const freshSession = await storage.getFieldNotesSession(sessionId);
+          let existingQuote: any = {};
+          try { existingQuote = JSON.parse((freshSession as any)?.quoteData || "{}"); } catch {}
+          const merged = { ...existingQuote, _aiExtracted: det };
+          await storage.updateFieldNotesSession(sessionId, { quoteData: JSON.stringify(merged) } as any);
+        }
+      }
     } catch (aiErr: any) {
       console.error("[FieldNotes] AI call failed:", aiErr.message);
     }

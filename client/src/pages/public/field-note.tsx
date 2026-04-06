@@ -2,7 +2,7 @@ import { useRoute } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
-import { NotebookPen, MapPin, Clock, User, AlertTriangle, X, Building2 } from "lucide-react";
+import { NotebookPen, MapPin, Clock, User, AlertTriangle, X, Building2, DollarSign, FileCheck, LayoutList } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
 const SESSION_TYPE_LABELS: Record<string, string> = {
@@ -10,12 +10,10 @@ const SESSION_TYPE_LABELS: Record<string, string> = {
   post_clean: "Post-Clean", damage_report: "Damage Report", maintenance: "Maintenance",
 };
 
-const PRIORITY_PILL: Record<string, string> = {
-  critical: "bg-red-100 text-red-700",
-  high: "bg-orange-100 text-orange-700",
-  normal: "bg-blue-50 text-blue-700",
-  low: "bg-gray-100 text-gray-500",
-};
+function parseQuoteData(raw: string | null | undefined): Record<string, any> {
+  if (!raw) return {};
+  try { return JSON.parse(raw); } catch { return {}; }
+}
 
 export default function PublicFieldNote() {
   const [, params] = useRoute("/public/field-notes/:token");
@@ -61,9 +59,11 @@ export default function PublicFieldNote() {
   const docTitle = publicDoc?.title || session?.title || SESSION_TYPE_LABELS[session?.sessionType] || "Field Report";
   const showTimestamps = publicDoc?.showTimestamps ?? false;
   const sessionType = SESSION_TYPE_LABELS[session?.sessionType] || "Field Note";
+  const documentMode = session?.documentMode || "standard";
+  const quoteData = parseQuoteData(session?.quoteData);
 
-  // Build recommendations from entries
-  const recommendedActions: string[] = (entries ?? [])
+  // Build a flat list of areas to focus on (non-empty recommended actions)
+  const areasToFocusOn: string[] = (entries ?? [])
     .map((e: any) => e.recommendedAction)
     .filter((a: any): a is string => !!a && a.trim().length > 0);
 
@@ -75,7 +75,7 @@ export default function PublicFieldNote() {
     } catch { return []; }
   };
 
-  // Assets not linked to any entry (show in a general section at top if present)
+  // Assets not linked to any entry
   const linkedAssetIds = new Set(
     (entries ?? []).flatMap((e: any) => {
       try { return JSON.parse(e.assetIds || "[]"); } catch { return []; }
@@ -99,14 +99,12 @@ export default function PublicFieldNote() {
             )}
             <div className="flex-1 min-w-0">
               {company?.name && (
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{company.name}</p>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{company.name}</p>
               )}
               <h1 className="text-xl font-bold text-gray-900 leading-tight">{docTitle}</h1>
-              <p className="text-sm text-gray-500 mt-0.5">{sessionType}</p>
-            </div>
-            <div className="shrink-0 flex items-center gap-1.5 text-xs text-gray-400 print:hidden">
-              <NotebookPen className="w-3.5 h-3.5" />
-              <span>Field Notes</span>
+              <p className="text-sm text-gray-400 mt-0.5">
+                {documentMode === "quote" ? "Quote Proposal · " : ""}{sessionType}
+              </p>
             </div>
           </div>
 
@@ -115,7 +113,7 @@ export default function PublicFieldNote() {
             {session?.startedAt && (
               <span className="flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-gray-400" />
-                {format(parseISO(session.startedAt), "MMMM d, yyyy · h:mm a")}
+                {format(parseISO(session.startedAt), "MMMM d, yyyy")}
               </span>
             )}
             {session?.locationName && (
@@ -137,10 +135,9 @@ export default function PublicFieldNote() {
       {/* ── Document Body ── */}
       <div className="max-w-2xl mx-auto px-5 py-8 space-y-0">
 
-        {/* Introduction */}
+        {/* Opening paragraph */}
         {(session?.aiSummary || session?.clientSafeSummary) && (
           <section className="mb-8">
-            <h2 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Introduction</h2>
             <p className="text-sm text-gray-700 leading-relaxed">
               {session.clientSafeSummary || session.aiSummary}
             </p>
@@ -148,7 +145,7 @@ export default function PublicFieldNote() {
           </section>
         )}
 
-        {/* Any unlinked photos — shown as general site photos */}
+        {/* Unlinked photos — site photos */}
         {unlinkedAssets.length > 0 && (
           <section className="mb-8">
             <h2 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Site Photos</h2>
@@ -173,7 +170,7 @@ export default function PublicFieldNote() {
           </section>
         )}
 
-        {/* No entries */}
+        {/* Empty state */}
         {(!entries || entries.length === 0) && unlinkedAssets.length === 0 && (
           <div className="text-center py-16 text-gray-400">
             <NotebookPen className="w-12 h-12 mx-auto mb-3 opacity-30" />
@@ -191,24 +188,13 @@ export default function PublicFieldNote() {
 
                   {/* Section header */}
                   <div className="flex items-center gap-3 mb-4">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                      Observation {i + 1}
-                    </span>
-                    <div className="flex-1 h-px bg-gray-200" />
-                  </div>
-
-                  {/* Metadata */}
-                  <div className="flex items-center gap-2 mb-2.5 flex-wrap">
+                    <span className="text-[10px] font-bold text-gray-400 whitespace-nowrap">{i + 1}.</span>
                     {entry.areaName && (
-                      <span className="text-xs font-medium text-gray-500 bg-gray-100 rounded px-2 py-0.5">{entry.areaName}</span>
+                      <span className="text-xs font-semibold text-gray-600">{entry.areaName}</span>
                     )}
-                    {(entry.priority === "high" || entry.priority === "critical") && (
-                      <span className={`text-[10px] font-medium rounded px-2 py-0.5 ${PRIORITY_PILL[entry.priority]}`}>
-                        {entry.priority}
-                      </span>
-                    )}
+                    <div className="flex-1 h-px bg-gray-200" />
                     {showTimestamps && entry.createdAt && (
-                      <span className="text-[10px] text-gray-400">{format(parseISO(entry.createdAt), "h:mm a")}</span>
+                      <span className="text-[10px] text-gray-400 shrink-0">{format(parseISO(entry.createdAt), "h:mm a")}</span>
                     )}
                   </div>
 
@@ -242,16 +228,15 @@ export default function PublicFieldNote() {
                   )}
 
                   {/* Body text */}
-                  <p className="text-sm text-gray-700 leading-relaxed mb-3">
+                  <p className="text-sm text-gray-700 leading-relaxed mb-2">
                     {entry.clientSafeSummary || entry.body}
                   </p>
 
-                  {/* Recommended action */}
+                  {/* Recommended action — plain note, no colored box */}
                   {entry.recommendedAction && (
-                    <div className="flex items-start gap-2 bg-blue-50 rounded-lg px-3.5 py-2.5 text-sm text-blue-700">
-                      <span className="font-semibold shrink-0 mt-0.5">→ Follow-up:</span>
-                      <span className="leading-relaxed">{entry.recommendedAction}</span>
-                    </div>
+                    <p className="text-xs text-gray-500 italic leading-relaxed">
+                      Note: {entry.recommendedAction}
+                    </p>
                   )}
                 </section>
               );
@@ -259,12 +244,12 @@ export default function PublicFieldNote() {
           </div>
         )}
 
-        {/* ── Recommendations Summary ── */}
-        {recommendedActions.length > 0 && (
+        {/* ── Areas to Focus On ── */}
+        {areasToFocusOn.length > 0 && (
           <section className="mt-10 pt-7 border-t border-gray-200">
-            <h2 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Recommended Follow-Up</h2>
+            <h2 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Areas to Focus On</h2>
             <ul className="space-y-2.5">
-              {recommendedActions.map((action, i) => (
+              {areasToFocusOn.map((action, i) => (
                 <li key={i} className="flex items-start gap-2.5 text-sm text-gray-700">
                   <span className="text-gray-400 font-medium shrink-0 mt-0.5">{i + 1}.</span>
                   <span className="leading-relaxed">{action}</span>
@@ -274,17 +259,105 @@ export default function PublicFieldNote() {
           </section>
         )}
 
+        {/* ── Quote / Proposal Section ── */}
+        {documentMode === "quote" && (quoteData.monthlyAmount || quoteData.scopeSummary || quoteData.serviceFrequency || quoteData.squareFootage) && (
+          <section className="mt-10 pt-7 border-t border-gray-200">
+            <div className="flex items-center gap-2 mb-5">
+              <DollarSign className="w-4 h-4 text-gray-500" />
+              <h2 className="text-sm font-bold text-gray-800">Proposed Service Scope</h2>
+            </div>
+
+            {/* Property details row */}
+            {(quoteData.squareFootage || quoteData.numFloors || quoteData.numOffices || quoteData.numWashrooms || quoteData.specialSurfaces) && (
+              <div className="mb-5">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                  <LayoutList className="w-3 h-3" /> Property Details
+                </p>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                  {quoteData.squareFootage && <div><span className="text-gray-400 text-xs">Square footage</span><p className="font-medium text-gray-800">{quoteData.squareFootage}</p></div>}
+                  {quoteData.numFloors && <div><span className="text-gray-400 text-xs">Floors</span><p className="font-medium text-gray-800">{quoteData.numFloors}</p></div>}
+                  {quoteData.numOffices && <div><span className="text-gray-400 text-xs">Offices</span><p className="font-medium text-gray-800">{quoteData.numOffices}</p></div>}
+                  {quoteData.numWashrooms && <div><span className="text-gray-400 text-xs">Washrooms</span><p className="font-medium text-gray-800">{quoteData.numWashrooms}</p></div>}
+                  {quoteData.numKitchens && <div><span className="text-gray-400 text-xs">Kitchens / break rooms</span><p className="font-medium text-gray-800">{quoteData.numKitchens}</p></div>}
+                  {quoteData.numEntrances && <div><span className="text-gray-400 text-xs">Entrances</span><p className="font-medium text-gray-800">{quoteData.numEntrances}</p></div>}
+                  {quoteData.specialSurfaces && <div className="col-span-2"><span className="text-gray-400 text-xs">Surfaces</span><p className="font-medium text-gray-800">{quoteData.specialSurfaces}</p></div>}
+                  {quoteData.otherAreas && <div className="col-span-2"><span className="text-gray-400 text-xs">Other areas</span><p className="font-medium text-gray-800">{quoteData.otherAreas}</p></div>}
+                </div>
+              </div>
+            )}
+
+            {/* Service scope */}
+            {(quoteData.serviceFrequency || quoteData.scopeSummary || quoteData.includedAreas || quoteData.addOns) && (
+              <div className="mb-5">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                  <FileCheck className="w-3 h-3" /> Service Scope
+                </p>
+                <div className="space-y-2 text-sm">
+                  {quoteData.serviceFrequency && (
+                    <div><span className="text-gray-400 text-xs">Frequency</span><p className="font-medium text-gray-800">{quoteData.serviceFrequency}</p></div>
+                  )}
+                  {quoteData.carpetFrequency && (
+                    <div><span className="text-gray-400 text-xs">Carpet care</span><p className="font-medium text-gray-800">{quoteData.carpetFrequency}</p></div>
+                  )}
+                  {quoteData.includedAreas && (
+                    <div><span className="text-gray-400 text-xs">Included areas</span><p className="font-medium text-gray-800">{quoteData.includedAreas}</p></div>
+                  )}
+                  {quoteData.scopeSummary && (
+                    <div><span className="text-gray-400 text-xs">Scope</span><p className="text-gray-700 leading-relaxed mt-0.5">{quoteData.scopeSummary}</p></div>
+                  )}
+                  {quoteData.addOns && (
+                    <div><span className="text-gray-400 text-xs">Add-ons</span><p className="font-medium text-gray-800">{quoteData.addOns}</p></div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Pricing */}
+            {(quoteData.monthlyAmount || quoteData.weeklyAmount || quoteData.biweeklyAmount || quoteData.oneTimeAmount) && (
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Pricing</p>
+                <div className="space-y-2">
+                  {quoteData.monthlyAmount && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Monthly</span>
+                      <span className="text-base font-bold text-gray-900">{quoteData.monthlyAmount}</span>
+                    </div>
+                  )}
+                  {quoteData.weeklyAmount && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Weekly</span>
+                      <span className="text-sm font-semibold text-gray-700">{quoteData.weeklyAmount}</span>
+                    </div>
+                  )}
+                  {quoteData.biweeklyAmount && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Bi-weekly</span>
+                      <span className="text-sm font-semibold text-gray-700">{quoteData.biweeklyAmount}</span>
+                    </div>
+                  )}
+                  {quoteData.oneTimeAmount && (
+                    <div className="flex justify-between items-center border-t border-gray-200 pt-2 mt-2">
+                      <span className="text-sm text-gray-600">One-time / deep clean</span>
+                      <span className="text-sm font-semibold text-gray-700">{quoteData.oneTimeAmount}</span>
+                    </div>
+                  )}
+                </div>
+                {quoteData.pricingNotes && (
+                  <p className="text-xs text-gray-500 mt-3 leading-relaxed">{quoteData.pricingNotes}</p>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
         {/* ── Closing ── */}
         <section className="mt-8 pt-6 border-t border-gray-200">
-          <p className="text-xs text-gray-400 leading-relaxed">
-            This field note summarizes the observations recorded during the site visit documented above.
-            It is intended to support follow-up planning, internal review, and client communication
-            regarding the areas documented during this visit.
-          </p>
-          <div className="flex items-center gap-3 mt-5 pt-4 border-t border-gray-100 text-[10px] text-gray-300">
+          <div className="flex items-center gap-3 text-[10px] text-gray-300">
             <NotebookPen className="w-3 h-3" />
-            <span>Generated by Clockfield · Field Notes</span>
-            {session?.startedAt && <span>· {format(parseISO(session.startedAt), "MMMM d, yyyy")}</span>}
+            <span>
+              {company?.name ? `${company.name} · ` : ""}Field Notes by Clockfield
+              {session?.startedAt ? ` · ${format(parseISO(session.startedAt), "MMMM d, yyyy")}` : ""}
+            </span>
           </div>
         </section>
       </div>

@@ -1,9 +1,8 @@
-import { useState } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,20 +16,20 @@ import {
   Loader2, Edit3, X, Check, Images, FileText,
   Sparkles, NotebookPen, Share2, Copy, Link as LinkIcon,
   EyeOff, User, Printer, ChevronDown, ChevronUp,
+  FileCheck, DollarSign, Building, LayoutList, Wand2,
 } from "lucide-react";
 import { format, parseISO, differenceInMinutes } from "date-fns";
-
-const PRIORITY_BADGE: Record<string, string> = {
-  critical: "bg-red-100 text-red-700 border-red-200",
-  high: "bg-orange-100 text-orange-700 border-orange-200",
-  normal: "bg-blue-50 text-blue-700 border-blue-200",
-  low: "bg-gray-100 text-gray-500 border-gray-200",
-};
 
 const SESSION_TYPE_LABELS: Record<string, string> = {
   site_visit: "Site Visit", inspection: "Inspection", pre_clean: "Pre-Clean",
   post_clean: "Post-Clean", damage_report: "Damage Report", maintenance: "Maintenance",
 };
+
+// ── Parse quote data safely ────────────────────────────────────────────────────
+function parseQuoteData(raw: string | null | undefined): Record<string, any> {
+  if (!raw) return {};
+  try { return JSON.parse(raw); } catch { return {}; }
+}
 
 // ── Share Panel ───────────────────────────────────────────────────────────────
 function SharePanel({ session, publicDoc, sessionId }: { session: any; publicDoc: any; sessionId: string }) {
@@ -151,9 +150,12 @@ function DocumentObservation({ entry, assets, sessionId, index, onPhotoClick }: 
     <div className="group relative">
       {/* Section divider with number */}
       <div className="flex items-center gap-3 mb-4">
-        <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest whitespace-nowrap">
-          Observation {index}
+        <span className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest whitespace-nowrap">
+          {index}.
         </span>
+        {entry.areaName && (
+          <span className="text-xs font-semibold text-foreground/70">{entry.areaName}</span>
+        )}
         <div className="flex-1 h-px bg-border" />
         {/* Edit toggle */}
         <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -174,24 +176,6 @@ function DocumentObservation({ entry, assets, sessionId, index, onPhotoClick }: 
         </div>
       </div>
 
-      {/* Observation metadata */}
-      <div className="flex items-center gap-2 mb-2.5 flex-wrap">
-        {entry.areaName && (
-          <span className="text-xs font-medium text-muted-foreground bg-muted rounded px-2 py-0.5">{entry.areaName}</span>
-        )}
-        {(entry.priority === "high" || entry.priority === "critical") && (
-          <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", PRIORITY_BADGE[entry.priority])}>
-            {entry.priority}
-          </Badge>
-        )}
-        {entry.issueDetected && (
-          <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-red-50 text-red-600 border-red-200">Issue</Badge>
-        )}
-        {(entry.tags ?? []).map((t: string) => (
-          <span key={t} className="text-[10px] text-muted-foreground">#{t}</span>
-        ))}
-      </div>
-
       {/* Title */}
       {editing ? (
         <Input data-testid="input-entry-title" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="text-base font-semibold mb-3 h-8" />
@@ -199,7 +183,7 @@ function DocumentObservation({ entry, assets, sessionId, index, onPhotoClick }: 
         <h3 className="text-base font-semibold text-foreground mb-3 leading-snug">{entry.title}</h3>
       )}
 
-      {/* Photos — larger, embedded in context */}
+      {/* Photos — embedded in context */}
       {linkedAssets.length > 0 && (
         <div className={cn(
           "mb-4 rounded-xl overflow-hidden",
@@ -226,8 +210,17 @@ function DocumentObservation({ entry, assets, sessionId, index, onPhotoClick }: 
       {editing ? (
         <Textarea data-testid="textarea-entry-body" value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))} rows={4} className="text-sm mb-3" />
       ) : (
-        <p className="text-sm text-foreground/80 leading-relaxed mb-3">{entry.body}</p>
+        <p className="text-sm text-foreground/80 leading-relaxed mb-2">{entry.body}</p>
       )}
+
+      {/* Recommended action — plain text note, no colored box */}
+      {editing ? (
+        <Input data-testid="input-entry-action" value={form.recommendedAction} onChange={e => setForm(f => ({ ...f, recommendedAction: e.target.value }))} placeholder="Note or follow-up…" className="text-sm h-7 mb-2" />
+      ) : entry.recommendedAction ? (
+        <p className="text-xs text-muted-foreground italic leading-relaxed mb-2">
+          Note: {entry.recommendedAction}
+        </p>
+      ) : null}
 
       {/* Spoken note — collapsible */}
       {entry.relatedTranscript && (
@@ -245,16 +238,219 @@ function DocumentObservation({ entry, assets, sessionId, index, onPhotoClick }: 
           "{entry.relatedTranscript}"
         </blockquote>
       )}
+    </div>
+  );
+}
 
-      {/* Recommended action */}
-      {editing ? (
-        <Input data-testid="input-entry-action" value={form.recommendedAction} onChange={e => setForm(f => ({ ...f, recommendedAction: e.target.value }))} placeholder="Recommended action…" className="text-sm h-7" />
-      ) : entry.recommendedAction ? (
-        <div className="flex items-start gap-2 bg-blue-50 dark:bg-blue-950/20 rounded-lg px-3 py-2.5 text-xs text-blue-700 dark:text-blue-300">
-          <span className="font-semibold shrink-0 mt-0.5">→ Follow-up:</span>
-          <span className="leading-relaxed">{entry.recommendedAction}</span>
+// ── AI Extracted Details Panel ─────────────────────────────────────────────────
+function AiExtractedPanel({ extracted, onApply }: { extracted: Record<string, any>; onApply: (data: Record<string, any>) => void }) {
+  const [open, setOpen] = useState(true);
+  const labels: Record<string, string> = {
+    square_footage: "Square footage", num_floors: "Floors", num_offices: "Offices",
+    num_washrooms: "Washrooms", num_kitchens: "Kitchens", num_hallways: "Hallways",
+    num_entrances: "Entrances", special_surfaces: "Surfaces", service_frequency: "Service frequency",
+    carpet_frequency: "Carpet care", other_notes: "Notes",
+  };
+  const hasValues = Object.entries(extracted).some(([, v]) => v !== null && v !== "");
+
+  if (!hasValues) return null;
+
+  return (
+    <div className="mb-6 border rounded-xl overflow-hidden">
+      <button
+        className="w-full flex items-center justify-between px-4 py-2.5 bg-muted/40 hover:bg-muted/60 transition-colors text-left"
+        onClick={() => setOpen(v => !v)}
+        data-testid="button-toggle-ai-extracted"
+      >
+        <div className="flex items-center gap-2">
+          <Wand2 className="w-3.5 h-3.5 text-primary" />
+          <span className="text-xs font-semibold">AI extracted details from recording</span>
         </div>
-      ) : null}
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-muted-foreground">Review before using in quote</span>
+          {open ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+        </div>
+      </button>
+      {open && (
+        <div className="px-4 py-3 space-y-2">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
+            {Object.entries(extracted).map(([k, v]) => {
+              if (!v || !labels[k]) return null;
+              return (
+                <div key={k} className="flex gap-2">
+                  <span className="text-[11px] text-muted-foreground shrink-0 w-28">{labels[k]}:</span>
+                  <span className="text-[11px] font-medium">{String(v)}</span>
+                </div>
+              );
+            })}
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs h-7 mt-2 gap-1"
+            onClick={() => {
+              const mapped: Record<string, string> = {
+                squareFootage: extracted.square_footage || "",
+                numFloors: extracted.num_floors || "",
+                numOffices: extracted.num_offices || "",
+                numWashrooms: extracted.num_washrooms || "",
+                numKitchens: extracted.num_kitchens || "",
+                numHallways: extracted.num_hallways || "",
+                numEntrances: extracted.num_entrances || "",
+                specialSurfaces: extracted.special_surfaces || "",
+                serviceFrequency: extracted.service_frequency || "",
+                carpetFrequency: extracted.carpet_frequency || "",
+              };
+              onApply(mapped);
+            }}
+            data-testid="button-apply-extracted"
+          >
+            <Check className="w-3 h-3" /> Apply to quote fields
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Quote Section ──────────────────────────────────────────────────────────────
+function QuoteSection({ sessionId, quoteData, onSave }: {
+  sessionId: string;
+  quoteData: Record<string, any>;
+  onSave: (data: Record<string, any>) => void;
+}) {
+  const [form, setForm] = useState<Record<string, string>>({
+    clientName: quoteData.clientName || "",
+    siteAddress: quoteData.siteAddress || "",
+    squareFootage: quoteData.squareFootage || "",
+    numFloors: quoteData.numFloors || "",
+    numOffices: quoteData.numOffices || "",
+    numWashrooms: quoteData.numWashrooms || "",
+    numKitchens: quoteData.numKitchens || "",
+    numHallways: quoteData.numHallways || "",
+    numEntrances: quoteData.numEntrances || "",
+    specialSurfaces: quoteData.specialSurfaces || "",
+    otherAreas: quoteData.otherAreas || "",
+    serviceFrequency: quoteData.serviceFrequency || "",
+    carpetFrequency: quoteData.carpetFrequency || "",
+    includedAreas: quoteData.includedAreas || "",
+    scopeSummary: quoteData.scopeSummary || "",
+    addOns: quoteData.addOns || "",
+    monthlyAmount: quoteData.monthlyAmount || "",
+    weeklyAmount: quoteData.weeklyAmount || "",
+    biweeklyAmount: quoteData.biweeklyAmount || "",
+    oneTimeAmount: quoteData.oneTimeAmount || "",
+    pricingNotes: quoteData.pricingNotes || "",
+  });
+
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const handleSave = () => {
+    const merged = { ...quoteData, ...form };
+    onSave(merged);
+  };
+
+  const field = (label: string, key: string, placeholder?: string, wide?: boolean) => (
+    <div className={wide ? "col-span-2" : ""}>
+      <Label className="text-[11px] text-muted-foreground mb-1 block">{label}</Label>
+      <Input
+        value={form[key] || ""}
+        onChange={set(key)}
+        placeholder={placeholder || ""}
+        className="h-7 text-xs"
+        data-testid={`input-quote-${key}`}
+      />
+    </div>
+  );
+
+  return (
+    <div className="mt-10 pt-6 border-t space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <DollarSign className="w-4 h-4 text-primary" />
+          <p className="text-sm font-semibold">Quote / Proposal Details</p>
+        </div>
+        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleSave} data-testid="button-save-quote">
+          <Check className="w-3 h-3" /> Save
+        </Button>
+      </div>
+
+      {/* Client info */}
+      <div>
+        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
+          <Building className="w-3 h-3" /> Client & Site
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("Client name", "clientName", "e.g. Acme Corp")}
+          {field("Site address", "siteAddress", "123 Main Street")}
+        </div>
+      </div>
+
+      {/* Property details */}
+      <div>
+        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
+          <LayoutList className="w-3 h-3" /> Property Details
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("Square footage", "squareFootage", "e.g. 1,200 sq ft")}
+          {field("Number of floors", "numFloors", "e.g. 2")}
+          {field("Offices", "numOffices", "e.g. 6")}
+          {field("Washrooms", "numWashrooms", "e.g. 3")}
+          {field("Kitchens / break rooms", "numKitchens", "e.g. 1")}
+          {field("Hallways", "numHallways", "e.g. 2")}
+          {field("Entrances", "numEntrances", "e.g. 1")}
+          {field("Special surfaces", "specialSurfaces", "e.g. carpet, VCT tile, glass")}
+          <div className="col-span-2">
+            <Label className="text-[11px] text-muted-foreground mb-1 block">Other areas</Label>
+            <Input value={form.otherAreas} onChange={set("otherAreas")} placeholder="e.g. lobby, garage, warehouse" className="h-7 text-xs" data-testid="input-quote-otherAreas" />
+          </div>
+        </div>
+      </div>
+
+      {/* Service scope */}
+      <div>
+        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
+          <FileCheck className="w-3 h-3" /> Service Scope
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("Service frequency", "serviceFrequency", "e.g. 3x per week")}
+          {field("Carpet care frequency", "carpetFrequency", "e.g. weekly")}
+          <div className="col-span-2">
+            <Label className="text-[11px] text-muted-foreground mb-1 block">Included areas</Label>
+            <Input value={form.includedAreas} onChange={set("includedAreas")} placeholder="e.g. all offices, washrooms, kitchen" className="h-7 text-xs" data-testid="input-quote-includedAreas" />
+          </div>
+          <div className="col-span-2">
+            <Label className="text-[11px] text-muted-foreground mb-1 block">Scope summary</Label>
+            <Textarea value={form.scopeSummary} onChange={set("scopeSummary")} rows={2} placeholder="Describe what the service includes…" className="text-xs resize-none" data-testid="textarea-quote-scopeSummary" />
+          </div>
+          <div className="col-span-2">
+            <Label className="text-[11px] text-muted-foreground mb-1 block">Add-ons</Label>
+            <Input value={form.addOns} onChange={set("addOns")} placeholder="e.g. window cleaning, floor waxing" className="h-7 text-xs" data-testid="input-quote-addOns" />
+          </div>
+        </div>
+      </div>
+
+      {/* Pricing */}
+      <div>
+        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
+          <DollarSign className="w-3 h-3" /> Pricing
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("Monthly amount", "monthlyAmount", "e.g. $1,200/month")}
+          {field("Weekly amount", "weeklyAmount", "e.g. $300/week")}
+          {field("Bi-weekly amount", "biweeklyAmount", "e.g. $600/bi-weekly")}
+          {field("One-time / deep clean", "oneTimeAmount", "e.g. $800")}
+          <div className="col-span-2">
+            <Label className="text-[11px] text-muted-foreground mb-1 block">Pricing notes</Label>
+            <Textarea value={form.pricingNotes} onChange={set("pricingNotes")} rows={2} placeholder="e.g. Based on 3 visits per week, includes all supplies." className="text-xs resize-none" data-testid="textarea-quote-pricingNotes" />
+          </div>
+        </div>
+      </div>
+
+      <Button size="sm" className="w-full gap-1" onClick={handleSave} data-testid="button-save-quote-bottom">
+        <Check className="w-3.5 h-3.5" /> Save Quote Details
+      </Button>
     </div>
   );
 }
@@ -285,10 +481,9 @@ function TranscriptView({ chunks, assets }: { chunks: any[]; assets: any[] }) {
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-5 pb-4 border-b">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Transcript Record</p>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Source Transcript</p>
         <p className="text-xs text-muted-foreground">
-          Raw voice-to-text transcript with photos shown in capture sequence.
-          Times shown are relative to session start.
+          Raw voice-to-text in capture sequence. Times are relative to session start. This is the source record — the Document tab shows the cleaned version.
         </p>
       </div>
       <div className="space-y-2">
@@ -362,6 +557,15 @@ export default function AdminFieldNotesSession() {
     onError: () => toast({ title: "Failed to start AI", variant: "destructive" }),
   });
 
+  const saveQuoteMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("PATCH", `/api/field-notes/sessions/${sessionId}`, data).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/field-notes/sessions", sessionId] });
+      toast({ title: "Quote details saved" });
+    },
+    onError: () => toast({ title: "Failed to save quote", variant: "destructive" }),
+  });
+
   if (isLoading || !session) {
     return (
       <div className="p-4 space-y-3">
@@ -380,10 +584,28 @@ export default function AdminFieldNotesSession() {
   const isProcessing = session.status === "processing" || session.status === "uploading";
   const isReady = session.status === "ready";
   const canShare = isReady && (entries.length > 0 || assets.length > 0);
+  const documentMode: string = session.documentMode || "standard";
+  const quoteData = parseQuoteData(session.quoteData);
+  const aiExtracted = quoteData._aiExtracted as Record<string, any> | undefined;
 
-  const recommendedActions = entries
+  const areasToFocusOn = entries
     .map(e => e.recommendedAction)
     .filter((a): a is string => !!a && a.trim().length > 0);
+
+  const toggleDocumentMode = () => {
+    const newMode = documentMode === "quote" ? "standard" : "quote";
+    updateMutation.mutate({ documentMode: newMode });
+  };
+
+  const handleSaveQuote = (data: Record<string, any>) => {
+    saveQuoteMutation.mutate({ quoteData: JSON.stringify(data) });
+  };
+
+  const handleApplyExtracted = (extracted: Record<string, any>) => {
+    const merged = { ...quoteData, ...extracted };
+    saveQuoteMutation.mutate({ quoteData: JSON.stringify(merged) });
+    toast({ title: "AI details applied to quote fields" });
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -403,7 +625,7 @@ export default function AdminFieldNotesSession() {
                 <Button size="icon" variant="ghost" className="w-7 h-7 shrink-0" onClick={() => setEditingTitle(false)}><X className="w-3.5 h-3.5" /></Button>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <h1 className="text-sm font-semibold truncate">{session.title || SESSION_TYPE_LABELS[session.sessionType] || session.sessionType}</h1>
                 <button data-testid="button-edit-title" className="text-muted-foreground hover:text-foreground shrink-0" onClick={() => { setEditTitle(session.title ?? ""); setEditingTitle(true); }}>
                   <Edit3 className="w-3 h-3" />
@@ -414,13 +636,28 @@ export default function AdminFieldNotesSession() {
               {session.locationName && <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3" />{session.locationName}</span>}
               <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" />{format(parseISO(session.startedAt), "MMM d h:mm a")}{duration !== null ? ` · ${duration}m` : ""}</span>
               {session.createdByName && <span className="flex items-center gap-0.5"><User className="w-3 h-3" />{session.createdByName}</span>}
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                {isProcessing && <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />}
-                {session.status}
-              </Badge>
+              <span className={cn(
+                "text-[10px] px-1.5 py-0 rounded-full border font-medium",
+                documentMode === "quote" ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/20 dark:text-green-400 dark:border-green-800" : "bg-muted text-muted-foreground border-border"
+              )}>
+                {documentMode === "quote" ? "Quote Proposal" : "Site Visit Note"}
+              </span>
             </div>
           </div>
           <div className="flex gap-1.5 flex-shrink-0 flex-wrap justify-end">
+            {canShare && isReady && (
+              <Button
+                data-testid="button-toggle-mode"
+                size="sm"
+                variant="outline"
+                className={cn("gap-1 text-xs h-7", documentMode === "quote" && "border-green-300 text-green-700 dark:border-green-700 dark:text-green-400")}
+                onClick={toggleDocumentMode}
+                disabled={updateMutation.isPending}
+              >
+                <DollarSign className="w-3 h-3" />
+                {documentMode === "quote" ? "Switch to Note" : "Turn into Quote"}
+              </Button>
+            )}
             {canShare && (
               <Button data-testid="button-print-doc" size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={() => window.print()}>
                 <Printer className="w-3 h-3" /> Print
@@ -486,10 +723,14 @@ export default function AdminFieldNotesSession() {
             ) : (
               <div className="max-w-2xl mx-auto px-4 md:px-6 py-6 space-y-0">
 
-                {/* Document intro */}
+                {/* AI extracted details panel (admin only) */}
+                {aiExtracted && (
+                  <AiExtractedPanel extracted={aiExtracted} onApply={handleApplyExtracted} />
+                )}
+
+                {/* Document intro paragraph */}
                 {session.aiSummary && (
                   <div className="mb-8">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Introduction</p>
                     <p className="text-sm text-foreground/80 leading-relaxed">{session.aiSummary}</p>
                     <div className="h-px bg-border mt-6" />
                   </div>
@@ -509,12 +750,12 @@ export default function AdminFieldNotesSession() {
                   ))}
                 </div>
 
-                {/* Recommendations summary */}
-                {recommendedActions.length > 0 && (
+                {/* Areas to focus on */}
+                {areasToFocusOn.length > 0 && (
                   <div className="mt-10 pt-6 border-t">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Recommended Follow-Up</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Areas to Focus On</p>
                     <ul className="space-y-2">
-                      {recommendedActions.map((action, i) => (
+                      {areasToFocusOn.map((action, i) => (
                         <li key={i} className="flex items-start gap-2.5 text-sm text-foreground/80">
                           <span className="text-muted-foreground font-medium shrink-0 mt-0.5">{i + 1}.</span>
                           <span className="leading-relaxed">{action}</span>
@@ -524,13 +765,18 @@ export default function AdminFieldNotesSession() {
                   </div>
                 )}
 
+                {/* Quote section (when in quote mode) */}
+                {documentMode === "quote" && (
+                  <QuoteSection
+                    sessionId={sessionId!}
+                    quoteData={quoteData}
+                    onSave={handleSaveQuote}
+                  />
+                )}
+
                 {/* Closing */}
                 <div className="mt-8 pt-5 border-t">
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    This field note is intended to support follow-up planning, internal review, and client communication
-                    regarding the areas documented during this visit.
-                  </p>
-                  <div className="flex items-center gap-3 mt-4 pt-3 border-t text-[10px] text-muted-foreground/60">
+                  <div className="flex items-center gap-3 text-[10px] text-muted-foreground/60">
                     <NotebookPen className="w-3 h-3" />
                     <span>Field Note · {format(parseISO(session.startedAt), "MMMM d, yyyy")}</span>
                     {session.createdByName && <span>· Prepared by {session.createdByName}</span>}
