@@ -19,8 +19,8 @@ import { Badge } from "@/components/ui/badge";
 import {
   LayoutDashboard, Users, Calendar, ClipboardList,
   DollarSign, Building2,
-  Settings, LogOut, Clock, ShieldCheck, BookOpen,
-  CreditCard, Bell, ShieldAlert, ChevronRight, FolderOpen, NotebookPen
+  Settings, LogOut, Clock, Users2, BookOpen,
+  CreditCard, Bell, ShieldAlert, ChevronRight
 } from "lucide-react";
 
 const navItems = [
@@ -30,10 +30,8 @@ const navItems = [
   { title: "Attendance", url: "/admin/attendance", icon: ClipboardList },
   { title: "Payroll", url: "/admin/payroll", icon: DollarSign },
   { title: "Clients", url: "/admin/clients", icon: Building2 },
-  { title: "Admins", url: "/admin/admins", icon: ShieldCheck },
-  { title: "Reports", url: "/admin/reports", icon: FolderOpen },
+  { title: "Management", url: "/admin/management", icon: Users2 },
   { title: "Work Log", url: "/admin/work-log", icon: BookOpen },
-  { title: "Field Notes", url: "/admin/field-notes", icon: NotebookPen },
   { title: "Settings", url: "/admin/settings", icon: Settings },
 ];
 
@@ -49,6 +47,10 @@ export function AdminSidebar() {
   const unreadMessages = (messages as any[]).filter(m => !m.isRead).length;
 
   const initials = user ? `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}` : "A";
+
+  // Work Log tab is active for work-log, reports, field-notes, requests sub-paths
+  const workLogPaths = ["/admin/work-log", "/admin/reports", "/admin/field-notes", "/admin/requests"];
+  const isWorkLogActive = workLogPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
 
   return (
     <Sidebar>
@@ -68,16 +70,21 @@ export function AdminSidebar() {
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.url}>
-                  <SidebarMenuButton asChild isActive={location === item.url || (item.url !== "/admin" && location.startsWith(item.url))}>
-                    <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
-                      <item.icon className="w-4 h-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {navItems.map((item) => {
+                const isActive = item.url === "/admin/work-log"
+                  ? isWorkLogActive
+                  : location === item.url || (item.url !== "/admin" && location.startsWith(item.url));
+                return (
+                  <SidebarMenuItem key={item.url}>
+                    <SidebarMenuButton asChild isActive={isActive}>
+                      <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
+                        <item.icon className="w-4 h-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

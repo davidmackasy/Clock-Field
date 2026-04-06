@@ -11,8 +11,8 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Users, Calendar, ClipboardList,
   DollarSign, Building2, Settings,
-  LogOut, MoreHorizontal, Clock, ChevronRight, ShieldCheck, BookOpen,
-  CreditCard, Bell, ShieldAlert, FolderOpen, NotebookPen,
+  LogOut, MoreHorizontal, Clock, ChevronRight, Users2, BookOpen,
+  CreditCard, Bell, ShieldAlert,
 } from "lucide-react";
 
 const primaryTabs = [
@@ -25,14 +25,14 @@ const primaryTabs = [
 const moreItems = [
   { label: "Payroll", href: "/admin/payroll", icon: DollarSign },
   { label: "Clients", href: "/admin/clients", icon: Building2 },
-  { label: "Admins", href: "/admin/admins", icon: ShieldCheck },
-  { label: "Reports", href: "/admin/reports", icon: FolderOpen },
+  { label: "Management", href: "/admin/management", icon: Users2 },
   { label: "Work Log", href: "/admin/work-log", icon: BookOpen },
-  { label: "Field Notes", href: "/admin/field-notes", icon: NotebookPen },
   { label: "Settings", href: "/admin/settings", icon: Settings },
   { label: "Subscription", href: "/admin/subscription", icon: CreditCard },
   { label: "Messages", href: "/admin/platform-messages", icon: Bell },
 ];
+
+const workLogPaths = ["/admin/work-log", "/admin/reports", "/admin/field-notes", "/admin/requests"];
 
 const pageTitles: Record<string, string> = {
   "/admin": "Dashboard",
@@ -42,11 +42,12 @@ const pageTitles: Record<string, string> = {
   "/admin/payroll": "Payroll",
   "/admin/timesheets": "Timesheets",
   "/admin/clients": "Clients",
-  "/admin/admins": "Admins",
-  "/admin/requests": "Requests",
-  "/admin/reports": "Reports",
+  "/admin/management": "Management",
+  "/admin/admins": "Management",
+  "/admin/requests": "Work Log",
+  "/admin/reports": "Work Log",
   "/admin/work-log": "Work Log",
-  "/admin/field-notes": "Field Notes",
+  "/admin/field-notes": "Work Log",
   "/admin/settings": "Settings",
   "/admin/subscription": "Subscription",
   "/admin/platform-messages": "Messages",
@@ -66,10 +67,22 @@ export function AdminMobileNav() {
   const unreadMessages = (messages as any[]).filter(m => !m.isRead).length;
 
   const initials = user ? `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}`.toUpperCase() : "A";
-  const pageTitle = pageTitles[location] ?? "ClockField";
+
+  const getPageTitle = () => {
+    for (const [path, title] of Object.entries(pageTitles)) {
+      if (location === path || location.startsWith(path + "/") || location.startsWith(path + "?")) return title;
+    }
+    return "ClockField";
+  };
+  const pageTitle = getPageTitle();
 
   const isMoreActive = moreItems.some(
-    (item) => location === item.href || location.startsWith(item.href + "/")
+    (item) => {
+      if (item.href === "/admin/work-log") {
+        return workLogPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
+      }
+      return location === item.href || location.startsWith(item.href + "/");
+    }
   );
 
   const handleMoreNav = (href: string) => {
@@ -126,9 +139,7 @@ export function AdminMobileNav() {
                 <div
                   className={cn(
                     "flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg min-w-[56px] transition-colors",
-                    isActive
-                      ? "text-primary"
-                      : "text-muted-foreground"
+                    isActive ? "text-primary" : "text-muted-foreground"
                   )}
                   data-testid={`mobile-nav-${tab.label.toLowerCase()}`}
                 >
@@ -173,13 +184,9 @@ export function AdminMobileNav() {
                 </AvatarFallback>
               </Avatar>
               <div className="min-w-0">
-                <p className="font-semibold text-sm truncate">
-                  {user?.firstName} {user?.lastName}
-                </p>
+                <p className="font-semibold text-sm truncate">{user?.firstName} {user?.lastName}</p>
                 <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
-                <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">
-                  Admin
-                </span>
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Admin</span>
               </div>
             </div>
 
@@ -201,10 +208,7 @@ export function AdminMobileNav() {
             <Button
               variant="outline"
               className="w-full justify-start gap-2 text-destructive border-destructive/30 hover:bg-destructive/5"
-              onClick={() => {
-                setProfileOpen(false);
-                logout();
-              }}
+              onClick={() => { setProfileOpen(false); logout(); }}
               data-testid="button-mobile-logout"
             >
               <LogOut className="w-4 h-4" />
@@ -222,7 +226,9 @@ export function AdminMobileNav() {
           </SheetHeader>
           <div className="space-y-1">
             {moreItems.map((item) => {
-              const isActive = location === item.href || location.startsWith(item.href + "/");
+              const isActive = item.href === "/admin/work-log"
+                ? workLogPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"))
+                : location === item.href || location.startsWith(item.href + "/");
               const isMessages = item.href === "/admin/platform-messages";
               return (
                 <button
@@ -230,11 +236,9 @@ export function AdminMobileNav() {
                   onClick={() => handleMoreNav(item.href)}
                   className={cn(
                     "w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-colors",
-                    isActive
-                      ? "bg-primary/10 text-primary"
-                      : "hover:bg-muted text-foreground"
+                    isActive ? "bg-primary/10 text-primary" : "hover:bg-muted text-foreground"
                   )}
-                  data-testid={`mobile-more-${item.label.toLowerCase()}`}
+                  data-testid={`mobile-more-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
                 >
                   <div className="flex items-center gap-3">
                     <div className="relative">

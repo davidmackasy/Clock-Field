@@ -1,0 +1,478 @@
+Dev Note: Admin-side organization and role update
+
+Objective
+
+Reorganize the admin-side navigation and management flow to make the system feel simpler, cleaner, and more product-like without breaking any existing working functionality.
+
+This update must only focus on:
+
+1. Moving Reports into Work Log
+2. Moving Field Notes into Work Log
+3. Renaming Admins to Management
+4. Adding role types under Management:
+
+   * Admin
+   * Assistant
+   * Team
+
+Do not touch attendance logic, schedule logic, payroll calculations, employee hours, cleaner flows, submissions flow, public links, document generation, reports rendering, auth logic outside this scope, or anything else currently working.
+
+Main navigation changes
+
+Current issue
+The left sidebar feels too spread out and too administrative. Reports, Work Log, and Field Notes are separated even though they belong to the same operational workflow.
+
+Required change
+Simplify the sidebar by making Work Log the parent operational section.
+
+New sidebar structure
+
+* Dashboard
+* Employees
+* Schedule
+* Attendance
+* Payroll
+* Clients
+* Management
+* Work Log
+* Settings
+
+Remove these as standalone sidebar items:
+
+* Reports
+* Field Notes
+* Admins
+
+Rename:
+
+* Admins → Management
+
+Work Log restructuring
+
+Goal
+Work Log should become the central place for all work submission-related actions and views.
+
+Inside Work Log, organize the content using tabs, sub-navigation, segmented controls, or a secondary left panel inside the page. Use the cleanest UI pattern already consistent with the app.
+
+Work Log must include these sections:
+
+1. Submissions / Work Log main list
+
+   * Current work submissions
+   * Submitted
+   * Reviewed
+   * Draft
+   * Has review
+   * Search and filters remain working
+
+2. Reports
+
+   * This should surface the existing reports view inside Work Log
+   * Do not rebuild report logic from scratch
+   * Reuse current reports functionality and route/component where possible
+   * User should be able to move back and forth easily between submissions and reports
+
+3. Field Notes
+
+   * Move the existing field notes view under Work Log
+   * Reuse existing field note logic and rendering
+   * User should be able to create, review, and manage field notes from inside Work Log
+
+4. Requests
+
+   * Add a section inside Work Log for requests if requests already exist in the system
+   * If requests are already on another page or in an existing module, surface them here through a sub-view, shared component, or embedded route
+   * Do not break the existing request functionality
+   * This is about simplifying access, not rebuilding the request system
+
+Expected Work Log experience
+
+When a user clicks Work Log, they should land on a unified operational page with clear internal navigation such as:
+
+* Submissions
+* Reports
+* Field Notes
+* Requests
+
+This should feel like one organized workspace instead of several disconnected pages.
+
+Routing recommendation
+
+Do not remove old routes abruptly if they may already be used internally or bookmarked.
+
+Recommended safe approach:
+
+* Keep old routes temporarily as redirects or wrappers
+* Route standalone Reports to Work Log > Reports
+* Route standalone Field Notes to Work Log > Field Notes
+* Route anything referencing old work log route to Work Log > Submissions
+
+This reduces risk and avoids breaking links, saved state, or internal references.
+
+Management rename
+
+Current label
+Admins
+
+New label
+Management
+
+Required updates
+Change all visible UI labels from Admins to Management in the business-facing product where appropriate, including:
+
+* Sidebar label
+* Page header
+* Add button labels
+* Modal titles
+* Empty states
+* Search placeholders if relevant
+* Table headers if relevant
+
+Keep internal system naming, database keys, APIs, or permissions unchanged unless absolutely necessary.
+Prefer UI-only rename first to reduce risk.
+
+Examples
+
+* “Admins” page → “Management”
+* “Add Admin” button → “Add Management”
+* “Invite New Admin” modal → “Add Management Member” or “Invite Management Member”
+
+Management roles to add
+
+Goal
+When a business owner adds a management user, they should choose a role.
+
+Roles required
+
+1. Admin
+2. Assistant
+3. Team
+
+Important clarification
+Do not create or expose super admin for business users.
+Super admin remains platform-level only and should not be part of this business-facing role creation flow.
+
+Create Management flow update
+
+Update the current “Invite New Admin” modal into a more flexible role-based modal.
+
+Rename modal
+
+* “Invite New Admin” → “Add Management Member”
+
+Add a required Role field
+Role options:
+
+* Admin
+* Assistant
+* Team
+
+Suggested form fields
+
+* First Name
+* Last Name
+* Email
+* Phone optional
+* Temporary PIN optional
+* Role required
+
+Optional helper text
+Explain each role briefly inside the UI so business owners understand the difference before creating the user.
+
+Recommended role permission model
+
+1. Admin
+   Purpose
+   Full company-level manager for that business.
+
+Access
+
+* Can view dashboard
+* Can view and manage employees
+* Can view and manage schedule
+* Can view and manage attendance
+* Can view and manage payroll views if payroll access already exists
+* Can view and manage clients
+* Can access Management
+* Can add another Admin
+* Can add Assistant
+* Can add Team
+* Can access Work Log, Reports, Field Notes, Requests
+* Can review submissions
+* Can create and manage field notes
+* Can contact employees if this exists
+* Can view client counts and operational data
+
+Restrictions
+
+* Must not have platform-level super admin powers
+* Must not access startup/internal-only controls
+* Must not manage system-wide platform settings outside their company scope
+
+2. Assistant
+   Purpose
+   Support role for office assistance and operational visibility.
+
+Access
+
+* Can view dashboard
+* Can view employees
+* Can view schedule
+* Can view attendance
+* Can view payroll
+* Can view clients
+* Can access Work Log
+* Can view reports
+* Can view field notes
+* Can view requests
+* Can follow up operationally
+
+Restrictions
+
+* Cannot add management users
+* Cannot edit management roles
+* Cannot delete management users
+* Cannot create or delete employees unless already intended by business rules
+* Cannot change critical settings
+* Cannot delete clients
+* Cannot change billing, company ownership, or high-risk settings
+* Cannot perform destructive actions
+
+3. Team
+   Purpose
+   Team lead or operational coordinator.
+
+Access
+
+* Can view employees
+* Can view schedules
+* Can see attendance status
+* Can view who clocked in and who did not
+* Can access selected Work Log operational views if needed
+* Can view clients list summary if needed for coordination
+* Can follow up with employees
+
+Restrictions
+
+* Cannot access Management creation or editing
+* Cannot add or delete users
+* Cannot modify settings
+* Cannot change payroll settings
+* Cannot perform destructive actions
+* Cannot change company-level configurations
+* Cannot create or remove admins or assistants
+
+Safe implementation rule
+If unsure whether a role should edit something, default to view-only for Assistant and Team.
+
+Permission design guidance
+
+Do not hardcode only front-end hiding.
+Implement real permission checks both:
+
+* In the UI
+* In the backend/API authorization layer
+
+Why
+A hidden button alone is not enough. A user could still hit an endpoint directly.
+
+Minimum safe permission areas to enforce
+
+* Management creation
+* Management editing
+* Management deletion
+* Role assignment
+* Settings updates
+* Destructive employee/client actions
+* Work Log actions that modify records
+* Field note creation/edit/delete if restricted
+* Report state changes if restricted
+
+UI behavior by role
+
+Admin
+
+* Full Management page visible
+* Add Management button visible
+* Edit role actions visible as allowed
+
+Assistant
+
+* Management page hidden or view-only depending on product choice
+* No Add Management button
+* No destructive actions
+* View-focused experience
+
+Team
+
+* No Management page access
+* Only operational pages needed for team oversight
+* View-focused experience
+
+Recommended safe UX
+
+* Admin: full company-management access
+* Assistant: broad visibility, limited actions
+* Team: operational visibility, minimal change power
+
+Management page updates
+
+Rename page from Admins to Management.
+
+On the page:
+
+* Show list of management members
+* Show role badge for each user
+* Allow filtering by role if useful
+* Show clear labels such as Admin, Assistant, Team
+
+Actions
+
+* Admin users can add new management members
+* Admin users can edit role if permitted
+* Admin users can reset PIN if this already exists
+* Admin users can deactivate or remove if this already exists and is safe
+
+Do not remove current working invite/reset logic unless necessary.
+Extend it safely.
+
+Data model guidance
+
+If current management/admin users only support one type today, add a role field safely.
+
+Suggested role enum:
+
+* admin
+* assistant
+* team
+
+Do not create super_admin in this business-facing layer unless it already exists internally and is clearly separated.
+
+Migration approach
+
+* Existing business admin users should default to admin
+* No existing user should lose access after deployment
+* Migration must be backward-safe
+
+Backward compatibility
+
+This is important.
+
+Do not break existing:
+
+* Admin logins
+* Added admin accounts
+* PIN setup flow
+* Password setup flow
+* Existing role-less users
+* Existing auth/session logic
+
+Safe fallback
+If a management user record has no role, treat them as admin until migrated.
+
+Design recommendations
+
+Keep this clean and simple.
+Do not over-design.
+
+Recommended Work Log layout:
+Top page header:
+
+* Work Log
+* Small description
+
+Under header:
+
+* Internal tabs: Submissions | Reports | Field Notes | Requests
+
+Below tabs:
+
+* Render corresponding existing content panels
+
+Recommended Management modal:
+
+* One clean modal
+* Role selector near the top or just under contact info
+* Short helper text under role selector
+
+Suggested role helper text:
+
+* Admin: Full business management access
+* Assistant: View most areas and help with office operations
+* Team: View team activity, schedules, and employee status
+
+Testing requirements
+
+Before shipping, verify all of this carefully without touching unrelated systems.
+
+Navigation tests
+
+* Reports no longer appears as standalone sidebar item
+* Field Notes no longer appears as standalone sidebar item
+* Admins no longer appears as standalone sidebar item
+* Management appears correctly
+* Work Log opens correctly
+* Internal navigation between Submissions, Reports, Field Notes, Requests works
+
+Route safety tests
+
+* Old Reports route redirects or maps safely
+* Old Field Notes route redirects or maps safely
+* No broken links
+* Browser back/forward works correctly
+
+Role tests
+
+* Existing admins still work
+* New Admin can be created
+* New Assistant can be created
+* New Team user can be created
+* Admin can add Admin, Assistant, Team
+* Assistant cannot add management users
+* Team cannot add management users
+* Assistant and Team only see what they are allowed to see
+* Backend blocks unauthorized actions even if endpoint is called directly
+
+Regression tests
+
+* Attendance unchanged
+* Schedule unchanged
+* Payroll unchanged
+* Employee hours unchanged
+* Cleaner submission flow unchanged
+* Existing reports generation unchanged
+* Field note functionality unchanged except new location in UI
+* Existing auth and invite flow still works
+* No changes to client-facing public links
+* No changes to documents or print logic unless directly required for moved views
+
+Do not do these
+
+* Do not redesign unrelated pages
+* Do not refactor attendance
+* Do not refactor payroll
+* Do not rename database structures carelessly
+* Do not remove old routes without safe redirects
+* Do not expose super admin to business users
+* Do not change anything outside this scope
+
+Implementation priority order
+
+1. Rename Admins to Management in UI
+2. Create role support for Management members
+3. Update Add Management modal with role selector
+4. Move Reports into Work Log
+5. Move Field Notes into Work Log
+6. Surface Requests inside Work Log
+7. Add route wrappers/redirects for backward compatibility
+8. Test permissions and regressions thoroughly
+
+Final instruction
+
+This must be implemented as a focused, isolated update only.
+Do not touch or improve anything else outside this exact scope.
+Preserve all current working behavior.
+Re-use existing components and routes wherever possible.
+Prefer minimal, safe structural changes over broad refactors.
+
+If you want, I can turn this into an even stricter step-by-step build checklist for your AI agent.

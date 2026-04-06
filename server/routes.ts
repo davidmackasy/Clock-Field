@@ -713,7 +713,7 @@ Welcome again, and thank you for choosing ClockField.
   app.post("/api/admins/invite", requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
-      const { firstName, lastName, email, phone, tempPin: customPin } = req.body;
+      const { firstName, lastName, email, phone, tempPin: customPin, managementRole, sendEmailInvite } = req.body;
       if (!email) return res.status(400).json({ message: "Email is required" });
       if (!firstName || !lastName) return res.status(400).json({ message: "Full name is required" });
 
@@ -722,6 +722,10 @@ Welcome again, and thank you for choosing ClockField.
 
       const pin = customPin && customPin.length >= 4 ? customPin : generateTempPin();
       const hashedPin = await hashPassword(pin);
+
+      // Generate invite token if email invite requested
+      const inviteToken = sendEmailInvite ? randomBytes(32).toString("hex") : null;
+      const inviteExpiresAt = inviteToken ? new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString() : null;
 
       const admin = await storage.createUser({
         companyId: user.companyId,
@@ -736,10 +740,129 @@ Welcome again, and thank you for choosing ClockField.
         mustChangePassword: true,
         tempPin: pin,
         createdAt: new Date().toISOString(),
-      });
+        managementRole: managementRole || "admin",
+        inviteToken: inviteToken || null,
+        inviteExpiresAt,
+        inviteStatus: "not_sent",
+      } as any);
+
+      // Send invite email (non-blocking)
+      let inviteEmailStatus = "not_sent";
+      if (sendEmailInvite && inviteToken && admin.email) {
+        try {
+          const company = await storage.getCompany(user.companyId);
+          const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+          const inviteUrl = `${appUrl}/accept-invite/${inviteToken}`;
+          const { sendManagementInviteEmail } = await import("./mail");
+          await sendManagementInviteEmail({
+            to: admin.email,
+            firstName: admin.firstName,
+            companyName: company?.name || "your company",
+            role: managementRole || "admin",
+            inviteUrl,
+          });
+          await storage.updateUser(admin.id, { inviteStatus: "sent", inviteSentAt: new Date().toISOString() } as any);
+          inviteEmailStatus = "sent";
+        } catch (_err) {
+          await storage.updateUser(admin.id, { inviteStatus: "failed" } as any).catch(() => {});
+          inviteEmailStatus = "failed";
+        }
+      }
 
       const { password: _, tempPin: __, ...safe } = admin;
-      res.json({ ...safe, tempPin: pin });
+      res.json({ ...safe, tempPin: pin, inviteEmailStatus });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Resend invite
+  app.post("/api/admins/:id/resend-invite", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const target = await storage.getUser(req.params.id);
+      if (!target || target.companyId !== user.companyId || target.role !== "admin") {
+        return res.status(404).json({ message: "Not found" });
+      }
+      if (!target.email) return res.status(400).json({ message: "No email on file" });
+
+      const inviteToken = randomBytes(32).toString("hex");
+      const inviteExpiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+      await storage.updateUser(target.id, { inviteToken, inviteExpiresAt, inviteStatus: "sent", inviteSentAt: new Date().toISOString() } as any);
+
+      const company = await storage.getCompany(user.companyId);
+      const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+      const inviteUrl = `${appUrl}/accept-invite/${inviteToken}`;
+      try {
+        const { sendManagementInviteEmail } = await import("./mail");
+        await sendManagementInviteEmail({
+          to: target.email,
+          firstName: target.firstName,
+          companyName: company?.name || "your company",
+          role: (target as any).managementRole || "admin",
+          inviteUrl,
+        });
+        res.json({ ok: true, inviteStatus: "sent" });
+      } catch (err: any) {
+        await storage.updateUser(target.id, { inviteStatus: "failed" } as any).catch(() => {});
+        res.status(500).json({ message: "Email failed", inviteStatus: "failed" });
+      }
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Accept invite page (public — no auth required)
+  app.get("/api/invite/accept/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const result = await db.select().from(users).where(eq(users.inviteToken, token)).limit(1);
+      const target = result?.[0];
+      if (!target) return res.status(404).json({ message: "Invite not found or already used" });
+      if (target.inviteAcceptedAt) return res.status(400).json({ message: "Invite already accepted" });
+      if (target.inviteExpiresAt && new Date(target.inviteExpiresAt) < new Date()) {
+        return res.status(400).json({ message: "Invite has expired" });
+      }
+      const company = await storage.getCompany(target.companyId);
+      res.json({
+        valid: true,
+        firstName: target.firstName,
+        lastName: target.lastName,
+        email: target.email,
+        managementRole: (target as any).managementRole || "admin",
+        companyName: company?.name || "",
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Accept invite — set password from invite link
+  app.post("/api/invite/accept/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const { password } = req.body;
+      if (!password || password.length < 6) return res.status(400).json({ message: "Password must be at least 6 characters" });
+
+      const result = await db.select().from(users).where(eq(users.inviteToken, token)).limit(1);
+      const target = result?.[0];
+      if (!target) return res.status(404).json({ message: "Invite not found" });
+      if (target.inviteAcceptedAt) return res.status(400).json({ message: "Invite already accepted" });
+      if (target.inviteExpiresAt && new Date(target.inviteExpiresAt) < new Date()) {
+        return res.status(400).json({ message: "Invite has expired" });
+      }
+
+      const hashedPassword = await hashPassword(password);
+      await storage.updateUser(target.id, {
+        password: hashedPassword,
+        mustChangePassword: false,
+        accountStatus: "active",
+        inviteToken: null,
+        inviteAcceptedAt: new Date().toISOString(),
+        inviteStatus: "accepted",
+      } as any);
+
+      res.json({ ok: true, email: target.email });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

@@ -1,0 +1,415 @@
+Dev Note Add-on: Management email invite flow
+
+Add this to the previous scope without changing any current working credential flow.
+
+New requirement
+
+When a business admin creates a new Management user:
+
+* Admin
+* Assistant
+* Team
+
+the system must also be able to send that person an email invite using the app’s existing email connection.
+
+This is an addition, not a replacement.
+
+Do not remove:
+
+* Current PIN generation
+* Current manual credential sharing flow
+* Current account creation flow
+* Current reset PIN flow
+* Any working login behavior
+
+The new email invite option must work alongside the current credential-based setup.
+
+Main objective
+
+After a Management member is created, the business should have two ways to onboard them:
+
+1. Existing way
+
+* Create the account
+* Generate credentials or temporary PIN
+* Share credentials manually
+
+2. New way
+
+* Create the account
+* Send an email invite automatically or through a send invite action
+* Recipient gets an email with an invite link
+* Recipient clicks the link and completes access setup
+
+This must feel seamless and must not break the current method.
+
+Management creation flow update
+
+Update the “Add Management Member” flow so that once a user is created, the system supports invite sending by email.
+
+Recommended UI behavior
+
+Inside the Add Management Member modal:
+
+* First Name
+* Last Name
+* Email
+* Phone optional
+* Temporary PIN optional
+* Role required
+* New checkbox or toggle:
+
+  * Send email invite
+
+Suggested default
+Turn “Send email invite” on by default only if the email system is already reliable and configured.
+Otherwise keep it optional but visible.
+
+Helper text example
+
+* “Send this person an email invite with a secure access link.”
+* “You can still share the generated credentials manually.”
+
+Safe behavior
+The account should still be created even if email sending fails, as long as account creation itself succeeds.
+Do not block account creation just because invite email delivery failed.
+
+Invite email behavior
+
+When a Management member is created and email invite is enabled:
+
+* Create the user record first
+* Generate the invite token/link securely
+* Send the invite email through the existing email connection
+* Mark invite status in the system
+
+Invite email should contain:
+
+* Business or company name if available
+* Recipient’s name
+* Role they were invited as
+* Secure invite link
+* Clear instruction to accept invite and access the platform
+* Expiration details if invite links expire
+* Fallback note that the business can also share generated credentials manually
+
+Do not expose raw sensitive credentials inside the email unless this is already part of an approved existing secure workflow.
+Prefer secure invite link flow.
+
+Invite link flow
+
+The invite link should allow the invited Management member to:
+
+* Open the platform
+* Verify or accept the invitation
+* Set up their password or complete access setup
+* Land in the correct company account
+* Be assigned the correct role already selected during creation
+
+The invite must be tied to:
+
+* The correct company
+* The correct Management user
+* The correct role
+* A secure token
+* An expiration window
+
+Recommended secure invite token behavior
+
+* Single-use token
+* Time-limited expiration
+* Invalid after acceptance
+* Invalid if manually revoked
+* Cannot be reused across companies
+* Cannot elevate role permissions
+
+Credential flow must remain unchanged
+
+This is critical.
+
+Do not remove or alter the current ability to:
+
+* Auto-generate temporary PIN
+* Leave PIN blank and auto-generate it
+* Share credentials manually
+* Let the new management user log in using the generated credentials if that already works today
+
+The new email invite is only an added onboarding method.
+
+Best safe setup:
+
+* Account gets created exactly the same as today
+* Credentials can still be viewed or shared exactly the same way
+* Invite email becomes an additional access path
+
+Suggested post-create result state
+
+After a Management member is created, show a clear success state with:
+
+* User created successfully
+* Role assigned
+* Invite email sent or not sent
+* Option to resend invite
+* Option to copy invite link if needed
+* Existing credential details remain available according to current behavior
+
+Suggested statuses
+
+* Invite sent
+* Invite pending
+* Invite accepted
+* Invite expired
+* Invite failed
+
+Management list updates
+
+On the Management page, add lightweight invite tracking for each management user.
+
+Suggested columns or badges
+
+* Name
+* Role
+* Email
+* Status
+* Invite status
+
+Possible invite statuses
+
+* Not sent
+* Sent
+* Accepted
+* Expired
+* Failed
+
+Suggested actions for Admin only
+
+* Resend invite
+* Copy invite link
+* Reset invite
+* Reset PIN
+* Edit member
+* Deactivate member if already supported
+
+Assistant and Team should not have invite-management powers.
+
+Permissions
+
+Only Admin role should be allowed to:
+
+* Create Management users
+* Send invites
+* Resend invites
+* Revoke invites
+* Change roles
+* Manage invite status actions
+
+Assistant:
+
+* No access to create or send invites
+* No access to role assignment
+* No access to credential management
+
+Team:
+
+* No access to any management or invite administration
+
+Backend/API safety
+
+Do not rely only on front-end button hiding.
+
+Enforce invite permissions on the backend for:
+
+* Create management member
+* Generate invite link
+* Send invite email
+* Resend invite
+* Revoke invite
+* Accept invite
+* Set password from invite flow
+
+The backend must verify:
+
+* User belongs to the correct company
+* Creator has Admin permissions
+* Role being assigned is allowed
+* Invite token belongs to intended recipient and company
+* Expired or already-used invites are rejected
+
+Email integration requirements
+
+Use the existing email connection already used by the app.
+Do not create a separate disconnected email system unless absolutely necessary.
+
+The invite email sending must:
+
+* Use the existing email service/provider
+* Use the existing branded sender setup where possible
+* Be logged for success/failure
+* Fail gracefully without breaking account creation
+
+Important
+Do not affect:
+
+* Welcome emails already working
+* Password reset emails already working
+* Broadcast emails outside this scope
+* Other email templates outside this scope
+
+Only extend the email system carefully for Management invites.
+
+Suggested template subject lines
+
+* You’ve been invited to join [Company Name] on ClockField
+* Your ClockField access invitation
+* You’ve been added as a [Role] on ClockField
+
+Suggested email body content
+Keep it simple and clear:
+
+* You were invited to join [Company Name] on ClockField as a [Role]
+* Click below to activate your access
+* Your invite link
+* This link expires in [time]
+* Contact your company admin if you need help
+
+Do not make the email overly technical.
+
+Invite acceptance flow
+
+When the recipient clicks the invite link:
+
+* They should land on a clean invite acceptance page
+* Show company name
+* Show invited role
+* Let them confirm account setup
+* Let them create password or complete access activation
+* Then redirect them into the platform
+
+If the account is already pre-created and only needs activation:
+
+* Keep that behavior intact
+* Just attach the invite acceptance to that same user account
+
+Edge cases to handle
+
+1. Email send fails but account created
+
+* Show account created successfully
+* Show invite failed
+* Allow resend invite later
+* Keep generated credentials available
+
+2. Invite link expired
+
+* Show clear expired message
+* Allow admin to resend a fresh invite
+
+3. User clicks used invite
+
+* Show invite already used
+* Redirect to login if appropriate
+
+4. Duplicate email
+
+* Preserve existing duplicate email protections
+* Do not create broken duplicate management users
+
+5. Wrong company mapping
+
+* Prevent invite from attaching to the wrong business account
+
+6. Existing management user already active
+
+* Allow resend invite only if that makes sense
+* Otherwise just allow reset credentials or normal login flow
+
+Data model guidance
+
+Add invite-related fields safely to the management user or invitation table.
+
+Suggested fields
+
+* role
+* invite_token_hash
+* invite_expires_at
+* invite_sent_at
+* invite_accepted_at
+* invite_status
+* invited_by
+* onboarding_method optional
+
+Keep migrations backward-safe.
+
+Existing management/admin users:
+
+* Default role to admin
+* No forced invite required
+* No disruption to current login flow
+
+Safe implementation order
+
+1. Keep current account creation and PIN flow untouched
+2. Add role field support if not complete already
+3. Add invite email toggle to Add Management Member modal
+4. Build secure invite token/link generation
+5. Send invite using existing email connection
+6. Add invite acceptance page/flow
+7. Add invite status to Management list
+8. Add resend invite action for Admin
+9. Test all permission and fallback scenarios
+
+Testing checklist
+
+Creation flow
+
+* Admin can create Admin
+* Admin can create Assistant
+* Admin can create Team
+* Account still creates correctly with no invite sent
+* Account still creates correctly with invite sent
+
+Email flow
+
+* Invite email sends successfully
+* Invite link opens correctly
+* Invite link maps to correct company and role
+* Invite acceptance completes setup properly
+* Invite status updates after acceptance
+* Resend invite works
+* Expired invite handled cleanly
+* Failed email does not break account creation
+
+Credential fallback
+
+* Generated credentials still work
+* Temporary PIN flow still works
+* Reset PIN still works
+* Manual onboarding still works
+
+Permission tests
+
+* Assistant cannot create management users
+* Assistant cannot send invites
+* Team cannot create management users
+* Team cannot send invites
+* Backend rejects unauthorized invite actions
+
+Regression tests
+
+* Attendance unchanged
+* Schedule unchanged
+* Payroll unchanged
+* Employees unchanged
+* Work Log unchanged except requested reorganization
+* Reports unchanged except moved under Work Log
+* Field Notes unchanged except moved under Work Log
+* Existing email flows not broken
+* Existing auth not broken
+
+Final instruction
+
+Implement this as an add-on to the Management update only.
+Do not replace the current credential system.
+Do not touch unrelated email logic.
+Do not break any existing account creation, login, PIN, or reset flows.
+The invite email feature must be additive, secure, role-aware, and company-aware.

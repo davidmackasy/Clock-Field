@@ -86,6 +86,14 @@ export const users = pgTable("users", {
   createdAt: text("created_at"),
   // Super Admin capability
   isSuperAdmin: boolean("is_super_admin").notNull().default(false),
+  // Management role (for admin users): admin | assistant | team
+  managementRole: text("management_role"),
+  // Invite flow fields
+  inviteToken: text("invite_token"),
+  inviteExpiresAt: text("invite_expires_at"),
+  inviteSentAt: text("invite_sent_at"),
+  inviteAcceptedAt: text("invite_accepted_at"),
+  inviteStatus: text("invite_status").default("not_sent"),
 });
 
 export const clients = pgTable("clients", {

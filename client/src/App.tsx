@@ -26,7 +26,10 @@ import AdminClients from "@/pages/admin/clients";
 import AdminRequests from "@/pages/admin/requests";
 import AdminSettings from "@/pages/admin/settings";
 import AdminAdmins from "@/pages/admin/admins";
+import AdminManagement from "@/pages/admin/management";
 import AdminWorkLog from "@/pages/admin/work-log";
+import AdminWorkLogHub from "@/pages/admin/work-log-hub";
+import AcceptInvitePage from "@/pages/accept-invite";
 import AdminFieldNotes from "@/pages/admin/field-notes";
 import AdminFieldNotesCapture from "@/pages/admin/field-notes-capture";
 import AdminFieldNotesSession from "@/pages/admin/field-notes-session";
@@ -85,7 +88,7 @@ function AdminLayout() {
           <header className="hidden md:flex lg:hidden items-center p-2 border-b">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
           </header>
-          <main className="flex-1 overflow-y-auto pt-14 pb-16 md:pt-0 md:pb-0">
+          <main className="flex-1 flex flex-col min-h-0 pt-14 pb-16 md:pt-0 md:pb-0">
             <Switch>
               <Route path="/admin" component={AdminDashboard} />
               <Route path="/admin/employees" component={AdminEmployees} />
@@ -95,20 +98,17 @@ function AdminLayout() {
                 <FeatureGate feature="payroll"><AdminPayroll /></FeatureGate>
               </Route>
               <Route path="/admin/clients" component={AdminClients} />
-              <Route path="/admin/admins" component={AdminAdmins} />
-              <Route path="/admin/requests">
-                <FeatureGate feature="requests"><AdminRequests /></FeatureGate>
-              </Route>
-              <Route path="/admin/work-log">
-                <FeatureGate feature="worklog"><AdminWorkLog /></FeatureGate>
-              </Route>
+              <Route path="/admin/management" component={AdminManagement} />
+              <Route path="/admin/admins"><Redirect to="/admin/management" /></Route>
               <Route path="/admin/timesheets">
                 <FeatureGate feature="timesheets"><AdminTimesheets /></FeatureGate>
               </Route>
-              <Route path="/admin/reports" component={AdminReports} />
               <Route path="/admin/field-notes/capture" component={AdminFieldNotesCapture} />
               <Route path="/admin/field-notes/session/:id" component={AdminFieldNotesSession} />
-              <Route path="/admin/field-notes" component={AdminFieldNotes} />
+              <Route path="/admin/work-log" component={AdminWorkLogHub} />
+              <Route path="/admin/reports"><Redirect to="/admin/work-log?tab=reports" /></Route>
+              <Route path="/admin/field-notes"><Redirect to="/admin/work-log?tab=field-notes" /></Route>
+              <Route path="/admin/requests"><Redirect to="/admin/work-log?tab=requests" /></Route>
               <Route path="/admin/settings" component={AdminSettings} />
               <Route path="/admin/subscription" component={AdminSubscription} />
               <Route path="/admin/platform-messages" component={AdminPlatformMessages} />
@@ -231,6 +231,13 @@ function AppRouter() {
   // Forgot / reset password pages (public, no auth needed)
   if (location === "/forgot-password") return <ForgotPasswordPage />;
   if (location.startsWith("/reset-password")) return <ResetPasswordPage />;
+  if (location.startsWith("/accept-invite/")) {
+    return (
+      <Switch>
+        <Route path="/accept-invite/:token" component={AcceptInvitePage} />
+      </Switch>
+    );
+  }
 
   // Short public URLs
   if (location.startsWith("/r/")) {
