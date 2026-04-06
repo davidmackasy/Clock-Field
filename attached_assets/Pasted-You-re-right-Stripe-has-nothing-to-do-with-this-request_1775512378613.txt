@@ -1,0 +1,104 @@
+You're right. Stripe has nothing to do with this request flow unless the exact failing endpoint somehow passes through shared middleware, and there is no reason to go broad before proving that.
+
+Send this to the agent:
+
+Dev Note: Stop scope creep. Fix only the exact Send to Cleaner path.
+
+You are going too far outside scope.
+
+Do not inspect Stripe.
+Do not inspect unrelated webhooks.
+Do not inspect unrelated TypeScript errors.
+Do not inspect unrelated middleware chains unless the exact failing Send to Cleaner route proves it is passing through them.
+Do not touch anything outside this feature.
+
+This app is in production. Nothing else should be changed.
+
+What you are allowed to inspect
+Only these items:
+
+1. The exact frontend submit handler for Send to Cleaner
+2. The exact API endpoint that Send to Cleaner calls
+3. The exact backend controller/handler for that endpoint
+4. The exact request payload being sent
+5. The exact response body/status from that endpoint
+6. The exact database insert or notification step inside that endpoint
+
+That is all.
+
+What you must do first
+Do not guess.
+Do not branch into other systems.
+
+Step 1
+Open browser network/devtools for the Send to Cleaner request and capture:
+
+* exact request URL
+* method
+* payload
+* response status
+* response body
+
+Step 2
+Add one temporary log at the very first line of the exact Send to Cleaner route handler:
+
+* log route reached
+* log cleaner id
+* log company id
+* log attachment count
+* log requireReplyBeforeClockOut value
+
+If this log does not appear, the route is not being hit.
+If this log appears, the route is being hit.
+
+Step 3
+Add temporary logs only inside that same handler after each step:
+
+* validation passed
+* attachments parsed
+* request saved
+* notification created
+* response sent
+
+Step 4
+If it fails, log the exact caught error from that handler only.
+
+Scope rules
+You are not allowed to investigate:
+
+* Stripe
+* Stripe webhook
+* unrelated TS errors
+* payroll
+* attendance
+* schedule
+* clock in/out
+* unrelated auth
+* unrelated notifications
+* unrelated routes
+
+Only inspect another file if the exact Send to Cleaner handler directly imports or calls it.
+
+Likely causes to test in this exact feature only
+
+* wrong request URL
+* cleaner id missing
+* payload field name mismatch
+* multipart/form-data parsing failure
+* captions array mismatch
+* boolean parsing issue
+* notification creation failure inside this handler
+* DB validation failure inside this handler
+
+Safe isolation test
+Run these in order only for this route:
+
+1. send cleaner + text only
+2. send cleaner + text + toggle
+3. send cleaner + text + one image
+4. send cleaner + text + one image + caption
+5. send full payload
+
+Stop broad investigation.
+Do not touch anything else.
+If you cannot fix this exact path safely, say so clearly so the feature can be removed.
