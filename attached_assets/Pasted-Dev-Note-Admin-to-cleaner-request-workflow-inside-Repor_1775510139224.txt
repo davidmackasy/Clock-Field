@@ -1,0 +1,596 @@
+Dev Note: Admin-to-cleaner request workflow inside Reports
+
+Objective
+
+Add a focused request workflow that lets admin send actionable requests to cleaners, and lets cleaners clearly see, complete, and reply to those requests without breaking any existing working flow.
+
+This must be implemented without changing:
+
+* Clock in logic
+* Clock out logic
+* Attendance logic
+* Schedule logic
+* Payroll logic
+* Existing work submission flow
+* Existing report generation flow
+* Existing field note flow
+* Existing cleaner bottom navigation structure unless required for this request only
+* Any other system behavior outside this scope
+
+This is an additive workflow only.
+
+Core goal
+
+Admin should be able to send a request to a cleaner that includes:
+
+* What needs to be done
+* What needs to be checked
+* Complaint details
+* Photos
+* Optional location/area reference
+* Optional due timing or shift reference
+
+Cleaner should then:
+
+* See a visible notification that there is a request
+* Open Reports
+* See the request clearly marked as important
+* Read the instructions and view attached images
+* Be guided on what action to take
+* Complete the requested work through the normal work flow
+* Reply to the request before clocking out
+* Admin should receive that reply and see a notification that work was completed or responded to
+
+This should feel like a request-response loop connected to real work completion.
+
+1. Admin-side request creation
+
+Add the ability for admin to create a request assigned to a specific cleaner.
+
+Where to place it
+Since Reports already has Reports and Requests structure, this request creation should live inside the Reports/Requests area on admin side, or inside the new unified Work Log > Requests section if that reorganization is already being implemented.
+
+Admin request form should support:
+
+* Assign cleaner
+* Request title
+* Request type
+* Description / issue details
+* Complaint details
+* What needs to be checked
+* What needs to be done
+* Attach photos
+* Optional site / location / area
+* Optional shift date
+* Optional urgency
+* Optional instruction toggle: requires response before clock out
+
+Suggested request types
+
+* Complaint follow-up
+* Re-clean required
+* Inspection required
+* Missing task follow-up
+* Incident follow-up
+* Field check
+* Custom
+
+Important
+Do not replace the normal report submission flow.
+This request should point the cleaner into the existing work/report flow, not create a separate broken process.
+
+2. Cleaner-side request visibility
+
+Cleaner must be able to clearly see when a new request exists.
+
+Required behavior
+When a cleaner has a pending request:
+
+* Show a visible notification badge on Reports in the cleaner app
+* Make the request appear prominently under Reports > Requests
+* Mark it clearly as Important or Action Required
+* When opened, show a clear detail view with:
+
+  * request title
+  * complaint or issue summary
+  * instructions
+  * photos
+  * location
+  * who sent it
+  * when it was sent
+  * status
+
+The request must not be hidden deep in the UI.
+
+Recommended cleaner UI behavior
+On cleaner app:
+
+* Reports tab shows badge count if requests are pending
+* Inside Reports, Requests tab shows pending requests first
+* Important requests appear pinned or highlighted at the top
+
+Suggested statuses visible to cleaner
+
+* New
+* Action required
+* In progress
+* Waiting for reply
+* Replied
+* Closed
+
+3. Cleaner instruction guidance
+
+When cleaner opens a request, the system should guide them clearly on what to do.
+
+This guidance should be automatic and system-generated in the request detail UI, not just raw admin text.
+
+Example system instruction block:
+“This request requires action. Please complete the requested work before ending your shift.
+To complete this request:
+
+1. Tap the plus button
+2. Start work or select the correct submission flow
+3. Add the requested photos and details
+4. Submit the work
+5. Return to this request and send your reply before clocking out”
+
+This guidance should appear inside the request detail page or as a persistent instruction card.
+
+Do not change the existing plus button behavior.
+Only guide the cleaner to use the current correct flow.
+
+4. Request-to-work linkage
+
+This is important.
+
+When cleaner completes the requested work, the system should allow that completed work to be linked back to the request.
+
+Required behavior
+Cleaner should be able to:
+
+* Start the work from the existing normal workflow
+* Submit the work normally
+* Then come back and reply to the request
+* Optionally reference the completed submission
+
+Best implementation
+On request detail page, provide:
+
+* Start requested work button
+* This routes into the existing work submission flow
+* Preserve request context if possible
+* After successful work submission, mark request as ready for reply or work submitted
+
+Safe linkage options
+At minimum:
+
+* Store related submission ID on the request after submission if launched from request context
+
+Preferred:
+
+* If cleaner started work from request page, attach request_id to the work submission metadata so admin can see the connection
+
+Do not disturb the normal submission schema unless done safely and backward-compatibly.
+
+5. Cleaner reply requirement before clock out
+
+If a request is marked as requiring a response before clock out, the system must remind the cleaner before they end shift.
+
+Required behavior
+Before clock out:
+
+* If cleaner has any pending request requiring reply
+* And no reply has been sent yet
+* Show a blocking or strongly interruptive reminder
+
+Recommended wording
+“You have a pending request that requires a reply before clocking out.”
+
+Then provide actions:
+
+* Review request
+* Reply now
+* Cancel clock out
+
+Important behavior rule
+Do not break existing clock out logic.
+Do not rewrite time tracking.
+This should be a pre-clock-out validation layer only.
+
+Recommended safe behavior
+
+* Do not auto-clock-out if reply is required and not submitted
+* Show modal
+* Let cleaner go to the request directly
+* After reply is submitted, they can return and clock out normally
+
+If product wants softer enforcement later, that can be configurable.
+For now, based on your request, cleaner should be reminded and directed before clock out.
+
+6. Cleaner reply flow
+
+After work is completed, cleaner must be able to reply to the request.
+
+Reply form should allow:
+
+* Short text response
+* Optional completion note
+* Optional “work submitted” confirmation
+* Optional attach final photos only if already supported safely
+* Optional linked submission reference auto-filled if available
+
+Suggested quick reply options
+
+* Work completed
+* Checked and resolved
+* Follow-up needed
+* Unable to complete
+* Needs admin review
+
+Suggested message field
+“Tell admin what was done”
+
+Example:
+“I completed the requested work and submitted the report.”
+
+Once reply is submitted:
+
+* Request status updates
+* Admin receives notification
+* Cleaner sees that reply was sent successfully
+
+7. Admin notification when cleaner responds
+
+Admin must receive a visible notification when cleaner has replied or completed a request.
+
+Required admin-side behavior
+
+* Show notification badge in relevant admin area
+* Show count on side menu or top notification area
+* Let admin open the request reply directly
+* Admin should be able to read what cleaner responded
+* Admin should see linked work submission if available
+
+Suggested notification examples
+
+* 1 request replied
+* 1 work completion received
+* Cleaner responded to assigned request
+
+Where notification should appear
+At minimum:
+
+* Side menu badge on Work Log or Reports/Requests area
+* Inside request list with unread/replied state
+
+Do not build a giant new notification system unless one already exists.
+Use the smallest safe extension needed for this workflow.
+
+8. Admin request conversation visibility
+
+Admin must be able to view the full lifecycle of the request.
+
+Admin request detail should show:
+
+* Request created by admin
+* Assigned cleaner
+* Instructions sent
+* Attached images
+* Request status
+* Work submission linked if available
+* Cleaner reply
+* Timestamps
+* Whether it is unresolved or closed
+
+Suggested status flow
+
+* Sent
+* Viewed
+* In progress
+* Work submitted
+* Replied
+* Closed
+
+Optional but useful
+Allow admin to reply back or add a follow-up note, but only if it does not create too much scope.
+If added, keep it very simple.
+
+9. Notifications and badges
+
+Cleaner side
+
+* Reports tab badge when new/pending requests exist
+* Requests tab badge count
+* Important highlight for action-required requests
+
+Admin side
+
+* Badge in side nav for pending replies or newly completed work
+* Badge in Requests list for unread cleaner reply
+
+Badge rules should be role-safe and company-safe.
+Only show relevant notifications to authorized users.
+
+10. Data model guidance
+
+Add this safely and backward-compatibly.
+
+Suggested request entity fields
+
+* id
+* company_id
+* created_by_admin_id
+* assigned_cleaner_id
+* title
+* type
+* description
+* complaint_details
+* requested_action
+* location_id optional
+* shift_id optional
+* priority
+* requires_reply_before_clock_out boolean
+* status
+* attachments
+* related_submission_id optional
+* cleaner_reply_text optional
+* cleaner_replied_at optional
+* cleaner_viewed_at optional
+* submitted_work_at optional
+* admin_read_reply_at optional
+* closed_at optional
+* created_at
+* updated_at
+
+Suggested status enum
+
+* sent
+* viewed
+* in_progress
+* work_submitted
+* replied
+* closed
+
+Suggested notification state fields
+
+* has_unread_for_cleaner
+* has_unread_for_admin
+
+Do not break old report records.
+This should be a separate request workflow or a carefully extended request model.
+
+11. Routing and UI integration
+
+Cleaner app
+Current Reports screen already has:
+
+* Reports
+* Requests
+
+Use this structure.
+Do not redesign unrelated navigation.
+
+Inside cleaner Reports:
+
+* Keep Reports tab
+* Keep Requests tab
+* Improve Requests tab to surface assigned admin requests clearly
+* Add important request card layout
+* Add request detail view
+* Add reply action
+
+Admin app
+Use either:
+
+* existing Reports/Requests area
+  or
+* new Work Log > Requests area if reorganization is already live
+
+Do not duplicate logic in two disconnected places.
+Use shared request data source.
+
+12. Clock-out reminder logic
+
+This is a critical part and must be implemented carefully.
+
+Condition
+Before cleaner clocks out:
+
+* Check if there are open requests assigned to them
+* Check if any of those require reply before clock out
+* Check if reply has not been submitted
+
+If true:
+
+* Show modal reminder
+* Do not disturb time-tracking state
+* Do not auto-delete or auto-close anything
+* Give direct navigation to the request
+
+Suggested modal buttons
+
+* Review request
+* Reply now
+* Cancel
+
+Avoid adding complicated bypass logic unless you intentionally want admin-configurable overrides later.
+
+13. Safe implementation rules
+
+Do not:
+
+* Change clock in calculations
+* Change clock out calculations
+* Change shift generation
+* Change attendance summaries
+* Change payroll summaries
+* Change employee hour logic
+* Change existing normal report creation unless necessary for linking
+* Change public report rendering
+* Change bottom nav layout outside request badges
+* Change existing plus flow beyond adding request context entry point if needed
+
+Only add:
+
+* request assignment flow
+* request visibility
+* request detail view
+* reply flow
+* reminder layer
+* notification badges
+* safe linking to existing submission flow
+
+14. Suggested UX flow
+
+Admin side
+
+1. Admin creates request
+2. Assigns cleaner
+3. Adds complaint details, what to check, what to do, photos
+4. Sends request
+
+Cleaner side
+
+1. Cleaner sees Reports badge / request notification
+2. Opens request
+3. Sees important request and instructions
+4. Starts work through current submission flow
+5. Completes work
+6. Returns to request
+7. Sends reply
+8. If not replied and tries to clock out, gets reminder
+9. Replies
+10. Admin receives notification
+
+Admin side after reply
+
+1. Admin sees badge
+
+2. Opens request
+
+3. Reads cleaner response
+
+4. Sees related work if linked
+
+5. Closes or follows up
+
+6. Permission rules
+
+Admin/business management
+
+* Can create requests
+* Can assign requests
+* Can view replies
+* Can close requests
+
+Assistant
+
+* Can view requests if allowed by role
+* Can possibly create requests only if you intentionally allow it
+* Safer default: view and monitor, but not full management unless explicitly enabled
+
+Team
+
+* Usually should not create admin requests unless you choose to allow team lead operational requests
+* Safer default: no request assignment power unless defined
+
+Cleaner
+
+* Can only see requests assigned to them
+* Can view details
+* Can reply
+* Cannot reassign
+* Cannot edit admin-created instruction body
+
+Backend must enforce all of this, not just the front end.
+
+16. Suggested minimal UI changes
+
+Cleaner Reports page
+
+* badge on Requests tab
+* important label
+* action required label
+* request detail modal/page
+* reply button
+* linked “start work” button
+
+Admin Requests page
+
+* create request button
+* assigned cleaner filter
+* pending reply filter
+* replied filter
+* unread badge
+* request detail drawer/page
+
+Clock-out reminder
+
+* clean modal
+* one message
+* one direct action to request
+
+17. Testing checklist
+
+Creation
+
+* Admin can create request
+* Request is assigned to correct cleaner
+* Photos attach correctly
+* Request appears on cleaner side
+
+Cleaner visibility
+
+* Cleaner sees notification badge
+* Cleaner sees request under Reports > Requests
+* Important request is highlighted
+* Request detail opens correctly
+* Photos display properly
+
+Work flow
+
+* Cleaner can start work from request context
+* Existing work submission flow still works normally
+* Submission can link back to request if started from request
+* Cleaner can return and reply
+
+Clock-out reminder
+
+* Reminder only appears when request requires reply and no reply exists
+* Reminder does not break clock out system
+* Cleaner can go to request and reply
+* Clock out works after reply
+
+Admin notifications
+
+* Admin sees notification when cleaner replies
+* Admin can open the reply
+* Admin can view linked work if available
+
+Regression
+
+* Clock in unchanged
+* Clock out unchanged
+* Attendance unchanged
+* Schedule unchanged
+* Payroll unchanged
+* Existing report flow unchanged
+* Existing request-independent submissions unchanged
+
+18. Final instruction
+
+Implement this as a narrow workflow enhancement only.
+
+The focus is:
+
+* admin sends request to cleaner
+* cleaner sees request clearly
+* cleaner is guided on what to do
+* cleaner completes work
+* cleaner replies before clock out if required
+* admin receives the reply and notification
+
+Do not redesign the whole system.
+Do not touch unrelated working areas.
+Reuse existing report/request/work submission components wherever possible.
+Prefer safe extensions, route reuse, and backward-compatible data changes over broad refactors.

@@ -1594,6 +1594,107 @@ Welcome again, and thank you for choosing ClockField.
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  // ── Admin → Cleaner Requests ─────────────────────────────────────────────
+  app.post("/api/admin/cleaner-requests", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const {
+        assignedCleanerId, title, requestType, description, complaintDetails,
+        requestedAction, locationId, priority, requiresReplyBeforeClockOut, photos,
+      } = req.body;
+      if (!assignedCleanerId) return res.status(400).json({ message: "Assigned cleaner is required" });
+      if (!title?.trim()) return res.status(400).json({ message: "Title is required" });
+
+      const now = new Date().toISOString();
+      const request = await storage.createClientRequest({
+        companyId: user.companyId,
+        clientId: undefined,
+        employeeId: assignedCleanerId,
+        createdByUserId: user.id,
+        createdByRole: "admin",
+        title: title.trim(),
+        description: [description, complaintDetails, requestedAction].filter(Boolean).join("\n\n") || null,
+        requestType: requestType || "complaint_followup",
+        priority: priority || "normal",
+        status: "new",
+        visibilityScope: "admin_and_employee",
+        requiresReplyBeforeClockOut: !!requiresReplyBeforeClockOut,
+        createdAt: now,
+      } as any);
+
+      // Store request body as initial message with photos
+      const msgBody = [description, complaintDetails ? `Issue: ${complaintDetails}` : null, requestedAction ? `Required action: ${requestedAction}` : null].filter(Boolean).join("\n\n");
+      const msg = await storage.createRequestMessage({
+        requestId: request.id,
+        authorUserId: user.id,
+        authorRole: "admin",
+        body: msgBody || null,
+        messageType: "initial_request",
+        isVisibleToClient: false,
+        isVisibleToEmployee: true,
+        isStatusUpdate: false,
+        statusValue: null,
+        createdAt: now,
+      });
+      if (photos && Array.isArray(photos)) {
+        for (const photo of photos) {
+          if (photo.dataUrl) {
+            await storage.createRequestAttachment({
+              requestMessageId: msg.id,
+              fileUrl: photo.dataUrl,
+              fileType: "image",
+              caption: photo.caption || null,
+              uploadedByUserId: user.id,
+              createdAt: now,
+            });
+          }
+        }
+      }
+      res.status(201).json(request);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Mark cleaner viewed
+  app.post("/api/client-requests/:id/mark-viewed", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const target = await storage.getClientRequest(req.params.id);
+      if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (user.role !== "employee" || target.employeeId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      if (!target.cleanerViewedAt) {
+        await storage.updateClientRequest(req.params.id, { cleanerViewedAt: new Date().toISOString() } as any);
+      }
+      res.json({ ok: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Mark admin read reply
+  app.post("/api/client-requests/:id/mark-admin-read", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const target = await storage.getClientRequest(req.params.id);
+      if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      await storage.updateClientRequest(req.params.id, { adminReadReplyAt: new Date().toISOString() } as any);
+      res.json({ ok: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Employee: get admin-assigned requests pending clock-out check
+  app.get("/api/employee/cleaner-requests/clock-out-check", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (user.role !== "employee") return res.status(403).json({ message: "Forbidden" });
+      const all = await storage.getClientRequestsByEmployee(user.id);
+      const pending = all.filter((r: any) =>
+        r.createdByRole === "admin" &&
+        r.requiresReplyBeforeClockOut &&
+        !["closed", "resolved"].includes(r.status) &&
+        r.status !== "replied"
+      );
+      res.json({ hasPending: pending.length > 0, count: pending.length, requests: pending });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   // ── Request Thread Messages ───────────────────────────────────────────────
   app.get("/api/client-requests/:id/messages", requireAuth, async (req, res) => {
     try {
@@ -1735,9 +1836,9 @@ Welcome again, and thank you for choosing ClockField.
           ...(resolvedAt ? { resolvedAt } : {}),
         });
       } else if (!isStatusUpdate) {
-        // Auto-update status when non-admin replies
-        if (user.role !== "admin" && (target.status === "new" || target.status === "resolved")) {
-          // Don't auto-change; keep current
+        if (user.role === "employee" && target.createdByRole === "admin") {
+          // Employee replying to an admin-assigned request → mark as "replied"
+          await storage.updateClientRequest(req.params.id, { status: "replied", updatedAt: now } as any);
         } else if (user.role === "admin" && target.status !== "resolved") {
           await storage.updateClientRequest(req.params.id, { status: "replied", updatedAt: now });
         }

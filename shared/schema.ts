@@ -204,6 +204,10 @@ export const clientRequests = pgTable("client_requests", {
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at"),
   resolvedAt: text("resolved_at"),
+  // Admin-to-cleaner request fields
+  requiresReplyBeforeClockOut: boolean("requires_reply_before_clock_out").notNull().default(false),
+  cleanerViewedAt: text("cleaner_viewed_at"),
+  adminReadReplyAt: text("admin_read_reply_at"),
 });
 
 export const requestMessages = pgTable("request_messages", {

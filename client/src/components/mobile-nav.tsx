@@ -30,9 +30,31 @@ interface CenterAction {
 interface MobileNavProps {
   items: NavItem[];
   centerAction?: CenterAction;
+  badges?: Record<string, number>;
 }
 
-export function MobileNav({ items, centerAction }: MobileNavProps) {
+function NavItemEl({ item, isActive, badge }: { item: NavItem; isActive: boolean; badge?: number }) {
+  return (
+    <Link href={item.href} data-testid={`nav-${item.label.toLowerCase()}`}>
+      <div className={cn(
+        "flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-md transition-colors min-w-[52px] relative",
+        isActive ? "text-primary" : "text-muted-foreground"
+      )}>
+        <div className="relative">
+          <item.icon className="w-5 h-5" />
+          {badge != null && badge > 0 && (
+            <span className="absolute -top-1 -right-1.5 min-w-[14px] h-[14px] bg-destructive rounded-full flex items-center justify-center text-[9px] font-bold text-white px-0.5 leading-none">
+              {badge > 9 ? "9+" : badge}
+            </span>
+          )}
+        </div>
+        <span className="text-[10px] font-medium">{item.label}</span>
+      </div>
+    </Link>
+  );
+}
+
+export function MobileNav({ items, centerAction, badges = {} }: MobileNavProps) {
   const [location, navigate] = useLocation();
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -54,18 +76,8 @@ export function MobileNav({ items, centerAction }: MobileNavProps) {
         <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t safe-area-bottom" data-testid="mobile-nav">
           <div className="flex items-end justify-around h-16 px-1 pb-1">
             {leftItems.map((item) => {
-              const isActive = location === item.href;
-              return (
-                <Link key={item.href} href={item.href} data-testid={`nav-${item.label.toLowerCase()}`}>
-                  <div className={cn(
-                    "flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-md transition-colors min-w-[52px]",
-                    isActive ? "text-primary" : "text-muted-foreground"
-                  )}>
-                    <item.icon className="w-5 h-5" />
-                    <span className="text-[10px] font-medium">{item.label}</span>
-                  </div>
-                </Link>
-              );
+              const isActive = location === item.href || (item.href !== "/employee" && location.startsWith(item.href));
+              return <NavItemEl key={item.href} item={item} isActive={isActive} badge={badges[item.href]} />;
             })}
 
             <div className="flex flex-col items-center -mt-6">
@@ -104,18 +116,8 @@ export function MobileNav({ items, centerAction }: MobileNavProps) {
             </div>
 
             {rightItems.map((item) => {
-              const isActive = location === item.href;
-              return (
-                <Link key={item.href} href={item.href} data-testid={`nav-${item.label.toLowerCase()}`}>
-                  <div className={cn(
-                    "flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-md transition-colors min-w-[52px]",
-                    isActive ? "text-primary" : "text-muted-foreground"
-                  )}>
-                    <item.icon className="w-5 h-5" />
-                    <span className="text-[10px] font-medium">{item.label}</span>
-                  </div>
-                </Link>
-              );
+              const isActive = location === item.href || (item.href !== "/employee" && location.startsWith(item.href));
+              return <NavItemEl key={item.href} item={item} isActive={isActive} badge={badges[item.href]} />;
             })}
           </div>
         </nav>
@@ -126,18 +128,12 @@ export function MobileNav({ items, centerAction }: MobileNavProps) {
             className="fixed inset-0 z-[100] flex flex-col justify-end"
             onClick={() => setSheetOpen(false)}
           >
-            {/* Backdrop */}
             <div className="absolute inset-0 bg-black/50" />
-
-            {/* Sheet panel */}
             <div
               className="relative bg-background rounded-t-2xl shadow-2xl pb-8 px-4 pt-4 animate-in slide-in-from-bottom-4 duration-200"
               onClick={e => e.stopPropagation()}
             >
-              {/* Handle */}
               <div className="w-10 h-1 bg-muted-foreground/20 rounded-full mx-auto mb-4" />
-
-              {/* Title + close */}
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-base">{centerAction.actionSheet.title}</h3>
                 <button
@@ -148,8 +144,6 @@ export function MobileNav({ items, centerAction }: MobileNavProps) {
                   <X className="w-4 h-4" />
                 </button>
               </div>
-
-              {/* Options */}
               <div className="space-y-2">
                 {centerAction.actionSheet.options.map((opt, i) => (
                   <button
@@ -173,7 +167,6 @@ export function MobileNav({ items, centerAction }: MobileNavProps) {
                   </button>
                 ))}
               </div>
-
               <button
                 className="w-full mt-3 py-3 text-sm text-muted-foreground font-medium"
                 onClick={() => setSheetOpen(false)}
@@ -191,21 +184,10 @@ export function MobileNav({ items, centerAction }: MobileNavProps) {
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t safe-area-bottom" data-testid="mobile-nav">
       <div className="flex items-center justify-around h-16 px-2">
         {items.map((item) => {
-          const isActive = location === item.href;
-          return (
-            <Link key={item.href} href={item.href} data-testid={`nav-${item.label.toLowerCase()}`}>
-              <div className={cn(
-                "flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-md transition-colors min-w-[56px]",
-                isActive ? "text-primary" : "text-muted-foreground"
-              )}>
-                <item.icon className="w-5 h-5" />
-                <span className="text-[10px] font-medium">{item.label}</span>
-              </div>
-            </Link>
-          );
+          const isActive = location === item.href || (item.href !== "/employee" && location.startsWith(item.href));
+          return <NavItemEl key={item.href} item={item} isActive={isActive} badge={badges[item.href]} />;
         })}
       </div>
     </nav>
   );
 }
-

@@ -7,13 +7,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, Play, Square, MapPin, Calendar, Timer } from "lucide-react";
+import { Link } from "wouter";
+import { Clock, Play, Square, Calendar, ShieldAlert, ChevronRight } from "lucide-react";
 
 export default function EmployeeHome() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [elapsed, setElapsed] = useState(0);
+  const [blockClockOutOpen, setBlockClockOutOpen] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
 
   const { data: tzData } = useQuery<{ timezone: string }>({
     queryKey: ["/api/settings/timezone"],
@@ -28,6 +32,13 @@ export default function EmployeeHome() {
 
   const { data: myShifts, isLoading: shiftsLoading } = useQuery<any[]>({
     queryKey: ["/api/shifts"],
+  });
+
+  const { data: clockOutCheck } = useQuery<{ hasPending: boolean; count: number; requests: any[] }>({
+    queryKey: ["/api/employee/cleaner-requests/clock-out-check"],
+    enabled: !!activeEntry,
+    staleTime: 30_000,
+    refetchInterval: activeEntry ? 60_000 : false,
   });
 
   const clockInMut = useMutation({
@@ -74,14 +85,67 @@ export default function EmployeeHome() {
     return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
+  const handleClockOutAttempt = () => {
+    if (clockOutCheck?.hasPending && clockOutCheck.requests?.length > 0) {
+      setPendingRequests(clockOutCheck.requests);
+      setBlockClockOutOpen(true);
+    } else {
+      clockOutMut.mutate();
+    }
+  };
+
   const today = localToday(tz);
   const todayShifts = (myShifts || []).filter(s => s.shiftDate === today && s.status === "scheduled");
   const upcomingShifts = (myShifts || []).filter(s => s.shiftDate > today && s.status === "scheduled").slice(0, 3);
-
   const isActive = !!activeEntry;
 
   return (
     <div className="p-4 pb-24 space-y-5">
+      {/* Clock-out blocker modal */}
+      <Dialog open={blockClockOutOpen} onOpenChange={setBlockClockOutOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700">
+              <ShieldAlert className="w-5 h-5" />
+              Reply Required Before Clocking Out
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              You have {pendingRequests.length} admin request{pendingRequests.length > 1 ? "s" : ""} that require{pendingRequests.length === 1 ? "s" : ""} your reply before you can clock out.
+            </p>
+            <div className="space-y-2">
+              {pendingRequests.map((req: any) => (
+                <div key={req.id} className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-sm font-semibold">{req.title}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{req.requestType?.replace(/_/g, " ")}</p>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-col gap-2">
+              <Link href="/employee/requests" onClick={() => setBlockClockOutOpen(false)}>
+                <Button className="w-full" data-testid="button-go-to-requests-from-blocker">
+                  <ChevronRight className="w-4 h-4 mr-1.5" />
+                  Reply to Admin Now
+                </Button>
+              </Link>
+              <Button
+                variant="outline"
+                className="w-full text-destructive border-destructive/30 hover:bg-destructive/5"
+                onClick={() => { setBlockClockOutOpen(false); clockOutMut.mutate(); }}
+                disabled={clockOutMut.isPending}
+                data-testid="button-clock-out-anyway"
+              >
+                {clockOutMut.isPending ? "Clocking out..." : "Clock Out Anyway"}
+              </Button>
+              <Button variant="ghost" className="w-full text-sm" onClick={() => setBlockClockOutOpen(false)} data-testid="button-cancel-clock-out">
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div>
         <h1 className="text-xl font-bold" data-testid="text-welcome">
           Hi, {user?.firstName}
@@ -90,6 +154,20 @@ export default function EmployeeHome() {
           {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
         </p>
       </div>
+
+      {/* Admin request reminder banner */}
+      {clockOutCheck?.hasPending && (
+        <Link href="/employee/requests">
+          <div className="flex items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 cursor-pointer hover:bg-amber-100 transition-colors" data-testid="admin-request-reminder-banner">
+            <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-800">Admin Request Pending</p>
+              <p className="text-xs text-amber-700">{clockOutCheck.count} request{clockOutCheck.count > 1 ? "s" : ""} require{clockOutCheck.count === 1 ? "s" : ""} your reply — check Reports tab</p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-amber-600 shrink-0" />
+          </div>
+        </Link>
+      )}
 
       <Card className={isActive ? "border-primary/30 bg-primary/5 dark:bg-primary/10" : ""}>
         <CardContent className="p-5">
@@ -113,7 +191,7 @@ export default function EmployeeHome() {
                 size="lg"
                 variant="destructive"
                 className="w-full h-14 text-base font-semibold"
-                onClick={() => clockOutMut.mutate()}
+                onClick={handleClockOutAttempt}
                 disabled={clockOutMut.isPending}
                 data-testid="button-clock-out"
               >
@@ -141,7 +219,7 @@ export default function EmployeeHome() {
                       data-testid={`button-clock-in-${shift.id}`}
                     >
                       <Play className="w-5 h-5 mr-2" />
-                      Clock In - {new Date(shift.scheduledStartAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      Clock In — {new Date(shift.scheduledStartAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </Button>
                   ))}
                 </div>
@@ -174,7 +252,7 @@ export default function EmployeeHome() {
                       <Clock className="w-4 h-4 text-muted-foreground" />
                       <div>
                         <p className="text-sm font-medium">
-                          {new Date(shift.scheduledStartAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} - {new Date(shift.scheduledEndAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          {new Date(shift.scheduledStartAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} — {new Date(shift.scheduledEndAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                         </p>
                         {shift.expectedHours && <p className="text-xs text-muted-foreground">{parseFloat(shift.expectedHours).toFixed(1)}h scheduled</p>}
                       </div>
@@ -203,7 +281,7 @@ export default function EmployeeHome() {
                           {new Date(shift.shiftDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(shift.scheduledStartAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} - {new Date(shift.scheduledEndAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          {new Date(shift.scheduledStartAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} — {new Date(shift.scheduledEndAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                         </p>
                       </div>
                     </div>

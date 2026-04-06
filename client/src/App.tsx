@@ -1,6 +1,6 @@
 import { Switch, Route, useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -150,6 +150,18 @@ function SuperAdminLayout() {
 }
 
 function EmployeeLayout() {
+  const { user } = useAuth();
+  const { data: empRequests = [] } = useQuery<any[]>({
+    queryKey: ["/api/client-requests"],
+    enabled: !!user?.id,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+  const adminRequestBadge = (empRequests as any[]).filter(
+    r => r.createdByRole === "admin" && !["closed", "resolved", "replied"].includes(r.status)
+  ).length;
+  const badges = adminRequestBadge > 0 ? { "/employee/reports": adminRequestBadge } : {};
+
   return (
     <div className="min-h-screen bg-background">
       <main className="pb-20">
@@ -169,7 +181,7 @@ function EmployeeLayout() {
           <Route component={NotFound} />
         </Switch>
       </main>
-      <MobileNav items={employeeNavItems} centerAction={employeeCenterAction} />
+      <MobileNav items={employeeNavItems} centerAction={employeeCenterAction} badges={badges} />
     </div>
   );
 }
