@@ -1,0 +1,301 @@
+Dev Note: Fix only the “Send to Cleaner” JSON parse error
+
+Issue
+
+When admin clicks Send to Cleaner, the action fails and shows this frontend error:
+
+Failed to execute 'json' on 'Response': Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+
+This means the frontend expected a JSON API response, but the backend returned HTML instead. Most likely:
+
+* the request is hitting the wrong route
+* the API threw an unhandled server error and returned an HTML error page
+* auth/session middleware redirected to an HTML page
+* a proxy/fallback returned index.html instead of JSON
+* the backend returned a non-JSON error response
+
+This must be fixed only for this Send to Cleaner flow.
+Do not touch anything else.
+
+Scope lock
+
+Only investigate and fix:
+
+* the request submission endpoint used by the Send to Cleaner button
+* the response handling for that specific request flow
+* any backend handler directly tied to creating/sending cleaner requests
+* any route mismatch, auth redirect, or response formatting issue for this exact feature
+
+Do not modify:
+
+* attendance
+* schedule
+* payroll
+* clock in
+* clock out
+* employee hours
+* cleaner work flow
+* reports unrelated to this request send action
+* auth logic globally unless the exact problem is a route-level auth response for this endpoint
+* any unrelated email or notification flows
+* any unrelated API wrappers
+
+Likely root cause to check first
+
+This error almost always happens because fetch(...).json() is being called on a response that is not JSON.
+
+For this exact flow, check these in order:
+
+1. Verify the request URL
+   Make sure the Send to Cleaner button is posting to the correct API endpoint and not to:
+
+* a frontend route
+* an invalid path
+* a route missing the /api prefix
+* a production path that differs from development
+
+Examples of common mistakes:
+
+* posting to /admin/requests/create instead of /api/admin/requests/create
+* posting to /requests/send and getting index.html back
+* hitting a relative route from nested page context that resolves incorrectly
+
+2. Check backend route existence in production
+   Confirm the endpoint actually exists in production and is registered before any catch-all route that serves the frontend app.
+
+If a React/Vite/SPA catch-all is intercepting the API call, the browser receives HTML, which explains the <!DOCTYPE html> response.
+
+3. Check server-side exceptions
+   If the route exists but crashes, the server may be returning an HTML 500 page instead of JSON.
+   Inspect logs for:
+
+* validation failure
+* undefined cleaner ID
+* bad payload shape
+* upload parsing failure
+* auth/session failure
+* null company ID
+* notification creation failure
+* attachment serialization issue
+
+4. Check auth middleware behavior on this endpoint
+   If the session expires or middleware redirects unauthorized requests to an HTML login page, the frontend will still try response.json() and fail.
+
+For API routes, auth failures must return JSON, not HTML redirect.
+
+5. Check photo upload / multipart handling
+   This request includes photos and text fields.
+   If the endpoint expects JSON but the frontend is sending FormData, or vice versa, the route may fail and return an HTML error page.
+
+Check whether the request is using:
+
+* Content-Type: application/json
+  or
+* multipart/form-data
+
+Make sure frontend and backend match exactly.
+
+Required fix
+
+1. Make the endpoint return JSON in all cases
+   For this Send to Cleaner API route, every response must be JSON.
+
+Successful response example:
+{
+"success": true,
+"requestId": "...",
+"message": "Request sent to cleaner successfully"
+}
+
+Validation error example:
+{
+"success": false,
+"error": "Cleaner is required"
+}
+
+Server error example:
+{
+"success": false,
+"error": "Failed to send request to cleaner"
+}
+
+Do not allow this route to return HTML.
+
+2. Harden the frontend response parsing
+   Do not blindly call response.json() without checking the response.
+
+For this exact flow:
+
+* inspect response.ok
+* inspect content-type
+* if response is not JSON, read response.text() for debugging/logging
+* show a safe user-facing error message
+* do not surface raw HTML
+* do not crash the modal
+
+Safe handling pattern for this route:
+
+* if content-type includes application/json, parse JSON
+* otherwise treat as backend failure for this flow and show:
+  “Failed to send request. Please try again.”
+* optionally log the raw response text in console only for debugging
+
+Important:
+This is not a replacement for fixing the backend.
+Backend must still be corrected.
+Frontend hardening is only to avoid the broken JSON parse crash.
+
+3. Ensure the route is registered before SPA catch-all
+   If using Express or similar:
+
+* API route must be mounted before static frontend fallback
+* catch-all route must not swallow API requests
+
+Common safe order:
+
+* auth/session middleware
+* api routes
+* static assets
+* frontend catch-all
+
+4. Preserve current feature behavior
+   Once fixed, clicking Send to Cleaner should still:
+
+* create the request
+* attach the photos/captions correctly
+* save require-reply-before-clock-out flag correctly
+* notify the cleaner correctly
+* keep the modal flow intact
+
+Do not redesign the flow.
+Only make it work.
+
+What to inspect in code
+
+Frontend
+Check the exact submit handler for the Send to Cleaner button:
+
+* request URL
+* method
+* headers
+* payload format
+* response parsing
+* error handling
+
+Backend
+Check the exact request creation endpoint:
+
+* route path
+* controller/handler
+* request body parsing
+* file upload parsing
+* auth/company lookup
+* notification creation
+* return type on success
+* return type on failure
+
+Check whether the endpoint accidentally:
+
+* redirects
+* throws unhandled exception
+* returns a rendered template
+* returns index.html
+* returns HTML from reverse proxy or platform error page
+
+Special attention to this screenshot flow
+
+Based on the screenshot, this happens after filling:
+
+* instructions
+* attached reference photos
+* captions
+* require reply before clock out
+
+So likely failure points are:
+
+* attachment upload parsing
+* caption array parsing
+* request payload schema mismatch
+* cleaner notification creation
+* response formatter
+
+Testing checklist
+
+Only test this flow.
+
+1. Send request with text only
+
+* no photos
+* must succeed
+
+2. Send request with one photo
+
+* must succeed
+
+3. Send request with multiple photos and captions
+
+* must succeed
+
+4. Send request with require-reply-before-clock-out on
+
+* must save correctly
+
+5. Confirm cleaner receives the request notification
+
+* must appear correctly
+
+6. Confirm API returns JSON on success
+
+* verify network response
+
+7. Confirm API returns JSON on failure
+
+* no HTML responses
+* no <!DOCTYPE html>
+
+8. Confirm modal does not crash on error
+
+* shows proper message
+* no raw JSON parse error shown to user
+
+9. Confirm production build behavior
+   This is important because the issue may only happen in production routing.
+   Test in production-like environment, not only local dev.
+
+Safe implementation rules
+
+Do not:
+
+* refactor the whole request system
+* change unrelated routes
+* change notification architecture globally
+* alter clock-out behavior
+* change reports UI beyond this exact flow
+* touch unrelated middleware unless this endpoint is returning HTML because of it
+
+Do:
+
+* fix the exact endpoint
+* make the exact response always JSON
+* harden the exact frontend caller
+* confirm request is actually saved and cleaner notification is created
+
+Recommended user-facing error fallback
+
+If request sending fails for any reason in this flow, show something simple like:
+“Unable to send request right now. Please try again.”
+
+Do not expose:
+
+* raw HTML
+* stack traces
+* JSON parse errors
+* server internals
+
+Final instruction
+
+Fix only the Send to Cleaner submission failure.
+The goal is simple:
+admin clicks Send to Cleaner, request saves, cleaner gets notification, and no JSON parse error appears.
+
+Do not touch anything else outside this exact path.

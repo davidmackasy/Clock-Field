@@ -127,9 +127,21 @@ function NewCleanerRequestDialog({ open, onClose, employees, locations }: { open
 
   const createMut = useMutation({
     mutationFn: async (data: any) => {
-      const res = await apiRequest("POST", "/api/admin/cleaner-requests", data);
-      if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
-      return res.json();
+      const res = await fetch("/api/admin/cleaner-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const raw = await res.text();
+        console.error("[send-cleaner-req] Non-JSON response:", res.status, raw.slice(0, 300));
+        throw new Error("Unable to send request right now. Please try again.");
+      }
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message || "Failed to send request to cleaner");
+      return body;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/client-requests"] });
@@ -138,7 +150,7 @@ function NewCleanerRequestDialog({ open, onClose, employees, locations }: { open
       setForm({ assignedCleanerId: "", title: "", requestType: "complaint_followup", description: "", complaintDetails: "", requestedAction: "", locationId: "", priority: "normal", requiresReplyBeforeClockOut: false });
       setPhotos([]);
     },
-    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Unable to send request", description: err.message, variant: "destructive" }),
   });
 
   return (
