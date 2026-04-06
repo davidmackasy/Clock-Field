@@ -1,0 +1,554 @@
+Dev Note: Rebuild Field Notes so they read like a real professional site note document
+
+Objective
+
+Field Notes currently do not feel professional, readable, or printable. The output looks like disconnected AI boxes instead of one organized site note document.
+
+This must be improved on:
+
+* Admin-side Field Notes detail view
+* Document view inside Field Notes
+* Public link view
+* Printable/downloadable output
+* Transcript presentation if shown to users
+
+Do not change anything else outside Field Notes.
+Do not affect:
+
+* attendance
+* payroll
+* schedule
+* work log
+* reports
+* cleaner work submission flow
+* public report flow outside Field Notes
+* clock in/out
+* anything unrelated to Field Notes rendering, structure, and document generation
+
+Main problems to fix
+
+1. The Field Notes output does not read like a proper note or professional document
+   Right now it feels like:
+
+* site photos
+* findings and notes
+* random blocks
+
+That is not enough.
+
+2. The text is being paraphrased too aggressively
+   The current output changes meaning too much and becomes vague or hard to understand.
+
+Example problem:
+“Several areas need updates to meet current standards.”
+This is too generic and does not reflect what was actually said while capturing the photos.
+
+3. Photos and text are not aligned properly
+   The text connected to a photo should make sense with that photo.
+   Right now the relationship between photo, spoken note, and resulting summary is weak.
+
+4. The document structure is poor
+   It should not look like multiple floating cards with fragments.
+   It should feel like one coherent field note with sections.
+
+5. The public link is not client-ready
+   If sent to a client, it should look polished, clear, and easy to understand.
+
+6. The admin-side document tab is confusing
+   If one field visit produces one field note, the document experience should feel like one document, not several disconnected document blocks unless there are truly separate notes.
+
+7. Transcript UI is weak
+   It does not look organized or useful enough.
+
+What the new Field Notes experience must feel like
+
+The Field Notes output should feel like:
+
+* a real site visit note
+* a professional inspection/field documentation record
+* a document someone can review, print, share, and understand
+* something suitable for admin, cleaner, and client
+
+Think:
+
+* structured site note
+* clear headings
+* clear introduction
+* grouped observations
+* photos tied to the right notes
+* clean sections
+* readable paragraphs
+* one coherent document
+
+Core content rule
+
+Do not hard-rephrase the original meaning.
+
+Keep the same meaning, same concept, and same practical intent from what the cleaner or admin said while taking the photos.
+
+The AI should improve clarity and grammar, but not rewrite the point into something vague or generic.
+
+Required text behavior:
+
+* preserve intent
+* preserve practical meaning
+* preserve what was actually being pointed out
+* improve readability only
+* organize statements professionally
+* avoid turning specific comments into broad filler language
+
+Example of correct direction
+
+Bad:
+“Several areas need updates to meet current standards.”
+
+Better:
+“During the site visit, several corner areas and public-facing sections were identified as needing updates. These areas should be reviewed individually to determine the exact corrective work required.”
+
+Even better if tied to actual image/note context:
+“Corner areas shown in the photos were identified as needing attention. Based on the notes recorded during the visit, these sections appear below standard for a public-facing area and should be reviewed for corrective cleaning, repair, or presentation updates.”
+
+That keeps meaning while making it readable.
+
+New Field Notes document structure
+
+Each field note should render as one primary document.
+
+Not multiple disconnected document blocks unless they are true subsections of the same note.
+
+Required document structure
+
+1. Document header
+   Show:
+
+* Company name
+* Site/client/location name
+* Field Note title
+* Visit date and time
+* Created by
+* Status
+* Optional note type such as Site Visit, Inspection Note, Walkthrough Note, Field Report
+
+This should look clean and professional.
+
+2. Introduction / Visit Summary
+   Add a proper introduction paragraph near the top.
+
+Purpose:
+Explain what this field note is about in a clear human way.
+
+This section should summarize:
+
+* why the visit happened
+* what was reviewed
+* what the note covers
+* what the reader should expect below
+
+Example structure:
+“This field note summarizes the observations recorded during the site visit on [date]. The purpose of this visit was to review visible conditions, document areas requiring attention, and provide photo-supported notes for internal review and client communication.”
+
+This should be generated from the actual note context, not generic filler.
+
+3. Site overview / General observations
+   Add a short section that introduces the overall condition or purpose of the note.
+
+Examples:
+
+* General Site Overview
+* Overall Observations
+* Visit Overview
+
+This gives context before jumping into individual findings.
+
+4. Organized observation sections
+   This is the most important part.
+
+Instead of random block cards, organize the document into clear observation sections.
+
+Each section should include:
+
+* section title
+* short paragraph explaining the issue/observation
+* why it matters or what was noted
+* supporting photos
+* action or recommendation if present from original note context
+
+Each section should feel like a proper note entry.
+
+Example section format:
+Observation 1: Corner Area Condition
+Summary paragraph
+Supporting photos
+Recorded notes
+Recommended follow-up
+
+Observation 2: Public Area Presentation
+Summary paragraph
+Supporting photos
+Recorded notes
+Recommended follow-up
+
+5. Photo-to-note alignment
+   Every photo should be tied to the correct observation or grouped section.
+
+Do not dump all photos into one generic gallery at the top unless there is also a grouped photo layout inside the related sections.
+
+Better behavior:
+
+* use photos as evidence under each relevant observation
+* show captions or note text connected to the image
+* preserve sequence if captured in order
+* if a photo belongs to a specific spoken note, keep that association
+
+6. Recommendations / Action items
+   At the end of the document, show a clear action-oriented section.
+
+Title ideas:
+
+* Recommended Follow-Up
+* Suggested Actions
+* Items Requiring Attention
+
+This section should summarize what needs to be done based on the notes.
+
+Do not invent actions that were not implied.
+Only structure and clarify what was already present.
+
+7. Closing summary
+   Add a short closing paragraph so the document feels complete.
+
+Example:
+“This field note is intended to support follow-up planning, internal review, and client communication regarding the areas documented during this visit.”
+
+Admin-side document tab improvements
+
+Current problem
+The Documents tab looks like separate blocks and does not feel like one real document.
+
+Required fix
+For one field visit, show one main document experience.
+
+If there are three findings, that should not look like three separate documents.
+It should feel like:
+
+* one document
+* with three organized sections or observations
+
+Recommended admin-side tabs
+
+* Document
+* Photos
+* Transcript
+
+But under Document:
+
+* render one full structured document
+* use internal section anchors or a side outline if needed
+* not floating disconnected cards pretending to be separate documents
+
+Document tab should show:
+
+* document header
+* summary/introduction
+* organized observation sections
+* related photos embedded in context
+* recommendations
+* optional export/print actions
+
+Photos tab
+Photos tab can remain, but improve presentation:
+
+* cleaner grid
+* better grouping if possible
+* timestamps
+* optional grouping by observation section
+* image expansion modal
+* captions if present
+
+Transcript tab
+Transcript should not feel raw or ugly.
+Improve it so it looks like a readable transcript record.
+
+Transcript tab should include:
+
+* clear header
+* optional speaker/source labeling if available
+* time sequence if available
+* paragraph chunking
+* copyable clean text
+* readable spacing
+
+Important:
+Transcript is supporting evidence.
+Document is the polished professional output.
+Do not confuse the two.
+
+Public link improvements
+
+This is critical.
+
+The public link must look like a polished field note that can be shared with a client.
+
+Public link should feel like a client-ready deliverable.
+
+Required public link structure
+
+* strong top header
+* note title
+* company branding
+* visit date and prepared by
+* concise introduction
+* organized sections with meaningful titles
+* photos placed under the matching section
+* clear action/recommendation summary
+* printable, readable spacing
+
+Do not make the public link look like an internal admin editor.
+It should look like a polished presentation of the note.
+
+Print/download requirements
+
+This must be printable and professional.
+
+Required print behavior
+
+* clean white background
+* proper page spacing
+* consistent section headings
+* readable paragraphs
+* avoid clipped image grids
+* avoid messy floating cards
+* preserve photo-to-text relationships as much as possible
+* show company/title/date clearly on page 1
+* use print-friendly margins and typography
+
+If exported/downloaded as PDF or printed from browser, it should still look like a document, not a dashboard.
+
+AI summarization/content generation rules
+
+This part needs to be fixed carefully.
+
+Current problem
+The AI is oversummarizing or rephrasing too much, which causes loss of meaning.
+
+New rules for Field Notes generation
+
+1. Preserve original meaning
+2. Keep observations grounded in what was actually said
+3. Prefer light editing over aggressive paraphrasing
+4. Convert fragments into readable professional sentences
+5. Keep specificity where possible
+6. Do not replace specific recorded concerns with vague generalizations
+7. If uncertainty exists, stay closer to original transcript instead of inventing polished filler
+8. Tie text to the correct photos/sections
+
+Recommended generation pipeline
+
+For each captured note/photo group:
+
+* extract original spoken note/transcript
+* lightly clean grammar
+* keep core meaning
+* create a concise professional observation paragraph
+* attach to the relevant photo(s)
+* derive optional action note only if the source implies one
+
+Then generate overall:
+
+* introduction
+* overall summary
+* recommendations summary
+* closing paragraph
+
+Do not generate disconnected “issue cards” first and call that the document.
+
+Suggested output structure from data model
+
+For each field note, create one structured object like:
+
+* header metadata
+* intro summary
+* overall site overview
+* observations[]
+
+  * title
+  * cleaned observation paragraph
+  * original note excerpt optional internal only
+  * photos[]
+  * suggested action
+* recommendations summary
+* closing summary
+
+This will make rendering far more professional than rendering raw blocks.
+
+Observation grouping logic
+
+If multiple photos and transcript lines belong to the same area or theme, group them under one observation section.
+
+Examples:
+
+* Corner areas
+* Lobby presentation
+* Washroom condition
+* Entryway appearance
+* Hallway updates needed
+
+Do not create too many tiny sections unless clearly necessary.
+Prefer fewer, stronger sections that are easier to read.
+
+Suggested UI treatment
+
+Admin and public link document view
+
+* letter/document style layout
+* strong title hierarchy
+* readable paragraph widths
+* subtle section dividers
+* embedded photo blocks with captions
+* section numbering if useful
+* “Observation 1”, “Observation 2” format if no better label exists
+
+Avoid:
+
+* too many colored pills
+* too many AI-looking tags
+* too many boxed cards stacked with no flow
+* random labels that interrupt reading
+
+The document should read top to bottom naturally.
+
+Photos and captions
+
+Current problem
+Photos feel separated from the explanation.
+
+Required behavior
+Under each observation:
+
+* show the related photos
+* add small caption or context line if available
+* allow click-to-expand
+* preserve order if important
+
+Photos tab can still show all photos, but document tab must show photos in context.
+
+Status and metadata cleanup
+
+Do not overload the document with badges and noisy tags.
+
+Keep visible metadata useful and professional:
+
+* date
+* prepared by
+* status
+* note type
+* location if available
+
+Reduce unnecessary visual clutter in the public and printable view.
+
+One document rule
+
+Important rule:
+If this is one site visit, it should render as one document.
+
+Do not make it appear like:
+
+* document 1
+* document 2
+* document 3
+
+when those are really just findings within one document.
+
+Instead:
+
+* one Field Note
+* multiple observation sections inside it
+
+This is a major required fix.
+
+Transcript improvements
+
+Current transcript tab rating is low because it does not look refined.
+
+Improve transcript by:
+
+* chunking text into readable sections
+* preserving sequence
+* showing timestamps if available
+* labeling it clearly as transcript/reference
+* making it easy to compare transcript to final document
+* not styling it like an afterthought
+
+Safe scope rules
+
+Do not:
+
+* rewrite the whole field note capture flow
+* change how photos are taken
+* change how transcript is recorded
+* touch unrelated admin pages
+* touch work log
+* touch reports
+* touch attendance or payroll
+* change data capture logic unless needed for better mapping between photo and note text
+
+Do:
+
+* improve the generation structure
+* improve the rendering structure
+* improve the public link presentation
+* improve the document tab so it feels like one note
+* improve transcript presentation
+* improve print output
+
+Testing checklist
+
+Document quality
+
+* one site visit renders as one professional document
+* intro exists
+* summary exists
+* sections are organized
+* photos align with the related note text
+* recommendations make sense
+* closing summary reads well
+
+Content quality
+
+* generated text keeps original meaning
+* no vague over-paraphrasing
+* note text is understandable
+* admin and client can tell what was observed and why it matters
+
+UI quality
+
+* document tab looks professional
+* public link looks client-ready
+* photos tab looks organized
+* transcript tab looks improved
+* print preview looks professional
+* PDF/print output is readable
+
+Regression
+
+* field note creation still works
+* photo upload still works
+* transcript capture still works
+* sharing/public link still works
+* no unrelated pages are affected
+
+Final instruction
+
+This is not a small cosmetic tweak.
+Field Notes needs to be upgraded from “AI cards with photos” into “one professional site note document.”
+
+The result must:
+
+* keep the same meaning of what was recorded
+* organize it clearly
+* align text with photos
+* feel professional on admin side
+* feel professional on public link
+* print like a real document
+
+Do not touch anything else outside this scope.
