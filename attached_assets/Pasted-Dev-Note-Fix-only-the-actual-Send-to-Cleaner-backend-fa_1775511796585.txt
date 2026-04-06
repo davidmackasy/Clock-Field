@@ -1,0 +1,346 @@
+Dev Note: Fix only the actual Send to Cleaner backend failure
+
+Current state
+
+The raw JSON parse crash is no longer the main problem.
+Now the UI is showing a safe error:
+
+Unable to send request right now. Please try again.
+
+That means the frontend fallback is working, but the actual request is still failing somewhere in the backend or endpoint chain.
+
+Do not touch anything else.
+Do not redesign the feature.
+Do not modify unrelated flows.
+Only fix why Send to Cleaner is still failing.
+
+Goal
+
+Make this exact action work end to end:
+
+Admin clicks Send to Cleaner
+→ request is saved
+→ attachments and captions are saved
+→ require-reply-before-clock-out is saved
+→ cleaner notification is created
+→ API returns JSON success
+→ UI closes or confirms success
+
+Only focus on this path.
+
+What this new error means
+
+The frontend is no longer crashing on HTML.
+Now it is correctly catching a failed request and showing a safe message.
+
+So the remaining issue is likely one of these:
+
+* backend route is being reached but throwing an error
+* validation is failing
+* cleaner ID is missing or invalid
+* attachment upload handling is failing
+* captions array shape does not match backend expectation
+* company or auth lookup is failing
+* notification creation is failing
+* database insert is failing
+* request payload field names do not match what backend expects
+
+Priority debugging order
+
+1. Check the exact network response for this submit
+   Inspect the failing request in browser dev tools and verify:
+
+* exact endpoint URL
+* request method
+* request payload
+* response status code
+* response body
+* response content-type
+
+Do not guess.
+Read the actual failing response.
+
+If response body is JSON, extract the exact backend error message.
+If response body is empty or generic, fix the backend to return a clear JSON error for this route only.
+
+2. Add temporary server-side logging only for this endpoint
+   Add focused logs around this exact request creation handler.
+
+Log:
+
+* companyId
+* admin user id
+* assigned cleaner id
+* title or instruction body presence
+* attachment count
+* caption count
+* requireReplyBeforeClockOut value
+* each major step:
+
+  * request received
+  * validation passed
+  * attachments processed
+  * request saved
+  * notification created
+  * response returned
+
+Also log the exact caught error.
+
+Do not add noisy global logs.
+Only log this endpoint.
+
+3. Verify assigned cleaner is actually being sent
+   This is one of the most likely issues.
+
+Confirm the frontend is sending the cleaner identifier the backend expects:
+
+* cleanerId
+  or
+* employeeId
+  or
+* assignedTo
+  or whatever the real schema is
+
+Very common failure:
+UI shows selected cleaner visually, but the payload does not include the real ID, or includes the wrong property name.
+
+Check:
+
+* selected cleaner exists at submit time
+* payload includes the correct ID
+* backend reads the same exact property name
+
+4. Verify payload format matches backend expectations
+   This modal includes:
+
+* text
+* photos
+* captions
+* reply-before-clock-out toggle
+
+Make sure frontend and backend agree on format.
+
+If using FormData:
+
+* backend must parse multipart/form-data
+* captions may need to be stringified then parsed
+* boolean fields may arrive as strings like "true" or "false"
+
+If using JSON:
+
+* image uploads cannot be raw File objects unless already uploaded separately
+* backend must expect JSON arrays, not multipart fields
+
+Most likely failure here:
+
+* captions array parsing
+* attachments field mismatch
+* boolean parsing mismatch
+* mixed payload structure
+
+5. Test text-only submit first
+   Before fixing the photo path, confirm the basic request can save.
+
+Try this exact minimal payload:
+
+* cleaner assigned
+* instruction text only
+* no photos
+* no captions
+* requireReplyBeforeClockOut false
+
+If this fails, the issue is core request creation.
+If this succeeds, the issue is in attachments or captions.
+
+This is the fastest isolation step.
+
+6. Then test with one image only
+   If text-only works:
+
+* send one photo
+* no caption
+
+Then:
+
+* one photo with one caption
+
+Then:
+
+* multiple photos and captions
+
+This will reveal whether the failure is in upload handling or array mapping.
+
+Most likely failure points in this modal
+
+Based on the UI shown, these are the highest-probability causes:
+
+1. Caption-photo mapping issue
+   You have 4 photos and caption inputs.
+   Backend may expect:
+
+* captions as ordered array
+* captions keyed by image id
+* captions omitted for empty values
+
+If backend assumes one format but frontend sends another, save may fail.
+
+2. Attachment upload parser mismatch
+   Frontend may be sending FormData, but backend may still be reading req.body as plain JSON.
+   Or backend may parse files correctly but fail when no upload middleware is attached to that route in production.
+
+3. Boolean parsing issue
+   Require reply before clock out may arrive as:
+
+* true
+* false
+* "true"
+* "false"
+* "on"
+* 1
+
+If backend expects a strict boolean and does not normalize, validation may fail.
+
+4. Cleaner notification creation failure
+   The request itself may save, but notification creation may fail afterward, causing the whole endpoint to return failure.
+   This should not break the entire request creation flow.
+
+Safer behavior:
+
+* save request first
+* try creating notification
+* if notification fails, return partial failure only if necessary
+* but ideally still return success if request saved and log the notification failure separately
+
+Only do this if product behavior allows it.
+Do not silently lose critical data.
+
+Required backend behavior for this route
+
+This route must return clear JSON in all cases.
+
+Success:
+{
+"success": true,
+"requestId": "...",
+"message": "Request sent to cleaner successfully"
+}
+
+Validation failure:
+{
+"success": false,
+"error": "Assigned cleaner is required"
+}
+
+Upload failure:
+{
+"success": false,
+"error": "Failed to upload one or more attachments"
+}
+
+Notification failure if request was not completed:
+{
+"success": false,
+"error": "Request saved failed during cleaner notification"
+}
+
+But if the request saves successfully and only the notification sub-step fails, decide carefully whether to:
+
+* return success with warning
+  or
+* return failure and rollback
+
+Safer product choice for production:
+If notification is required for the feature to be meaningful, use transaction or rollback.
+If request record without notification is acceptable, return success with warning and allow retry notification.
+Only choose one intentionally.
+
+What to fix in code
+
+Frontend submit handler
+Verify:
+
+* selected cleaner ID is included
+* payload shape exactly matches backend schema
+* captions array is normalized
+* empty captions handled safely
+* boolean converted cleanly
+* request URL is correct
+* no duplicate submit or stale modal state
+
+Backend handler
+Verify in order:
+
+1. auth and company resolution
+2. assigned cleaner validation
+3. field parsing and normalization
+4. attachment parsing
+5. request save
+6. notification creation
+7. final JSON response
+
+Add try/catch around only this handler if missing.
+Return exact JSON error message from this route.
+
+Recommended normalization rules
+
+For this route only:
+
+* trim text fields
+* convert requireReplyBeforeClockOut to real boolean
+* normalize captions to array of strings
+* ignore empty optional captions safely
+* allow zero attachments
+* verify assigned cleaner belongs to the same company
+* verify cleaner user exists and is active if needed
+
+Production-safe debugging checklist
+
+Run these in order without touching anything else:
+
+1. Send request with only cleaner + text
+2. Send request with cleaner + text + toggle on
+3. Send request with cleaner + text + 1 image
+4. Send request with cleaner + text + 1 image + caption
+5. Send request with cleaner + text + multiple images + captions
+
+For each step, capture:
+
+* request payload
+* response code
+* response JSON
+* server logs
+
+This will isolate the exact failing layer quickly.
+
+Do not do these
+
+* Do not refactor reports
+* Do not refactor notifications globally
+* Do not touch clock in or clock out
+* Do not touch attendance
+* Do not touch schedule
+* Do not touch payroll
+* Do not redesign the modal
+* Do not change unrelated auth flows
+* Do not introduce broad API wrapper changes
+
+Safe fallback rule
+
+If the failure is caused only by optional attachments, do not let the whole request crash with a vague message.
+Return a specific JSON error so the admin knows what failed.
+
+But first fix the actual backend issue rather than masking it.
+
+Final instruction
+
+The JSON parsing problem is already handled.
+Now fix the real request creation failure only.
+
+Focus on:
+
+* exact endpoint
+* exact payload
+* exact backend validation or save failure
+* exact notification creation step
+
+Nothing else should be touched.
