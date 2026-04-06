@@ -1,0 +1,396 @@
+Dev Note: Improve cleaner request popup UX only
+
+Objective
+
+Improve the cleaner-side request popup so it is easier to read, easier to act on, and routes directly to the correct request source.
+
+This update must only affect the cleaner-side request reading and reply experience.
+
+Do not touch:
+
+* clock in
+* clock out
+* attendance
+* payroll
+* schedule
+* admin-side request creation logic
+* report generation logic
+* work submission logic
+* anything outside this cleaner request UI and navigation path
+
+Main problems to fix
+
+1. The current popup is too cramped
+   The request content is hard to read because too many sections are stacked into a small space.
+
+2. The Action Required box is taking too much room
+   It blocks the request content and makes it harder to read the actual message and attachments.
+
+3. The reply area also feels too packed into the same view
+   The whole thing feels like a crowded form instead of a readable conversation.
+
+4. The notification opens the wrong place
+   When the cleaner taps the notification, it first opens Reports instead of opening the actual Request thread/detail directly.
+
+This creates confusion because the cleaner may think there is nothing there.
+
+Required UI direction
+
+Rebuild the cleaner-side request detail popup in a conversation-style layout inspired by iMessage or WhatsApp.
+
+It should feel like a message thread, not like a cramped admin form.
+
+The experience should be:
+
+* clean
+* readable
+* smooth
+* message-based
+* attachment-friendly
+* easy to reply to
+
+Do not literally copy iMessage branding.
+Just use that style direction:
+
+* message thread feel
+* roomy bubbles/cards
+* clear spacing
+* clean attachment previews
+* sticky reply area
+* smooth interaction
+
+New cleaner request detail layout
+
+Convert the current popup into a cleaner conversation-style request view with this structure:
+
+1. Header
+   Top area should show:
+
+* request title
+* status
+* request type
+* priority
+* date
+* close button
+
+Keep this compact and clean.
+
+2. Request conversation area
+   The actual admin request should be displayed like a received message thread/card.
+
+Show:
+
+* admin request message
+* any complaint details
+* instructions
+* attached images
+* sent time
+* optional labels like Action Required or Reply Needed
+
+This should be the main readable body.
+
+3. System guidance area
+   The current Action Required guidance should not permanently block content.
+
+Instead:
+
+* make it collapsible
+* allow cleaner to minimize it
+* allow cleaner to reopen it if needed
+* default it to compact if the request has already been viewed once
+
+Recommended behavior:
+
+* first time opening a new request: show guidance expanded
+* after that: show as collapsed summary bar
+* cleaner can expand or collapse manually
+
+Suggested collapsed format:
+“Action Required: Tap to view steps”
+
+Expanded format:
+Show the steps and Start Work Submission button.
+
+4. Attachment display
+   Make image attachments easier to view.
+
+Requirements:
+
+* larger image previews
+* clear spacing
+* tap to expand image
+* scroll-friendly layout
+* captions visible under each attachment if present
+* do not cram images into a tiny boxed section
+
+Use a chat/media style layout:
+
+* attachment cards or grid
+* cleaner can clearly see what the admin attached
+* captions should sit naturally under the image, not squeezed awkwardly
+
+5. Reply composer
+   The reply area should feel like a message composer, similar to chat apps.
+
+Requirements:
+
+* sticky bottom composer if possible
+* cleaner can type reply naturally
+* attachment button beside or under input
+* send button clearly visible
+* quick reply chips can remain, but should not crowd the main reading area
+
+Recommended layout:
+
+* quick reply suggestions above composer in a scrollable row or wrapped clean row
+* text input area below
+* attach photos button
+* send reply button
+
+The reply composer must not reduce readability of the request above.
+
+6. Thread feel
+   If admin request exists and cleaner replies later, the screen should start feeling like a thread:
+
+* admin message at top
+* cleaner reply below once sent
+* future follow-ups can appear naturally if added later
+
+Even if this is still technically one request record, the UI should feel like a conversation.
+
+Action Required section changes
+
+Current problem
+The Action Required block takes too much space and competes with the request content.
+
+Required fix
+Make this section dismissible or collapsible.
+
+Cleaner should be able to:
+
+* minimize it
+* close it temporarily
+* reopen it if needed
+
+Do not delete the function.
+Just make it less intrusive.
+
+Recommended behavior
+
+* add a minimize icon
+* add a close or collapse toggle
+* collapsed state should persist while that request is open
+* optionally remember collapse state per request locally
+
+Start Work Submission button
+
+Keep the button, but place it inside the collapsible guidance section or as a cleaner inline action under the admin request.
+
+It should not dominate the screen.
+
+It should clearly say something like:
+
+* Start Work Submission
+  or
+* Start Requested Work
+
+It must still launch the existing correct work flow.
+Do not change the existing work submission behavior.
+
+Cleaner notification routing fix
+
+This is important.
+
+Current problem
+When cleaner taps a request notification, the app first takes them to Reports, and then they must manually tap Requests to find the actual item.
+
+That is too indirect and confusing.
+
+Required fix
+When cleaner taps a notification related to a request:
+
+* route directly to the Requests tab
+* open the exact request detail automatically
+* do not land on empty Reports first
+
+Expected behavior
+Notification tap flow should be:
+notification tapped
+→ open Reports section if needed
+→ auto-select Requests tab
+→ auto-open the specific request thread/detail
+
+If the app architecture allows deep linking, use a direct route such as:
+
+* reports?tab=requests&requestId=...
+  or equivalent internal navigation state
+
+If using navigation state:
+
+* pass request id
+* pass open tab = requests
+* auto-open modal/detail drawer/page
+
+Important
+Do not just route to Reports home.
+Take the cleaner exactly to the relevant request.
+
+Cleaner request detail readability requirements
+
+Make sure the cleaner can clearly see:
+
+* what the issue is
+* what needs to be done
+* what photos were attached
+* what complaint was raised
+* what steps are expected
+* how to reply
+
+The request body should not be hidden between controls.
+
+Spacing and layout rules
+
+Use more vertical spacing.
+Use clearer separation between:
+
+* request content
+* guidance
+* attachments
+* reply tools
+
+Avoid:
+
+* stacked compressed boxes
+* too many controls in the visible center at once
+* narrow scrolling areas inside narrow scrolling areas
+
+Recommended UX approach
+Use one main scroll area for the conversation/content.
+Keep the composer anchored at the bottom if possible.
+
+Suggested cleaner-side structure
+
+Header
+Request title, status, date, close
+
+Conversation area
+
+* admin request card/message bubble
+* attached images and captions
+* optional complaint details section if present
+* optional linked work status if relevant
+
+Collapsible guidance section
+
+* action required summary
+* expandable steps
+* start work button
+
+Quick reply row
+
+* prefilled chips if kept
+
+Reply composer
+
+* text box
+* attach button
+* send button
+
+Optional styling direction
+
+Use softer message-style UI:
+
+* rounded message cards
+* lighter neutral background
+* cleaner spacing
+* sticky bottom composer
+* clear timestamps
+* consistent media previews
+
+Again, do not replicate iMessage branding.
+Just use that level of readability and simplicity.
+
+Navigation behavior requirements
+
+When cleaner opens a request from a notification:
+
+* request should be marked viewed
+* correct Requests tab should open
+* exact request detail should open
+* no extra taps required
+
+When cleaner opens Reports normally:
+
+* they can still manually switch between Reports and Requests
+* existing Reports tab should remain intact
+* Requests tab should remain intact
+* only notification-based routing should become smarter
+
+What not to change
+
+Do not:
+
+* redesign admin request creation
+* change request data structure unless needed for UI state only
+* touch attendance
+* touch payroll
+* touch schedule
+* touch clocking
+* touch report submission logic
+* touch unrelated notifications
+* touch bottom navigation structure except routing behavior for request notifications
+
+Safe implementation guidance
+
+Prefer:
+
+* UI-only restructuring on cleaner request detail screen
+* local state for collapse/expand
+* route/deep-link fix for request notifications
+* reuse existing request data
+* reuse existing reply submission logic
+
+Avoid:
+
+* backend rewrites unless notification click handling requires a request id payload that is missing
+* broad notification system refactors
+* changing unrelated screen layouts
+
+Testing checklist
+
+Cleaner request popup
+
+* request text is fully readable
+* images are clearly visible
+* captions display properly
+* action required can be collapsed
+* action required can be reopened
+* reply area feels cleaner and less cramped
+* send reply still works
+* attach photo still works
+
+Notification flow
+
+* request notification opens Requests tab directly
+* exact request opens immediately
+* cleaner does not land on empty Reports first
+* viewed state updates correctly
+
+Regression
+
+* regular Reports still work
+* regular Requests list still work
+* start work button still opens correct flow
+* reply submission still works
+* nothing else in cleaner app is affected
+
+Final instruction
+
+This is a focused cleaner UX improvement only.
+
+Fix these two things only:
+
+1. make the request popup readable and conversation-style
+2. make request notifications open the exact request directly instead of landing on Reports first
+
+Do not change anything else outside this scope.

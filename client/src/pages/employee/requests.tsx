@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -16,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PhotoUploader, type PhotoItem } from "@/components/photo-uploader";
 import {
   Plus, MessageSquare, ChevronRight, AlertTriangle, Clock,
-  ShieldAlert, CheckCircle2, Info, ExternalLink,
+  ShieldAlert, CheckCircle2, Info, ExternalLink, ChevronDown, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +48,7 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+// ── Used in employee's own report dialog ──────────────────────────────────────
 function ThreadMessage({ msg, authorName }: { msg: any; authorName: string }) {
   const isAdmin = msg.authorRole === "admin";
   return (
@@ -81,13 +82,76 @@ function ThreadMessage({ msg, authorName }: { msg: any; authorName: string }) {
   );
 }
 
-// ── Admin Request Detail Dialog ───────────────────────────────────────────────
+// ── Conversation-style message for admin requests ──────────────────────────────
+function ConversationMessage({ msg, authorName, onImageClick }: {
+  msg: any; authorName: string; onImageClick: (src: string) => void;
+}) {
+  const isAdmin = msg.authorRole === "admin";
+
+  if (msg.messageType === "status_change") {
+    return (
+      <div className="flex justify-center">
+        <span className="text-[10px] text-muted-foreground bg-muted/80 rounded-full px-3 py-1 border">
+          Status → {STATUS_LABELS[msg.statusValue] || msg.statusValue}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex flex-col gap-1 ${isAdmin ? "items-start" : "items-end"} px-3`}>
+      <div className={`max-w-[88%] overflow-hidden shadow-sm ${
+        isAdmin
+          ? "rounded-2xl rounded-tl-sm bg-primary text-primary-foreground"
+          : "rounded-2xl rounded-tr-sm bg-muted/90 border text-foreground"
+      }`}>
+        {(msg.body || msg.attachments?.length > 0) && (
+          <div className="px-3.5 pt-3 pb-2.5">
+            <p className={`text-[10px] font-semibold mb-1.5 ${isAdmin ? "opacity-60" : "text-muted-foreground"}`}>
+              {isAdmin ? "Admin" : authorName}
+            </p>
+            {msg.body && (
+              <p className="whitespace-pre-wrap text-[13px] leading-relaxed">{msg.body}</p>
+            )}
+          </div>
+        )}
+        {msg.attachments?.length > 0 && (
+          <div className={`space-y-1.5 pb-2.5 px-2 ${!msg.body ? "pt-2.5" : "pt-0"}`}>
+            {msg.attachments.map((att: any) => (
+              <div
+                key={att.id}
+                className="cursor-pointer overflow-hidden rounded-xl"
+                onClick={() => onImageClick(`/api/attachments/${att.id}/image`)}
+              >
+                <img
+                  src={`/api/attachments/${att.id}/image`}
+                  alt={att.caption || "photo"}
+                  className="w-full max-h-64 object-cover"
+                  loading="lazy"
+                />
+                {att.caption && (
+                  <p className={`text-[10px] px-2 pt-1.5 pb-1 ${isAdmin ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                    {att.caption}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <span className="text-[10px] text-muted-foreground px-1">{formatTime(msg.createdAt)}</span>
+    </div>
+  );
+}
+
+// ── Admin Request Detail — conversation style ──────────────────────────────────
 function AdminRequestDetail({ req, onClose }: { req: any; onClose: () => void }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [replyText, setReplyText] = useState("");
   const [replyPhotos, setReplyPhotos] = useState<PhotoItem[]>([]);
-  const [quickReply, setQuickReply] = useState("");
+  const [guideOpen, setGuideOpen] = useState(!req.cleanerViewedAt);
+  const [lightbox, setLightbox] = useState<string | null>(null);
   const authorName = `${user?.firstName || ""} ${user?.lastName || ""}`.trim();
 
   const { data: messages, isLoading: msgsLoading } = useQuery<any[]>({
@@ -96,11 +160,15 @@ function AdminRequestDetail({ req, onClose }: { req: any; onClose: () => void })
     staleTime: 30_000,
   });
 
-  // Mark as viewed on open
-  useMutation({
-    mutationFn: async () => apiRequest("POST", `/api/client-requests/${req.id}/mark-viewed`, {}),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/client-requests"] }),
-  });
+  useEffect(() => {
+    if (!req.cleanerViewedAt) {
+      fetch(`/api/client-requests/${req.id}/mark-viewed`, { method: "POST", credentials: "include" })
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ["/api/client-requests"] });
+        })
+        .catch(() => {});
+    }
+  }, [req.id]);
 
   const replyMut = useMutation({
     mutationFn: async (data: any) => {
@@ -114,7 +182,6 @@ function AdminRequestDetail({ req, onClose }: { req: any; onClose: () => void })
       queryClient.invalidateQueries({ queryKey: ["/api/client-requests", user?.id] });
       setReplyText("");
       setReplyPhotos([]);
-      setQuickReply("");
       toast({ title: "Reply sent to admin" });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
@@ -123,124 +190,163 @@ function AdminRequestDetail({ req, onClose }: { req: any; onClose: () => void })
   const canReply = !["closed", "resolved"].includes(req.status);
   const hasReplied = req.status === "replied";
 
-  const handleQuickReply = (text: string) => {
-    setQuickReply(text);
-    setReplyText(text);
-  };
-
   const sendReply = () => {
     const body = replyText.trim();
     if (!body && replyPhotos.length === 0) return;
-    replyMut.mutate({
-      body: body || null,
-      photos: replyPhotos.map(p => ({ dataUrl: p.dataUrl, caption: p.caption })),
-    });
+    replyMut.mutate({ body: body || null, photos: replyPhotos.map(p => ({ dataUrl: p.dataUrl, caption: p.caption })) });
   };
 
   return (
-    <Dialog open={!!req} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg max-h-[92vh] flex flex-col">
-        <DialogHeader>
-          <div className="flex items-start gap-2">
-            <ShieldAlert className="w-4 h-4 text-destructive mt-1 shrink-0" />
-            <DialogTitle className="text-base leading-snug pr-6">{req.title}</DialogTitle>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1 flex-wrap">
-            <Badge variant={(STATUS_VARIANT[req.status] as any) || "secondary"} className="text-xs">
-              {STATUS_LABELS[req.status] || req.status}
-            </Badge>
-            <span>{req.requestType?.replace(/_/g, " ")}</span>
-            <Badge variant={(PRIORITY_VARIANT[req.priority] as any) || "secondary"} className="text-[10px] h-4 px-1">{req.priority}</Badge>
-            <span><Clock className="w-3 h-3 inline mr-0.5" />{new Date(req.createdAt).toLocaleDateString()}</span>
-          </div>
-        </DialogHeader>
+    <>
+      <Dialog open={!!req} onOpenChange={onClose}>
+        <DialogContent className="max-w-lg p-0 gap-0 flex flex-col" style={{ maxHeight: "92vh" }}>
 
-        {/* System guidance */}
-        {!hasReplied && (
-          <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 space-y-2 shrink-0">
-            <p className="text-xs font-semibold text-blue-800 flex items-center gap-1.5">
-              <Info className="w-3.5 h-3.5" />Action Required
-            </p>
-            <p className="text-xs text-blue-700">Admin has assigned you a request. To complete it:</p>
-            <ol className="text-xs text-blue-700 space-y-0.5 list-decimal list-inside">
-              <li>Read the instructions below carefully</li>
-              <li>Go to your home screen and start your work or work submission</li>
-              <li>Complete the requested task</li>
-              <li>Return here and send a reply before clocking out</li>
-            </ol>
-            <Link href="/employee/work-log">
-              <Button size="sm" variant="outline" className="w-full mt-1 border-blue-300 text-blue-700 hover:bg-blue-100 text-xs h-8" onClick={onClose} data-testid="button-start-work-from-request">
-                <ExternalLink className="w-3.5 h-3.5 mr-1.5" />Start Work Submission
-              </Button>
-            </Link>
-          </div>
-        )}
-
-        {hasReplied && (
-          <div className="rounded-lg bg-green-50 border border-green-200 p-3 flex items-center gap-2 shrink-0">
-            <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
-            <p className="text-xs text-green-700 font-medium">You replied to this request. Admin has been notified.</p>
-          </div>
-        )}
-
-        {/* Thread */}
-        <div className="flex-1 overflow-y-auto space-y-4 py-2 min-h-0 border-t">
-          {msgsLoading ? (
-            <div className="space-y-3 pt-1">
-              <Skeleton className="h-16 w-4/5" />
-              <Skeleton className="h-10 w-3/4 ml-auto" />
+          {/* ── Header ── */}
+          <div className="px-4 pt-4 pb-3 border-b shrink-0">
+            <div className="flex items-start gap-2 pr-6">
+              <ShieldAlert className="w-4 h-4 text-destructive mt-0.5 shrink-0" />
+              <h2 className="font-semibold text-sm leading-snug">{req.title}</h2>
             </div>
-          ) : !messages?.length ? (
-            <p className="text-xs text-muted-foreground text-center py-4">No messages yet.</p>
-          ) : (
-            messages.map((msg: any) => (
-              <ThreadMessage key={msg.id} msg={msg} authorName={authorName} />
-            ))
-          )}
-        </div>
+            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+              <Badge variant={(STATUS_VARIANT[req.status] as any) || "secondary"} className="text-xs">
+                {STATUS_LABELS[req.status] || req.status}
+              </Badge>
+              <span className="text-xs text-muted-foreground">{req.requestType?.replace(/_/g, " ")}</span>
+              <Badge variant={(PRIORITY_VARIANT[req.priority] as any) || "secondary"} className="text-[10px] h-4 px-1">{req.priority}</Badge>
+              <span className="text-xs text-muted-foreground flex items-center gap-0.5">
+                <Clock className="w-3 h-3" />{new Date(req.createdAt).toLocaleDateString()}
+              </span>
+            </div>
+          </div>
 
-        {/* Reply */}
-        {canReply && (
-          <div className="border-t pt-3 space-y-2 shrink-0">
-            {!hasReplied && (
-              <div className="flex gap-1 flex-wrap">
-                {QUICK_REPLIES.map((qr, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleQuickReply(qr)}
-                    className={cn(
-                      "text-[10px] px-2 py-1 rounded-full border transition-colors",
-                      quickReply === qr ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground hover:text-foreground border-border"
-                    )}
-                    data-testid={`button-quick-reply-${i}`}
-                  >
-                    {qr.length > 30 ? qr.slice(0, 30) + "…" : qr}
-                  </button>
-                ))}
+          {/* ── Scrollable thread ── */}
+          <div className="flex-1 overflow-y-auto min-h-0">
+
+            {/* Collapsible guidance */}
+            {!hasReplied ? (
+              <div className="mx-3 mt-3 rounded-xl border border-blue-200 bg-blue-50/90 overflow-hidden">
+                <button
+                  className="w-full flex items-center justify-between px-3 py-2.5 text-left gap-2"
+                  onClick={() => setGuideOpen(v => !v)}
+                  data-testid="button-toggle-action-guide"
+                >
+                  <span className="text-xs font-semibold text-blue-800 flex items-center gap-1.5">
+                    <Info className="w-3.5 h-3.5 shrink-0" />
+                    {guideOpen ? "Action Required" : "Action Required — tap to view steps"}
+                  </span>
+                  <ChevronDown className={cn("w-4 h-4 text-blue-500 shrink-0 transition-transform", guideOpen && "rotate-180")} />
+                </button>
+                {guideOpen && (
+                  <div className="px-3 pb-3 border-t border-blue-200/60 space-y-2.5">
+                    <ol className="text-xs text-blue-700 space-y-1.5 list-decimal list-inside pt-2.5">
+                      <li>Read the instructions below carefully</li>
+                      <li>Start your work or work submission from the home screen</li>
+                      <li>Complete the requested task</li>
+                      <li>Return here and send a reply{req.requiresReplyBeforeClockOut ? " before clocking out" : ""}</li>
+                    </ol>
+                    <Link href="/employee/work-log">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full border-blue-300 text-blue-700 hover:bg-blue-100 text-xs h-8"
+                        onClick={onClose}
+                        data-testid="button-start-work-from-request"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 mr-1.5" />Start Work Submission
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="mx-3 mt-3 rounded-xl bg-green-50 border border-green-200 p-3 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                <p className="text-xs text-green-700 font-medium">Replied — admin has been notified.</p>
               </div>
             )}
-            <Textarea
-              placeholder="Tell admin what was done..."
-              value={replyText}
-              onChange={e => setReplyText(e.target.value)}
-              rows={2}
-              className="resize-none text-sm"
-              data-testid="input-admin-req-reply"
-            />
-            <PhotoUploader photos={replyPhotos} onChange={setReplyPhotos} maxPhotos={3} maxSizeMB={10} label="Attach Photos" />
-            <Button
-              className="w-full"
-              size="sm"
-              disabled={(!replyText.trim() && replyPhotos.length === 0) || replyMut.isPending}
-              onClick={sendReply}
-              data-testid="button-send-admin-req-reply"
-            >
-              {replyMut.isPending ? "Sending..." : "Send Reply to Admin"}
-            </Button>
+
+            {/* Messages */}
+            <div className="py-4 space-y-4">
+              {msgsLoading ? (
+                <div className="space-y-3 px-3 pt-1">
+                  <Skeleton className="h-24 w-4/5" />
+                  <Skeleton className="h-12 w-3/4 ml-auto" />
+                </div>
+              ) : !messages?.length ? (
+                <p className="text-xs text-muted-foreground text-center py-4">No messages yet.</p>
+              ) : (
+                messages.map((msg: any) => (
+                  <ConversationMessage key={msg.id} msg={msg} authorName={authorName} onImageClick={setLightbox} />
+                ))
+              )}
+            </div>
           </div>
-        )}
-      </DialogContent>
-    </Dialog>
+
+          {/* ── Sticky reply composer ── */}
+          {canReply && (
+            <div className="border-t bg-background px-3 pt-3 pb-4 space-y-2.5 shrink-0">
+              {!hasReplied && (
+                <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
+                  {QUICK_REPLIES.map((qr, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setReplyText(replyText === qr ? "" : qr)}
+                      className={cn(
+                        "text-[10px] px-2.5 py-1.5 rounded-full border whitespace-nowrap shrink-0 transition-colors",
+                        replyText === qr
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-muted text-muted-foreground hover:text-foreground border-border"
+                      )}
+                      data-testid={`button-quick-reply-${i}`}
+                    >
+                      {qr.length > 28 ? qr.slice(0, 28) + "…" : qr}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <Textarea
+                placeholder="Tell admin what was done..."
+                value={replyText}
+                onChange={e => setReplyText(e.target.value)}
+                rows={2}
+                className="resize-none text-sm"
+                data-testid="input-admin-req-reply"
+              />
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <PhotoUploader photos={replyPhotos} onChange={setReplyPhotos} maxPhotos={3} maxSizeMB={10} label="Attach Photos" />
+                </div>
+                <Button
+                  size="sm"
+                  className="shrink-0 h-9 px-5"
+                  disabled={(!replyText.trim() && replyPhotos.length === 0) || replyMut.isPending}
+                  onClick={sendReply}
+                  data-testid="button-send-admin-req-reply"
+                >
+                  {replyMut.isPending ? "Sending…" : "Send Reply"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/92 flex items-center justify-center p-4"
+          onClick={() => setLightbox(null)}
+        >
+          <img src={lightbox} alt="" className="max-w-full max-h-full object-contain rounded-lg" />
+          <button
+            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20"
+            onClick={() => setLightbox(null)}
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -277,13 +383,18 @@ export default function EmployeeRequests() {
     retry: 1,
   });
 
-  const markViewedMut = useMutation({
-    mutationFn: async (id: string) => apiRequest("POST", `/api/client-requests/${id}/mark-viewed`, {}),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/client-requests"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/client-requests", user?.id] });
-    },
-  });
+  // Deep-link: auto-open a specific request via ?openId=
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const openId = params.get("openId");
+    if (openId && requests) {
+      const target = requests.find(r => r.id === openId);
+      if (target) {
+        setAdminDetailReq(target);
+        window.history.replaceState({}, "", "/employee/requests");
+      }
+    }
+  }, [requests]);
 
   const createMut = useMutation({
     mutationFn: async (data: any) => {
@@ -325,11 +436,6 @@ export default function EmployeeRequests() {
 
   const pendingAdminCount = adminAssigned.filter(r => !["closed", "resolved", "replied"].includes(r.status)).length;
   const authorName = `${user?.firstName || ""} ${user?.lastName || ""}`.trim();
-
-  const openAdminReq = (req: any) => {
-    setAdminDetailReq(req);
-    if (!req.cleanerViewedAt) markViewedMut.mutate(req.id);
-  };
 
   return (
     <div className="pb-24">
@@ -381,7 +487,7 @@ export default function EmployeeRequests() {
                       isPending ? "border-destructive/40 bg-destructive/5 hover:shadow-md" : "hover:shadow-sm"
                     )}
                     data-testid={`admin-request-card-${req.id}`}
-                    onClick={() => openAdminReq(req)}
+                    onClick={() => setAdminDetailReq(req)}
                   >
                     <CardContent className="p-3">
                       <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -474,7 +580,7 @@ export default function EmployeeRequests() {
         )}
       </div>
 
-      {/* Admin request detail */}
+      {/* Admin request detail — conversation style */}
       {adminDetailReq && (
         <AdminRequestDetail req={adminDetailReq} onClose={() => setAdminDetailReq(null)} />
       )}

@@ -160,7 +160,15 @@ function EmployeeLayout() {
   const adminRequestBadge = (empRequests as any[]).filter(
     r => r.createdByRole === "admin" && !["closed", "resolved", "replied"].includes(r.status)
   ).length;
-  const badges = adminRequestBadge > 0 ? { "/employee/reports": adminRequestBadge } : {};
+
+  // When there are pending admin requests, reroute the "Reports" nav item to /employee/requests
+  // so the badge click takes the cleaner directly to their requests, not the reports page.
+  const navItems = adminRequestBadge > 0
+    ? employeeNavItems.map(item =>
+        item.href === "/employee/reports" ? { ...item, href: "/employee/requests" } : item
+      )
+    : employeeNavItems;
+  const badges = adminRequestBadge > 0 ? { "/employee/requests": adminRequestBadge } : {};
 
   return (
     <div className="min-h-screen bg-background">
@@ -181,7 +189,7 @@ function EmployeeLayout() {
           <Route component={NotFound} />
         </Switch>
       </main>
-      <MobileNav items={employeeNavItems} centerAction={employeeCenterAction} badges={badges} />
+      <MobileNav items={navItems} centerAction={employeeCenterAction} badges={badges} />
     </div>
   );
 }
