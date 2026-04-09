@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { ClipboardList, Search, CalendarIcon, Filter, User, Clock, BarChart2, Users2, TrendingUp, AlertCircle, LogOut } from "lucide-react";
-import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
+import { format, subDays, startOfWeek, startOfMonth, startOfDay, endOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { EmployeeAttendanceModal } from "@/components/employee-attendance-modal";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -262,8 +262,8 @@ export default function AdminAttendance() {
         } else if (dateRange === "this_month") {
           if (clockIn < startOfMonth(now)) return false;
         } else if (dateRange === "custom") {
-          if (customRange.from && clockIn < customRange.from) return false;
-          if (customRange.to && clockIn > customRange.to) return false;
+          if (customRange.from && clockIn < startOfDay(customRange.from)) return false;
+          if (customRange.to && clockIn > endOfDay(customRange.to)) return false;
         }
 
         return true;

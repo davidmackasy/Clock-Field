@@ -1,0 +1,156 @@
+Dev note for AI agent
+
+Issue to fix
+The admin Attendance page is not matching the cleaner My Hours page for the same custom date range.
+
+Example shown
+Custom range selected: Mar 16, 2026 to Mar 29, 2026
+
+Cleaner side
+
+* Total shifts: 11
+* Total hours: 61h 23m
+* Includes Sun, Mar 29
+
+Admin side
+
+* Total shifts: 10
+* Total hours: 53h 53m
+* Missing the last day in the selected range
+* It appears to stop at Mar 26 in the visible list and is not correctly including Mar 29 in totals
+
+What this means
+The admin custom range query is likely excluding the end date or handling the end date/time boundary incorrectly, while the cleaner side is including it correctly.
+
+Main goal
+Fix only the custom date range attendance fetch and totals on the admin side so that the admin sees the exact same shifts, hours, and dates as the cleaner side for the same employee and same selected range.
+
+Do not change
+
+* Do not change the attendance concept
+* Do not change payroll logic
+* Do not change clock in or clock out behavior
+* Do not change timezone logic unless the bug is directly caused by end-of-day range conversion for this exact screen
+* Do not redesign the UI
+* Do not touch any working filters, employee logic, or reports outside this exact issue
+* Do not change cleaner-side behavior since it appears correct
+
+What to investigate
+Focus only on how the admin Attendance page builds and sends the custom range filter.
+
+Check these areas carefully
+
+1. Admin custom range query
+
+* Verify whether the end date is being treated as exclusive instead of inclusive
+* Check if the backend query uses something like:
+  createdAt >= startDate AND createdAt < endDate
+  without pushing endDate to the end of the selected day
+* If so, this would skip entries on the final selected date
+
+2. Date normalization
+
+* Check whether the admin side converts the selected end date to midnight at the start of the day instead of 23:59:59.999
+* Example:
+  Bad:
+  endDate = 2026-03-29T00:00:00
+  Good:
+  endDate = 2026-03-29T23:59:59.999
+* Or better:
+  query >= startOfDay(fromDate) and < startOfDay(dayAfterToDate)
+
+3. Frontend to backend payload mismatch
+
+* Confirm the admin screen is actually sending Mar 29 as the end date
+* Confirm the API is receiving the same end date the UI shows
+* Confirm no formatting issue is trimming or shifting the date during serialization
+
+4. Timezone handling on admin side only
+
+* Check whether admin custom range is being converted in UTC in a way that drops late local-day records
+* If cleaner side uses local date boundaries and admin side uses UTC boundaries, that could explain the mismatch
+* Keep the existing system intact, but make the admin custom range use the same date boundary logic as the cleaner My Hours page
+
+5. Totals calculation source
+
+* Confirm that total shifts and total hours on admin are calculated from the fully filtered dataset
+* Make sure the list query and summary cards use the exact same filtered result set
+* No separate query should accidentally exclude the final day
+
+Expected behavior after fix
+For the same employee and same date range:
+
+* Admin side and cleaner side must show the same total shifts
+* Admin side and cleaner side must show the same total worked hours
+* Admin side must include all records from the first selected date through the last selected date
+* If Mar 29 is selected, any shift on Mar 29 must appear in admin totals and history
+
+Safe implementation guidance
+Use one shared date-range helper for admin attendance filtering so the selected range is always inclusive.
+
+Recommended approach
+
+* Normalize fromDate to start of day
+* Normalize toDate to the next day start, then use less-than next day start
+* Example logic:
+  rangeStart = local start of selected from date
+  rangeEndExclusive = local start of day after selected to date
+  query where timestamp >= rangeStart and timestamp < rangeEndExclusive
+
+This is safer than trying to use 23:59:59 manually and avoids millisecond edge cases.
+
+Important
+Use the same range logic for:
+
+* attendance list rows
+* total hours
+* total shifts
+* avg hours per shift
+* employee count if affected
+
+Testing required
+Test only this issue and confirm nothing else changes.
+
+Test case 1
+
+* Employee with a shift on the last selected day
+* Select custom range Mar 16 to Mar 29
+* Confirm admin includes Mar 29 record
+* Confirm admin totals match cleaner totals exactly
+
+Test case 2
+
+* Range with no shift on final day
+* Confirm totals remain correct and no extra records appear
+
+Test case 3
+
+* Single-day custom range
+* From = To = a day with a shift
+* Confirm admin shows that one day correctly
+
+Test case 4
+
+* Single-day custom range with no shift
+* Confirm zero results, not previous or next day leakage
+
+Test case 5
+
+* Compare admin and cleaner for same employee and same range
+* Hours must match
+* Shift count must match
+* Day list must match
+
+Acceptance criteria
+
+* Admin custom range includes the final selected day
+* Admin totals match cleaner-side totals for the same period
+* No changes to cleaner app behavior
+* No regressions to payroll, schedule, clock flow, or other attendance pages
+* No UI redesign or unrelated refactoring
+
+Priority
+High priority because this creates reporting confusion in production and affects trust in worked hours.
+
+Instruction to agent
+Please fix only the admin custom range attendance filtering and totals mismatch. Do not touch anything else that is currently working.
