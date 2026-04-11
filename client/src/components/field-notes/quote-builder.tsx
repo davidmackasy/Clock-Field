@@ -48,6 +48,75 @@ const ADDON_DEFAULT_TYPE: Record<string, string> = {
 
 const ADDON_PRICING_TYPES = ["One-time", "Per visit", "Per week", "Per month", "Custom"];
 
+// ── Display billing period ─────────────────────────────────────────────────────
+const DISPLAY_PERIODS = [
+  "Per visit", "Weekly", "Bi-weekly", "Monthly",
+  "Every 2 months", "Quarterly", "6 months", "Custom",
+];
+
+function getDisplayPeriodLabel(period: string, customWeeks?: string, customMonths?: string): string {
+  if (period === "Custom") {
+    if (customMonths && parseInt(customMonths) > 0) return `${customMonths}-month service`;
+    if (customWeeks && parseInt(customWeeks) > 0) return `${customWeeks}-week service`;
+    return "Custom period";
+  }
+  const map: Record<string, string> = {
+    "Per visit": "Per visit", "Weekly": "Weekly", "Bi-weekly": "Bi-weekly",
+    "Monthly": "Monthly", "Every 2 months": "Every 2 months",
+    "Quarterly": "Quarterly", "6 months": "6-month",
+  };
+  return map[period] || period;
+}
+
+// Compute the display amount from a base per-visit price scaled to a display period
+function computeDisplayAmountFromPerVisit(
+  perVisitAmt: number,
+  daysPerWeek: number,
+  displayPeriod: string,
+  customWeeks?: string,
+  customMonths?: string
+): number {
+  const visitsPerWeek = daysPerWeek;
+  const visitsPerMonth = daysPerWeek * 4;
+  switch (displayPeriod) {
+    case "Per visit":       return perVisitAmt;
+    case "Weekly":          return perVisitAmt * visitsPerWeek;
+    case "Bi-weekly":       return perVisitAmt * visitsPerWeek * 2;
+    case "Monthly":         return perVisitAmt * visitsPerMonth;
+    case "Every 2 months":  return perVisitAmt * visitsPerMonth * 2;
+    case "Quarterly":       return perVisitAmt * visitsPerMonth * 3;
+    case "6 months":        return perVisitAmt * visitsPerMonth * 6;
+    case "Custom": {
+      if (customMonths && parseInt(customMonths) > 0)
+        return perVisitAmt * visitsPerMonth * parseInt(customMonths);
+      if (customWeeks && parseInt(customWeeks) > 0)
+        return perVisitAmt * visitsPerWeek * parseInt(customWeeks);
+      return perVisitAmt;
+    }
+    default: return perVisitAmt;
+  }
+}
+
+// Scale an add-on amount based on its pricingType and the selected display period
+function scaleAddonForDisplay(
+  addonAmt: number,
+  pricingType: string,
+  displayPeriod: string,
+  daysPerWeek: number,
+  customWeeks?: string,
+  customMonths?: string
+): number {
+  // One-time add-ons never scale
+  if (!pricingType || pricingType === "One-time") return addonAmt;
+  // Recurring add-ons: scale the same way as base service
+  return computeDisplayAmountFromPerVisit(
+    pricingType === "Per visit"  ? addonAmt :
+    pricingType === "Per week"   ? addonAmt / daysPerWeek :
+    pricingType === "Per month"  ? addonAmt / (daysPerWeek * 4) : addonAmt,
+    daysPerWeek, displayPeriod, customWeeks, customMonths
+  );
+}
+
 // ── Helpers: parse / stringify tag arrays from quoteData ───────────────────────
 function parseTags(v: string | string[] | undefined): string[] {
   if (!v) return [];
@@ -371,6 +440,13 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
     return syncAddonPricingLines(tags, saved);
   });
 
+  // Display billing period — controls what the public quote shows
+  const [displayBillingPeriod, setDisplayBillingPeriod] = useState(quoteData.displayBillingPeriod || "");
+  const [customDisplayWeeks, setCustomDisplayWeeks]     = useState(quoteData.customDisplayWeeks || "");
+  const [customDisplayMonths, setCustomDisplayMonths]   = useState(quoteData.customDisplayMonths || "");
+  // Manually-overridden display amount (set when admin edits the computed field)
+  const [displayAmountOverride, setDisplayAmountOverride] = useState(quoteData.displayAmount || "");
+
   // AI suggestion results
   const [suggestion, setSuggestion] = useState<Record<string, any> | null>(
     quoteData.pricingExplanation ? quoteData : null
@@ -435,6 +511,50 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
   const taxTotal = taxLines.reduce((s, t) => s + t.amount, 0);
   const grandTotal = subtotal !== null ? subtotal + taxTotal : null;
 
+  // ── Display period computed values ──────────────────────────────────────────
+  // Derive per-visit amount from baseAmt + billingMode + serviceDaysPerWeek
+  const dpwNum = parseInt(serviceDaysPerWeek) || parseInt(daysPerWeek) || 5;
+  const perVisitAmt: number | null = (() => {
+    if (!baseAmt) return null;
+    const bm = billingMode || serviceType || "";
+    if (bm.toLowerCase().includes("per visit") || bm.toLowerCase().includes("one")) return baseAmt;
+    if (bm.toLowerCase().includes("bi")) return baseAmt / (dpwNum * 2);
+    if (bm.toLowerCase().includes("week") && !bm.toLowerCase().includes("month")) return baseAmt / dpwNum;
+    if (bm.toLowerCase().includes("month")) return baseAmt / (dpwNum * 4);
+    return baseAmt; // fallback: treat as per-visit
+  })();
+
+  // Computed display recurring service amount (from per-visit × display period)
+  const isOneTimeBilling = (billingMode || "").toLowerCase().includes("one") || (serviceType || "").toLowerCase().includes("one");
+  const computedDisplayBase: number | null =
+    !isOneTimeBilling && displayBillingPeriod && displayBillingPeriod !== "" && perVisitAmt !== null
+      ? computeDisplayAmountFromPerVisit(perVisitAmt, dpwNum, displayBillingPeriod, customDisplayWeeks, customDisplayMonths)
+      : null;
+
+  // Compute scaled addon totals for display period
+  const displayAddonLines = displayBillingPeriod
+    ? addonPricingLines.filter(l => l.included && l.amount).map(l => {
+        const raw = parseAmount(l.amount) || 0;
+        const scaledAmt = scaleAddonForDisplay(raw, l.pricingType, displayBillingPeriod, dpwNum, customDisplayWeeks, customDisplayMonths);
+        return { ...l, scaledAmount: scaledAmt };
+      })
+    : [];
+  const displayOneTimeAddons = displayAddonLines.filter(l => !l.pricingType || l.pricingType === "One-time");
+  const displayRecurringAddons = displayAddonLines.filter(l => l.pricingType && l.pricingType !== "One-time");
+
+  // Total for display period
+  const displayBaseAmt = displayAmountOverride ? (parseAmount(displayAmountOverride) ?? computedDisplayBase) : computedDisplayBase;
+  const displayAddonTotal = displayAddonLines.reduce((s, l) => s + l.scaledAmount, 0);
+  const displaySubtotal = displayBaseAmt !== null ? displayBaseAmt + displayAddonTotal : null;
+  const displayTaxLines: Array<{ name: string; rate: number; amount: number }> =
+    taxEnabled && displaySubtotal !== null
+      ? taxes.filter(t => t.name && t.rate)
+             .map(t => ({ name: t.name, rate: parseFloat(t.rate) || 0, amount: (displaySubtotal * (parseFloat(t.rate) || 0)) / 100 }))
+      : [];
+  const displayTaxTotal = displayTaxLines.reduce((s, t) => s + t.amount, 0);
+  const displayGrandTotal = displaySubtotal !== null ? displaySubtotal + displayTaxTotal : null;
+  const displayPeriodLabel = displayBillingPeriod ? getDisplayPeriodLabel(displayBillingPeriod, customDisplayWeeks, customDisplayMonths) : "";
+
   // -- Compile current quoteData object ----------------------------------------
   const buildQuoteData = () => ({
     ...quoteData,
@@ -475,6 +595,19 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
     baseSubtotal: baseAmt !== null ? fmtDollar(baseAmt) : "",
     addonSubtotal: addonTotal > 0 ? fmtDollar(addonTotal) : "",
     combinedSubtotal: subtotal !== null ? fmtDollar(subtotal) : "",
+    // Display billing period (controls what public quote shows)
+    displayBillingPeriod,
+    displayPeriodLabel,
+    customDisplayWeeks,
+    customDisplayMonths,
+    displayAmount: displayAmountOverride || (computedDisplayBase !== null ? fmtDollar(computedDisplayBase) : ""),
+    displaySubtotal: displaySubtotal !== null ? fmtDollar(displaySubtotal) : "",
+    displayGrandTotal: displayGrandTotal !== null ? fmtDollar(displayGrandTotal) : "",
+    displayTaxLines: JSON.stringify(displayTaxLines),
+    displayAddonLines: JSON.stringify(displayAddonLines.map(l => ({
+      name: l.name, pricingType: l.pricingType, amount: fmtDollar(l.scaledAmount), included: l.included,
+      isRecurring: l.pricingType !== "One-time",
+    }))),
   });
 
   const handleSave = () => onSave(buildQuoteData());
@@ -1114,6 +1247,127 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
             data-testid="input-quote-baseAmount"
           />
         </div>
+
+        {/* Display Billing Period selector */}
+        {!isOneTimeBilling && (
+          <div className="rounded-xl border bg-muted/20 p-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <CalendarClock className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className="text-[11px] font-bold uppercase tracking-wide text-foreground">Display billing period</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              Choose how the quote amount is presented to the client. Recurring amounts are automatically scaled; one-time add-ons are never multiplied.
+            </p>
+            <div className="flex items-center gap-2">
+              <Select
+                value={displayBillingPeriod || "none"}
+                onValueChange={v => {
+                  setDisplayBillingPeriod(v === "none" ? "" : v);
+                  setDisplayAmountOverride(""); // clear override so computed takes over
+                }}
+              >
+                <SelectTrigger className="h-7 text-xs flex-1" data-testid="select-displayBillingPeriod">
+                  <SelectValue placeholder="Same as billing mode…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Same as billing mode</SelectItem>
+                  {DISPLAY_PERIODS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Custom period inputs */}
+            {displayBillingPeriod === "Custom" && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-[10px] text-muted-foreground mb-1 block">Number of weeks</Label>
+                  <Input
+                    value={customDisplayWeeks}
+                    onChange={e => { setCustomDisplayWeeks(e.target.value); setCustomDisplayMonths(""); setDisplayAmountOverride(""); }}
+                    placeholder="e.g. 6"
+                    className="h-7 text-xs"
+                    data-testid="input-customDisplayWeeks"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground mb-1 block">— or months —</Label>
+                  <Input
+                    value={customDisplayMonths}
+                    onChange={e => { setCustomDisplayMonths(e.target.value); setCustomDisplayWeeks(""); setDisplayAmountOverride(""); }}
+                    placeholder="e.g. 3"
+                    className="h-7 text-xs"
+                    data-testid="input-customDisplayMonths"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Computed display amount preview */}
+            {displayBillingPeriod && displayBillingPeriod !== "none" && computedDisplayBase !== null && (
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground block">
+                  {displayPeriodLabel} service amount
+                  {displayAddonTotal > 0 ? " (recurring add-ons scaled)" : ""}
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={displayAmountOverride || fmtDollar(computedDisplayBase)}
+                    onChange={e => setDisplayAmountOverride(e.target.value)}
+                    placeholder={fmtDollar(computedDisplayBase)}
+                    className="h-8 text-sm font-semibold flex-1"
+                    data-testid="input-displayAmount"
+                  />
+                  {displayAmountOverride && (
+                    <button
+                      type="button"
+                      className="text-[10px] text-muted-foreground hover:text-foreground border rounded px-2 h-8 shrink-0"
+                      onClick={() => setDisplayAmountOverride("")}
+                      data-testid="button-reset-displayAmount"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+
+                {/* Display period breakdown preview */}
+                <div className="rounded-lg border bg-background p-2.5 space-y-1 mt-2 text-xs" data-testid="section-display-breakdown">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Recurring {displayPeriodLabel.toLowerCase()} service</span>
+                    <span className="font-medium text-foreground">{displayAmountOverride || fmtDollar(computedDisplayBase)}</span>
+                  </div>
+                  {displayOneTimeAddons.map((l, i) => (
+                    <div key={i} className="flex justify-between text-muted-foreground">
+                      <span>{l.name} <span className="text-[10px] opacity-60">(one-time)</span></span>
+                      <span>{fmtDollar(l.scaledAmount)}</span>
+                    </div>
+                  ))}
+                  {displayRecurringAddons.map((l, i) => (
+                    <div key={i} className="flex justify-between text-muted-foreground">
+                      <span>{l.name} <span className="text-[10px] opacity-60">({l.pricingType})</span></span>
+                      <span>{fmtDollar(l.scaledAmount)}</span>
+                    </div>
+                  ))}
+                  {displayAddonLines.length > 0 && (
+                    <div className="flex justify-between text-muted-foreground border-t pt-1 mt-0.5">
+                      <span>Subtotal</span>
+                      <span className="font-medium text-foreground">{displaySubtotal !== null ? fmtDollar(displaySubtotal) : "—"}</span>
+                    </div>
+                  )}
+                  {displayTaxLines.map((t, i) => (
+                    <div key={i} className="flex justify-between text-muted-foreground">
+                      <span>{t.name} ({t.rate}%)</span>
+                      <span>{fmtDollar(t.amount)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between font-semibold text-foreground border-t pt-1 mt-0.5">
+                    <span>Total</span>
+                    <span data-testid="text-display-grand-total">{displayGrandTotal !== null ? fmtDollar(displayGrandTotal) : "—"}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Tax toggle */}
         <div className="flex items-center justify-between pt-1 pb-1">

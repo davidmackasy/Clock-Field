@@ -292,7 +292,7 @@ function QuoteDetailsGrid({ quoteData }: { quoteData: Record<string, any> }) {
   const hasProperty = propType || quoteData.squareFootage || quoteData.numFloors || quoteData.numOffices ||
     quoteData.numWashrooms || quoteData.bedrooms || quoteData.numOfficeAreas;
   const hasScope = freqLabel || quoteData.scopeSummary || includedAreas.length > 0 || addOns.length > 0;
-  const hasPricing = quoteData.baseAmount || quoteData.monthlyAmount || quoteData.weeklyAmount || quoteData.biweeklyAmount || quoteData.oneTimeAmount;
+  const hasPricing = quoteData.baseAmount || quoteData.monthlyAmount || quoteData.weeklyAmount || quoteData.biweeklyAmount || quoteData.oneTimeAmount || quoteData.displayAmount;
 
   if (!hasProperty && !hasScope && !hasPricing) return null;
 
@@ -358,6 +358,96 @@ function QuoteDetailsGrid({ quoteData }: { quoteData: Record<string, any> }) {
 
       {/* Pricing */}
       {hasPricing && (() => {
+        const fmtAmt = (a: string) => a && !a.startsWith("$") ? `$${a}` : a;
+        const hasDisplayPeriod = !!quoteData.displayBillingPeriod && quoteData.displayBillingPeriod !== "none";
+
+        if (hasDisplayPeriod) {
+          // ── Display-period view: use pre-computed display fields ──
+          const periodLabel = quoteData.displayPeriodLabel || quoteData.displayBillingPeriod || "Service";
+          const displayAmt  = quoteData.displayAmount || "";
+          const displaySub  = quoteData.displaySubtotal || displayAmt;
+          const displayTotal = quoteData.displayGrandTotal || displaySub;
+          const displayTaxLines: Array<{name: string; rate: number; amount: number}> = (() => {
+            try { const l = JSON.parse(quoteData.displayTaxLines || "[]"); return Array.isArray(l) ? l : []; } catch { return []; }
+          })();
+          const displayAddonLines: Array<{name: string; pricingType: string; amount: string; included: boolean; isRecurring: boolean}> = (() => {
+            try { const l = JSON.parse(quoteData.displayAddonLines || "[]"); return Array.isArray(l) ? l : []; } catch { return []; }
+          })();
+          const oneTimeAddons = displayAddonLines.filter(l => !l.isRecurring);
+          const recurringAddons = displayAddonLines.filter(l => l.isRecurring);
+          const hasAddons = displayAddonLines.length > 0;
+
+          return (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                <DollarSign className="w-3 h-3" /> Pricing
+              </p>
+
+              {/* Base recurring service */}
+              {displayAmt && (
+                <div>
+                  {hasAddons && <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Recurring service</p>}
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-sm text-gray-600">{periodLabel}</span>
+                    <span className="text-xl font-bold text-gray-900">{fmtAmt(displayAmt)}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* One-time add-ons (not scaled) */}
+              {oneTimeAddons.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">One-time add-ons</p>
+                  {oneTimeAddons.map((l, i) => (
+                    <div key={i} className="flex justify-between text-sm">
+                      <span className="text-gray-600">{l.name}</span>
+                      <span className="font-medium text-gray-900">{fmtAmt(l.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Recurring add-ons (scaled to period) */}
+              {recurringAddons.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Recurring add-ons</p>
+                  {recurringAddons.map((l, i) => (
+                    <div key={i} className="flex justify-between text-sm">
+                      <span className="text-gray-600">{l.name}</span>
+                      <span className="font-medium text-gray-900">{fmtAmt(l.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Subtotal / tax / total */}
+              <div className="space-y-1 pt-2 border-t border-gray-200">
+                {hasAddons && displaySub && (
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>Subtotal</span>
+                    <span>{fmtAmt(displaySub)}</span>
+                  </div>
+                )}
+                {displayTaxLines.map((t, i) => (
+                  <div key={i} className="flex justify-between text-xs text-gray-500">
+                    <span>{t.name} ({t.rate}%)</span>
+                    <span>{t.amount.toLocaleString("en-CA", { style: "currency", currency: "CAD" }).replace("CA", "")}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-200 pt-1.5">
+                  <span>Total</span>
+                  <span>{fmtAmt(displayTotal)}</span>
+                </div>
+              </div>
+
+              {quoteData.pricingNotes && (
+                <p className="text-xs text-gray-500 leading-relaxed border-t border-gray-100 pt-3">{quoteData.pricingNotes}</p>
+              )}
+            </div>
+          );
+        }
+
+        // ── Fallback: show billing-mode-based pricing (no display period set) ──
         const taxLines: Array<{name: string; rate: number; amount: number}> = (() => {
           try { const l = JSON.parse(quoteData.taxLines || "[]"); return Array.isArray(l) ? l : []; } catch { return []; }
         })();
@@ -365,8 +455,8 @@ function QuoteDetailsGrid({ quoteData }: { quoteData: Record<string, any> }) {
           try { const l = JSON.parse(quoteData.addonPricingLines || "[]"); return Array.isArray(l) ? l : []; } catch { return []; }
         })();
         const includedAddons = addonLines.filter(l => l.included && l.amount);
-        const oneTimeAddons = includedAddons.filter(l => !l.pricingType || l.pricingType === "One-time");
-        const recurringAddons = includedAddons.filter(l => l.pricingType && l.pricingType !== "One-time");
+        const oneTimeAddonsFallback = includedAddons.filter(l => !l.pricingType || l.pricingType === "One-time");
+        const recurringAddonsFallback = includedAddons.filter(l => l.pricingType && l.pricingType !== "One-time");
 
         const bm = (quoteData.billingMode || quoteData.serviceType || "").toLowerCase();
         const primaryLabel =
@@ -379,32 +469,25 @@ function QuoteDetailsGrid({ quoteData }: { quoteData: Record<string, any> }) {
         const primaryAmt = quoteData.baseAmount || quoteData.monthlyAmount || quoteData.weeklyAmount || quoteData.biweeklyAmount || quoteData.oneTimeAmount;
         const grandTotalStr = quoteData.grandTotal;
         const hasAddons = includedAddons.length > 0;
-        const fmtAmt = (a: string) => a.startsWith("$") ? a : `$${a}`;
 
         return (
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
               <DollarSign className="w-3 h-3" /> Pricing
             </p>
-
-            {/* Base service */}
             {primaryAmt && (
               <div>
-                {hasAddons && (
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Base service</p>
-                )}
+                {hasAddons && <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Base service</p>}
                 <div className="flex justify-between items-baseline">
                   <span className="text-sm text-gray-600">{primaryLabel}</span>
                   <span className="text-xl font-bold text-gray-900">{primaryAmt}</span>
                 </div>
               </div>
             )}
-
-            {/* One-time add-ons */}
-            {oneTimeAddons.length > 0 && (
+            {oneTimeAddonsFallback.length > 0 && (
               <div className="space-y-1.5">
                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">One-time add-ons</p>
-                {oneTimeAddons.map((l, i) => (
+                {oneTimeAddonsFallback.map((l, i) => (
                   <div key={i} className="flex justify-between text-sm">
                     <span className="text-gray-600">{l.name}</span>
                     <span className="font-medium text-gray-900">{fmtAmt(l.amount)}</span>
@@ -412,12 +495,10 @@ function QuoteDetailsGrid({ quoteData }: { quoteData: Record<string, any> }) {
                 ))}
               </div>
             )}
-
-            {/* Recurring add-ons */}
-            {recurringAddons.length > 0 && (
+            {recurringAddonsFallback.length > 0 && (
               <div className="space-y-1.5">
                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Recurring add-ons</p>
-                {recurringAddons.map((l, i) => (
+                {recurringAddonsFallback.map((l, i) => (
                   <div key={i} className="flex justify-between text-sm">
                     <span className="text-gray-600">{l.name} <span className="text-[10px] text-gray-400">({l.pricingType})</span></span>
                     <span className="font-medium text-gray-900">{fmtAmt(l.amount)}</span>
@@ -425,8 +506,6 @@ function QuoteDetailsGrid({ quoteData }: { quoteData: Record<string, any> }) {
                 ))}
               </div>
             )}
-
-            {/* Subtotal + taxes + total */}
             <div className="space-y-1 pt-2 border-t border-gray-200">
               {hasAddons && primaryAmt && (
                 <div className="flex justify-between text-xs text-gray-500">
@@ -440,20 +519,11 @@ function QuoteDetailsGrid({ quoteData }: { quoteData: Record<string, any> }) {
                   <span>{t.amount.toLocaleString("en-CA", { style: "currency", currency: "CAD" }).replace("CA", "")}</span>
                 </div>
               ))}
-              {(grandTotalStr || (hasAddons && primaryAmt)) && (
-                <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-200 pt-1.5">
-                  <span>Total</span>
-                  <span>{grandTotalStr || quoteData.combinedSubtotal || primaryAmt}</span>
-                </div>
-              )}
-              {!hasAddons && !taxLines.length && primaryAmt && (
-                <div className="flex justify-between text-sm font-bold text-gray-900 pt-1">
-                  <span>Total</span>
-                  <span>{grandTotalStr || primaryAmt}</span>
-                </div>
-              )}
+              <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-200 pt-1.5">
+                <span>Total</span>
+                <span>{grandTotalStr || quoteData.combinedSubtotal || primaryAmt}</span>
+              </div>
             </div>
-
             {quoteData.pricingNotes && (
               <p className="text-xs text-gray-500 leading-relaxed border-t border-gray-100 pt-3">{quoteData.pricingNotes}</p>
             )}
