@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
@@ -14,11 +15,14 @@ import {
   Check, ChevronDown, ChevronUp, Plus, X, Loader2,
   DollarSign, Building, LayoutList, FileCheck, Sparkles,
   Wand2, Lock, Home, Briefcase, Factory, CheckCircle2, XCircle,
+  Receipt, Percent, Trash2,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type PropertyType = "residential" | "commercial" | "industrial" | "";
+
+interface TaxLine { name: string; rate: string; }
 
 // ── Helpers: parse / stringify tag arrays from quoteData ───────────────────────
 function parseTags(v: string | string[] | undefined): string[] {
@@ -27,6 +31,22 @@ function parseTags(v: string | string[] | undefined): string[] {
   try { const p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch { return []; }
 }
 function stringifyTags(tags: string[]): string { return JSON.stringify(tags); }
+
+function parseTaxes(v: any): TaxLine[] {
+  if (!v) return [];
+  if (Array.isArray(v)) return v;
+  try { const p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch { return []; }
+}
+
+// Parse a price string like "$1,200" or "$1200/month" → number or null
+function parseAmount(s: string): number | null {
+  const m = s.replace(/[$,\/\s]/g, "").match(/[\d.]+/);
+  return m ? parseFloat(m[0]) : null;
+}
+
+function fmtDollar(n: number): string {
+  return "$" + n.toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 // ── TagInput ──────────────────────────────────────────────────────────────────
 function TagInput({ tags, onChange, placeholder, testId }: {
@@ -183,6 +203,13 @@ const COMMON_ADDONS = [
   "Post-Construction Cleanup","Odor Treatment",
 ];
 
+const PRESET_TAXES: Record<string, string> = {
+  "GST": "5",
+  "PST": "7",
+  "HST": "13",
+  "QST": "9.975",
+};
+
 // ── Main QuoteBuilder ─────────────────────────────────────────────────────────
 export function QuoteBuilder({ sessionId, quoteData, onSave }: {
   sessionId: string;
@@ -262,22 +289,57 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
   const [difficultyMult, setDifficultyMult] = useState(quoteData.difficultyMult || "1.0");
   const [minimumCharge, setMinimumCharge]   = useState(quoteData.minimumCharge || "");
 
-  // Client-facing pricing outputs
-  const [oneTimeAmount, setOneTimeAmount]     = useState(quoteData.oneTimeAmount || "");
-  const [weeklyAmount, setWeeklyAmount]       = useState(quoteData.weeklyAmount || "");
-  const [biweeklyAmount, setBiweeklyAmount]   = useState(quoteData.biweeklyAmount || "");
-  const [monthlyAmount, setMonthlyAmount]     = useState(quoteData.monthlyAmount || "");
-  const [pricingNotes, setPricingNotes]       = useState(quoteData.pricingNotes || "");
+  // Client-facing pricing outputs (subtotal / base amount)
+  const [baseAmount, setBaseAmount]         = useState(quoteData.baseAmount || "");
+  const [pricingNotes, setPricingNotes]     = useState(quoteData.pricingNotes || "");
+
+  // Legacy fields kept for backward compat with public page
+  const [oneTimeAmount, setOneTimeAmount]   = useState(quoteData.oneTimeAmount || "");
+  const [weeklyAmount, setWeeklyAmount]     = useState(quoteData.weeklyAmount || "");
+  const [biweeklyAmount, setBiweeklyAmount] = useState(quoteData.biweeklyAmount || "");
+  const [monthlyAmount, setMonthlyAmount]   = useState(quoteData.monthlyAmount || "");
+
+  // Tax state
+  const [taxEnabled, setTaxEnabled] = useState<boolean>(quoteData.taxEnabled === true || quoteData.taxEnabled === "true");
+  const [taxes, setTaxes] = useState<TaxLine[]>(parseTaxes(quoteData.taxes));
 
   // AI suggestion results
   const [suggestion, setSuggestion] = useState<Record<string, any> | null>(
     quoteData.pricingExplanation ? quoteData : null
   );
+  const [suggestError, setSuggestError] = useState<string>("");
 
   // Section open state
   const [openSection, setOpenSection] = useState<string[]>(["details", "scope", "pricing_output"]);
   const toggle = (s: string) => setOpenSection(v => v.includes(s) ? v.filter(x => x !== s) : [...v, s]);
   const isOpen = (s: string) => openSection.includes(s);
+
+  const quoteStatus = quoteData.quoteStatus;
+  const isRes = propertyType === "residential";
+  const isCom = propertyType === "commercial";
+  const isInd = propertyType === "industrial";
+  const comSub = commercialSubtype.toLowerCase();
+
+  // -- Tax helpers --------------------------------------------------------------
+  const addTax = (name = "", rate = "") => setTaxes(t => [...t, { name, rate }]);
+  const removeTax = (i: number) => setTaxes(t => t.filter((_, j) => j !== i));
+  const updateTax = (i: number, field: "name" | "rate", val: string) =>
+    setTaxes(t => t.map((x, j) => j === i ? { ...x, [field]: val } : x));
+
+  // -- Live price calculation ---------------------------------------------------
+  const getPrimaryAmount = (): number | null => {
+    const raw = baseAmount || oneTimeAmount || weeklyAmount || biweeklyAmount || monthlyAmount;
+    return raw ? parseAmount(raw) : null;
+  };
+  const subtotal = getPrimaryAmount();
+  const taxLines: Array<{ name: string; rate: number; amount: number }> =
+    taxEnabled && subtotal !== null
+      ? taxes
+          .filter(t => t.name && t.rate)
+          .map(t => ({ name: t.name, rate: parseFloat(t.rate) || 0, amount: (subtotal * (parseFloat(t.rate) || 0)) / 100 }))
+      : [];
+  const taxTotal = taxLines.reduce((s, t) => s + t.amount, 0);
+  const grandTotal = subtotal !== null ? subtotal + taxTotal : null;
 
   // -- Compile current quoteData object ----------------------------------------
   const buildQuoteData = () => ({
@@ -301,7 +363,15 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
     // Internal
     laborHours, hourlyPay, targetMargin, travelAdjust, suppliesAdjust, difficultyMult, minimumCharge,
     // Pricing outputs
-    oneTimeAmount, weeklyAmount, biweeklyAmount, monthlyAmount, pricingNotes,
+    baseAmount,
+    oneTimeAmount, weeklyAmount, biweeklyAmount, monthlyAmount,
+    pricingNotes,
+    // Tax
+    taxEnabled,
+    taxes: JSON.stringify(taxes),
+    // Computed totals (for public page display)
+    taxLines: JSON.stringify(taxLines),
+    grandTotal: grandTotal !== null ? fmtDollar(grandTotal) : "",
   });
 
   const handleSave = () => onSave(buildQuoteData());
@@ -322,37 +392,53 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
 
   // -- AI Price Suggestion -----------------------------------------------------
   const priceMutation = useMutation({
-    mutationFn: () => apiRequest("POST", `/api/field-notes/sessions/${sessionId}/suggest-price`, {
-      propertyType, commercialSubtype, industrialSubtype, squareFootage,
-      numOffices, numWashrooms, numKitchens, numHallways, numEntrances, numFloors,
-      numDiningAreas, numBoardrooms, numReception, hasKitchen, greaseLevel,
-      bedrooms, bathrooms, stories, conditionLevel, homeType,
-      numOfficeAreas, hasLunchroom, hasLockerRoom, heavySoilLevel,
-      serviceType, daysPerWeek, visitsPerMonth, visitDuration, crewSizeEst,
-      firstCleanType, addOnTags: addOnTags.join(", "),
-      specialSurfaces: specialSurfaceTags.join(", "),
-      otherAreas: otherAreaTags.join(", "),
-      laborHours, hourlyPay, targetMargin, travelAdjust, suppliesAdjust,
-      difficultyMult, minimumCharge,
-    }).then(r => r.json()),
+    mutationFn: () => {
+      setSuggestError("");
+      return apiRequest("POST", `/api/field-notes/sessions/${sessionId}/suggest-price`, {
+        propertyType, commercialSubtype, industrialSubtype, squareFootage,
+        numOffices, numWashrooms, numKitchens, numHallways, numEntrances, numFloors,
+        numDiningAreas, numBoardrooms, numReception, hasKitchen, greaseLevel: greasLevel,
+        bedrooms, bathrooms, stories, conditionLevel, homeType,
+        numOfficeAreas, hasLunchroom, hasLockerRoom, heavySoilLevel,
+        serviceType, daysPerWeek, visitsPerMonth, visitDuration, crewSizeEst,
+        firstCleanType, addOnTags: addOnTags.join(", "),
+        specialSurfaces: specialSurfaceTags.join(", "),
+        otherAreas: otherAreaTags.join(", "),
+        laborHours, hourlyPay, targetMargin, travelAdjust, suppliesAdjust,
+        difficultyMult, minimumCharge,
+      }).then(r => r.json());
+    },
     onSuccess: (data) => {
       setSuggestion(data);
-      if (data.suggestedOneTime) setOneTimeAmount(data.suggestedOneTime);
-      if (data.suggestedWeekly) setWeeklyAmount(data.suggestedWeekly);
-      if (data.suggestedBiweekly) setBiweeklyAmount(data.suggestedBiweekly);
-      if (data.suggestedMonthly) setMonthlyAmount(data.suggestedMonthly);
+      setSuggestError("");
+      // Autofill based on service type
+      const st = (serviceType || "").toLowerCase();
+      if (st.includes("one") || st.includes("time") || !serviceType) {
+        if (data.suggestedOneTime) { setOneTimeAmount(data.suggestedOneTime); setBaseAmount(data.suggestedOneTime); }
+      } else if (st.includes("week") && !st.includes("bi")) {
+        if (data.suggestedWeekly) { setWeeklyAmount(data.suggestedWeekly); setBaseAmount(data.suggestedWeekly); }
+      } else if (st.includes("bi")) {
+        if (data.suggestedBiweekly) { setBiweeklyAmount(data.suggestedBiweekly); setBaseAmount(data.suggestedBiweekly); }
+      } else if (st.includes("month")) {
+        if (data.suggestedMonthly) { setMonthlyAmount(data.suggestedMonthly); setBaseAmount(data.suggestedMonthly); }
+      } else {
+        // Fallback: fill all that have values
+        if (data.suggestedOneTime) setOneTimeAmount(data.suggestedOneTime);
+        if (data.suggestedWeekly) setWeeklyAmount(data.suggestedWeekly);
+        if (data.suggestedBiweekly) setBiweeklyAmount(data.suggestedBiweekly);
+        if (data.suggestedMonthly) { setMonthlyAmount(data.suggestedMonthly); setBaseAmount(data.suggestedMonthly); }
+      }
+      if (data.pricingNotes && !pricingNotes) setPricingNotes(data.pricingNotes);
       if (data.scopeSummary && !scopeSummary) setScopeSummary(data.scopeSummary);
       if (!isOpen("pricing_output")) setOpenSection(v => [...v, "pricing_output"]);
-      toast({ title: "Price suggestion ready" });
+      toast({ title: "Price suggestion applied", description: "Review and edit below, then save." });
     },
-    onError: () => toast({ title: "Failed to generate suggestion", variant: "destructive" }),
+    onError: (err: any) => {
+      const msg = err?.message || "Failed to generate suggestion";
+      setSuggestError(msg);
+      toast({ title: "Could not generate suggestion", description: msg.replace(/^\d+:\s*/, "").slice(0, 120), variant: "destructive" });
+    },
   });
-
-  const quoteStatus = quoteData.quoteStatus;
-  const isRes = propertyType === "residential";
-  const isCom = propertyType === "commercial";
-  const isInd = propertyType === "industrial";
-  const comSub = commercialSubtype.toLowerCase();
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -415,7 +501,11 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
                   ? "border-primary bg-primary/5 text-primary"
                   : "border-input bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground"
               )}
-              onClick={() => { setPropertyType(type); if (!isOpen("type")) toggle("type"); if (!isOpen("details")) setOpenSection(v => [...v, "details"]); }}
+              onClick={() => {
+                setPropertyType(type);
+                if (!isOpen("type")) toggle("type");
+                if (!isOpen("details")) setOpenSection(v => [...v, "details"]);
+              }}
             >
               {icon}
               {label}
@@ -462,42 +552,50 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
               <DropField label="Stories" value={stories} onChange={setStories} options={FLOORS} testId="select-stories" />
               <DropField label="Basement" value={basement} onChange={setBasement} options={BASEMENTS} testId="select-basement" />
               <DropField label="Kitchens" value={kitchenCount} onChange={setKitchenCount} options={COUNT_1_5} testId="select-kitchenCount" />
-              <DropField label="Living areas" value={livingAreas} onChange={setLivingAreas} options={COUNT_0_6} testId="select-livingAreas" wide />
+              <DropField label="Living areas" value={livingAreas} onChange={setLivingAreas} options={COUNT_1_5} testId="select-livingAreas" />
             </div>
           )}
 
-          {/* ── Commercial ── */}
+          {/* ── Commercial general ── */}
           {isCom && (
             <div className="grid grid-cols-2 gap-3">
               <DropField label="Floors" value={numFloors} onChange={setNumFloors} options={FLOORS} testId="select-numFloors" />
-              <DropField label="Washrooms" value={numWashrooms} onChange={setNumWashrooms} options={COUNT_0_6} testId="select-numWashrooms" />
-              <DropField label="Entrances" value={numEntrances} onChange={setNumEntrances} options={COUNT_0_6} testId="select-numEntrances" />
-              <DropField label="Hallways" value={numHallways} onChange={setNumHallways} options={COUNT_0_6} testId="select-numHallways" />
+              <DropField label="Washrooms" value={numWashrooms} onChange={setNumWashrooms} options={COUNT_0_10} testId="select-numWashrooms" />
+              <DropField label="Entrances" value={numEntrances} onChange={setNumEntrances} options={COUNT_0_10} testId="select-numEntrances" />
+              <DropField label="Hallways" value={numHallways} onChange={setNumHallways} options={COUNT_0_10} testId="select-numHallways" />
 
-              {/* Office */}
-              {(comSub === "" || comSub === "office" || comSub === "mixed-use" || comSub === "clinic" || comSub === "school" || comSub === "warehouse office") && (
+              {/* Office subtype */}
+              {(!commercialSubtype || comSub === "office" || comSub === "mixed-use") && (
                 <>
                   <DropField label="Offices" value={numOffices} onChange={setNumOffices} options={COUNT_0_10} testId="select-numOffices" />
-                  <DropField label="Boardrooms" value={numBoardrooms} onChange={setNumBoardrooms} options={COUNT_0_10} testId="select-numBoardrooms" />
+                  <DropField label="Boardrooms" value={numBoardrooms} onChange={setNumBoardrooms} options={COUNT_0_6} testId="select-numBoardrooms" />
                   <DropField label="Reception areas" value={numReception} onChange={setNumReception} options={COUNT_0_6} testId="select-numReception" />
                   <DropField label="Break rooms / kitchens" value={numKitchens} onChange={setNumKitchens} options={COUNT_0_6} testId="select-numKitchens" />
                 </>
               )}
 
-              {/* Restaurant */}
-              {(comSub === "restaurant") && (
+              {/* Restaurant subtype */}
+              {comSub === "restaurant" && (
                 <>
-                  <DropField label="Dining areas" value={numDiningAreas} onChange={setNumDiningAreas} options={COUNT_0_6} testId="select-numDiningAreas" />
                   <DropField label="Kitchen present" value={hasKitchen} onChange={setHasKitchen} options={["Yes","No"]} testId="select-hasKitchen" />
-                  <DropField label="Grease / kitchen condition" value={greasLevel} onChange={setGreaseLevel} options={["Light","Moderate","Heavy","Severe"]} testId="select-greaseLevel" />
+                  <DropField label="Dining areas" value={numDiningAreas} onChange={setNumDiningAreas} options={COUNT_0_10} testId="select-numDiningAreas" />
+                  <DropField label="Kitchen / grease condition" value={greasLevel} onChange={setGreaseLevel} options={["Light","Moderate","Heavy","Very Heavy"]} testId="select-greaseLevel" />
                 </>
               )}
 
-              {/* Retail */}
+              {/* Retail subtype */}
               {comSub === "retail" && (
                 <>
-                  <DropField label="Sales floor" value={hasSalesFloor} onChange={setHasSalesFloor} options={["Yes","No"]} testId="select-hasSalesFloor" />
-                  <DropField label="Stock room" value={hasStockRoom} onChange={setHasStockRoom} options={["Yes","No"]} testId="select-hasStockRoom" />
+                  <DropField label="Has sales floor" value={hasSalesFloor} onChange={setHasSalesFloor} options={["Yes","No"]} testId="select-hasSalesFloor" />
+                  <DropField label="Has stock room" value={hasStockRoom} onChange={setHasStockRoom} options={["Yes","No"]} testId="select-hasStockRoom" />
+                </>
+              )}
+
+              {/* Clinic / School / Other */}
+              {(comSub === "clinic" || comSub === "school" || comSub === "warehouse office" || comSub === "other" || comSub === "") && (
+                <>
+                  <DropField label="Offices" value={numOffices} onChange={setNumOffices} options={COUNT_0_10} testId="select-numOffices-alt" />
+                  <DropField label="Break rooms / kitchens" value={numKitchens} onChange={setNumKitchens} options={COUNT_0_6} testId="select-numKitchens-alt" />
                 </>
               )}
             </div>
@@ -506,26 +604,25 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
           {/* ── Industrial ── */}
           {isInd && (
             <div className="grid grid-cols-2 gap-3">
-              <DropField label="Washrooms" value={numWashrooms} onChange={setNumWashrooms} options={COUNT_0_6} testId="select-ind-numWashrooms" />
-              <DropField label="Office areas" value={numOfficeAreas} onChange={setNumOfficeAreas} options={COUNT_0_10} testId="select-numOfficeAreas" />
-              <DropField label="Floors" value={numFloors} onChange={setNumFloors} options={FLOORS} testId="select-ind-numFloors" />
-              <DropField label="Entrances" value={numEntrances} onChange={setNumEntrances} options={COUNT_0_6} testId="select-ind-numEntrances" />
-              <DropField label="Lunchroom" value={hasLunchroom} onChange={setHasLunchroom} options={["Yes","No"]} testId="select-hasLunchroom" />
+              <DropField label="Floors" value={numFloors} onChange={setNumFloors} options={FLOORS} testId="select-numFloors-ind" />
+              <DropField label="Washrooms" value={numWashrooms} onChange={setNumWashrooms} options={COUNT_0_10} testId="select-numWashrooms-ind" />
+              <DropField label="Office areas" value={numOfficeAreas} onChange={setNumOfficeAreas} options={COUNT_0_6} testId="select-numOfficeAreas" />
+              <DropField label="Heavy soil level" value={heavySoilLevel} onChange={setHeavySoilLevel} options={["None","Light","Moderate","Heavy","Very Heavy"]} testId="select-heavySoilLevel" />
+              <DropField label="Lunchroom / break room" value={hasLunchroom} onChange={setHasLunchroom} options={["Yes","No"]} testId="select-hasLunchroom" />
               <DropField label="Locker room" value={hasLockerRoom} onChange={setHasLockerRoom} options={["Yes","No"]} testId="select-hasLockerRoom" />
               <DropField label="Loading dock" value={hasLoadingDock} onChange={setHasLoadingDock} options={["Yes","No"]} testId="select-hasLoadingDock" />
-              <DropField label="Heavy soil level" value={heavySoilLevel} onChange={setHeavySoilLevel} options={["Light","Moderate","Heavy","Very Heavy"]} testId="select-heavySoilLevel" wide />
             </div>
           )}
 
-          {/* Shared tag fields */}
+          {/* Special surfaces & other areas — all types */}
           <div className="space-y-3 pt-1">
             <div>
               <Label className="text-[11px] text-muted-foreground mb-1.5 block">Special surfaces</Label>
-              <TagInput tags={specialSurfaceTags} onChange={setSpecialSurfaceTags} placeholder="e.g. Carpet, VCT tile…" testId="input-special-surfaces" />
+              <TagInput tags={specialSurfaceTags} onChange={setSpecialSurfaceTags} placeholder="e.g. VCT tile, carpet, glass…" testId="input-special-surfaces" />
             </div>
             <div>
               <Label className="text-[11px] text-muted-foreground mb-1.5 block">Other areas</Label>
-              <TagInput tags={otherAreaTags} onChange={setOtherAreaTags} placeholder="e.g. Lobby, Garage…" testId="input-other-areas" />
+              <TagInput tags={otherAreaTags} onChange={setOtherAreaTags} placeholder="e.g. lobby, server room…" testId="input-other-areas" />
             </div>
           </div>
         </Section>
@@ -534,18 +631,19 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
       {/* ── S3: Service Scope ── */}
       <Section title="Service Scope" icon={<FileCheck className="w-3.5 h-3.5" />} open={isOpen("scope")} onToggle={() => toggle("scope")}>
         <div className="grid grid-cols-2 gap-3">
-          <DropField label="Service type" value={serviceType} onChange={setServiceType} options={SERVICE_TYPES} testId="select-serviceType" />
-          <DropField label="First clean type" value={firstCleanType} onChange={setFirstCleanType} options={FIRST_CLEAN_TYPES} testId="select-firstCleanType" />
-
-          {(serviceType === "Weekly") && (
+          <DropField label="Service type" value={serviceType} onChange={setServiceType} options={SERVICE_TYPES} testId="select-serviceType" wide />
+          {serviceType === "Weekly" && (
             <DropField label="Days per week" value={daysPerWeek} onChange={setDaysPerWeek} options={DAYS_PER_WEEK} testId="select-daysPerWeek" />
           )}
           {(serviceType === "Monthly" || serviceType === "Custom") && (
             <DropField label="Visits per month" value={visitsPerMonth} onChange={setVisitsPerMonth} options={VISITS_MONTHLY} testId="select-visitsPerMonth" />
           )}
-
+          {serviceType === "Bi-Weekly" && (
+            <DropField label="Visits per month" value={visitsPerMonth} onChange={setVisitsPerMonth} options={VISITS_MONTHLY} testId="select-visitsPerMonth-bw" />
+          )}
           <DropField label="Est. visit duration" value={visitDuration} onChange={setVisitDuration} options={VISIT_DURATIONS} testId="select-visitDuration" />
-          <DropField label="Suggested crew size" value={crewSizeEst} onChange={setCrewSizeEst} options={CREW} testId="select-crewSizeEst" />
+          <DropField label="Est. crew size" value={crewSizeEst} onChange={setCrewSizeEst} options={CREW} testId="select-crewSizeEst" />
+          <DropField label="First clean type" value={firstCleanType} onChange={setFirstCleanType} options={FIRST_CLEAN_TYPES} testId="select-firstCleanType" wide />
         </div>
 
         {/* Included areas */}
@@ -631,10 +729,12 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
             </Select>
           </div>
         </div>
+      </Section>
 
-        {/* Suggest Price button */}
+      {/* ── Suggest Price button (always visible once propertyType is set) ── */}
+      <div className="space-y-2">
         <Button
-          className="w-full gap-2 mt-2"
+          className="w-full gap-2"
           onClick={() => priceMutation.mutate()}
           disabled={priceMutation.isPending || !propertyType}
           data-testid="button-suggest-price"
@@ -647,7 +747,12 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
         {!propertyType && (
           <p className="text-[11px] text-muted-foreground text-center">Select a property type above to enable price suggestion.</p>
         )}
-      </Section>
+        {suggestError && (
+          <p className="text-[11px] text-destructive bg-destructive/5 border border-destructive/20 rounded-lg px-3 py-2" data-testid="text-suggest-error">
+            {suggestError.replace(/^\d+:\s*/, "").slice(0, 200)}
+          </p>
+        )}
+      </div>
 
       {/* ── AI Suggestion Result ── */}
       {suggestion?.pricingExplanation && (
@@ -700,29 +805,149 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
               </div>
             )}
           </div>
-          <p className="text-[10px] text-muted-foreground italic">Prices auto-applied to quote output below. You can edit them.</p>
+          <p className="text-[10px] text-muted-foreground italic">Prices applied to Quote Output below. Edit to finalize, then save.</p>
         </div>
       )}
 
-      {/* ── S5: Client-Facing Pricing Output ── */}
-      <Section title="Client-Facing Pricing" icon={<DollarSign className="w-3.5 h-3.5" />} open={isOpen("pricing_output")} onToggle={() => toggle("pricing_output")}>
+      {/* ── S5: Quote Output (Client-Facing) ── */}
+      <Section title="Quote Output" icon={<Receipt className="w-3.5 h-3.5" />} open={isOpen("pricing_output")} onToggle={() => toggle("pricing_output")}>
         <p className="text-[11px] text-muted-foreground">These amounts appear on the public quote. Edit to finalize before sharing.</p>
-        <div className="grid grid-cols-2 gap-3">
-          <TextField label="Monthly amount" value={monthlyAmount} onChange={setMonthlyAmount} placeholder="e.g. $1,200/month" testId="input-quote-monthlyAmount" />
-          <TextField label="Weekly amount" value={weeklyAmount} onChange={setWeeklyAmount} placeholder="e.g. $300/week" testId="input-quote-weeklyAmount" />
-          <TextField label="Bi-weekly amount" value={biweeklyAmount} onChange={setBiweeklyAmount} placeholder="e.g. $600/bi-weekly" testId="input-quote-biweeklyAmount" />
-          <TextField label="One-time / deep clean" value={oneTimeAmount} onChange={setOneTimeAmount} placeholder="e.g. $800" testId="input-quote-oneTimeAmount" />
-          <div className="col-span-2">
-            <Label className="text-[11px] text-muted-foreground mb-1 block">Pricing notes</Label>
-            <Textarea
-              value={pricingNotes}
-              onChange={e => setPricingNotes(e.target.value)}
-              rows={2}
-              placeholder="e.g. Based on 3 visits per week, includes all supplies."
-              className="text-xs resize-none"
-              data-testid="textarea-quote-pricingNotes"
-            />
+
+        {/* Base amount */}
+        <div className="space-y-1">
+          <Label className="text-[11px] text-muted-foreground block">
+            {serviceType === "One-Time" ? "One-time amount" :
+             serviceType === "Weekly" ? "Weekly amount" :
+             serviceType === "Bi-Weekly" ? "Bi-weekly amount" :
+             serviceType === "Monthly" ? "Monthly amount" :
+             "Quote amount (subtotal before taxes)"}
+          </Label>
+          <Input
+            value={baseAmount}
+            onChange={e => {
+              setBaseAmount(e.target.value);
+              // Sync to the appropriate legacy field too
+              const st = (serviceType || "").toLowerCase();
+              if (st.includes("one") || !serviceType) setOneTimeAmount(e.target.value);
+              else if (st.includes("week") && !st.includes("bi")) setWeeklyAmount(e.target.value);
+              else if (st.includes("bi")) setBiweeklyAmount(e.target.value);
+              else if (st.includes("month")) setMonthlyAmount(e.target.value);
+            }}
+            placeholder="e.g. $1,200"
+            className="h-8 text-sm font-medium"
+            data-testid="input-quote-baseAmount"
+          />
+        </div>
+
+        {/* Tax toggle */}
+        <div className="flex items-center justify-between pt-1 pb-1">
+          <div className="flex items-center gap-2">
+            <Percent className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-[11px] font-medium text-foreground">Apply taxes</span>
           </div>
+          <Switch
+            checked={taxEnabled}
+            onCheckedChange={setTaxEnabled}
+            data-testid="switch-tax-enabled"
+          />
+        </div>
+
+        {/* Tax rows */}
+        {taxEnabled && (
+          <div className="space-y-2">
+            {taxes.map((tax, i) => (
+              <div key={i} className="flex items-center gap-2" data-testid={`row-tax-${i}`}>
+                <Input
+                  value={tax.name}
+                  onChange={e => updateTax(i, "name", e.target.value)}
+                  placeholder="Tax name (e.g. GST)"
+                  className="h-7 text-xs flex-1"
+                  data-testid={`input-tax-name-${i}`}
+                />
+                <div className="relative flex items-center">
+                  <Input
+                    value={tax.rate}
+                    onChange={e => updateTax(i, "rate", e.target.value)}
+                    placeholder="Rate"
+                    className="h-7 text-xs w-20 pr-6"
+                    data-testid={`input-tax-rate-${i}`}
+                  />
+                  <span className="absolute right-2 text-[10px] text-muted-foreground">%</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeTax(i)}
+                  className="text-muted-foreground hover:text-destructive transition-colors"
+                  data-testid={`button-remove-tax-${i}`}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+            {/* Preset tax quick-add */}
+            <div className="flex flex-wrap gap-1">
+              {Object.entries(PRESET_TAXES).map(([name, rate]) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => addTax(name, rate)}
+                  className="text-[10px] border rounded-full px-2 py-0.5 text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                  data-testid={`button-preset-tax-${name}`}
+                >
+                  + {name} {rate}%
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => addTax()}
+                className="text-[10px] border rounded-full px-2 py-0.5 text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                data-testid="button-add-custom-tax"
+              >
+                + Custom tax
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Live price breakdown */}
+        {subtotal !== null && (
+          <div className="rounded-xl border bg-muted/30 p-3 space-y-1.5 text-xs" data-testid="section-price-breakdown">
+            <div className="flex justify-between text-muted-foreground">
+              <span>Subtotal</span>
+              <span className="font-medium text-foreground">{fmtDollar(subtotal)}</span>
+            </div>
+            {taxLines.map((t, i) => (
+              <div key={i} className="flex justify-between text-muted-foreground" data-testid={`row-tax-line-${i}`}>
+                <span>{t.name} ({t.rate}%)</span>
+                <span>{fmtDollar(t.amount)}</span>
+              </div>
+            ))}
+            {taxEnabled && taxLines.length > 0 && (
+              <div className="flex justify-between font-semibold text-foreground border-t pt-1.5 mt-1">
+                <span>Total</span>
+                <span data-testid="text-grand-total">{fmtDollar(grandTotal!)}</span>
+              </div>
+            )}
+            {(!taxEnabled || taxLines.length === 0) && (
+              <div className="flex justify-between font-semibold text-foreground border-t pt-1.5 mt-1">
+                <span>Total</span>
+                <span data-testid="text-grand-total">{fmtDollar(subtotal)}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Pricing notes */}
+        <div>
+          <Label className="text-[11px] text-muted-foreground mb-1 block">Pricing notes</Label>
+          <Textarea
+            value={pricingNotes}
+            onChange={e => setPricingNotes(e.target.value)}
+            rows={2}
+            placeholder="e.g. Based on 3 visits per week, includes all supplies."
+            className="text-xs resize-none"
+            data-testid="textarea-quote-pricingNotes"
+          />
         </div>
       </Section>
 

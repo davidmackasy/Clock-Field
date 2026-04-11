@@ -4861,6 +4861,7 @@ Return ONLY valid JSON matching this structure:
   "suggestedLaborHours": "X hrs",
   "suggestedCrew": "X cleaners",
   "pricingExplanation": "2-3 sentence explanation of pricing logic",
+  "pricingNotes": "1-2 sentence client-facing pricing note (e.g. what's included, frequency basis)",
   "pricingConfidence": "High|Medium|Low",
   "scopeSummary": "1-2 sentence client-facing scope summary"
 }
@@ -4869,22 +4870,28 @@ Only include keys that are relevant. If service is one-time only, omit weekly/bi
 
       const completion = await openaiClient.chat.completions.create({
         model: "gpt-4o-mini",
-        response_format: { type: "json_object" },
         messages: [{ role: "user", content: prompt }],
-        max_tokens: 600,
+        max_tokens: 700,
         temperature: 0.3,
       });
 
-      const result = JSON.parse(completion.choices[0]?.message?.content || "{}");
+      const rawContent = completion.choices[0]?.message?.content || "";
+      // Extract JSON object from response (handles markdown code fences or raw JSON)
+      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error(`AI returned non-JSON response: ${rawContent.slice(0, 200)}`);
+      const result = JSON.parse(jsonMatch[0]);
 
       // Persist suggestion to quoteData
-      let quoteData: any = {};
-      try { quoteData = JSON.parse((session as any).quoteData || "{}"); } catch {}
-      Object.assign(quoteData, result);
-      await storage.updateFieldNotesSession(session.id, { quoteData: JSON.stringify(quoteData) } as any);
+      let existingQuoteData: any = {};
+      try { existingQuoteData = JSON.parse((session as any).quoteData || "{}"); } catch {}
+      Object.assign(existingQuoteData, result);
+      await storage.updateFieldNotesSession(session.id, { quoteData: JSON.stringify(existingQuoteData) } as any);
 
       res.json(result);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) {
+      console.error("[suggest-price] Error:", err?.message, err?.stack?.slice(0, 500));
+      res.status(500).json({ message: err.message || "Failed to generate suggestion" });
+    }
   });
 
   // POST /api/field-notes/sessions/:id/generate-scope — AI scope summary

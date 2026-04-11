@@ -292,7 +292,7 @@ function QuoteDetailsGrid({ quoteData }: { quoteData: Record<string, any> }) {
   const hasProperty = propType || quoteData.squareFootage || quoteData.numFloors || quoteData.numOffices ||
     quoteData.numWashrooms || quoteData.bedrooms || quoteData.numOfficeAreas;
   const hasScope = freqLabel || quoteData.scopeSummary || includedAreas.length > 0 || addOns.length > 0;
-  const hasPricing = quoteData.monthlyAmount || quoteData.weeklyAmount || quoteData.biweeklyAmount || quoteData.oneTimeAmount;
+  const hasPricing = quoteData.baseAmount || quoteData.monthlyAmount || quoteData.weeklyAmount || quoteData.biweeklyAmount || quoteData.oneTimeAmount;
 
   if (!hasProperty && !hasScope && !hasPricing) return null;
 
@@ -357,42 +357,66 @@ function QuoteDetailsGrid({ quoteData }: { quoteData: Record<string, any> }) {
       )}
 
       {/* Pricing */}
-      {hasPricing && (
-        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-            <DollarSign className="w-3 h-3" /> Pricing
-          </p>
-          <div className="space-y-2">
-            {quoteData.monthlyAmount && (
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Monthly</span>
-                <span className="text-lg font-bold text-gray-900">{quoteData.monthlyAmount}</span>
-              </div>
-            )}
-            {quoteData.weeklyAmount && (
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Weekly</span>
-                <span className="text-sm font-semibold text-gray-700">{quoteData.weeklyAmount}</span>
-              </div>
-            )}
-            {quoteData.biweeklyAmount && (
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Bi-weekly</span>
-                <span className="text-sm font-semibold text-gray-700">{quoteData.biweeklyAmount}</span>
-              </div>
-            )}
-            {quoteData.oneTimeAmount && (
-              <div className="flex justify-between items-center border-t border-gray-200 pt-2 mt-2">
-                <span className="text-sm text-gray-600">One-time / deep clean</span>
-                <span className="text-sm font-semibold text-gray-700">{quoteData.oneTimeAmount}</span>
-              </div>
+      {hasPricing && (() => {
+        // Parse tax lines from admin-saved data
+        const taxLines: Array<{name: string; rate: number; amount: number}> = (() => {
+          try {
+            const lines = JSON.parse(quoteData.taxLines || "[]");
+            return Array.isArray(lines) ? lines : [];
+          } catch { return []; }
+        })();
+        // Determine primary amount label based on service type
+        const st = (quoteData.serviceType || "").toLowerCase();
+        const primaryLabel =
+          st.includes("one") || st.includes("time") ? "One-time" :
+          st.includes("week") && !st.includes("bi") ? "Per week" :
+          st.includes("bi") ? "Bi-weekly" :
+          st.includes("month") ? "Per month" :
+          quoteData.serviceType || "Service";
+        const primaryAmt = quoteData.baseAmount || quoteData.monthlyAmount || quoteData.weeklyAmount || quoteData.biweeklyAmount || quoteData.oneTimeAmount;
+        const grandTotalStr = quoteData.grandTotal;
+
+        return (
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+              <DollarSign className="w-3 h-3" /> Pricing
+            </p>
+            <div className="space-y-2">
+              {/* Primary amount (subtotal) */}
+              {primaryAmt && (
+                <div className="flex justify-between items-baseline">
+                  <span className="text-sm text-gray-600">{primaryLabel}</span>
+                  <span className="text-xl font-bold text-gray-900">{primaryAmt}</span>
+                </div>
+              )}
+              {/* Tax lines */}
+              {taxLines.length > 0 && (
+                <div className="space-y-1 pt-2 border-t border-gray-200">
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>Subtotal</span>
+                    <span>{primaryAmt}</span>
+                  </div>
+                  {taxLines.map((t, i) => (
+                    <div key={i} className="flex justify-between text-xs text-gray-500">
+                      <span>{t.name} ({t.rate}%)</span>
+                      <span>{t.amount.toLocaleString("en-CA", { style: "currency", currency: "CAD" }).replace("CA", "")}</span>
+                    </div>
+                  ))}
+                  {grandTotalStr && (
+                    <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-200 pt-1.5">
+                      <span>Total</span>
+                      <span>{grandTotalStr}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            {quoteData.pricingNotes && (
+              <p className="text-xs text-gray-500 mt-3 leading-relaxed border-t border-gray-100 pt-3">{quoteData.pricingNotes}</p>
             )}
           </div>
-          {quoteData.pricingNotes && (
-            <p className="text-xs text-gray-500 mt-3 leading-relaxed">{quoteData.pricingNotes}</p>
-          )}
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
