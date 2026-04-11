@@ -1,0 +1,388 @@
+DEV NOTE
+
+Main issue
+
+The final quote pricing is still incomplete.
+
+Right now the public quote is treating everything like one base service price.
+That is wrong when the quote includes:
+
+deep clean
+strip and wax floors
+disinfection
+floor buffing
+power washing
+post-construction cleanup
+or any other major add-on service
+
+These must not be absorbed into the normal base visit price.
+
+If the base recurring visit is $175, and strip and wax is a separate large service, the quote must show that separately and add it into the final total properly.
+
+Scope
+
+Only improve Field Note quotation pricing and public quote pricing breakdown.
+Do not touch attendance.
+Do not touch payroll.
+Do not touch schedules.
+Do not touch employee hours.
+Do not touch auth.
+Do not touch unrelated quote flows.
+Do not touch invoices.
+Do not touch anything else.
+
+1. Separate base service pricing from add-on pricing
+
+Required fix
+
+The quote engine must split pricing into:
+
+Base service price
+Add-on service prices
+Tax breakdown
+Final total
+
+Do not merge add-ons into one flat visit price.
+
+Example structure
+
+Base recurring service
+Bi-weekly visit: $175/visit
+
+Add-ons
+Deep clean: $100
+Strip and wax floors: $2,000
+Disinfection: $10
+
+Subtotal
+$2,285
+
+Tax
+GST or other taxes
+
+Total
+Final total after tax
+
+2. Add-ons must support their own pricing
+
+Every add-on should have its own price input or suggested price value.
+
+Required behavior
+
+If a user adds an add-on service, that add-on must support:
+
+name
+pricing type
+amount
+whether it is one-time or recurring
+optional quantity or unit if needed
+
+Examples
+
+Deep clean
+Usually one-time add-on
+
+Strip and wax floors
+Usually one-time large add-on
+
+Disinfection
+Can be one-time or recurring depending on quote
+
+Floor buffing
+Can be one-time or recurring
+
+Power washing
+Usually one-time
+
+Post-construction cleanup
+Usually one-time
+
+3. Add pricing type for each add-on
+
+Each add-on needs a pricing mode selector.
+
+Required options
+
+One-time
+Per visit
+Per week
+Per month
+Custom
+
+Recommended default behavior
+
+Deep clean = one-time default
+Strip and wax = one-time default
+Disinfection = one-time default unless changed
+Floor buffing = one-time default unless changed
+Restocking = recurring optional
+High-touch detailing = recurring optional
+
+This matters because some add-ons should only be charged once, while others may repeat.
+
+4. Quote builder must include add-on pricing section
+
+Add a dedicated section in the admin quote builder:
+
+Add-on pricing
+
+For each selected add-on, show a row or card with:
+
+Add-on name
+Pricing type
+Price amount
+Optional notes
+Include in final quote toggle
+
+Example
+
+Strip & Wax Floors
+Pricing type: One-time
+Amount: $2,000
+Included: Yes
+
+Deep Clean
+Pricing type: One-time
+Amount: $100
+Included: Yes
+
+Disinfection
+Pricing type: One-time
+Amount: $10
+Included: Yes
+
+Do not leave add-ons as labels only.
+They must become actual priced line items.
+
+5. AI suggestion must suggest add-on prices too
+
+When Suggest Price runs, it should not only suggest the base service amount.
+
+It should also suggest pricing for major add-ons based on:
+selected add-ons
+property type
+square footage if available
+difficulty
+photo condition
+service type
+labor hours
+cleaning intensity
+
+Important
+
+Do not force AI to guess blindly.
+Use structured logic and configurable rules where possible.
+
+Correct behavior
+
+Base service gets one suggestion
+Each add-on gets its own suggested price
+User can edit each amount before saving
+
+6. Add-on pricing rules must be configurable
+
+Do not hardcode random values.
+
+Use configurable logic for major add-ons.
+
+Examples of settings to support
+
+Deep clean multiplier
+Strip and wax rate by square footage or area
+Disinfection surcharge
+Floor buffing surcharge
+Power washing rate
+Post-construction cleanup multiplier
+Minimum add-on charge
+
+This lets the business adjust pricing later without code changes.
+
+7. Public quote pricing card must show line items properly
+
+Problem
+
+The current public quote pricing card only shows one price and total.
+That is not enough when add-ons exist.
+
+Required fix
+
+The public quote pricing area must show:
+
+Base service
+Add-ons
+Subtotal
+Taxes
+Total
+
+Example public layout
+
+Pricing
+
+Bi-weekly service
+$175/visit
+
+One-time add-ons
+Deep clean
+$100
+
+Strip & wax floors
+$2,000
+
+Disinfection
+$10
+
+Subtotal
+$2,285
+
+GST (5%)
+$114.25
+
+Total
+$2,399.25
+
+This is much clearer and more professional.
+
+8. Keep recurring and one-time charges clear
+
+If the quote has both recurring service and one-time setup work, the client must be able to understand the difference.
+
+Required structure
+
+Recurring services
+shown as recurring price
+
+One-time add-ons
+shown separately
+
+Example
+
+Recurring cleaning
+Bi-weekly: $175/visit
+
+One-time startup services
+Deep clean: $100
+Strip & wax floors: $2,000
+
+Do not collapse all of this into one recurring number.
+
+9. Tax calculation must include add-ons correctly
+
+Taxes must apply to the full taxable subtotal, including:
+base service
+included add-ons
+
+Unless later there is a tax exemption rule, assume included priced items are taxable.
+
+Required logic
+
+Subtotal = base service + included add-ons
+Tax lines apply to subtotal
+Total = subtotal + taxes
+
+10. Suggested price response shape should include add-ons
+
+Update the suggestion output structure so it supports itemized pricing.
+
+Suggested structure
+
+baseService:
+label
+pricingType
+amount
+
+addOns:
+name
+pricingType
+amount
+notes
+
+subtotal
+taxes
+total
+pricingNotes
+
+This gives the frontend enough data to render a real quote.
+
+11. Quote output editing behavior
+
+After Suggest Price runs:
+
+base service amount should autofill
+each selected add-on should autofill with its own suggested amount
+subtotal should calculate automatically
+taxes should calculate automatically
+total should calculate automatically
+
+User must still be able to edit:
+base amount
+any add-on amount
+pricing type of add-ons
+whether an add-on is included
+
+12. Public quote wording improvement
+
+If add-ons exist, the quote summary should mention them clearly.
+
+Example
+
+This quote includes regular bi-weekly restaurant cleaning plus one-time startup services for deep cleaning and strip and wax floor treatment.
+
+That is better than making it sound like everything is included in one small service fee.
+
+13. UI rules
+
+Keep the add-on pricing section compact.
+Do not overcrowd the quote page.
+Use one row or compact cards per add-on.
+Do not make users re-enter add-ons manually if they already selected them earlier in the quote.
+
+If add-ons were selected in service scope, they should appear automatically in add-on pricing.
+
+14. QA checklist
+
+Base service pricing still works
+Selected add-ons appear in add-on pricing section
+Each add-on can have its own amount
+Each add-on can have its own pricing type
+Suggest Price generates base service plus add-on suggestions
+Subtotal includes add-ons
+Taxes calculate from subtotal
+Total updates correctly
+Public quote shows itemized pricing clearly
+Recurring service and one-time add-ons are separated clearly
+No unrelated module is touched
+
+15. Do not touch rules
+
+Do not touch attendance
+Do not touch payroll
+Do not touch schedules
+Do not touch employee hours
+Do not touch auth
+Do not touch unrelated quote systems
+Do not touch invoices
+Do not touch unrelated public links
+
+Only improve:
+Field Note quote itemized pricing
+Field Note add-on pricing logic
+Field Note public quote line-item pricing display
+Field Note subtotal and total calculation with add-ons
+
+Priority order
+
+Priority 1
+Separate base service from add-on pricing
+
+Priority 2
+Add add-on pricing section in admin quote builder
+
+Priority 3
+Make Suggest Price generate add-on prices too
+
+Priority 4
+Update public quote pricing card to show itemized totals properly
+
+Use this exact direction.
+Do not simplify the add-ons into one flat visit price.
+The final quote must show real line-item pricing.

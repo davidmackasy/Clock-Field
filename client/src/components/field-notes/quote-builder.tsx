@@ -24,6 +24,30 @@ type PropertyType = "residential" | "commercial" | "industrial" | "";
 
 interface TaxLine { name: string; rate: string; }
 
+interface AddOnPricingLine {
+  name: string;
+  pricingType: string;
+  amount: string;
+  included: boolean;
+}
+
+// Default pricing type per add-on name
+const ADDON_DEFAULT_TYPE: Record<string, string> = {
+  "Deep Clean": "One-time",
+  "Strip & Wax Floors": "One-time",
+  "Disinfection": "One-time",
+  "Floor Buffing": "One-time",
+  "Power Washing": "One-time",
+  "Post-Construction Cleanup": "One-time",
+  "Carpet Spot Cleaning": "One-time",
+  "Odor Treatment": "One-time",
+  "Inside Windows": "One-time",
+  "Restocking": "Per visit",
+  "High-Touch Detailing": "Per visit",
+};
+
+const ADDON_PRICING_TYPES = ["One-time", "Per visit", "Per week", "Per month", "Custom"];
+
 // ── Helpers: parse / stringify tag arrays from quoteData ───────────────────────
 function parseTags(v: string | string[] | undefined): string[] {
   if (!v) return [];
@@ -36,6 +60,25 @@ function parseTaxes(v: any): TaxLine[] {
   if (!v) return [];
   if (Array.isArray(v)) return v;
   try { const p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch { return []; }
+}
+
+function parseAddonPricingLines(v: any): AddOnPricingLine[] {
+  if (!v) return [];
+  if (Array.isArray(v)) return v;
+  try { const p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch { return []; }
+}
+
+// Sync add-on pricing lines to match the current set of add-on tags
+function syncAddonPricingLines(tags: string[], existing: AddOnPricingLine[]): AddOnPricingLine[] {
+  const kept = existing.filter(l => tags.includes(l.name));
+  const newTags = tags.filter(t => !existing.find(l => l.name === t));
+  const newLines: AddOnPricingLine[] = newTags.map(name => ({
+    name,
+    pricingType: ADDON_DEFAULT_TYPE[name] || "One-time",
+    amount: "",
+    included: true,
+  }));
+  return [...kept, ...newLines];
 }
 
 // Parse a price string like "$1,200" or "$1200/month" → number or null
@@ -321,6 +364,13 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
   const [taxEnabled, setTaxEnabled] = useState<boolean>(quoteData.taxEnabled === true || quoteData.taxEnabled === "true");
   const [taxes, setTaxes] = useState<TaxLine[]>(parseTaxes(quoteData.taxes));
 
+  // Add-on pricing lines — initialized from saved data, then synced to addOnTags
+  const [addonPricingLines, setAddonPricingLines] = useState<AddOnPricingLine[]>(() => {
+    const saved = parseAddonPricingLines(quoteData.addonPricingLines);
+    const tags = parseTags(quoteData.addOnTags);
+    return syncAddonPricingLines(tags, saved);
+  });
+
   // AI suggestion results
   const [suggestion, setSuggestion] = useState<Record<string, any> | null>(
     quoteData.pricingExplanation ? quoteData : null
@@ -344,6 +394,18 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
   const updateTax = (i: number, field: "name" | "rate", val: string) =>
     setTaxes(t => t.map((x, j) => j === i ? { ...x, [field]: val } : x));
 
+  // -- Add-on pricing line helpers ----------------------------------------------
+  const updateAddonLine = (i: number, field: keyof AddOnPricingLine, val: string | boolean) =>
+    setAddonPricingLines(t => t.map((x, j) => j === i ? { ...x, [field]: val } : x));
+  const toggleAddonIncluded = (i: number) =>
+    setAddonPricingLines(t => t.map((x, j) => j === i ? { ...x, included: !x.included } : x));
+
+  // Combined setter — keeps addonPricingLines in sync whenever add-ons change
+  const handleAddOnTagsChange = (tags: string[]) => {
+    setAddOnTags(tags);
+    setAddonPricingLines(prev => syncAddonPricingLines(tags, prev));
+  };
+
   // -- Pricing schedule computed values ----------------------------------------
   const quotePeriodWeeks = quotePeriodToWeeks(quotePeriod);
   const estimatedVisits: number | null =
@@ -357,7 +419,13 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
     const raw = baseAmount || oneTimeAmount || weeklyAmount || biweeklyAmount || monthlyAmount;
     return raw ? parseAmount(raw) : null;
   };
-  const subtotal = getPrimaryAmount();
+  const baseAmt = getPrimaryAmount();
+  const addonTotal = addonPricingLines
+    .filter(l => l.included && l.amount)
+    .reduce((s, l) => s + (parseAmount(l.amount) || 0), 0);
+  const hasBase = baseAmt !== null;
+  const hasAddons = addonTotal > 0;
+  const subtotal = hasBase || hasAddons ? (baseAmt || 0) + addonTotal : null;
   const taxLines: Array<{ name: string; rate: number; amount: number }> =
     taxEnabled && subtotal !== null
       ? taxes
@@ -395,12 +463,18 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
     baseAmount,
     oneTimeAmount, weeklyAmount, biweeklyAmount, monthlyAmount,
     pricingNotes,
+    // Add-on pricing lines
+    addonPricingLines: JSON.stringify(addonPricingLines),
     // Tax
     taxEnabled,
     taxes: JSON.stringify(taxes),
     // Computed totals (for public page display)
     taxLines: JSON.stringify(taxLines),
     grandTotal: grandTotal !== null ? fmtDollar(grandTotal) : "",
+    // Base + addon breakdown for public page
+    baseSubtotal: baseAmt !== null ? fmtDollar(baseAmt) : "",
+    addonSubtotal: addonTotal > 0 ? fmtDollar(addonTotal) : "",
+    combinedSubtotal: subtotal !== null ? fmtDollar(subtotal) : "",
   });
 
   const handleSave = () => onSave(buildQuoteData());
@@ -438,6 +512,8 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
         // Pricing schedule
         billingMode, serviceDaysPerWeek, quotePeriod,
         estimatedVisits: estimatedVisits !== null ? String(estimatedVisits) : "",
+        // Add-on list for pricing suggestions
+        addOnList: addonPricingLines.map(l => l.name).join(", "),
       }).then(r => r.json());
     },
     onSuccess: (data) => {
@@ -465,6 +541,19 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
       }
       if (data.pricingNotes && !pricingNotes) setPricingNotes(data.pricingNotes);
       if (data.scopeSummary && !scopeSummary) setScopeSummary(data.scopeSummary);
+      // Autofill add-on amounts from AI suggestions
+      if (Array.isArray(data.addOnSuggestions) && data.addOnSuggestions.length > 0) {
+        setAddonPricingLines(prev => prev.map(line => {
+          const match = data.addOnSuggestions.find(
+            (s: any) => s.name?.toLowerCase() === line.name.toLowerCase()
+          );
+          if (match && match.amount && !line.amount) {
+            return { ...line, amount: match.amount, pricingType: match.pricingType || line.pricingType };
+          }
+          return line;
+        }));
+        if (!isOpen("addon_pricing")) setOpenSection(v => [...v, "addon_pricing"]);
+      }
       if (!isOpen("pricing_output")) setOpenSection(v => [...v, "pricing_output"]);
       toast({ title: "Price suggestion applied", description: "Review and edit below, then save." });
     },
@@ -694,7 +783,7 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
           </div>
           <div>
             <Label className="text-[11px] text-muted-foreground mb-1.5 block">Add-ons</Label>
-            <TagInput tags={addOnTags} onChange={setAddOnTags} placeholder="e.g. Floor buffing…" testId="input-add-ons" />
+            <TagInput tags={addOnTags} onChange={handleAddOnTagsChange} placeholder="e.g. Floor buffing…" testId="input-add-ons" />
             {/* Common add-on chips */}
             <div className="flex flex-wrap gap-1 mt-1.5">
               {COMMON_ADDONS.filter(a => !addOnTags.includes(a)).map(a => (
@@ -702,7 +791,7 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
                   key={a}
                   type="button"
                   className="text-[10px] border rounded-full px-2 py-0.5 text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
-                  onClick={() => setAddOnTags(t => [...t, a])}
+                  onClick={() => handleAddOnTagsChange([...addOnTags, a])}
                 >
                   + {a}
                 </button>
@@ -737,7 +826,56 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
         </div>
       </Section>
 
-      {/* ── S4: Internal Pricing (admin-only) ── */}
+      {/* ── S4a: Add-on Pricing ── */}
+      {addonPricingLines.length > 0 && (
+        <Section
+          title="Add-on Pricing"
+          icon={<LayoutList className="w-3.5 h-3.5" />}
+          open={isOpen("addon_pricing")}
+          onToggle={() => toggle("addon_pricing")}
+        >
+          <p className="text-[11px] text-muted-foreground">Each selected add-on appears as a separate line item on the quote. Set its pricing type and amount independently.</p>
+          <div className="space-y-2">
+            {addonPricingLines.map((line, i) => (
+              <div key={i} className="flex items-center gap-2 bg-muted/20 rounded-lg px-3 py-2.5" data-testid={`row-addon-pricing-${i}`}>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium truncate text-foreground">{line.name}</p>
+                </div>
+                <Select value={line.pricingType || "One-time"} onValueChange={v => updateAddonLine(i, "pricingType", v)}>
+                  <SelectTrigger className="h-6 text-[10px] w-24 shrink-0" data-testid={`select-addon-pricingType-${i}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ADDON_PRICING_TYPES.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Input
+                  value={line.amount}
+                  onChange={e => updateAddonLine(i, "amount", e.target.value)}
+                  placeholder="e.g. $500"
+                  className="h-6 text-[10px] w-24 shrink-0"
+                  data-testid={`input-addon-amount-${i}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => toggleAddonIncluded(i)}
+                  className={cn(
+                    "text-[10px] px-2 py-0.5 rounded-full border whitespace-nowrap transition-colors shrink-0",
+                    line.included
+                      ? "bg-primary/10 text-primary border-primary/20"
+                      : "text-muted-foreground border-border"
+                  )}
+                  data-testid={`button-addon-included-${i}`}
+                >
+                  {line.included ? "Included" : "Excluded"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {/* ── S4b: Internal Pricing (admin-only) ── */}
       <Section
         title="Internal Pricing"
         icon={<Lock className="w-3.5 h-3.5" />}
@@ -1050,28 +1188,45 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
         {/* Live price breakdown */}
         {subtotal !== null && (
           <div className="rounded-xl border bg-muted/30 p-3 space-y-1.5 text-xs" data-testid="section-price-breakdown">
-            <div className="flex justify-between text-muted-foreground">
-              <span>Subtotal</span>
-              <span className="font-medium text-foreground">{fmtDollar(subtotal)}</span>
-            </div>
+            {/* Base service line */}
+            {baseAmt !== null && (
+              <div className="flex justify-between text-muted-foreground">
+                <span>
+                  {(billingMode === "One-time" || serviceType === "One-Time") ? "One-time service" :
+                   billingMode === "Per visit" ? "Per visit" :
+                   (billingMode === "Weekly" || serviceType === "Weekly") ? "Weekly service" :
+                   (billingMode === "Bi-weekly" || serviceType === "Bi-Weekly") ? "Bi-weekly service" :
+                   (billingMode === "Monthly" || serviceType === "Monthly") ? "Monthly service" :
+                   "Base service"}
+                </span>
+                <span className="font-medium text-foreground">{fmtDollar(baseAmt)}</span>
+              </div>
+            )}
+            {/* Add-on line items */}
+            {addonPricingLines.filter(l => l.included && l.amount).map((l, i) => (
+              <div key={i} className="flex justify-between text-muted-foreground" data-testid={`row-addon-line-${i}`}>
+                <span>{l.name} <span className="text-[10px] opacity-60">({l.pricingType})</span></span>
+                <span>{l.amount.startsWith("$") ? l.amount : `$${l.amount}`}</span>
+              </div>
+            ))}
+            {/* Subtotal divider — only show if there are add-ons */}
+            {hasAddons && hasBase && (
+              <div className="flex justify-between text-muted-foreground border-t pt-1.5 mt-0.5">
+                <span>Subtotal</span>
+                <span className="font-medium text-foreground">{fmtDollar(subtotal)}</span>
+              </div>
+            )}
+            {/* Tax lines */}
             {taxLines.map((t, i) => (
               <div key={i} className="flex justify-between text-muted-foreground" data-testid={`row-tax-line-${i}`}>
                 <span>{t.name} ({t.rate}%)</span>
                 <span>{fmtDollar(t.amount)}</span>
               </div>
             ))}
-            {taxEnabled && taxLines.length > 0 && (
-              <div className="flex justify-between font-semibold text-foreground border-t pt-1.5 mt-1">
-                <span>Total</span>
-                <span data-testid="text-grand-total">{fmtDollar(grandTotal!)}</span>
-              </div>
-            )}
-            {(!taxEnabled || taxLines.length === 0) && (
-              <div className="flex justify-between font-semibold text-foreground border-t pt-1.5 mt-1">
-                <span>Total</span>
-                <span data-testid="text-grand-total">{fmtDollar(subtotal)}</span>
-              </div>
-            )}
+            <div className="flex justify-between font-semibold text-foreground border-t pt-1.5 mt-1">
+              <span>Total</span>
+              <span data-testid="text-grand-total">{fmtDollar(grandTotal !== null ? grandTotal : subtotal)}</span>
+            </div>
           </div>
         )}
 

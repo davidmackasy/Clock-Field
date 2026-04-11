@@ -4800,6 +4800,7 @@ Return a JSON object with these exact fields:
         laborHours, hourlyPay, targetMargin, travelAdjust, suppliesAdjust,
         difficultyMult, minimumCharge,
         billingMode, serviceDaysPerWeek, quotePeriod, estimatedVisits,
+        addOnList,
       } = req.body;
 
       // Gather session photos context
@@ -4841,7 +4842,7 @@ SERVICE DETAILS:
 - Visit duration: ${visitDuration || "not specified"}
 - Crew size: ${crewSizeEst || "not specified"}
 - First clean type: ${firstCleanType || "standard"}
-- Add-ons: ${addOnTags || "none"}
+- Add-ons: ${addOnList || addOnTags || "none"}
 
 INTERNAL INPUTS:
 - Labor hours estimate: ${laborHours || "not provided"}
@@ -4888,8 +4889,12 @@ Return ONLY valid JSON. Include only the keys relevant to the selected billing m
   "pricingExplanation": "2-3 sentence explanation of pricing logic and how visit count factors in",
   "pricingNotes": "1-2 sentence client-facing pricing note (frequency, what's included)",
   "pricingConfidence": "High|Medium|Low",
-  "scopeSummary": "1-2 sentence client-facing scope summary"
+  "scopeSummary": "1-2 sentence client-facing scope summary",
+  "addOnSuggestions": [
+    { "name": "add-on name exactly as listed", "amount": "$X", "pricingType": "One-time|Per visit|Monthly" }
+  ]
 }
+${addOnList ? `\nADD-ON PRICING: For each add-on in the list "${addOnList}", suggest an appropriate standalone price and whether it is typically one-time, per visit, or monthly. Populate the addOnSuggestions array. If no add-ons, return an empty array.` : ""}
 
 Format all dollar amounts as "$X" or "$X,XXX". Omit keys that don't apply to the selected billing mode.`;
 

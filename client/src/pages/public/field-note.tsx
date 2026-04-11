@@ -358,61 +358,104 @@ function QuoteDetailsGrid({ quoteData }: { quoteData: Record<string, any> }) {
 
       {/* Pricing */}
       {hasPricing && (() => {
-        // Parse tax lines from admin-saved data
         const taxLines: Array<{name: string; rate: number; amount: number}> = (() => {
-          try {
-            const lines = JSON.parse(quoteData.taxLines || "[]");
-            return Array.isArray(lines) ? lines : [];
-          } catch { return []; }
+          try { const l = JSON.parse(quoteData.taxLines || "[]"); return Array.isArray(l) ? l : []; } catch { return []; }
         })();
-        // Determine primary amount label based on service type
-        const st = (quoteData.serviceType || "").toLowerCase();
+        const addonLines: Array<{name: string; pricingType: string; amount: string; included: boolean}> = (() => {
+          try { const l = JSON.parse(quoteData.addonPricingLines || "[]"); return Array.isArray(l) ? l : []; } catch { return []; }
+        })();
+        const includedAddons = addonLines.filter(l => l.included && l.amount);
+        const oneTimeAddons = includedAddons.filter(l => !l.pricingType || l.pricingType === "One-time");
+        const recurringAddons = includedAddons.filter(l => l.pricingType && l.pricingType !== "One-time");
+
+        const bm = (quoteData.billingMode || quoteData.serviceType || "").toLowerCase();
         const primaryLabel =
-          st.includes("one") || st.includes("time") ? "One-time" :
-          st.includes("week") && !st.includes("bi") ? "Per week" :
-          st.includes("bi") ? "Bi-weekly" :
-          st.includes("month") ? "Per month" :
-          quoteData.serviceType || "Service";
+          bm.includes("one") || bm.includes("time") ? "One-time" :
+          bm.includes("per visit") ? "Per visit" :
+          bm.includes("bi") ? "Bi-weekly" :
+          bm.includes("week") ? "Per week" :
+          bm.includes("month") ? "Per month" :
+          quoteData.billingMode || quoteData.serviceType || "Service";
         const primaryAmt = quoteData.baseAmount || quoteData.monthlyAmount || quoteData.weeklyAmount || quoteData.biweeklyAmount || quoteData.oneTimeAmount;
         const grandTotalStr = quoteData.grandTotal;
+        const hasAddons = includedAddons.length > 0;
+        const fmtAmt = (a: string) => a.startsWith("$") ? a : `$${a}`;
 
         return (
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
               <DollarSign className="w-3 h-3" /> Pricing
             </p>
-            <div className="space-y-2">
-              {/* Primary amount (subtotal) */}
-              {primaryAmt && (
+
+            {/* Base service */}
+            {primaryAmt && (
+              <div>
+                {hasAddons && (
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Base service</p>
+                )}
                 <div className="flex justify-between items-baseline">
                   <span className="text-sm text-gray-600">{primaryLabel}</span>
                   <span className="text-xl font-bold text-gray-900">{primaryAmt}</span>
                 </div>
-              )}
-              {/* Tax lines */}
-              {taxLines.length > 0 && (
-                <div className="space-y-1 pt-2 border-t border-gray-200">
-                  <div className="flex justify-between text-xs text-gray-500">
-                    <span>Subtotal</span>
-                    <span>{primaryAmt}</span>
+              </div>
+            )}
+
+            {/* One-time add-ons */}
+            {oneTimeAddons.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">One-time add-ons</p>
+                {oneTimeAddons.map((l, i) => (
+                  <div key={i} className="flex justify-between text-sm">
+                    <span className="text-gray-600">{l.name}</span>
+                    <span className="font-medium text-gray-900">{fmtAmt(l.amount)}</span>
                   </div>
-                  {taxLines.map((t, i) => (
-                    <div key={i} className="flex justify-between text-xs text-gray-500">
-                      <span>{t.name} ({t.rate}%)</span>
-                      <span>{t.amount.toLocaleString("en-CA", { style: "currency", currency: "CAD" }).replace("CA", "")}</span>
-                    </div>
-                  ))}
-                  {grandTotalStr && (
-                    <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-200 pt-1.5">
-                      <span>Total</span>
-                      <span>{grandTotalStr}</span>
-                    </div>
-                  )}
+                ))}
+              </div>
+            )}
+
+            {/* Recurring add-ons */}
+            {recurringAddons.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Recurring add-ons</p>
+                {recurringAddons.map((l, i) => (
+                  <div key={i} className="flex justify-between text-sm">
+                    <span className="text-gray-600">{l.name} <span className="text-[10px] text-gray-400">({l.pricingType})</span></span>
+                    <span className="font-medium text-gray-900">{fmtAmt(l.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Subtotal + taxes + total */}
+            <div className="space-y-1 pt-2 border-t border-gray-200">
+              {hasAddons && primaryAmt && (
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>Subtotal</span>
+                  <span>{quoteData.combinedSubtotal || primaryAmt}</span>
+                </div>
+              )}
+              {taxLines.map((t, i) => (
+                <div key={i} className="flex justify-between text-xs text-gray-500">
+                  <span>{t.name} ({t.rate}%)</span>
+                  <span>{t.amount.toLocaleString("en-CA", { style: "currency", currency: "CAD" }).replace("CA", "")}</span>
+                </div>
+              ))}
+              {(grandTotalStr || (hasAddons && primaryAmt)) && (
+                <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-200 pt-1.5">
+                  <span>Total</span>
+                  <span>{grandTotalStr || quoteData.combinedSubtotal || primaryAmt}</span>
+                </div>
+              )}
+              {!hasAddons && !taxLines.length && primaryAmt && (
+                <div className="flex justify-between text-sm font-bold text-gray-900 pt-1">
+                  <span>Total</span>
+                  <span>{grandTotalStr || primaryAmt}</span>
                 </div>
               )}
             </div>
+
             {quoteData.pricingNotes && (
-              <p className="text-xs text-gray-500 mt-3 leading-relaxed border-t border-gray-100 pt-3">{quoteData.pricingNotes}</p>
+              <p className="text-xs text-gray-500 leading-relaxed border-t border-gray-100 pt-3">{quoteData.pricingNotes}</p>
             )}
           </div>
         );
