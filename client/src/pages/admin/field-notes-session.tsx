@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, Component, type ReactNode } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -31,6 +31,34 @@ const SESSION_TYPE_LABELS: Record<string, string> = {
 function parseQuoteData(raw: string | null | undefined): Record<string, any> {
   if (!raw) return {};
   try { return JSON.parse(raw); } catch { return {}; }
+}
+
+// ── Error boundary ─────────────────────────────────────────────────────────────
+class SectionErrorBoundary extends Component<
+  { children: ReactNode; fallback?: ReactNode },
+  { hasError: boolean; errorMessage: string }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, errorMessage: "" };
+  }
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, errorMessage: String(error?.message || error || "Unknown error") };
+  }
+  componentDidCatch(error: any, info: any) {
+    console.error("[FieldNote] Render error:", error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback ?? (
+        <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+          <p className="font-medium text-foreground mb-1">Could not load this section.</p>
+          <p className="text-xs">Please refresh or contact support. ({this.state.errorMessage})</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 // ── Share Panel ───────────────────────────────────────────────────────────────
@@ -916,11 +944,13 @@ export default function AdminFieldNotesSession() {
 
                 {/* Quote section (when in quote mode) */}
                 {documentMode === "quote" && (
-                  <QuoteBuilder
-                    sessionId={sessionId!}
-                    quoteData={quoteData}
-                    onSave={handleSaveQuote}
-                  />
+                  <SectionErrorBoundary>
+                    <QuoteBuilder
+                      sessionId={sessionId!}
+                      quoteData={quoteData}
+                      onSave={handleSaveQuote}
+                    />
+                  </SectionErrorBoundary>
                 )}
 
                 {/* Closing */}
@@ -987,12 +1017,14 @@ export default function AdminFieldNotesSession() {
           {/* ── PROPOSAL TAB ── */}
           {documentMode === "quote" && (
             <TabsContent value="proposal" className="flex-1 overflow-y-auto mt-0">
-              <ProposalTab
-                session={session}
-                quoteData={quoteData}
-                sessionId={sessionId!}
-                publicDoc={session.publicDoc}
-              />
+              <SectionErrorBoundary>
+                <ProposalTab
+                  session={session}
+                  quoteData={quoteData}
+                  sessionId={sessionId!}
+                  publicDoc={session.publicDoc}
+                />
+              </SectionErrorBoundary>
             </TabsContent>
           )}
         </Tabs>

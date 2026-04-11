@@ -132,9 +132,12 @@ function parseTaxes(v: any): TaxLine[] {
 }
 
 function parseAddonPricingLines(v: any): AddOnPricingLine[] {
+  let arr: any[] = [];
   if (!v) return [];
-  if (Array.isArray(v)) return v;
-  try { const p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch { return []; }
+  if (Array.isArray(v)) { arr = v; }
+  else { try { const p = JSON.parse(v); arr = Array.isArray(p) ? p : []; } catch { return []; } }
+  // Normalize: ensure amount is always a string
+  return arr.map(l => ({ ...l, amount: l.amount != null ? String(l.amount) : "" }));
 }
 
 // Sync add-on pricing lines to match the current set of add-on tags
@@ -151,9 +154,18 @@ function syncAddonPricingLines(tags: string[], existing: AddOnPricingLine[]): Ad
 }
 
 // Parse a price string like "$1,200" or "$1200/month" → number or null
-function parseAmount(s: string): number | null {
-  const m = s.replace(/[$,\/\s]/g, "").match(/[\d.]+/);
+// Also handles raw numbers safely
+function parseAmount(s: any): number | null {
+  if (s == null || s === "") return null;
+  if (typeof s === "number") return isFinite(s) ? s : null;
+  const m = String(s).replace(/[$,\/\s]/g, "").match(/[\d.]+/);
   return m ? parseFloat(m[0]) : null;
+}
+// Format an addon amount (string or number) for display as a dollar string
+function fmtAddonAmount(v: any): string {
+  if (v == null || v === "") return "";
+  const s = String(v);
+  return s.startsWith("$") ? s : `$${s}`;
 }
 
 function fmtDollar(n: number): string {
@@ -680,8 +692,8 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
           const match = data.addOnSuggestions.find(
             (s: any) => s.name?.toLowerCase() === line.name.toLowerCase()
           );
-          if (match && match.amount && !line.amount) {
-            return { ...line, amount: match.amount, pricingType: match.pricingType || line.pricingType };
+          if (match && match.amount != null && match.amount !== "" && !line.amount) {
+            return { ...line, amount: String(match.amount), pricingType: match.pricingType || line.pricingType };
           }
           return line;
         }));
@@ -1460,7 +1472,7 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
             {addonPricingLines.filter(l => l.included && l.amount).map((l, i) => (
               <div key={i} className="flex justify-between text-muted-foreground" data-testid={`row-addon-line-${i}`}>
                 <span>{l.name} <span className="text-[10px] opacity-60">({l.pricingType})</span></span>
-                <span>{l.amount.startsWith("$") ? l.amount : `$${l.amount}`}</span>
+                <span>{fmtAddonAmount(l.amount)}</span>
               </div>
             ))}
             {/* Subtotal divider — only show if there are add-ons */}
