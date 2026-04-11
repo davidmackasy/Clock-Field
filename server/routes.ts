@@ -4779,6 +4779,114 @@ Return a JSON object with these exact fields:
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  // POST /api/field-notes/sessions/:id/suggest-price — AI + formula pricing
+  app.post("/api/field-notes/sessions/:id/suggest-price", fnAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const session = await storage.getFieldNotesSession(req.params.id);
+      if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const [openaiClient] = getOpenAIClient();
+      if (!openaiClient) return res.status(503).json({ message: "AI not available" });
+
+      const {
+        propertyType, commercialSubtype, industrialSubtype, squareFootage,
+        numOffices, numWashrooms, numKitchens, numHallways, numEntrances, numFloors,
+        numDiningAreas, numBoardrooms, numReception, hasKitchen, greaseLevel,
+        bedrooms, bathrooms, stories, conditionLevel, homeType,
+        numOfficeAreas, hasLunchroom, hasLockerRoom, heavySoilLevel,
+        serviceType, daysPerWeek, visitsPerMonth, visitDuration, crewSizeEst,
+        firstCleanType, addOnTags, specialSurfaces, otherAreas,
+        laborHours, hourlyPay, targetMargin, travelAdjust, suppliesAdjust,
+        difficultyMult, minimumCharge,
+      } = req.body;
+
+      // Gather session photos context
+      const assets: any[] = (session as any).assets ?? [];
+      const photoCount = assets.length;
+      const areaLabels = [...new Set(assets.map((a: any) => a.areaLabel).filter(Boolean))];
+      const entries: any[] = (session as any).entries ?? [];
+      const entryText = entries.map(e => e.body || "").filter(Boolean).join("\n").slice(0, 1500);
+
+      // Build full prompt
+      const prompt = `You are a pricing assistant for a professional cleaning company. Generate an accurate, competitive price suggestion for the following cleaning quote.
+
+PROPERTY:
+- Type: ${propertyType || "unknown"} ${commercialSubtype || industrialSubtype || ""}
+- ${propertyType === "residential" ? `Home type: ${homeType}, Bedrooms: ${bedrooms}, Bathrooms: ${bathrooms}, Stories: ${stories}, Condition: ${conditionLevel}` : ""}
+- ${propertyType === "commercial" ? `Offices: ${numOffices}, Washrooms: ${numWashrooms}, Kitchens: ${numKitchens}, Hallways: ${numHallways}, Entrances: ${numEntrances}, Floors: ${numFloors}${numDiningAreas ? `, Dining areas: ${numDiningAreas}` : ""}${greaseLevel ? `, Kitchen condition: ${greaseLevel}` : ""}` : ""}
+- ${propertyType === "industrial" ? `Office areas: ${numOfficeAreas}, Washrooms: ${numWashrooms}, Floors: ${numFloors}, Heavy soil: ${heavySoilLevel}, Lunchroom: ${hasLunchroom}, Locker room: ${hasLockerRoom}` : ""}
+- Square footage: ${squareFootage || "not provided"}
+- Special surfaces: ${specialSurfaces || "none noted"}
+- Other areas: ${otherAreas || "none"}
+
+SERVICE:
+- Type: ${serviceType || "one-time"}
+- Days/week: ${daysPerWeek || "N/A"}
+- Visits/month: ${visitsPerMonth || "N/A"}
+- Visit duration: ${visitDuration || "not specified"}
+- Crew size: ${crewSizeEst || "not specified"}
+- First clean type: ${firstCleanType || "standard"}
+- Add-ons: ${addOnTags || "none"}
+
+INTERNAL INPUTS:
+- Labor hours estimate: ${laborHours || "not provided"}
+- Hourly pay per worker: $${hourlyPay || "not provided"}
+- Target margin: ${targetMargin || "50"}%
+- Travel adjustment: $${travelAdjust || "0"}
+- Supplies adjustment: $${suppliesAdjust || "0"}
+- Difficulty multiplier: ${difficultyMult || "1.0"}×
+- Minimum charge: $${minimumCharge || "not set"}
+
+SITE CONTEXT (from field note):
+- Photos captured: ${photoCount}
+- Areas photographed: ${areaLabels.join(", ") || "general"}
+- Field note observations: ${entryText || "none"}
+
+INSTRUCTIONS:
+Calculate professional cleaning prices using these rules:
+1. If hourly pay and labor hours are provided, use them as the base cost, then apply margin and adjustments
+2. If not provided, estimate based on property type, size, and condition
+3. Apply difficulty multiplier to increase price for hard conditions (grease, heavy soil, etc.)
+4. Apply minimum charge if calculated price is below it
+5. For recurring services: weekly < biweekly < monthly per-visit pricing (frequency discounts)
+6. One-time / deep clean pricing is typically 1.5–3x the regular visit price
+7. Use Canadian market rates if context suggests Canada, US rates otherwise
+
+Return ONLY valid JSON matching this structure:
+{
+  "suggestedOneTime": "$X",
+  "suggestedWeekly": "$X/visit or $X/week",
+  "suggestedBiweekly": "$X/visit",
+  "suggestedMonthly": "$X/month",
+  "suggestedLaborHours": "X hrs",
+  "suggestedCrew": "X cleaners",
+  "pricingExplanation": "2-3 sentence explanation of pricing logic",
+  "pricingConfidence": "High|Medium|Low",
+  "scopeSummary": "1-2 sentence client-facing scope summary"
+}
+
+Only include keys that are relevant. If service is one-time only, omit weekly/biweekly/monthly. Format all dollar amounts as "$X" or "$X,XXX".`;
+
+      const completion = await openaiClient.chat.completions.create({
+        model: "gpt-4o-mini",
+        response_format: { type: "json_object" },
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 600,
+        temperature: 0.3,
+      });
+
+      const result = JSON.parse(completion.choices[0]?.message?.content || "{}");
+
+      // Persist suggestion to quoteData
+      let quoteData: any = {};
+      try { quoteData = JSON.parse((session as any).quoteData || "{}"); } catch {}
+      Object.assign(quoteData, result);
+      await storage.updateFieldNotesSession(session.id, { quoteData: JSON.stringify(quoteData) } as any);
+
+      res.json(result);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   // POST /api/field-notes/sessions/:id/generate-scope — AI scope summary
   app.post("/api/field-notes/sessions/:id/generate-scope", fnAuth, async (req, res) => {
     try {
@@ -4787,22 +4895,43 @@ Return a JSON object with these exact fields:
       if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       const [openaiClient] = getOpenAIClient();
       if (!openaiClient) return res.status(503).json({ message: "AI not available" });
-      let quoteData: any = {};
-      try { quoteData = JSON.parse((session as any).quoteData || "{}"); } catch {}
+      let storedQuote: any = {};
+      try { storedQuote = JSON.parse((session as any).quoteData || "{}"); } catch {}
+      // Merge with live form values sent in the request body (takes priority)
+      const body = req.body || {};
+      const quoteData: any = { ...storedQuote, ...body };
       const entries: any[] = (session as any).entries ?? [];
       const entryText = entries.map(e => e.body || "").filter(Boolean).join("\n");
+      const parseTags = (v: any): string[] => {
+        if (!v) return [];
+        if (Array.isArray(v)) return v;
+        try { const p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch { return String(v).split(",").map(s => s.trim()).filter(Boolean); }
+      };
+      const inclAreas = parseTags(quoteData.includedAreaTags ?? quoteData.includedAreas);
+      const addOns = parseTags(quoteData.addOnTags ?? quoteData.addOns);
+      const propLine = [quoteData.propertyType, quoteData.commercialSubtype || quoteData.industrialSubtype].filter(Boolean).join(" – ");
+      const serviceDetail = quoteData.serviceType === "Weekly" && quoteData.daysPerWeek
+        ? `Weekly (${quoteData.daysPerWeek}x/week)` : quoteData.serviceType || quoteData.serviceFrequency || "";
       const prompt = [
-        "You are an assistant generating a professional service scope summary for a commercial cleaning proposal.",
-        "Based on the field note entries below, write 2–3 concise sentences describing what cleaning services are needed and what was observed.",
-        "Be specific about areas mentioned. Write in third person, professional tone.",
+        "You are an assistant generating a professional service scope summary for a cleaning proposal.",
+        "Write 2–3 concise client-facing sentences describing what cleaning services will be provided.",
+        "Be specific about areas mentioned. Use professional tone, present tense.",
         "",
-        "Property details from quote form:",
+        "Property details:",
+        propLine ? `- Property type: ${propLine}` : "",
         quoteData.squareFootage ? `- Square footage: ${quoteData.squareFootage}` : "",
+        quoteData.numFloors ? `- Floors: ${quoteData.numFloors}` : "",
         quoteData.numOffices ? `- Offices: ${quoteData.numOffices}` : "",
         quoteData.numWashrooms ? `- Washrooms: ${quoteData.numWashrooms}` : "",
         quoteData.numKitchens ? `- Kitchens/break rooms: ${quoteData.numKitchens}` : "",
-        quoteData.serviceFrequency ? `- Service frequency: ${quoteData.serviceFrequency}` : "",
-        quoteData.includedAreas ? `- Included areas: ${quoteData.includedAreas}` : "",
+        quoteData.numHallways ? `- Hallways: ${quoteData.numHallways}` : "",
+        quoteData.numEntrances ? `- Entrances: ${quoteData.numEntrances}` : "",
+        quoteData.bedrooms ? `- Bedrooms: ${quoteData.bedrooms}` : "",
+        quoteData.bathrooms ? `- Bathrooms: ${quoteData.bathrooms}` : "",
+        serviceDetail ? `- Service frequency: ${serviceDetail}` : "",
+        inclAreas.length ? `- Included areas: ${inclAreas.join(", ")}` : "",
+        addOns.length ? `- Add-on services: ${addOns.join(", ")}` : "",
+        quoteData.firstCleanType && quoteData.firstCleanType !== "Standard" ? `- First clean type: ${quoteData.firstCleanType}` : "",
         "",
         "Field note observations:",
         entryText || "(no observations recorded)",

@@ -1,0 +1,735 @@
+import { useState, useRef } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Check, ChevronDown, ChevronUp, Plus, X, Loader2,
+  DollarSign, Building, LayoutList, FileCheck, Sparkles,
+  Wand2, Lock, Home, Briefcase, Factory, CheckCircle2, XCircle,
+} from "lucide-react";
+import { format, parseISO } from "date-fns";
+
+// ── Types ──────────────────────────────────────────────────────────────────────
+type PropertyType = "residential" | "commercial" | "industrial" | "";
+
+// ── Helpers: parse / stringify tag arrays from quoteData ───────────────────────
+function parseTags(v: string | string[] | undefined): string[] {
+  if (!v) return [];
+  if (Array.isArray(v)) return v;
+  try { const p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch { return []; }
+}
+function stringifyTags(tags: string[]): string { return JSON.stringify(tags); }
+
+// ── TagInput ──────────────────────────────────────────────────────────────────
+function TagInput({ tags, onChange, placeholder, testId }: {
+  tags: string[];
+  onChange: (t: string[]) => void;
+  placeholder?: string;
+  testId?: string;
+}) {
+  const [input, setInput] = useState("");
+  const ref = useRef<HTMLInputElement>(null);
+  const add = () => {
+    const v = input.trim();
+    if (v && !tags.includes(v)) { onChange([...tags, v]); setInput(""); }
+  };
+  const remove = (i: number) => onChange(tags.filter((_, j) => j !== i));
+  return (
+    <div className="space-y-1.5">
+      <div className="flex gap-1">
+        <Input
+          ref={ref}
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+          placeholder={placeholder}
+          className="h-7 text-xs flex-1"
+          data-testid={testId}
+        />
+        <button
+          type="button"
+          className="h-7 w-7 flex items-center justify-center rounded-md border border-input bg-background hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+          onClick={add}
+        >
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {tags.map((t, i) => (
+            <span key={i} className="inline-flex items-center gap-1 bg-muted border rounded-full px-2 py-0.5 text-[11px]">
+              {t}
+              <button type="button" onClick={() => remove(i)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-2.5 h-2.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Dropdown field helper ─────────────────────────────────────────────────────
+function DropField({ label, value, onChange, options, testId, wide }: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  testId?: string;
+  wide?: boolean;
+}) {
+  return (
+    <div className={wide ? "col-span-2" : ""}>
+      <Label className="text-[11px] text-muted-foreground mb-1 block">{label}</Label>
+      <Select value={value || "none"} onValueChange={v => onChange(v === "none" ? "" : v)}>
+        <SelectTrigger className="h-7 text-xs" data-testid={testId}>
+          <SelectValue placeholder="Select…" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">—</SelectItem>
+          {options.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+// ── Text field helper ─────────────────────────────────────────────────────────
+function TextField({ label, value, onChange, placeholder, testId, wide }: {
+  label: string; value: string; onChange: (v: string) => void;
+  placeholder?: string; testId?: string; wide?: boolean;
+}) {
+  return (
+    <div className={wide ? "col-span-2" : ""}>
+      <Label className="text-[11px] text-muted-foreground mb-1 block">{label}</Label>
+      <Input
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="h-7 text-xs"
+        data-testid={testId}
+      />
+    </div>
+  );
+}
+
+// ── Section wrapper ───────────────────────────────────────────────────────────
+function Section({ title, icon, open, onToggle, children, badge }: {
+  title: string; icon: React.ReactNode; open: boolean;
+  onToggle: () => void; children: React.ReactNode; badge?: string;
+}) {
+  return (
+    <div className="border rounded-xl overflow-hidden">
+      <button
+        type="button"
+        className="w-full flex items-center gap-2.5 px-4 py-3 bg-muted/40 hover:bg-muted/70 transition-colors text-left"
+        onClick={onToggle}
+      >
+        <span className="text-muted-foreground">{icon}</span>
+        <span className="text-xs font-bold text-foreground uppercase tracking-wide flex-1">{title}</span>
+        {badge && (
+          <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">{badge}</span>
+        )}
+        {open ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+      </button>
+      {open && <div className="px-4 pb-4 pt-3 space-y-4">{children}</div>}
+    </div>
+  );
+}
+
+// ── Dropdown option sets ──────────────────────────────────────────────────────
+const COUNT_0_10 = ["0","1","2","3","4","5","6","7","8","9","10+"];
+const COUNT_0_6  = ["0","1","2","3","4","5","6+"];
+const COUNT_1_6  = ["1","2","3","4","5","6+"];
+const COUNT_1_5  = ["1","2","3","4","5+"];
+const FLOORS     = ["1","2","3","4","5+"];
+const CREW       = ["1","2","3","4","5","6","7","8","9","10+"];
+
+const VISIT_DURATIONS = [
+  "0.5 hr","1 hr","1.5 hrs","2 hrs","2.5 hrs","3 hrs","4 hrs","5 hrs","6 hrs","8 hrs","Custom",
+];
+
+const COMMERCIAL_SUBTYPES = [
+  "Office","Restaurant","Retail","Clinic","School","Warehouse Office","Mixed-Use","Other",
+];
+const INDUSTRIAL_SUBTYPES = [
+  "Warehouse","Plant","Shop","Manufacturing","Distribution","Workshop","Other",
+];
+const HOME_TYPES = ["House","Apartment","Condo","Townhouse","Duplex","Basement Suite","Other"];
+const BASEMENTS  = ["None","Finished","Unfinished","Walkout"];
+const CONDITIONS = ["Light Cleaning","Moderate Cleaning","Heavy Cleaning","Deep Clean Needed"];
+
+const SERVICE_TYPES = [
+  "One-Time","Daily","Weekly","Bi-Weekly","Monthly","Custom",
+];
+const DAYS_PER_WEEK  = ["1","2","3","4","5","6","7"];
+const VISITS_MONTHLY = ["1","2","3","4","5","6+"];
+const FIRST_CLEAN_TYPES = [
+  "Standard","Heavy Initial Clean","Deep Clean","Move-In / Move-Out","Post-Construction Touch-Up","Other",
+];
+
+const COMMON_ADDONS = [
+  "Inside Windows","Carpet Spot Cleaning","Floor Buffing","Disinfection",
+  "Restocking","High-Touch Detailing","Power Washing","Strip & Wax Floors",
+  "Post-Construction Cleanup","Odor Treatment",
+];
+
+// ── Main QuoteBuilder ─────────────────────────────────────────────────────────
+export function QuoteBuilder({ sessionId, quoteData, onSave }: {
+  sessionId: string;
+  quoteData: Record<string, any>;
+  onSave: (data: Record<string, any>) => void;
+}) {
+  const { toast } = useToast();
+
+  // -- Form state ---------------------------------------------------------------
+  const [propertyType, setPropertyType] = useState<PropertyType>(quoteData.propertyType || "");
+  const [commercialSubtype, setCommercialSubtype] = useState(quoteData.commercialSubtype || "");
+  const [industrialSubtype, setIndustrialSubtype] = useState(quoteData.industrialSubtype || "");
+
+  // Client
+  const [clientName, setClientName] = useState(quoteData.clientName || "");
+  const [siteAddress, setSiteAddress] = useState(quoteData.siteAddress || "");
+  const [squareFootage, setSquareFootage] = useState(quoteData.squareFootage || "");
+
+  // Residential
+  const [homeType, setHomeType] = useState(quoteData.homeType || "");
+  const [bedrooms, setBedrooms] = useState(quoteData.bedrooms || "");
+  const [bathrooms, setBathrooms] = useState(quoteData.bathrooms || "");
+  const [halfBaths, setHalfBaths] = useState(quoteData.halfBaths || "");
+  const [stories, setStories] = useState(quoteData.stories || "");
+  const [basement, setBasement] = useState(quoteData.basement || "");
+  const [kitchenCount, setKitchenCount] = useState(quoteData.kitchenCount || "");
+  const [livingAreas, setLivingAreas] = useState(quoteData.livingAreas || "");
+  const [conditionLevel, setConditionLevel] = useState(quoteData.conditionLevel || "");
+
+  // Commercial / generic
+  const [numOffices, setNumOffices]         = useState(quoteData.numOffices || "");
+  const [numBoardrooms, setNumBoardrooms]   = useState(quoteData.numBoardrooms || "");
+  const [numReception, setNumReception]     = useState(quoteData.numReception || "");
+  const [numWashrooms, setNumWashrooms]     = useState(quoteData.numWashrooms || "");
+  const [numKitchens, setNumKitchens]       = useState(quoteData.numKitchens || "");
+  const [numHallways, setNumHallways]       = useState(quoteData.numHallways || "");
+  const [numEntrances, setNumEntrances]     = useState(quoteData.numEntrances || "");
+  const [numFloors, setNumFloors]           = useState(quoteData.numFloors || "");
+
+  // Restaurant extras
+  const [hasKitchen, setHasKitchen]         = useState(quoteData.hasKitchen || "");
+  const [numDiningAreas, setNumDiningAreas] = useState(quoteData.numDiningAreas || "");
+  const [greasLevel, setGreaseLevel]        = useState(quoteData.greaseLevel || "");
+
+  // Retail extras
+  const [hasSalesFloor, setHasSalesFloor]   = useState(quoteData.hasSalesFloor || "");
+  const [hasStockRoom, setHasStockRoom]     = useState(quoteData.hasStockRoom || "");
+
+  // Industrial
+  const [numOfficeAreas, setNumOfficeAreas] = useState(quoteData.numOfficeAreas || "");
+  const [hasLunchroom, setHasLunchroom]     = useState(quoteData.hasLunchroom || "");
+  const [hasLockerRoom, setHasLockerRoom]   = useState(quoteData.hasLockerRoom || "");
+  const [heavySoilLevel, setHeavySoilLevel] = useState(quoteData.heavySoilLevel || "");
+  const [hasLoadingDock, setHasLoadingDock] = useState(quoteData.hasLoadingDock || "");
+
+  // Tags
+  const [specialSurfaceTags, setSpecialSurfaceTags] = useState<string[]>(parseTags(quoteData.specialSurfaceTags));
+  const [otherAreaTags, setOtherAreaTags]           = useState<string[]>(parseTags(quoteData.otherAreaTags));
+  const [addOnTags, setAddOnTags]                   = useState<string[]>(parseTags(quoteData.addOnTags));
+  const [includedAreaTags, setIncludedAreaTags]     = useState<string[]>(parseTags(quoteData.includedAreaTags));
+
+  // Service scope
+  const [serviceType, setServiceType]       = useState(quoteData.serviceType || "");
+  const [daysPerWeek, setDaysPerWeek]       = useState(quoteData.daysPerWeek || "");
+  const [visitsPerMonth, setVisitsPerMonth] = useState(quoteData.visitsPerMonth || "");
+  const [visitDuration, setVisitDuration]   = useState(quoteData.visitDuration || "");
+  const [crewSizeEst, setCrewSizeEst]       = useState(quoteData.crewSizeEst || "");
+  const [firstCleanType, setFirstCleanType] = useState(quoteData.firstCleanType || "");
+  const [scopeSummary, setScopeSummary]     = useState(quoteData.scopeSummary || "");
+
+  // Internal pricing (admin-only)
+  const [laborHours, setLaborHours]         = useState(quoteData.laborHours || "");
+  const [hourlyPay, setHourlyPay]           = useState(quoteData.hourlyPay || "");
+  const [targetMargin, setTargetMargin]     = useState(quoteData.targetMargin || "50");
+  const [travelAdjust, setTravelAdjust]     = useState(quoteData.travelAdjust || "");
+  const [suppliesAdjust, setSuppliesAdjust] = useState(quoteData.suppliesAdjust || "");
+  const [difficultyMult, setDifficultyMult] = useState(quoteData.difficultyMult || "1.0");
+  const [minimumCharge, setMinimumCharge]   = useState(quoteData.minimumCharge || "");
+
+  // Client-facing pricing outputs
+  const [oneTimeAmount, setOneTimeAmount]     = useState(quoteData.oneTimeAmount || "");
+  const [weeklyAmount, setWeeklyAmount]       = useState(quoteData.weeklyAmount || "");
+  const [biweeklyAmount, setBiweeklyAmount]   = useState(quoteData.biweeklyAmount || "");
+  const [monthlyAmount, setMonthlyAmount]     = useState(quoteData.monthlyAmount || "");
+  const [pricingNotes, setPricingNotes]       = useState(quoteData.pricingNotes || "");
+
+  // AI suggestion results
+  const [suggestion, setSuggestion] = useState<Record<string, any> | null>(
+    quoteData.pricingExplanation ? quoteData : null
+  );
+
+  // Section open state
+  const [openSection, setOpenSection] = useState<string[]>(["details", "scope", "pricing_output"]);
+  const toggle = (s: string) => setOpenSection(v => v.includes(s) ? v.filter(x => x !== s) : [...v, s]);
+  const isOpen = (s: string) => openSection.includes(s);
+
+  // -- Compile current quoteData object ----------------------------------------
+  const buildQuoteData = () => ({
+    ...quoteData,
+    propertyType, commercialSubtype, industrialSubtype,
+    clientName, siteAddress, squareFootage,
+    // Residential
+    homeType, bedrooms, bathrooms, halfBaths, stories, basement, kitchenCount, livingAreas, conditionLevel,
+    // Commercial
+    numOffices, numBoardrooms, numReception, numWashrooms, numKitchens, numHallways, numEntrances, numFloors,
+    hasKitchen, numDiningAreas, greaseLevel: greasLevel, hasSalesFloor, hasStockRoom,
+    // Industrial
+    numOfficeAreas, hasLunchroom, hasLockerRoom, heavySoilLevel, hasLoadingDock,
+    // Tags
+    specialSurfaceTags: stringifyTags(specialSurfaceTags),
+    otherAreaTags: stringifyTags(otherAreaTags),
+    addOnTags: stringifyTags(addOnTags),
+    includedAreaTags: stringifyTags(includedAreaTags),
+    // Scope
+    serviceType, daysPerWeek, visitsPerMonth, visitDuration, crewSizeEst, firstCleanType, scopeSummary,
+    // Internal
+    laborHours, hourlyPay, targetMargin, travelAdjust, suppliesAdjust, difficultyMult, minimumCharge,
+    // Pricing outputs
+    oneTimeAmount, weeklyAmount, biweeklyAmount, monthlyAmount, pricingNotes,
+  });
+
+  const handleSave = () => onSave(buildQuoteData());
+
+  // -- AI Scope Summary --------------------------------------------------------
+  const scopeMutation = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/field-notes/sessions/${sessionId}/generate-scope`, {
+      propertyType, commercialSubtype, numOffices, numWashrooms, numKitchens,
+      numHallways, numEntrances, numFloors, squareFootage, serviceType,
+      includedAreas: includedAreaTags.join(", "),
+    }).then(r => r.json()),
+    onSuccess: (data) => {
+      setScopeSummary(data.scopeSummary || "");
+      toast({ title: "Scope summary generated" });
+    },
+    onError: () => toast({ title: "Failed to generate scope", variant: "destructive" }),
+  });
+
+  // -- AI Price Suggestion -----------------------------------------------------
+  const priceMutation = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/field-notes/sessions/${sessionId}/suggest-price`, {
+      propertyType, commercialSubtype, industrialSubtype, squareFootage,
+      numOffices, numWashrooms, numKitchens, numHallways, numEntrances, numFloors,
+      numDiningAreas, numBoardrooms, numReception, hasKitchen, greaseLevel,
+      bedrooms, bathrooms, stories, conditionLevel, homeType,
+      numOfficeAreas, hasLunchroom, hasLockerRoom, heavySoilLevel,
+      serviceType, daysPerWeek, visitsPerMonth, visitDuration, crewSizeEst,
+      firstCleanType, addOnTags: addOnTags.join(", "),
+      specialSurfaces: specialSurfaceTags.join(", "),
+      otherAreas: otherAreaTags.join(", "),
+      laborHours, hourlyPay, targetMargin, travelAdjust, suppliesAdjust,
+      difficultyMult, minimumCharge,
+    }).then(r => r.json()),
+    onSuccess: (data) => {
+      setSuggestion(data);
+      if (data.suggestedOneTime) setOneTimeAmount(data.suggestedOneTime);
+      if (data.suggestedWeekly) setWeeklyAmount(data.suggestedWeekly);
+      if (data.suggestedBiweekly) setBiweeklyAmount(data.suggestedBiweekly);
+      if (data.suggestedMonthly) setMonthlyAmount(data.suggestedMonthly);
+      if (data.scopeSummary && !scopeSummary) setScopeSummary(data.scopeSummary);
+      if (!isOpen("pricing_output")) setOpenSection(v => [...v, "pricing_output"]);
+      toast({ title: "Price suggestion ready" });
+    },
+    onError: () => toast({ title: "Failed to generate suggestion", variant: "destructive" }),
+  });
+
+  const quoteStatus = quoteData.quoteStatus;
+  const isRes = propertyType === "residential";
+  const isCom = propertyType === "commercial";
+  const isInd = propertyType === "industrial";
+  const comSub = commercialSubtype.toLowerCase();
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+  return (
+    <div className="mt-10 pt-6 border-t space-y-5">
+
+      {/* Response status banners */}
+      {quoteStatus === "accepted" && (
+        <div className="flex items-center gap-2.5 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-xl dark:bg-green-950/20 dark:border-green-800 dark:text-green-400" data-testid="banner-admin-quote-accepted">
+          <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+          <div>
+            <p className="text-xs font-semibold">Client accepted this quote</p>
+            {quoteData.quoteAcceptedAt && <p className="text-[11px] text-green-600 dark:text-green-500">Accepted {format(parseISO(quoteData.quoteAcceptedAt), "MMM d, yyyy 'at' h:mm a")}</p>}
+          </div>
+        </div>
+      )}
+      {quoteStatus === "declined" && (
+        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-xl dark:bg-red-950/20 dark:border-red-800 dark:text-red-400" data-testid="banner-admin-quote-declined">
+          <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-xs font-semibold">Client declined this quote</p>
+            {quoteData.quoteDeclineReason && <p className="text-[11px] text-red-600 dark:text-red-500 mt-0.5">Reason: {quoteData.quoteDeclineReason}</p>}
+            {quoteData.quoteDeclinedAt && <p className="text-[11px] text-red-500 mt-0.5">{format(parseISO(quoteData.quoteDeclinedAt), "MMM d, yyyy 'at' h:mm a")}</p>}
+          </div>
+        </div>
+      )}
+
+      {/* Section header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <DollarSign className="w-4 h-4 text-primary" />
+          <p className="text-sm font-semibold">Quote Builder</p>
+        </div>
+        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleSave} data-testid="button-save-quote">
+          <Check className="w-3 h-3" /> Save
+        </Button>
+      </div>
+
+      {/* ── S1: Client & Property Type ── */}
+      <Section title="Client & Property Type" icon={<Building className="w-3.5 h-3.5" />} open={isOpen("type")} onToggle={() => toggle("type")}>
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <TextField label="Client name" value={clientName} onChange={setClientName} placeholder="e.g. Acme Corp" testId="input-quote-clientName" />
+          <TextField label="Site address" value={siteAddress} onChange={setSiteAddress} placeholder="123 Main Street" testId="input-quote-siteAddress" />
+        </div>
+
+        {/* Property type cards */}
+        <p className="text-[11px] text-muted-foreground mb-2 font-medium">Property type <span className="text-red-500">*</span></p>
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          {([
+            { type: "residential" as PropertyType, label: "Residential", icon: <Home className="w-4 h-4" /> },
+            { type: "commercial" as PropertyType,  label: "Commercial",  icon: <Briefcase className="w-4 h-4" /> },
+            { type: "industrial" as PropertyType,  label: "Industrial",  icon: <Factory className="w-4 h-4" /> },
+          ]).map(({ type, label, icon }) => (
+            <button
+              key={type}
+              type="button"
+              data-testid={`button-property-type-${type}`}
+              className={cn(
+                "flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border transition-all text-xs font-medium",
+                propertyType === type
+                  ? "border-primary bg-primary/5 text-primary"
+                  : "border-input bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+              )}
+              onClick={() => { setPropertyType(type); if (!isOpen("type")) toggle("type"); if (!isOpen("details")) setOpenSection(v => [...v, "details"]); }}
+            >
+              {icon}
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Subtypes */}
+        {isCom && (
+          <DropField
+            label="Commercial subtype"
+            value={commercialSubtype}
+            onChange={setCommercialSubtype}
+            options={COMMERCIAL_SUBTYPES}
+            testId="select-commercial-subtype"
+          />
+        )}
+        {isInd && (
+          <DropField
+            label="Industrial subtype"
+            value={industrialSubtype}
+            onChange={setIndustrialSubtype}
+            options={INDUSTRIAL_SUBTYPES}
+            testId="select-industrial-subtype"
+          />
+        )}
+      </Section>
+
+      {/* ── S2: Property Details ── */}
+      {propertyType && (
+        <Section title="Property Details" icon={<LayoutList className="w-3.5 h-3.5" />} open={isOpen("details")} onToggle={() => toggle("details")}>
+
+          {/* Square footage — always available */}
+          <TextField label="Square footage (optional)" value={squareFootage} onChange={setSquareFootage} placeholder="e.g. 2,400 sq ft" testId="input-quote-squareFootage" wide />
+
+          {/* ── Residential ── */}
+          {isRes && (
+            <div className="grid grid-cols-2 gap-3">
+              <DropField label="Home type" value={homeType} onChange={setHomeType} options={HOME_TYPES} testId="select-homeType" />
+              <DropField label="Condition" value={conditionLevel} onChange={setConditionLevel} options={CONDITIONS} testId="select-conditionLevel" />
+              <DropField label="Bedrooms" value={bedrooms} onChange={setBedrooms} options={COUNT_0_6} testId="select-bedrooms" />
+              <DropField label="Bathrooms" value={bathrooms} onChange={setBathrooms} options={COUNT_1_5} testId="select-bathrooms" />
+              <DropField label="Half bathrooms" value={halfBaths} onChange={setHalfBaths} options={COUNT_0_6} testId="select-halfBaths" />
+              <DropField label="Stories" value={stories} onChange={setStories} options={FLOORS} testId="select-stories" />
+              <DropField label="Basement" value={basement} onChange={setBasement} options={BASEMENTS} testId="select-basement" />
+              <DropField label="Kitchens" value={kitchenCount} onChange={setKitchenCount} options={COUNT_1_5} testId="select-kitchenCount" />
+              <DropField label="Living areas" value={livingAreas} onChange={setLivingAreas} options={COUNT_0_6} testId="select-livingAreas" wide />
+            </div>
+          )}
+
+          {/* ── Commercial ── */}
+          {isCom && (
+            <div className="grid grid-cols-2 gap-3">
+              <DropField label="Floors" value={numFloors} onChange={setNumFloors} options={FLOORS} testId="select-numFloors" />
+              <DropField label="Washrooms" value={numWashrooms} onChange={setNumWashrooms} options={COUNT_0_6} testId="select-numWashrooms" />
+              <DropField label="Entrances" value={numEntrances} onChange={setNumEntrances} options={COUNT_0_6} testId="select-numEntrances" />
+              <DropField label="Hallways" value={numHallways} onChange={setNumHallways} options={COUNT_0_6} testId="select-numHallways" />
+
+              {/* Office */}
+              {(comSub === "" || comSub === "office" || comSub === "mixed-use" || comSub === "clinic" || comSub === "school" || comSub === "warehouse office") && (
+                <>
+                  <DropField label="Offices" value={numOffices} onChange={setNumOffices} options={COUNT_0_10} testId="select-numOffices" />
+                  <DropField label="Boardrooms" value={numBoardrooms} onChange={setNumBoardrooms} options={COUNT_0_10} testId="select-numBoardrooms" />
+                  <DropField label="Reception areas" value={numReception} onChange={setNumReception} options={COUNT_0_6} testId="select-numReception" />
+                  <DropField label="Break rooms / kitchens" value={numKitchens} onChange={setNumKitchens} options={COUNT_0_6} testId="select-numKitchens" />
+                </>
+              )}
+
+              {/* Restaurant */}
+              {(comSub === "restaurant") && (
+                <>
+                  <DropField label="Dining areas" value={numDiningAreas} onChange={setNumDiningAreas} options={COUNT_0_6} testId="select-numDiningAreas" />
+                  <DropField label="Kitchen present" value={hasKitchen} onChange={setHasKitchen} options={["Yes","No"]} testId="select-hasKitchen" />
+                  <DropField label="Grease / kitchen condition" value={greasLevel} onChange={setGreaseLevel} options={["Light","Moderate","Heavy","Severe"]} testId="select-greaseLevel" />
+                </>
+              )}
+
+              {/* Retail */}
+              {comSub === "retail" && (
+                <>
+                  <DropField label="Sales floor" value={hasSalesFloor} onChange={setHasSalesFloor} options={["Yes","No"]} testId="select-hasSalesFloor" />
+                  <DropField label="Stock room" value={hasStockRoom} onChange={setHasStockRoom} options={["Yes","No"]} testId="select-hasStockRoom" />
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── Industrial ── */}
+          {isInd && (
+            <div className="grid grid-cols-2 gap-3">
+              <DropField label="Washrooms" value={numWashrooms} onChange={setNumWashrooms} options={COUNT_0_6} testId="select-ind-numWashrooms" />
+              <DropField label="Office areas" value={numOfficeAreas} onChange={setNumOfficeAreas} options={COUNT_0_10} testId="select-numOfficeAreas" />
+              <DropField label="Floors" value={numFloors} onChange={setNumFloors} options={FLOORS} testId="select-ind-numFloors" />
+              <DropField label="Entrances" value={numEntrances} onChange={setNumEntrances} options={COUNT_0_6} testId="select-ind-numEntrances" />
+              <DropField label="Lunchroom" value={hasLunchroom} onChange={setHasLunchroom} options={["Yes","No"]} testId="select-hasLunchroom" />
+              <DropField label="Locker room" value={hasLockerRoom} onChange={setHasLockerRoom} options={["Yes","No"]} testId="select-hasLockerRoom" />
+              <DropField label="Loading dock" value={hasLoadingDock} onChange={setHasLoadingDock} options={["Yes","No"]} testId="select-hasLoadingDock" />
+              <DropField label="Heavy soil level" value={heavySoilLevel} onChange={setHeavySoilLevel} options={["Light","Moderate","Heavy","Very Heavy"]} testId="select-heavySoilLevel" wide />
+            </div>
+          )}
+
+          {/* Shared tag fields */}
+          <div className="space-y-3 pt-1">
+            <div>
+              <Label className="text-[11px] text-muted-foreground mb-1.5 block">Special surfaces</Label>
+              <TagInput tags={specialSurfaceTags} onChange={setSpecialSurfaceTags} placeholder="e.g. Carpet, VCT tile…" testId="input-special-surfaces" />
+            </div>
+            <div>
+              <Label className="text-[11px] text-muted-foreground mb-1.5 block">Other areas</Label>
+              <TagInput tags={otherAreaTags} onChange={setOtherAreaTags} placeholder="e.g. Lobby, Garage…" testId="input-other-areas" />
+            </div>
+          </div>
+        </Section>
+      )}
+
+      {/* ── S3: Service Scope ── */}
+      <Section title="Service Scope" icon={<FileCheck className="w-3.5 h-3.5" />} open={isOpen("scope")} onToggle={() => toggle("scope")}>
+        <div className="grid grid-cols-2 gap-3">
+          <DropField label="Service type" value={serviceType} onChange={setServiceType} options={SERVICE_TYPES} testId="select-serviceType" />
+          <DropField label="First clean type" value={firstCleanType} onChange={setFirstCleanType} options={FIRST_CLEAN_TYPES} testId="select-firstCleanType" />
+
+          {(serviceType === "Weekly") && (
+            <DropField label="Days per week" value={daysPerWeek} onChange={setDaysPerWeek} options={DAYS_PER_WEEK} testId="select-daysPerWeek" />
+          )}
+          {(serviceType === "Monthly" || serviceType === "Custom") && (
+            <DropField label="Visits per month" value={visitsPerMonth} onChange={setVisitsPerMonth} options={VISITS_MONTHLY} testId="select-visitsPerMonth" />
+          )}
+
+          <DropField label="Est. visit duration" value={visitDuration} onChange={setVisitDuration} options={VISIT_DURATIONS} testId="select-visitDuration" />
+          <DropField label="Suggested crew size" value={crewSizeEst} onChange={setCrewSizeEst} options={CREW} testId="select-crewSizeEst" />
+        </div>
+
+        {/* Included areas */}
+        <div className="space-y-3 pt-1">
+          <div>
+            <Label className="text-[11px] text-muted-foreground mb-1.5 block">Included areas</Label>
+            <TagInput tags={includedAreaTags} onChange={setIncludedAreaTags} placeholder="e.g. All offices, Washrooms…" testId="input-included-areas" />
+          </div>
+          <div>
+            <Label className="text-[11px] text-muted-foreground mb-1.5 block">Add-ons</Label>
+            <TagInput tags={addOnTags} onChange={setAddOnTags} placeholder="e.g. Floor buffing…" testId="input-add-ons" />
+            {/* Common add-on chips */}
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {COMMON_ADDONS.filter(a => !addOnTags.includes(a)).map(a => (
+                <button
+                  key={a}
+                  type="button"
+                  className="text-[10px] border rounded-full px-2 py-0.5 text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                  onClick={() => setAddOnTags(t => [...t, a])}
+                >
+                  + {a}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Scope summary */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <Label className="text-[11px] text-muted-foreground">Scope summary</Label>
+            <button
+              type="button"
+              className="flex items-center gap-1 text-[10px] text-primary hover:underline disabled:opacity-50"
+              onClick={() => scopeMutation.mutate()}
+              disabled={scopeMutation.isPending}
+              data-testid="button-ai-scope-summary"
+            >
+              {scopeMutation.isPending ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Wand2 className="w-2.5 h-2.5" />}
+              {scopeMutation.isPending ? "Generating…" : "AI Generate"}
+            </button>
+          </div>
+          <Textarea
+            value={scopeSummary}
+            onChange={e => setScopeSummary(e.target.value)}
+            rows={3}
+            placeholder="Describe what the service includes…"
+            className="text-xs resize-none"
+            data-testid="textarea-quote-scopeSummary"
+          />
+        </div>
+      </Section>
+
+      {/* ── S4: Internal Pricing (admin-only) ── */}
+      <Section
+        title="Internal Pricing"
+        icon={<Lock className="w-3.5 h-3.5" />}
+        open={isOpen("internal")}
+        onToggle={() => toggle("internal")}
+        badge="Not shown to client"
+      >
+        <p className="text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+          These inputs help calculate suggested pricing. They are never included on the public quote.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <TextField label="Est. labor hours" value={laborHours} onChange={setLaborHours} placeholder="e.g. 4" testId="input-laborHours" />
+          <TextField label="Hourly pay per worker ($)" value={hourlyPay} onChange={setHourlyPay} placeholder="e.g. 22" testId="input-hourlyPay" />
+          <TextField label="Target margin (%)" value={targetMargin} onChange={setTargetMargin} placeholder="e.g. 50" testId="input-targetMargin" />
+          <TextField label="Minimum charge ($)" value={minimumCharge} onChange={setMinimumCharge} placeholder="e.g. 150" testId="input-minimumCharge" />
+          <TextField label="Travel adjustment ($)" value={travelAdjust} onChange={setTravelAdjust} placeholder="e.g. 25" testId="input-travelAdjust" />
+          <TextField label="Supplies adjustment ($)" value={suppliesAdjust} onChange={setSuppliesAdjust} placeholder="e.g. 30" testId="input-suppliesAdjust" />
+          <div className="col-span-2">
+            <Label className="text-[11px] text-muted-foreground mb-1 block">Difficulty multiplier</Label>
+            <Select value={difficultyMult || "1.0"} onValueChange={setDifficultyMult}>
+              <SelectTrigger className="h-7 text-xs" data-testid="select-difficultyMult">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {["0.8","0.9","1.0","1.1","1.2","1.3","1.4","1.5","1.75","2.0"].map(v => (
+                  <SelectItem key={v} value={v}>{v}× {v === "1.0" ? "(Standard)" : v < "1.0" ? "(Easy)" : "(Hard)"}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Suggest Price button */}
+        <Button
+          className="w-full gap-2 mt-2"
+          onClick={() => priceMutation.mutate()}
+          disabled={priceMutation.isPending || !propertyType}
+          data-testid="button-suggest-price"
+        >
+          {priceMutation.isPending
+            ? <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing…</>
+            : <><Sparkles className="w-4 h-4" /> Suggest Price</>
+          }
+        </Button>
+        {!propertyType && (
+          <p className="text-[11px] text-muted-foreground text-center">Select a property type above to enable price suggestion.</p>
+        )}
+      </Section>
+
+      {/* ── AI Suggestion Result ── */}
+      {suggestion?.pricingExplanation && (
+        <div className="rounded-xl border border-primary/20 bg-primary/3 p-4 space-y-3" data-testid="section-ai-suggestion">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-primary" />
+            <p className="text-xs font-bold text-primary uppercase tracking-wide">AI Pricing Suggestion</p>
+            {suggestion.pricingConfidence && (
+              <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full ml-auto">
+                Confidence: {suggestion.pricingConfidence}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-foreground/80 leading-relaxed">{suggestion.pricingExplanation}</p>
+          <div className="grid grid-cols-2 gap-2">
+            {suggestion.suggestedOneTime && (
+              <div className="bg-background rounded-lg border px-3 py-2">
+                <p className="text-[10px] text-muted-foreground">One-time</p>
+                <p className="text-sm font-bold">{suggestion.suggestedOneTime}</p>
+              </div>
+            )}
+            {suggestion.suggestedWeekly && (
+              <div className="bg-background rounded-lg border px-3 py-2">
+                <p className="text-[10px] text-muted-foreground">Weekly</p>
+                <p className="text-sm font-bold">{suggestion.suggestedWeekly}</p>
+              </div>
+            )}
+            {suggestion.suggestedBiweekly && (
+              <div className="bg-background rounded-lg border px-3 py-2">
+                <p className="text-[10px] text-muted-foreground">Bi-weekly</p>
+                <p className="text-sm font-bold">{suggestion.suggestedBiweekly}</p>
+              </div>
+            )}
+            {suggestion.suggestedMonthly && (
+              <div className="bg-background rounded-lg border px-3 py-2">
+                <p className="text-[10px] text-muted-foreground">Monthly</p>
+                <p className="text-sm font-bold">{suggestion.suggestedMonthly}</p>
+              </div>
+            )}
+            {suggestion.suggestedLaborHours && (
+              <div className="bg-background rounded-lg border px-3 py-2">
+                <p className="text-[10px] text-muted-foreground">Est. labor hours</p>
+                <p className="text-sm font-bold">{suggestion.suggestedLaborHours}</p>
+              </div>
+            )}
+            {suggestion.suggestedCrew && (
+              <div className="bg-background rounded-lg border px-3 py-2">
+                <p className="text-[10px] text-muted-foreground">Crew size</p>
+                <p className="text-sm font-bold">{suggestion.suggestedCrew}</p>
+              </div>
+            )}
+          </div>
+          <p className="text-[10px] text-muted-foreground italic">Prices auto-applied to quote output below. You can edit them.</p>
+        </div>
+      )}
+
+      {/* ── S5: Client-Facing Pricing Output ── */}
+      <Section title="Client-Facing Pricing" icon={<DollarSign className="w-3.5 h-3.5" />} open={isOpen("pricing_output")} onToggle={() => toggle("pricing_output")}>
+        <p className="text-[11px] text-muted-foreground">These amounts appear on the public quote. Edit to finalize before sharing.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <TextField label="Monthly amount" value={monthlyAmount} onChange={setMonthlyAmount} placeholder="e.g. $1,200/month" testId="input-quote-monthlyAmount" />
+          <TextField label="Weekly amount" value={weeklyAmount} onChange={setWeeklyAmount} placeholder="e.g. $300/week" testId="input-quote-weeklyAmount" />
+          <TextField label="Bi-weekly amount" value={biweeklyAmount} onChange={setBiweeklyAmount} placeholder="e.g. $600/bi-weekly" testId="input-quote-biweeklyAmount" />
+          <TextField label="One-time / deep clean" value={oneTimeAmount} onChange={setOneTimeAmount} placeholder="e.g. $800" testId="input-quote-oneTimeAmount" />
+          <div className="col-span-2">
+            <Label className="text-[11px] text-muted-foreground mb-1 block">Pricing notes</Label>
+            <Textarea
+              value={pricingNotes}
+              onChange={e => setPricingNotes(e.target.value)}
+              rows={2}
+              placeholder="e.g. Based on 3 visits per week, includes all supplies."
+              className="text-xs resize-none"
+              data-testid="textarea-quote-pricingNotes"
+            />
+          </div>
+        </div>
+      </Section>
+
+      {/* Save button */}
+      <Button size="sm" className="w-full gap-1" onClick={handleSave} data-testid="button-save-quote-bottom">
+        <Check className="w-3.5 h-3.5" /> Save Quote Details
+      </Button>
+    </div>
+  );
+}
