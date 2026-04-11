@@ -434,9 +434,14 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
       toast({ title: "Price suggestion applied", description: "Review and edit below, then save." });
     },
     onError: (err: any) => {
-      const msg = err?.message || "Failed to generate suggestion";
-      setSuggestError(msg);
-      toast({ title: "Could not generate suggestion", description: msg.replace(/^\d+:\s*/, "").slice(0, 120), variant: "destructive" });
+      let msg = err?.message || "Failed to generate suggestion";
+      // Parse raw JSON error bodies like {"message":"..."} that apiRequest can surface
+      try { const parsed = JSON.parse(msg); if (parsed?.message) msg = parsed.message; } catch {}
+      // Strip leading status code prefix e.g. "500: ..."
+      msg = msg.replace(/^\d+:\s*/, "").trim();
+      const displayMsg = msg.length > 0 ? msg : "Could not generate pricing suggestion. Please try again.";
+      setSuggestError(displayMsg);
+      toast({ title: "Could not generate suggestion", description: displayMsg.slice(0, 120), variant: "destructive" });
     },
   });
 

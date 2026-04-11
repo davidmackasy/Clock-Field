@@ -4785,8 +4785,9 @@ Return a JSON object with these exact fields:
       const user = req.user as any;
       const session = await storage.getFieldNotesSession(req.params.id);
       if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      const [openaiClient] = getOpenAIClient();
-      if (!openaiClient) return res.status(503).json({ message: "AI not available" });
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) return res.status(503).json({ message: "AI not available — OPENAI_API_KEY not configured" });
+      const openaiClient = new OpenAI({ apiKey });
 
       const {
         propertyType, commercialSubtype, industrialSubtype, squareFootage,
@@ -4900,8 +4901,9 @@ Only include keys that are relevant. If service is one-time only, omit weekly/bi
       const user = req.user as any;
       const session = await storage.getFieldNotesSession(req.params.id);
       if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      const [openaiClient] = getOpenAIClient();
-      if (!openaiClient) return res.status(503).json({ message: "AI not available" });
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) return res.status(503).json({ message: "AI not available — OPENAI_API_KEY not configured" });
+      const openaiClient = new OpenAI({ apiKey });
       let storedQuote: any = {};
       try { storedQuote = JSON.parse((session as any).quoteData || "{}"); } catch {}
       // Merge with live form values sent in the request body (takes priority)
@@ -4953,7 +4955,10 @@ Only include keys that are relevant. If service is one-time only, omit weekly/bi
       quoteData.scopeSummary = scopeSummary;
       await storage.updateFieldNotesSession(session.id, { quoteData: JSON.stringify(quoteData) } as any);
       res.json({ scopeSummary });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) {
+      console.error("[generate-scope] Error:", err?.message, err?.stack?.slice(0, 500));
+      res.status(500).json({ message: "Could not generate scope summary. Please try again." });
+    }
   });
 
   // GET /api/field-notes/assets/:assetId/image — serve photo
