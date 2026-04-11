@@ -15,7 +15,7 @@ import {
   Check, ChevronDown, ChevronUp, Plus, X, Loader2,
   DollarSign, Building, LayoutList, FileCheck, Sparkles,
   Wand2, Lock, Home, Briefcase, Factory, CheckCircle2, XCircle,
-  Receipt, Percent, Trash2,
+  Receipt, Percent, Trash2, CalendarClock,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -193,6 +193,19 @@ const SERVICE_TYPES = [
 ];
 const DAYS_PER_WEEK  = ["1","2","3","4","5","6","7"];
 const VISITS_MONTHLY = ["1","2","3","4","5","6+"];
+const BILLING_MODES = ["One-time","Per visit","Weekly","Bi-weekly","Monthly","Custom recurring"];
+const QUOTE_PERIODS = ["1 week","2 weeks","4 weeks","1 month","3 months","6 months","12 months","Custom"];
+
+function quotePeriodToWeeks(period: string): number | null {
+  if (period === "1 week") return 1;
+  if (period === "2 weeks") return 2;
+  if (period === "4 weeks") return 4;
+  if (period === "1 month") return 4;
+  if (period === "3 months") return 13;
+  if (period === "6 months") return 26;
+  if (period === "12 months") return 52;
+  return null;
+}
 const FIRST_CLEAN_TYPES = [
   "Standard","Heavy Initial Clean","Deep Clean","Move-In / Move-Out","Post-Construction Touch-Up","Other",
 ];
@@ -280,6 +293,11 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
   const [firstCleanType, setFirstCleanType] = useState(quoteData.firstCleanType || "");
   const [scopeSummary, setScopeSummary]     = useState(quoteData.scopeSummary || "");
 
+  // Pricing schedule
+  const [billingMode, setBillingMode]               = useState(quoteData.billingMode || "");
+  const [serviceDaysPerWeek, setServiceDaysPerWeek] = useState(quoteData.serviceDaysPerWeek || "");
+  const [quotePeriod, setQuotePeriod]               = useState(quoteData.quotePeriod || "");
+
   // Internal pricing (admin-only)
   const [laborHours, setLaborHours]         = useState(quoteData.laborHours || "");
   const [hourlyPay, setHourlyPay]           = useState(quoteData.hourlyPay || "");
@@ -326,6 +344,14 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
   const updateTax = (i: number, field: "name" | "rate", val: string) =>
     setTaxes(t => t.map((x, j) => j === i ? { ...x, [field]: val } : x));
 
+  // -- Pricing schedule computed values ----------------------------------------
+  const quotePeriodWeeks = quotePeriodToWeeks(quotePeriod);
+  const estimatedVisits: number | null =
+    billingMode && billingMode !== "One-time" && billingMode !== "Per visit" &&
+    serviceDaysPerWeek && quotePeriodWeeks !== null
+      ? parseInt(serviceDaysPerWeek) * quotePeriodWeeks
+      : null;
+
   // -- Live price calculation ---------------------------------------------------
   const getPrimaryAmount = (): number | null => {
     const raw = baseAmount || oneTimeAmount || weeklyAmount || biweeklyAmount || monthlyAmount;
@@ -360,6 +386,9 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
     includedAreaTags: stringifyTags(includedAreaTags),
     // Scope
     serviceType, daysPerWeek, visitsPerMonth, visitDuration, crewSizeEst, firstCleanType, scopeSummary,
+    // Pricing schedule
+    billingMode, serviceDaysPerWeek, quotePeriod,
+    estimatedVisits: estimatedVisits !== null ? String(estimatedVisits) : "",
     // Internal
     laborHours, hourlyPay, targetMargin, travelAdjust, suppliesAdjust, difficultyMult, minimumCharge,
     // Pricing outputs
@@ -406,27 +435,33 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
         otherAreas: otherAreaTags.join(", "),
         laborHours, hourlyPay, targetMargin, travelAdjust, suppliesAdjust,
         difficultyMult, minimumCharge,
+        // Pricing schedule
+        billingMode, serviceDaysPerWeek, quotePeriod,
+        estimatedVisits: estimatedVisits !== null ? String(estimatedVisits) : "",
       }).then(r => r.json());
     },
     onSuccess: (data) => {
       setSuggestion(data);
       setSuggestError("");
-      // Autofill based on service type
-      const st = (serviceType || "").toLowerCase();
-      if (st.includes("one") || st.includes("time") || !serviceType) {
+      // Autofill — billingMode takes priority over serviceType for determining which field to fill
+      const bm = (billingMode || serviceType || "").toLowerCase();
+      if (bm.includes("one") || bm.includes("time") || (!billingMode && !serviceType)) {
         if (data.suggestedOneTime) { setOneTimeAmount(data.suggestedOneTime); setBaseAmount(data.suggestedOneTime); }
-      } else if (st.includes("week") && !st.includes("bi")) {
-        if (data.suggestedWeekly) { setWeeklyAmount(data.suggestedWeekly); setBaseAmount(data.suggestedWeekly); }
-      } else if (st.includes("bi")) {
+      } else if (bm.includes("per visit")) {
+        if (data.suggestedPerVisit || data.suggestedOneTime) {
+          const v = data.suggestedPerVisit || data.suggestedOneTime;
+          setBaseAmount(v); setOneTimeAmount(v);
+        }
+      } else if (bm.includes("bi")) {
         if (data.suggestedBiweekly) { setBiweeklyAmount(data.suggestedBiweekly); setBaseAmount(data.suggestedBiweekly); }
-      } else if (st.includes("month")) {
+      } else if (bm.includes("week")) {
+        if (data.suggestedWeekly) { setWeeklyAmount(data.suggestedWeekly); setBaseAmount(data.suggestedWeekly); }
+      } else if (bm.includes("month")) {
         if (data.suggestedMonthly) { setMonthlyAmount(data.suggestedMonthly); setBaseAmount(data.suggestedMonthly); }
       } else {
-        // Fallback: fill all that have values
-        if (data.suggestedOneTime) setOneTimeAmount(data.suggestedOneTime);
-        if (data.suggestedWeekly) setWeeklyAmount(data.suggestedWeekly);
-        if (data.suggestedBiweekly) setBiweeklyAmount(data.suggestedBiweekly);
-        if (data.suggestedMonthly) { setMonthlyAmount(data.suggestedMonthly); setBaseAmount(data.suggestedMonthly); }
+        // Fallback: fill the primary amount from whichever the AI returned
+        const fallback = data.suggestedMonthly || data.suggestedBiweekly || data.suggestedWeekly || data.suggestedOneTime;
+        if (fallback) setBaseAmount(fallback);
       }
       if (data.pricingNotes && !pricingNotes) setPricingNotes(data.pricingNotes);
       if (data.scopeSummary && !scopeSummary) setScopeSummary(data.scopeSummary);
@@ -736,6 +771,65 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
         </div>
       </Section>
 
+      {/* ── Pricing Schedule ── */}
+      <div className="rounded-xl border bg-muted/20 px-4 py-3 space-y-3" data-testid="section-pricing-schedule">
+        <div className="flex items-center gap-2">
+          <CalendarClock className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className="text-xs font-bold text-foreground uppercase tracking-wide">Pricing Schedule</span>
+          <span className="text-[10px] text-muted-foreground ml-auto">Guides the pricing suggestion</span>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <Label className="text-[11px] text-muted-foreground mb-1 block">Billing mode</Label>
+            <Select value={billingMode || "none"} onValueChange={v => setBillingMode(v === "none" ? "" : v)}>
+              <SelectTrigger className="h-7 text-xs" data-testid="select-billingMode">
+                <SelectValue placeholder="Select billing mode…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">—</SelectItem>
+                {BILLING_MODES.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {billingMode && billingMode !== "One-time" && billingMode !== "Per visit" && (
+            <>
+              <div>
+                <Label className="text-[11px] text-muted-foreground mb-1 block">Service days / week</Label>
+                <Select value={serviceDaysPerWeek || "none"} onValueChange={v => setServiceDaysPerWeek(v === "none" ? "" : v)}>
+                  <SelectTrigger className="h-7 text-xs" data-testid="select-serviceDaysPerWeek">
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">—</SelectItem>
+                    {["1","2","3","4","5","6","7"].map(o => (
+                      <SelectItem key={o} value={o}>{o} day{o !== "1" ? "s" : ""}/week</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-[11px] text-muted-foreground mb-1 block">Quote period</Label>
+                <Select value={quotePeriod || "none"} onValueChange={v => setQuotePeriod(v === "none" ? "" : v)}>
+                  <SelectTrigger className="h-7 text-xs" data-testid="select-quotePeriod">
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">—</SelectItem>
+                    {QUOTE_PERIODS.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
+        </div>
+        {estimatedVisits !== null && (
+          <div className="text-[11px] text-muted-foreground bg-background rounded-lg border px-3 py-2" data-testid="text-estimated-visits">
+            <span className="font-medium text-foreground">{estimatedVisits} estimated visits</span>
+            {" "}in period — {serviceDaysPerWeek} days/week × {quotePeriodWeeks} week{quotePeriodWeeks !== 1 ? "s" : ""}
+          </div>
+        )}
+      </div>
+
       {/* ── Suggest Price button (always visible once propertyType is set) ── */}
       <div className="space-y-2">
         <Button
@@ -771,8 +865,39 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
               </span>
             )}
           </div>
+          {/* Billing context row */}
+          {(billingMode || estimatedVisits !== null) && (
+            <div className="flex flex-wrap gap-2">
+              {billingMode && (
+                <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
+                  {billingMode}
+                </span>
+              )}
+              {serviceDaysPerWeek && billingMode !== "One-time" && billingMode !== "Per visit" && (
+                <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+                  {serviceDaysPerWeek} days/week
+                </span>
+              )}
+              {quotePeriod && billingMode !== "One-time" && billingMode !== "Per visit" && (
+                <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+                  {quotePeriod}
+                </span>
+              )}
+              {estimatedVisits !== null && (
+                <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+                  ~{estimatedVisits} visits
+                </span>
+              )}
+            </div>
+          )}
           <p className="text-xs text-foreground/80 leading-relaxed">{suggestion.pricingExplanation}</p>
           <div className="grid grid-cols-2 gap-2">
+            {suggestion.suggestedPerVisit && (
+              <div className="bg-background rounded-lg border px-3 py-2">
+                <p className="text-[10px] text-muted-foreground">Per visit</p>
+                <p className="text-sm font-bold">{suggestion.suggestedPerVisit}</p>
+              </div>
+            )}
             {suggestion.suggestedOneTime && (
               <div className="bg-background rounded-lg border px-3 py-2">
                 <p className="text-[10px] text-muted-foreground">One-time</p>
@@ -795,6 +920,12 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
               <div className="bg-background rounded-lg border px-3 py-2">
                 <p className="text-[10px] text-muted-foreground">Monthly</p>
                 <p className="text-sm font-bold">{suggestion.suggestedMonthly}</p>
+              </div>
+            )}
+            {suggestion.suggestedSubtotal && (
+              <div className="bg-background rounded-lg border px-3 py-2">
+                <p className="text-[10px] text-muted-foreground">Period subtotal</p>
+                <p className="text-sm font-bold">{suggestion.suggestedSubtotal}</p>
               </div>
             )}
             {suggestion.suggestedLaborHours && (
@@ -821,10 +952,12 @@ export function QuoteBuilder({ sessionId, quoteData, onSave }: {
         {/* Base amount */}
         <div className="space-y-1">
           <Label className="text-[11px] text-muted-foreground block">
-            {serviceType === "One-Time" ? "One-time amount" :
-             serviceType === "Weekly" ? "Weekly amount" :
-             serviceType === "Bi-Weekly" ? "Bi-weekly amount" :
-             serviceType === "Monthly" ? "Monthly amount" :
+            {(billingMode === "One-time" || serviceType === "One-Time") ? "One-time amount" :
+             (billingMode === "Per visit") ? "Per-visit amount" :
+             (billingMode === "Weekly" || serviceType === "Weekly") ? "Weekly amount" :
+             (billingMode === "Bi-weekly" || serviceType === "Bi-Weekly") ? "Bi-weekly amount" :
+             (billingMode === "Monthly" || serviceType === "Monthly") ? "Monthly amount" :
+             billingMode === "Custom recurring" ? "Amount for selected period" :
              "Quote amount (subtotal before taxes)"}
           </Label>
           <Input

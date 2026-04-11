@@ -1,0 +1,440 @@
+DEV NOTE
+
+Main update needed
+
+The quote suggestion is now working, but the pricing periods are still incomplete.
+
+Right now it generates broad pricing outputs like:
+one-time
+weekly
+bi-weekly
+monthly
+
+That is not enough.
+
+We also need proper recurring period selection and breakdowns before pricing is generated, so the system is not guessing every period at once when the user only needs one pricing structure.
+
+Main objective
+
+Improve the Field Note quotation pricing period flow only.
+Do not touch anything else.
+Do not touch attendance.
+Do not touch payroll.
+Do not touch schedules.
+Do not touch employee hours.
+Do not touch auth.
+Do not touch unrelated quote flows.
+Do not touch invoices.
+
+1. Problem with current pricing output
+
+The system is generating multiple pricing options at once, but the real quote needs to match the actual billing structure the user wants.
+
+Examples of missing logic:
+5 days per week
+7 days per week
+custom number of service days per week
+bi-weekly for a defined cycle
+monthly based on actual service frequency
+longer-term estimates like yearly
+
+Right now the quote is too generic.
+We need it to ask the right pricing period before generation, or let the user select it clearly before generating.
+
+2. Add pricing schedule section before Suggest Price
+
+Before the Suggest Price button, add a clear compact section called:
+
+Pricing schedule
+
+This section should control what kind of quote the system generates.
+
+Required fields
+
+Billing mode
+One-time
+Per visit
+Weekly
+Bi-weekly
+Monthly
+Custom recurring
+
+Service frequency
+1 day per week
+2 days per week
+3 days per week
+4 days per week
+5 days per week
+6 days per week
+7 days per week
+
+Quote duration
+1 week
+2 weeks
+4 weeks
+1 month
+3 months
+6 months
+12 months
+Custom
+
+Important
+
+Do not make AI generate every possible pricing structure by default if the user only wants one.
+The selected pricing schedule should guide the output.
+
+3. How the pricing schedule should work
+
+A. One-time
+
+If billing mode is One-time:
+generate one-time quote only
+do not prioritize weekly, bi-weekly, or monthly outputs
+show one-time subtotal, taxes, and total
+
+B. Per visit
+
+If billing mode is Per visit:
+generate a per-visit amount
+optionally show estimated weekly or monthly totals as admin reference only
+public quote should focus on per-visit price
+
+C. Weekly
+
+If billing mode is Weekly:
+use selected service frequency
+example:
+5 days per week
+7 days per week
+3 days per week
+
+Then generate:
+price per visit
+weekly subtotal
+monthly estimate based on 4 weeks if needed
+taxes
+total
+
+D. Bi-weekly
+
+If billing mode is Bi-weekly:
+generate the price based on a 2-week cycle
+service frequency still matters
+
+Examples:
+5 days per week for 2 weeks
+7 days per week for 2 weeks
+3 days per week for 2 weeks
+
+System should calculate:
+visits per 2-week period
+bi-weekly subtotal
+taxes
+total
+
+E. Monthly
+
+If billing mode is Monthly:
+generate pricing based on selected service frequency across 1 month
+
+Examples:
+5 days per week for 4 weeks
+7 days per week for 4 weeks
+2 days per week for 4 weeks
+
+System should calculate:
+visits per month
+monthly subtotal
+taxes
+total
+
+F. Custom recurring
+
+If billing mode is Custom recurring:
+allow the user to define:
+service days per week
+quote duration
+or visits per period
+
+Then price accordingly.
+
+4. Add service days per week selector
+
+This is very important.
+
+We forgot the actual weekly service day count.
+
+Add:
+Service days per week
+
+Options:
+1
+2
+3
+4
+5
+6
+7
+
+Label it clearly so the user understands this means how many days the cleaners will come each week.
+
+Examples
+
+5 days per week
+7 days per week
+
+This field must directly affect the generated price.
+
+5. Add quote duration selector
+
+Add:
+Quote period or pricing duration
+
+Options:
+1 week
+2 weeks
+4 weeks
+1 month
+3 months
+6 months
+12 months
+Custom
+
+This helps the user decide whether they want:
+weekly pricing
+bi-weekly pricing
+monthly pricing
+longer-term estimate
+
+Important
+
+If user picks Weekly + 5 days per week + 4 weeks,
+the system should understand that as a monthly recurring estimate.
+
+If user picks Bi-weekly + 5 days per week,
+the system should price 2 weeks of service.
+
+If user picks Monthly + 7 days per week,
+the system should price 4 weeks of daily service.
+
+6. AI suggestion behavior must change
+
+Right now AI is generating everything at once.
+That is not ideal.
+
+Required behavior
+
+Before pricing suggestion is finalized, the system should use the selected pricing schedule as the main target.
+
+Example
+
+If user selected:
+Billing mode = Monthly
+Service days per week = 5
+Quote period = 1 month
+
+Then the main output should be:
+Monthly amount
+Visits per month
+Estimated labor total
+Taxes
+Final total
+
+Optional supporting outputs can still exist in admin for reference, but the main quote output must match the selected structure.
+
+7. Quote output should match selected pricing structure
+
+Do not always show all of these equally:
+weekly
+bi-weekly
+monthly
+one-time
+
+Instead, the quote output section should focus on the chosen mode.
+
+Examples
+
+If selected mode is Bi-weekly:
+primary field shown should be Bi-weekly amount
+
+If selected mode is Monthly:
+primary field shown should be Monthly amount
+
+If selected mode is Weekly:
+primary field shown should be Weekly amount
+
+If selected mode is One-time:
+primary field shown should be One-time amount
+
+Optional secondary references can stay admin-only if needed.
+
+8. Suggested output breakdown rules
+
+The suggestion engine should calculate from:
+price per visit
+number of visits per selected period
+selected service days per week
+quote period
+labor estimate
+difficulty multiplier
+supplies and travel
+minimum charge
+taxes if enabled
+
+Examples
+
+Case 1
+5 days per week
+4 weeks
+$150 per visit
+
+Then:
+weekly = $750
+monthly = $3,000 before tax
+
+Case 2
+7 days per week
+2 weeks
+$175 per visit
+
+Then:
+bi-weekly = 14 visits
+2-week subtotal = $2,450 before tax
+
+Case 3
+3 days per week
+1 month
+$120 per visit
+
+Then:
+monthly = about 12 visits
+subtotal = $1,440 before tax
+
+These calculations should be automatic.
+
+9. Add visit count preview before final quote
+
+Once the user selects pricing schedule fields, show a small helper preview such as:
+
+Estimated visits in selected period: 20
+Calculated from: 5 days/week × 4 weeks
+
+This helps users understand the logic before they click Suggest Price.
+
+10. AI pricing suggestion card should improve
+
+The AI Pricing Suggestion card should show:
+
+Selected billing mode
+Selected service days per week
+Selected quote period
+Estimated visits in that period
+Estimated labor hours
+Crew size
+Suggested subtotal
+Taxes if enabled
+Final total
+
+This makes the result easier to trust.
+
+11. Public quote should stay simple
+
+The public quote should not show every internal calculation.
+
+It should show only the final chosen pricing structure.
+
+Example
+
+If the user selected Monthly:
+Monthly service quote
+Service frequency: 5 days per week
+Billing period: 1 month
+Subtotal
+Taxes
+Total
+
+If selected Bi-weekly:
+Bi-weekly service quote
+Service frequency: 7 days per week
+Billing period: 2 weeks
+Subtotal
+Taxes
+Total
+
+Do not show confusing extra pricing options on the public side.
+
+12. Keep manual override
+
+Users must still be able to edit the suggested number before saving.
+
+The suggestion should autofill.
+The user can adjust.
+Then save the quote.
+
+13. Compact UI requirement
+
+Do not overcrowd the page.
+Keep the new pricing schedule section small and clean.
+Use dropdowns, not large text inputs.
+
+Recommended order
+
+Pricing schedule
+Billing mode
+Service days per week
+Quote period
+Then Suggest Price
+
+14. QA checklist
+
+Pricing schedule section exists before Suggest Price
+Billing mode selector exists
+Service days per week selector includes 1 to 7
+Quote period selector exists
+Suggest Price uses selected pricing structure
+System no longer tries to force every pricing model equally
+Bi-weekly pricing correctly uses 2-week logic
+Monthly pricing correctly uses selected weekly service frequency
+7-days-per-week pricing works
+5-days-per-week pricing works
+Visit count preview is shown
+Quote output focuses on the selected pricing mode
+Public quote shows only the final chosen pricing structure
+Taxes still calculate properly
+No unrelated module is touched
+
+15. Do not touch rules
+
+Do not touch attendance
+Do not touch payroll
+Do not touch schedules
+Do not touch employee hours
+Do not touch auth
+Do not touch unrelated quotes
+Do not touch invoices
+Do not touch unrelated public links
+
+Only improve:
+Field Note quote pricing schedule selection
+Field Note quote service days per week logic
+Field Note quote period calculation
+Field Note quote output matching selected billing mode
+
+Priority order
+
+Priority 1
+Add billing mode, service days per week, and quote period before Suggest Price
+
+Priority 2
+Make Suggest Price calculate based on selected period instead of generating everything blindly
+
+Priority 3
+Make Quote Output focus on the selected pricing structure
+
+Priority 4
+Keep public quote simple and professional based on the chosen pricing mode
+
+Use this exact direction.
+Do not make unrelated changes.
+Do not remove the current working suggestion flow.
+Just make the pricing period logic smarter and complete.

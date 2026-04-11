@@ -4799,6 +4799,7 @@ Return a JSON object with these exact fields:
         firstCleanType, addOnTags, specialSurfaces, otherAreas,
         laborHours, hourlyPay, targetMargin, travelAdjust, suppliesAdjust,
         difficultyMult, minimumCharge,
+        billingMode, serviceDaysPerWeek, quotePeriod, estimatedVisits,
       } = req.body;
 
       // Gather session photos context
@@ -4807,6 +4808,14 @@ Return a JSON object with these exact fields:
       const areaLabels = [...new Set(assets.map((a: any) => a.areaLabel).filter(Boolean))];
       const entries: any[] = (session as any).entries ?? [];
       const entryText = entries.map(e => e.body || "").filter(Boolean).join("\n").slice(0, 1500);
+
+      // Determine the primary billing mode for the prompt
+      const primaryBillingMode = billingMode || serviceType || "one-time";
+      const isOneTime = primaryBillingMode.toLowerCase().includes("one") || primaryBillingMode.toLowerCase().includes("time");
+      const isPerVisit = primaryBillingMode.toLowerCase().includes("per visit");
+      const isWeekly = primaryBillingMode.toLowerCase().includes("week") && !primaryBillingMode.toLowerCase().includes("bi");
+      const isBiWeekly = primaryBillingMode.toLowerCase().includes("bi");
+      const isMonthly = primaryBillingMode.toLowerCase().includes("month");
 
       // Build full prompt
       const prompt = `You are a pricing assistant for a professional cleaning company. Generate an accurate, competitive price suggestion for the following cleaning quote.
@@ -4820,9 +4829,14 @@ PROPERTY:
 - Special surfaces: ${specialSurfaces || "none noted"}
 - Other areas: ${otherAreas || "none"}
 
-SERVICE:
-- Type: ${serviceType || "one-time"}
-- Days/week: ${daysPerWeek || "N/A"}
+PRICING SCHEDULE (PRIMARY — use this to focus your output):
+- Billing mode: ${primaryBillingMode}
+- Service days per week: ${serviceDaysPerWeek || daysPerWeek || "N/A"}
+- Quote period: ${quotePeriod || "not specified"}
+- Estimated visits in period: ${estimatedVisits || "N/A"}
+
+SERVICE DETAILS:
+- Service type: ${serviceType || "not specified"}
 - Visits/month: ${visitsPerMonth || "N/A"}
 - Visit duration: ${visitDuration || "not specified"}
 - Crew size: ${crewSizeEst || "not specified"}
@@ -4845,29 +4859,39 @@ SITE CONTEXT (from field note):
 
 INSTRUCTIONS:
 Calculate professional cleaning prices using these rules:
-1. If hourly pay and labor hours are provided, use them as the base cost, then apply margin and adjustments
-2. If not provided, estimate based on property type, size, and condition
-3. Apply difficulty multiplier to increase price for hard conditions (grease, heavy soil, etc.)
-4. Apply minimum charge if calculated price is below it
-5. For recurring services: weekly < biweekly < monthly per-visit pricing (frequency discounts)
-6. One-time / deep clean pricing is typically 1.5–3x the regular visit price
-7. Use Canadian market rates if context suggests Canada, US rates otherwise
+1. FOCUS on the selected billing mode: "${primaryBillingMode}" — this is the primary output required
+2. If service days per week and quote period are specified, use them to compute the period total
+   Example: 5 days/week × 4 weeks = 20 visits; 20 × per-visit price = monthly subtotal
+3. If hourly pay and labor hours are provided, use them as the base per-visit cost, then apply margin and adjustments
+4. If internal inputs are not provided, estimate based on property type, size, and condition
+5. Apply difficulty multiplier (${difficultyMult || "1.0"}×) to the per-visit base cost
+6. Apply minimum charge if calculated per-visit price is below it
+7. One-time / deep clean pricing is typically 1.5–3× the regular visit price
+8. Use Canadian market rates if context suggests Canada, US rates otherwise
 
-Return ONLY valid JSON matching this structure:
+${isOneTime ? "OUTPUT FOCUS: This is a ONE-TIME quote. Provide suggestedOneTime only. Do not generate weekly/bi-weekly/monthly amounts." : ""}
+${isPerVisit ? "OUTPUT FOCUS: This is a PER-VISIT quote. Provide suggestedPerVisit as the primary output. Optionally include a weekly or monthly estimate as a reference." : ""}
+${isWeekly ? `OUTPUT FOCUS: This is a WEEKLY quote. Provide suggestedPerVisit (price per visit) and suggestedWeekly (total per week based on ${serviceDaysPerWeek || daysPerWeek || "selected"} days/week). Optionally provide suggestedMonthly as a 4-week estimate.` : ""}
+${isBiWeekly ? `OUTPUT FOCUS: This is a BI-WEEKLY quote. Provide suggestedPerVisit and suggestedBiweekly (total for 2-week cycle based on ${serviceDaysPerWeek || daysPerWeek || "selected"} days/week × 2 weeks = ${estimatedVisits || "calculated"} visits). Include suggestedSubtotal for the full period.` : ""}
+${isMonthly ? `OUTPUT FOCUS: This is a MONTHLY quote. Provide suggestedPerVisit and suggestedMonthly (total for the month based on ${serviceDaysPerWeek || daysPerWeek || "selected"} days/week × 4 weeks = ${estimatedVisits || "calculated"} visits). Include suggestedSubtotal for the full period.` : ""}
+
+Return ONLY valid JSON. Include only the keys relevant to the selected billing mode:
 {
+  "suggestedPerVisit": "$X",
   "suggestedOneTime": "$X",
-  "suggestedWeekly": "$X/visit or $X/week",
-  "suggestedBiweekly": "$X/visit",
+  "suggestedWeekly": "$X/week",
+  "suggestedBiweekly": "$X for 2-week period",
   "suggestedMonthly": "$X/month",
-  "suggestedLaborHours": "X hrs",
+  "suggestedSubtotal": "$X (period total before taxes)",
+  "suggestedLaborHours": "X hrs per visit",
   "suggestedCrew": "X cleaners",
-  "pricingExplanation": "2-3 sentence explanation of pricing logic",
-  "pricingNotes": "1-2 sentence client-facing pricing note (e.g. what's included, frequency basis)",
+  "pricingExplanation": "2-3 sentence explanation of pricing logic and how visit count factors in",
+  "pricingNotes": "1-2 sentence client-facing pricing note (frequency, what's included)",
   "pricingConfidence": "High|Medium|Low",
   "scopeSummary": "1-2 sentence client-facing scope summary"
 }
 
-Only include keys that are relevant. If service is one-time only, omit weekly/biweekly/monthly. Format all dollar amounts as "$X" or "$X,XXX".`;
+Format all dollar amounts as "$X" or "$X,XXX". Omit keys that don't apply to the selected billing mode.`;
 
       const completion = await openaiClient.chat.completions.create({
         model: "gpt-4o-mini",
