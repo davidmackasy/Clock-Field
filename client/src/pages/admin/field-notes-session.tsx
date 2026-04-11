@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, Component, type ReactNode } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -16,11 +16,10 @@ import {
   Loader2, Edit3, X, Check, Images, FileText,
   Sparkles, NotebookPen, Share2, Copy, Link as LinkIcon,
   EyeOff, User, Printer, ChevronDown, ChevronUp,
-  DollarSign, ClipboardList, CheckCircle2, XCircle,
-  Send, Eye, CircleDot, ExternalLink,
+  FileCheck, DollarSign, Building, LayoutList, Wand2,
+  CheckCircle2, XCircle,
 } from "lucide-react";
 import { format, parseISO, differenceInMinutes } from "date-fns";
-import { QuoteBuilder } from "@/components/field-notes/quote-builder";
 
 const SESSION_TYPE_LABELS: Record<string, string> = {
   site_visit: "Site Visit", inspection: "Inspection", pre_clean: "Pre-Clean",
@@ -31,34 +30,6 @@ const SESSION_TYPE_LABELS: Record<string, string> = {
 function parseQuoteData(raw: string | null | undefined): Record<string, any> {
   if (!raw) return {};
   try { return JSON.parse(raw); } catch { return {}; }
-}
-
-// ── Error boundary ─────────────────────────────────────────────────────────────
-class SectionErrorBoundary extends Component<
-  { children: ReactNode; fallback?: ReactNode },
-  { hasError: boolean; errorMessage: string }
-> {
-  constructor(props: any) {
-    super(props);
-    this.state = { hasError: false, errorMessage: "" };
-  }
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, errorMessage: String(error?.message || error || "Unknown error") };
-  }
-  componentDidCatch(error: any, info: any) {
-    console.error("[FieldNote] Render error:", error, info);
-  }
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback ?? (
-        <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-          <p className="font-medium text-foreground mb-1">Could not load this section.</p>
-          <p className="text-xs">Please refresh or contact support. ({this.state.errorMessage})</p>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
 }
 
 // ── Share Panel ───────────────────────────────────────────────────────────────
@@ -345,6 +316,196 @@ function AiExtractedPanel({ extracted, onApply }: { extracted: Record<string, an
   );
 }
 
+// ── Quote Section ──────────────────────────────────────────────────────────────
+function QuoteSection({ sessionId, quoteData, onSave }: {
+  sessionId: string;
+  quoteData: Record<string, any>;
+  onSave: (data: Record<string, any>) => void;
+}) {
+  const { toast } = useToast();
+  const [form, setForm] = useState<Record<string, string>>({
+    clientName: quoteData.clientName || "",
+    siteAddress: quoteData.siteAddress || "",
+    squareFootage: quoteData.squareFootage || "",
+    numFloors: quoteData.numFloors || "",
+    numOffices: quoteData.numOffices || "",
+    numWashrooms: quoteData.numWashrooms || "",
+    numKitchens: quoteData.numKitchens || "",
+    numHallways: quoteData.numHallways || "",
+    numEntrances: quoteData.numEntrances || "",
+    specialSurfaces: quoteData.specialSurfaces || "",
+    otherAreas: quoteData.otherAreas || "",
+    serviceFrequency: quoteData.serviceFrequency || "",
+    carpetFrequency: quoteData.carpetFrequency || "",
+    includedAreas: quoteData.includedAreas || "",
+    scopeSummary: quoteData.scopeSummary || "",
+    addOns: quoteData.addOns || "",
+    monthlyAmount: quoteData.monthlyAmount || "",
+    weeklyAmount: quoteData.weeklyAmount || "",
+    biweeklyAmount: quoteData.biweeklyAmount || "",
+    oneTimeAmount: quoteData.oneTimeAmount || "",
+    pricingNotes: quoteData.pricingNotes || "",
+  });
+
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const handleSave = () => {
+    const merged = { ...quoteData, ...form };
+    onSave(merged);
+  };
+
+  const scopeMutation = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/field-notes/sessions/${sessionId}/generate-scope`).then(r => r.json()),
+    onSuccess: (data) => {
+      setForm(f => ({ ...f, scopeSummary: data.scopeSummary || "" }));
+      toast({ title: "Scope summary generated" });
+    },
+    onError: () => toast({ title: "Failed to generate scope", variant: "destructive" }),
+  });
+
+  const field = (label: string, key: string, placeholder?: string, wide?: boolean) => (
+    <div className={wide ? "col-span-2" : ""}>
+      <Label className="text-[11px] text-muted-foreground mb-1 block">{label}</Label>
+      <Input
+        value={form[key] || ""}
+        onChange={set(key)}
+        placeholder={placeholder || ""}
+        className="h-7 text-xs"
+        data-testid={`input-quote-${key}`}
+      />
+    </div>
+  );
+
+  const quoteStatus = quoteData.quoteStatus;
+
+  return (
+    <div className="mt-10 pt-6 border-t space-y-6">
+
+      {/* Response status banner */}
+      {quoteStatus === "accepted" && (
+        <div className="flex items-center gap-2.5 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-xl dark:bg-green-950/20 dark:border-green-800 dark:text-green-400" data-testid="banner-admin-quote-accepted">
+          <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+          <div>
+            <p className="text-xs font-semibold">Client accepted this quote</p>
+            {quoteData.quoteAcceptedAt && (
+              <p className="text-[11px] text-green-600 dark:text-green-500">Accepted {format(parseISO(quoteData.quoteAcceptedAt), "MMM d, yyyy 'at' h:mm a")}</p>
+            )}
+          </div>
+        </div>
+      )}
+      {quoteStatus === "declined" && (
+        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-xl dark:bg-red-950/20 dark:border-red-800 dark:text-red-400" data-testid="banner-admin-quote-declined">
+          <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-xs font-semibold">Client declined this quote</p>
+            {quoteData.quoteDeclineReason && <p className="text-[11px] text-red-600 dark:text-red-500 mt-0.5">Reason: {quoteData.quoteDeclineReason}</p>}
+            {quoteData.quoteDeclinedAt && <p className="text-[11px] text-red-500 mt-0.5">{format(parseISO(quoteData.quoteDeclinedAt), "MMM d, yyyy 'at' h:mm a")}</p>}
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <DollarSign className="w-4 h-4 text-primary" />
+          <p className="text-sm font-semibold">Quote / Proposal Details</p>
+        </div>
+        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleSave} data-testid="button-save-quote">
+          <Check className="w-3 h-3" /> Save
+        </Button>
+      </div>
+
+      {/* Client info */}
+      <div>
+        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
+          <Building className="w-3 h-3" /> Client & Site
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("Client name", "clientName", "e.g. Acme Corp")}
+          {field("Site address", "siteAddress", "123 Main Street")}
+        </div>
+      </div>
+
+      {/* Property details */}
+      <div>
+        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
+          <LayoutList className="w-3 h-3" /> Property Details
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("Square footage", "squareFootage", "e.g. 1,200 sq ft")}
+          {field("Number of floors", "numFloors", "e.g. 2")}
+          {field("Offices", "numOffices", "e.g. 6")}
+          {field("Washrooms", "numWashrooms", "e.g. 3")}
+          {field("Kitchens / break rooms", "numKitchens", "e.g. 1")}
+          {field("Hallways", "numHallways", "e.g. 2")}
+          {field("Entrances", "numEntrances", "e.g. 1")}
+          {field("Special surfaces", "specialSurfaces", "e.g. carpet, VCT tile, glass")}
+          <div className="col-span-2">
+            <Label className="text-[11px] text-muted-foreground mb-1 block">Other areas</Label>
+            <Input value={form.otherAreas} onChange={set("otherAreas")} placeholder="e.g. lobby, garage, warehouse" className="h-7 text-xs" data-testid="input-quote-otherAreas" />
+          </div>
+        </div>
+      </div>
+
+      {/* Service scope */}
+      <div>
+        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
+          <FileCheck className="w-3 h-3" /> Service Scope
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("Service frequency", "serviceFrequency", "e.g. 3x per week")}
+          {field("Carpet care frequency", "carpetFrequency", "e.g. weekly")}
+          <div className="col-span-2">
+            <Label className="text-[11px] text-muted-foreground mb-1 block">Included areas</Label>
+            <Input value={form.includedAreas} onChange={set("includedAreas")} placeholder="e.g. all offices, washrooms, kitchen" className="h-7 text-xs" data-testid="input-quote-includedAreas" />
+          </div>
+          <div className="col-span-2">
+            <div className="flex items-center justify-between mb-1">
+              <Label className="text-[11px] text-muted-foreground">Scope summary</Label>
+              <button
+                type="button"
+                className="flex items-center gap-1 text-[10px] text-primary hover:underline disabled:opacity-50"
+                onClick={() => scopeMutation.mutate()}
+                disabled={scopeMutation.isPending}
+                data-testid="button-ai-scope-summary"
+              >
+                {scopeMutation.isPending ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Wand2 className="w-2.5 h-2.5" />}
+                {scopeMutation.isPending ? "Generating…" : "AI Generate"}
+              </button>
+            </div>
+            <Textarea value={form.scopeSummary} onChange={set("scopeSummary")} rows={3} placeholder="Describe what the service includes…" className="text-xs resize-none" data-testid="textarea-quote-scopeSummary" />
+          </div>
+          <div className="col-span-2">
+            <Label className="text-[11px] text-muted-foreground mb-1 block">Add-ons</Label>
+            <Input value={form.addOns} onChange={set("addOns")} placeholder="e.g. window cleaning, floor waxing" className="h-7 text-xs" data-testid="input-quote-addOns" />
+          </div>
+        </div>
+      </div>
+
+      {/* Pricing */}
+      <div>
+        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
+          <DollarSign className="w-3 h-3" /> Pricing
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("Monthly amount", "monthlyAmount", "e.g. $1,200/month")}
+          {field("Weekly amount", "weeklyAmount", "e.g. $300/week")}
+          {field("Bi-weekly amount", "biweeklyAmount", "e.g. $600/bi-weekly")}
+          {field("One-time / deep clean", "oneTimeAmount", "e.g. $800")}
+          <div className="col-span-2">
+            <Label className="text-[11px] text-muted-foreground mb-1 block">Pricing notes</Label>
+            <Textarea value={form.pricingNotes} onChange={set("pricingNotes")} rows={2} placeholder="e.g. Based on 3 visits per week, includes all supplies." className="text-xs resize-none" data-testid="textarea-quote-pricingNotes" />
+          </div>
+        </div>
+      </div>
+
+      <Button size="sm" className="w-full gap-1" onClick={handleSave} data-testid="button-save-quote-bottom">
+        <Check className="w-3.5 h-3.5" /> Save Quote Details
+      </Button>
+    </div>
+  );
+}
+
 // ── Transcript view ────────────────────────────────────────────────────────────
 function TranscriptView({ chunks, assets }: { chunks: any[]; assets: any[] }) {
   const [lightbox, setLightbox] = useState<string | null>(null);
@@ -411,218 +572,6 @@ function TranscriptView({ chunks, assets }: { chunks: any[]; assets: any[] }) {
           </button>
         </div>
       )}
-    </div>
-  );
-}
-
-// ── Proposal status helpers ────────────────────────────────────────────────────
-const PROPOSAL_STATUSES = [
-  { key: "draft",    label: "Draft",    icon: CircleDot,     color: "text-muted-foreground" },
-  { key: "sent",     label: "Sent",     icon: Send,          color: "text-blue-600 dark:text-blue-400" },
-  { key: "viewed",   label: "Viewed",   icon: Eye,           color: "text-purple-600 dark:text-purple-400" },
-  { key: "accepted", label: "Accepted", icon: CheckCircle2,  color: "text-green-600 dark:text-green-400" },
-  { key: "declined", label: "Declined", icon: XCircle,       color: "text-red-600 dark:text-red-400" },
-];
-
-function proposalStatusFromQuoteData(quoteData: Record<string, any>): string {
-  const qs = (quoteData.quoteStatus || "").toLowerCase();
-  if (qs === "accepted") return "accepted";
-  if (qs === "declined") return "declined";
-  if (qs === "viewed")   return "viewed";
-  if (qs === "sent")     return "sent";
-  return "draft";
-}
-
-// ── ProposalTab ────────────────────────────────────────────────────────────────
-function ProposalTab({
-  session, quoteData, sessionId, publicDoc,
-}: {
-  session: any; quoteData: Record<string, any>; sessionId: string; publicDoc: any;
-}) {
-  const { toast } = useToast();
-  const proposalStatus = proposalStatusFromQuoteData(quoteData);
-  const shareUrl = publicDoc?.isEnabled && publicDoc?.shareToken
-    ? `${window.location.origin}/public/field-notes/${publicDoc.shareToken}` : null;
-
-  const markSentMutation = useMutation({
-    mutationFn: () => apiRequest("PATCH", `/api/field-notes/sessions/${sessionId}`, {
-      quoteData: JSON.stringify({ ...quoteData, quoteStatus: "sent", quoteSentAt: new Date().toISOString() }),
-    }).then(r => r.json()),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/field-notes/sessions", sessionId] });
-      toast({ title: "Proposal marked as sent" });
-    },
-  });
-
-  const copyLink = () => {
-    if (!shareUrl) return;
-    navigator.clipboard.writeText(shareUrl);
-    toast({ title: "Link copied to clipboard" });
-  };
-
-  // Display amounts
-  const hasDisplayPeriod = !!quoteData.displayBillingPeriod && quoteData.displayBillingPeriod !== "none";
-  const periodLabel = hasDisplayPeriod
-    ? (quoteData.displayPeriodLabel || quoteData.displayBillingPeriod)
-    : (quoteData.billingMode || quoteData.serviceType || "Service");
-  const displayedAmt = hasDisplayPeriod
-    ? (quoteData.displayAmount || quoteData.displaySubtotal || "")
-    : (quoteData.baseAmount || quoteData.monthlyAmount || quoteData.weeklyAmount || quoteData.biweeklyAmount || quoteData.oneTimeAmount || "");
-  const subtotalAmt = hasDisplayPeriod ? (quoteData.displaySubtotal || displayedAmt) : (quoteData.combinedSubtotal || displayedAmt);
-  const totalAmt    = hasDisplayPeriod ? (quoteData.displayGrandTotal || subtotalAmt) : (quoteData.grandTotal || subtotalAmt);
-
-  return (
-    <div className="max-w-2xl mx-auto px-4 md:px-6 py-6 space-y-6">
-
-      {/* Status tracker */}
-      <div className="rounded-xl border p-4 space-y-4" data-testid="section-proposal-status">
-        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Proposal Status</p>
-        <div className="flex items-center gap-0">
-          {PROPOSAL_STATUSES.map((s, i) => {
-            const Icon = s.icon;
-            const active = proposalStatus === s.key;
-            const past = PROPOSAL_STATUSES.findIndex(x => x.key === proposalStatus) >= i;
-            return (
-              <div key={s.key} className="flex items-center flex-1 last:flex-none">
-                <div className={cn("flex flex-col items-center gap-1 min-w-0", !active && "opacity-50")}>
-                  <div className={cn(
-                    "w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all",
-                    active   ? "border-primary bg-primary/10" : past ? "border-border bg-muted" : "border-border/40 bg-background",
-                  )}>
-                    <Icon className={cn("w-3.5 h-3.5", active ? s.color : "text-muted-foreground")} />
-                  </div>
-                  <span className={cn("text-[10px] font-medium whitespace-nowrap", active ? "text-foreground" : "text-muted-foreground")}>{s.label}</span>
-                </div>
-                {i < PROPOSAL_STATUSES.length - 1 && (
-                  <div className={cn("flex-1 h-px mx-1 -mt-4", past ? "bg-border" : "bg-border/30")} />
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Status timestamps */}
-        <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-          {quoteData.quoteSentAt && (
-            <div className="bg-muted/40 rounded-lg px-3 py-2">
-              <p className="text-[10px] text-muted-foreground">Sent</p>
-              <p className="font-medium">{format(parseISO(quoteData.quoteSentAt), "MMM d, yyyy h:mm a")}</p>
-            </div>
-          )}
-          {quoteData.quoteViewedAt && (
-            <div className="bg-muted/40 rounded-lg px-3 py-2">
-              <p className="text-[10px] text-muted-foreground">Viewed</p>
-              <p className="font-medium">{format(parseISO(quoteData.quoteViewedAt), "MMM d, yyyy h:mm a")}</p>
-            </div>
-          )}
-          {quoteData.quoteAcceptedAt && (
-            <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2">
-              <p className="text-[10px] text-green-600 dark:text-green-400">Accepted</p>
-              <p className="font-medium text-green-700 dark:text-green-300">{format(parseISO(quoteData.quoteAcceptedAt), "MMM d, yyyy h:mm a")}</p>
-            </div>
-          )}
-          {quoteData.quoteDeclinedAt && (
-            <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
-              <p className="text-[10px] text-red-600 dark:text-red-400">Declined</p>
-              <p className="font-medium text-red-700 dark:text-red-300">{format(parseISO(quoteData.quoteDeclinedAt), "MMM d, yyyy h:mm a")}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Decline reason */}
-        {quoteData.quoteDeclineReason && (
-          <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2.5">
-            <p className="text-[10px] text-red-600 dark:text-red-400 font-semibold mb-0.5">Decline reason</p>
-            <p className="text-sm text-red-800 dark:text-red-200">{quoteData.quoteDeclineReason}</p>
-          </div>
-        )}
-      </div>
-
-      {/* Proposal summary */}
-      <div className="rounded-xl border p-4 space-y-3" data-testid="section-proposal-summary">
-        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Proposal Summary</p>
-        <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-xs">
-          {quoteData.clientName && (
-            <div>
-              <p className="text-[10px] text-muted-foreground">Client</p>
-              <p className="font-medium">{quoteData.clientName}</p>
-            </div>
-          )}
-          {quoteData.siteAddress && (
-            <div>
-              <p className="text-[10px] text-muted-foreground">Site</p>
-              <p className="font-medium">{quoteData.siteAddress}</p>
-            </div>
-          )}
-          {periodLabel && (
-            <div>
-              <p className="text-[10px] text-muted-foreground">Billing period shown</p>
-              <p className="font-medium">{periodLabel}</p>
-            </div>
-          )}
-          {displayedAmt && (
-            <div>
-              <p className="text-[10px] text-muted-foreground">Service amount</p>
-              <p className="font-semibold text-foreground">{displayedAmt}</p>
-            </div>
-          )}
-          {subtotalAmt && subtotalAmt !== displayedAmt && (
-            <div>
-              <p className="text-[10px] text-muted-foreground">Subtotal</p>
-              <p className="font-medium">{subtotalAmt}</p>
-            </div>
-          )}
-          {totalAmt && (
-            <div>
-              <p className="text-[10px] text-muted-foreground">Total (incl. tax)</p>
-              <p className="font-bold text-foreground">{totalAmt}</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Quick actions */}
-      <div className="rounded-xl border p-4 space-y-3" data-testid="section-proposal-actions">
-        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Quick Actions</p>
-        <div className="flex flex-wrap gap-2">
-          {shareUrl && (
-            <a
-              href={shareUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs border rounded-lg px-3 py-1.5 hover:bg-muted transition-colors"
-              data-testid="link-open-public-quote"
-            >
-              <ExternalLink className="w-3.5 h-3.5" /> Open public quote
-            </a>
-          )}
-          {shareUrl && (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 text-xs border rounded-lg px-3 py-1.5 hover:bg-muted transition-colors"
-              onClick={copyLink}
-              data-testid="button-copy-quote-link"
-            >
-              <Copy className="w-3.5 h-3.5" /> Copy link
-            </button>
-          )}
-          {proposalStatus === "draft" && (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 text-xs border border-blue-300 text-blue-700 dark:text-blue-400 dark:border-blue-700 rounded-lg px-3 py-1.5 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
-              onClick={() => markSentMutation.mutate()}
-              disabled={markSentMutation.isPending}
-              data-testid="button-mark-sent"
-            >
-              {markSentMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-              Mark as sent
-            </button>
-          )}
-        </div>
-        {!shareUrl && (
-          <p className="text-xs text-muted-foreground">Generate a share link from the Share panel to enable client access.</p>
-        )}
-      </div>
     </div>
   );
 }
@@ -761,23 +710,6 @@ export default function AdminFieldNotesSession() {
               )}>
                 {documentMode === "quote" ? "Quote Proposal" : "Site Visit Note"}
               </span>
-              {documentMode === "quote" && (() => {
-                const st = proposalStatusFromQuoteData(quoteData);
-                const cfg: Record<string, { label: string; cls: string }> = {
-                  draft:    { label: "Draft",    cls: "bg-muted text-muted-foreground border-border" },
-                  sent:     { label: "Sent",     cls: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-800" },
-                  viewed:   { label: "Viewed",   cls: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-800" },
-                  accepted: { label: "Accepted", cls: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/20 dark:text-green-400 dark:border-green-800" },
-                  declined: { label: "Declined", cls: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/20 dark:text-red-400 dark:border-red-800" },
-                };
-                const c = cfg[st] || cfg.draft;
-                return (
-                  <span className={cn("text-[10px] px-1.5 py-0 rounded-full border font-medium", c.cls)}
-                    data-testid="badge-proposal-status">
-                    Proposal {c.label}
-                  </span>
-                );
-              })()}
             </div>
           </div>
           <div className="flex gap-1.5 flex-shrink-0 flex-wrap justify-end">
@@ -840,18 +772,6 @@ export default function AdminFieldNotesSession() {
             <TabsTrigger data-testid="tab-transcript" value="transcript" className="text-xs px-3">
               <FileText className="w-3 h-3 mr-1" />Transcript
             </TabsTrigger>
-            {documentMode === "quote" && (
-              <TabsTrigger data-testid="tab-proposal" value="proposal" className="text-xs px-3">
-                <ClipboardList className="w-3 h-3 mr-1" />Proposal
-                {(() => {
-                  const st = proposalStatusFromQuoteData(quoteData);
-                  if (st === "accepted") return <span className="ml-1 w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />;
-                  if (st === "declined") return <span className="ml-1 w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />;
-                  if (st === "sent")     return <span className="ml-1 w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />;
-                  return null;
-                })()}
-              </TabsTrigger>
-            )}
           </TabsList>
 
           {/* ── DOCUMENT TAB ── */}
@@ -944,13 +864,11 @@ export default function AdminFieldNotesSession() {
 
                 {/* Quote section (when in quote mode) */}
                 {documentMode === "quote" && (
-                  <SectionErrorBoundary>
-                    <QuoteBuilder
-                      sessionId={sessionId!}
-                      quoteData={quoteData}
-                      onSave={handleSaveQuote}
-                    />
-                  </SectionErrorBoundary>
+                  <QuoteSection
+                    sessionId={sessionId!}
+                    quoteData={quoteData}
+                    onSave={handleSaveQuote}
+                  />
                 )}
 
                 {/* Closing */}
@@ -1013,20 +931,6 @@ export default function AdminFieldNotesSession() {
           <TabsContent value="transcript" className="flex-1 overflow-y-auto px-4 md:px-6 py-4 mt-0">
             <TranscriptView chunks={chunks} assets={assets} />
           </TabsContent>
-
-          {/* ── PROPOSAL TAB ── */}
-          {documentMode === "quote" && (
-            <TabsContent value="proposal" className="flex-1 overflow-y-auto mt-0">
-              <SectionErrorBoundary>
-                <ProposalTab
-                  session={session}
-                  quoteData={quoteData}
-                  sessionId={sessionId!}
-                  publicDoc={session.publicDoc}
-                />
-              </SectionErrorBoundary>
-            </TabsContent>
-          )}
         </Tabs>
       </div>
 

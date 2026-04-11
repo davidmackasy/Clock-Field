@@ -269,271 +269,6 @@ function TranscriptSection({ chunks, hasTranscript }: { chunks: any[]; hasTransc
   );
 }
 
-// ── Quote details grid (property + scope + pricing) ───────────────────────
-function QuoteDetailsGrid({ quoteData }: { quoteData: Record<string, any> }) {
-  const parseTags = (v: any): string[] => {
-    if (!v) return [];
-    if (Array.isArray(v)) return v;
-    try { const p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch { return []; }
-  };
-  const includedAreas = parseTags(quoteData.includedAreaTags ?? quoteData.includedAreas);
-  const addOns        = parseTags(quoteData.addOnTags ?? quoteData.addOns);
-  const specialSurfs  = parseTags(quoteData.specialSurfaceTags ?? quoteData.specialSurfaces);
-  const otherAreas    = parseTags(quoteData.otherAreaTags ?? quoteData.otherAreas);
-  const propType   = quoteData.propertyType as string | undefined;
-  const propSubtype = (quoteData.commercialSubtype || quoteData.industrialSubtype) as string | undefined;
-  const freqLabel = (() => {
-    const st = quoteData.serviceType as string | undefined;
-    if (!st) return (quoteData.serviceFrequency as string) || "";
-    if (st === "Weekly" && quoteData.daysPerWeek) return `Weekly · ${quoteData.daysPerWeek}×/week`;
-    if ((st === "Monthly" || st === "Custom") && quoteData.visitsPerMonth) return `${st} · ${quoteData.visitsPerMonth} visits/month`;
-    return st;
-  })();
-  const hasProperty = propType || quoteData.squareFootage || quoteData.numFloors || quoteData.numOffices ||
-    quoteData.numWashrooms || quoteData.bedrooms || quoteData.numOfficeAreas;
-  const hasScope = freqLabel || quoteData.scopeSummary || includedAreas.length > 0 || addOns.length > 0;
-  const hasPricing = quoteData.baseAmount || quoteData.monthlyAmount || quoteData.weeklyAmount || quoteData.biweeklyAmount || quoteData.oneTimeAmount || quoteData.displayAmount;
-
-  if (!hasProperty && !hasScope && !hasPricing) return null;
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-      {/* Property */}
-      {hasProperty && (
-        <div>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-            <LayoutList className="w-3 h-3" /> Property
-          </p>
-          <div className="space-y-2 text-sm">
-            {propType && <div><span className="text-gray-400 text-xs block">Type</span><span className="font-medium capitalize">{propType}{propSubtype ? ` · ${propSubtype}` : ""}</span></div>}
-            {quoteData.homeType && <div><span className="text-gray-400 text-xs block">Home type</span><span className="font-medium">{quoteData.homeType}</span></div>}
-            {quoteData.squareFootage && <div><span className="text-gray-400 text-xs block">Square footage</span><span className="font-medium">{quoteData.squareFootage}</span></div>}
-            {quoteData.numFloors && <div><span className="text-gray-400 text-xs block">Floors</span><span className="font-medium">{quoteData.numFloors}</span></div>}
-            {quoteData.bedrooms && <div><span className="text-gray-400 text-xs block">Bedrooms</span><span className="font-medium">{quoteData.bedrooms}</span></div>}
-            {quoteData.bathrooms && <div><span className="text-gray-400 text-xs block">Bathrooms</span><span className="font-medium">{quoteData.bathrooms}</span></div>}
-            {quoteData.numOffices && <div><span className="text-gray-400 text-xs block">Offices</span><span className="font-medium">{quoteData.numOffices}</span></div>}
-            {quoteData.numWashrooms && <div><span className="text-gray-400 text-xs block">Washrooms</span><span className="font-medium">{quoteData.numWashrooms}</span></div>}
-            {quoteData.numKitchens && <div><span className="text-gray-400 text-xs block">Kitchens</span><span className="font-medium">{quoteData.numKitchens}</span></div>}
-            {quoteData.numOfficeAreas && <div><span className="text-gray-400 text-xs block">Office areas</span><span className="font-medium">{quoteData.numOfficeAreas}</span></div>}
-            {specialSurfs.length > 0 && <div><span className="text-gray-400 text-xs block">Surfaces</span><span className="font-medium">{specialSurfs.join(", ")}</span></div>}
-            {otherAreas.length > 0 && <div><span className="text-gray-400 text-xs block">Other areas</span><span className="font-medium">{otherAreas.join(", ")}</span></div>}
-          </div>
-        </div>
-      )}
-
-      {/* Service Scope */}
-      {hasScope && (
-        <div>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-            <FileCheck className="w-3 h-3" /> Service Scope
-          </p>
-          <div className="space-y-2 text-sm">
-            {freqLabel && <div><span className="text-gray-400 text-xs block">Service type</span><span className="font-medium">{freqLabel}</span></div>}
-            {quoteData.firstCleanType && quoteData.firstCleanType !== "Standard" && <div><span className="text-gray-400 text-xs block">First clean</span><span className="font-medium">{quoteData.firstCleanType}</span></div>}
-            {quoteData.visitDuration && <div><span className="text-gray-400 text-xs block">Est. duration</span><span className="font-medium">{quoteData.visitDuration}</span></div>}
-            {includedAreas.length > 0 && (
-              <div>
-                <span className="text-gray-400 text-xs block mb-1">Included areas</span>
-                <div className="flex flex-wrap gap-1">
-                  {includedAreas.map((a, i) => (
-                    <span key={i} className="text-[11px] bg-gray-100 px-2 py-0.5 rounded-full text-gray-700">{a}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {addOns.length > 0 && (
-              <div>
-                <span className="text-gray-400 text-xs block mb-1">Add-ons</span>
-                <div className="flex flex-wrap gap-1">
-                  {addOns.map((a, i) => (
-                    <span key={i} className="text-[11px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">{a}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {quoteData.scopeSummary && <div className="pt-1"><p className="text-gray-700 leading-relaxed text-xs">{quoteData.scopeSummary}</p></div>}
-          </div>
-        </div>
-      )}
-
-      {/* Pricing */}
-      {hasPricing && (() => {
-        const fmtAmt = (a: string) => a && !a.startsWith("$") ? `$${a}` : a;
-        const hasDisplayPeriod = !!quoteData.displayBillingPeriod && quoteData.displayBillingPeriod !== "none";
-
-        if (hasDisplayPeriod) {
-          // ── Display-period view: use pre-computed display fields ──
-          const periodLabel = quoteData.displayPeriodLabel || quoteData.displayBillingPeriod || "Service";
-          const displayAmt  = quoteData.displayAmount || "";
-          const displaySub  = quoteData.displaySubtotal || displayAmt;
-          const displayTotal = quoteData.displayGrandTotal || displaySub;
-          const displayTaxLines: Array<{name: string; rate: number; amount: number}> = (() => {
-            try { const l = JSON.parse(quoteData.displayTaxLines || "[]"); return Array.isArray(l) ? l : []; } catch { return []; }
-          })();
-          const displayAddonLines: Array<{name: string; pricingType: string; amount: string; included: boolean; isRecurring: boolean}> = (() => {
-            try { const l = JSON.parse(quoteData.displayAddonLines || "[]"); return Array.isArray(l) ? l : []; } catch { return []; }
-          })();
-          const oneTimeAddons = displayAddonLines.filter(l => !l.isRecurring);
-          const recurringAddons = displayAddonLines.filter(l => l.isRecurring);
-          const hasAddons = displayAddonLines.length > 0;
-
-          return (
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-                <DollarSign className="w-3 h-3" /> Pricing
-              </p>
-
-              {/* Base recurring service */}
-              {displayAmt && (
-                <div>
-                  {hasAddons && <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Recurring service</p>}
-                  <div className="flex justify-between items-baseline">
-                    <span className="text-sm text-gray-600">{periodLabel}</span>
-                    <span className="text-xl font-bold text-gray-900">{fmtAmt(displayAmt)}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* One-time add-ons (not scaled) */}
-              {oneTimeAddons.length > 0 && (
-                <div className="space-y-1.5">
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">One-time add-ons</p>
-                  {oneTimeAddons.map((l, i) => (
-                    <div key={i} className="flex justify-between text-sm">
-                      <span className="text-gray-600">{l.name}</span>
-                      <span className="font-medium text-gray-900">{fmtAmt(l.amount)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Recurring add-ons (scaled to period) */}
-              {recurringAddons.length > 0 && (
-                <div className="space-y-1.5">
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Recurring add-ons</p>
-                  {recurringAddons.map((l, i) => (
-                    <div key={i} className="flex justify-between text-sm">
-                      <span className="text-gray-600">{l.name}</span>
-                      <span className="font-medium text-gray-900">{fmtAmt(l.amount)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Subtotal / tax / total */}
-              <div className="space-y-1 pt-2 border-t border-gray-200">
-                {hasAddons && displaySub && (
-                  <div className="flex justify-between text-xs text-gray-500">
-                    <span>Subtotal</span>
-                    <span>{fmtAmt(displaySub)}</span>
-                  </div>
-                )}
-                {displayTaxLines.map((t, i) => (
-                  <div key={i} className="flex justify-between text-xs text-gray-500">
-                    <span>{t.name} ({t.rate}%)</span>
-                    <span>{t.amount.toLocaleString("en-CA", { style: "currency", currency: "CAD" }).replace("CA", "")}</span>
-                  </div>
-                ))}
-                <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-200 pt-1.5">
-                  <span>Total</span>
-                  <span>{fmtAmt(displayTotal)}</span>
-                </div>
-              </div>
-
-              {quoteData.pricingNotes && (
-                <p className="text-xs text-gray-500 leading-relaxed border-t border-gray-100 pt-3">{quoteData.pricingNotes}</p>
-              )}
-            </div>
-          );
-        }
-
-        // ── Fallback: show billing-mode-based pricing (no display period set) ──
-        const taxLines: Array<{name: string; rate: number; amount: number}> = (() => {
-          try { const l = JSON.parse(quoteData.taxLines || "[]"); return Array.isArray(l) ? l : []; } catch { return []; }
-        })();
-        const addonLines: Array<{name: string; pricingType: string; amount: string; included: boolean}> = (() => {
-          try { const l = JSON.parse(quoteData.addonPricingLines || "[]"); return Array.isArray(l) ? l : []; } catch { return []; }
-        })();
-        const includedAddons = addonLines.filter(l => l.included && l.amount);
-        const oneTimeAddonsFallback = includedAddons.filter(l => !l.pricingType || l.pricingType === "One-time");
-        const recurringAddonsFallback = includedAddons.filter(l => l.pricingType && l.pricingType !== "One-time");
-
-        const bm = (quoteData.billingMode || quoteData.serviceType || "").toLowerCase();
-        const primaryLabel =
-          bm.includes("one") || bm.includes("time") ? "One-time" :
-          bm.includes("per visit") ? "Per visit" :
-          bm.includes("bi") ? "Bi-weekly" :
-          bm.includes("week") ? "Per week" :
-          bm.includes("month") ? "Per month" :
-          quoteData.billingMode || quoteData.serviceType || "Service";
-        const primaryAmt = quoteData.baseAmount || quoteData.monthlyAmount || quoteData.weeklyAmount || quoteData.biweeklyAmount || quoteData.oneTimeAmount;
-        const grandTotalStr = quoteData.grandTotal;
-        const hasAddons = includedAddons.length > 0;
-
-        return (
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-              <DollarSign className="w-3 h-3" /> Pricing
-            </p>
-            {primaryAmt && (
-              <div>
-                {hasAddons && <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Base service</p>}
-                <div className="flex justify-between items-baseline">
-                  <span className="text-sm text-gray-600">{primaryLabel}</span>
-                  <span className="text-xl font-bold text-gray-900">{primaryAmt}</span>
-                </div>
-              </div>
-            )}
-            {oneTimeAddonsFallback.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">One-time add-ons</p>
-                {oneTimeAddonsFallback.map((l, i) => (
-                  <div key={i} className="flex justify-between text-sm">
-                    <span className="text-gray-600">{l.name}</span>
-                    <span className="font-medium text-gray-900">{fmtAmt(l.amount)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {recurringAddonsFallback.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Recurring add-ons</p>
-                {recurringAddonsFallback.map((l, i) => (
-                  <div key={i} className="flex justify-between text-sm">
-                    <span className="text-gray-600">{l.name} <span className="text-[10px] text-gray-400">({l.pricingType})</span></span>
-                    <span className="font-medium text-gray-900">{fmtAmt(l.amount)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="space-y-1 pt-2 border-t border-gray-200">
-              {hasAddons && primaryAmt && (
-                <div className="flex justify-between text-xs text-gray-500">
-                  <span>Subtotal</span>
-                  <span>{quoteData.combinedSubtotal || primaryAmt}</span>
-                </div>
-              )}
-              {taxLines.map((t, i) => (
-                <div key={i} className="flex justify-between text-xs text-gray-500">
-                  <span>{t.name} ({t.rate}%)</span>
-                  <span>{t.amount.toLocaleString("en-CA", { style: "currency", currency: "CAD" }).replace("CA", "")}</span>
-                </div>
-              ))}
-              <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-200 pt-1.5">
-                <span>Total</span>
-                <span>{grandTotalStr || quoteData.combinedSubtotal || primaryAmt}</span>
-              </div>
-            </div>
-            {quoteData.pricingNotes && (
-              <p className="text-xs text-gray-500 leading-relaxed border-t border-gray-100 pt-3">{quoteData.pricingNotes}</p>
-            )}
-          </div>
-        );
-      })()}
-    </div>
-  );
-}
-
 // ── Main public page ───────────────────────────────────────────────────────
 export default function PublicFieldNote() {
   const [, params] = useRoute("/public/field-notes/:token");
@@ -793,7 +528,79 @@ export default function PublicFieldNote() {
               </div>
             )}
 
-            <QuoteDetailsGrid quoteData={quoteData} />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+              {/* Property Details */}
+              {(quoteData.squareFootage || quoteData.numFloors || quoteData.numOffices || quoteData.numWashrooms) && (
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                    <LayoutList className="w-3 h-3" /> Property Details
+                  </p>
+                  <div className="space-y-2 text-sm">
+                    {quoteData.squareFootage && <div><span className="text-gray-400 text-xs block">Square footage</span><span className="font-medium">{quoteData.squareFootage}</span></div>}
+                    {quoteData.numFloors && <div><span className="text-gray-400 text-xs block">Floors</span><span className="font-medium">{quoteData.numFloors}</span></div>}
+                    {quoteData.numOffices && <div><span className="text-gray-400 text-xs block">Offices</span><span className="font-medium">{quoteData.numOffices}</span></div>}
+                    {quoteData.numWashrooms && <div><span className="text-gray-400 text-xs block">Washrooms</span><span className="font-medium">{quoteData.numWashrooms}</span></div>}
+                    {quoteData.numKitchens && <div><span className="text-gray-400 text-xs block">Kitchens</span><span className="font-medium">{quoteData.numKitchens}</span></div>}
+                    {quoteData.specialSurfaces && <div><span className="text-gray-400 text-xs block">Surfaces</span><span className="font-medium">{quoteData.specialSurfaces}</span></div>}
+                    {quoteData.otherAreas && <div><span className="text-gray-400 text-xs block">Other areas</span><span className="font-medium">{quoteData.otherAreas}</span></div>}
+                  </div>
+                </div>
+              )}
+
+              {/* Service Scope */}
+              {(quoteData.serviceFrequency || quoteData.scopeSummary || quoteData.includedAreas) && (
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                    <FileCheck className="w-3 h-3" /> Service Scope
+                  </p>
+                  <div className="space-y-2 text-sm">
+                    {quoteData.serviceFrequency && <div><span className="text-gray-400 text-xs block">Frequency</span><span className="font-medium">{quoteData.serviceFrequency}</span></div>}
+                    {quoteData.carpetFrequency && <div><span className="text-gray-400 text-xs block">Carpet care</span><span className="font-medium">{quoteData.carpetFrequency}</span></div>}
+                    {quoteData.includedAreas && <div><span className="text-gray-400 text-xs block">Included areas</span><span className="font-medium">{quoteData.includedAreas}</span></div>}
+                    {quoteData.addOns && <div><span className="text-gray-400 text-xs block">Add-ons</span><span className="font-medium">{quoteData.addOns}</span></div>}
+                    {quoteData.scopeSummary && <div><span className="text-gray-400 text-xs block">Scope</span><p className="text-gray-700 leading-relaxed">{quoteData.scopeSummary}</p></div>}
+                  </div>
+                </div>
+              )}
+
+              {/* Pricing */}
+              {(quoteData.monthlyAmount || quoteData.weeklyAmount || quoteData.biweeklyAmount || quoteData.oneTimeAmount) && (
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                    <DollarSign className="w-3 h-3" /> Pricing
+                  </p>
+                  <div className="space-y-2">
+                    {quoteData.monthlyAmount && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Monthly</span>
+                        <span className="text-lg font-bold text-gray-900">{quoteData.monthlyAmount}</span>
+                      </div>
+                    )}
+                    {quoteData.weeklyAmount && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Weekly</span>
+                        <span className="text-sm font-semibold text-gray-700">{quoteData.weeklyAmount}</span>
+                      </div>
+                    )}
+                    {quoteData.biweeklyAmount && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Bi-weekly</span>
+                        <span className="text-sm font-semibold text-gray-700">{quoteData.biweeklyAmount}</span>
+                      </div>
+                    )}
+                    {quoteData.oneTimeAmount && (
+                      <div className="flex justify-between items-center border-t border-gray-200 pt-2 mt-2">
+                        <span className="text-sm text-gray-600">One-time / deep clean</span>
+                        <span className="text-sm font-semibold text-gray-700">{quoteData.oneTimeAmount}</span>
+                      </div>
+                    )}
+                  </div>
+                  {quoteData.pricingNotes && (
+                    <p className="text-xs text-gray-500 mt-3 leading-relaxed">{quoteData.pricingNotes}</p>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Accept / Decline (only if no response yet) */}
             {(!currentQuoteStatus || currentQuoteStatus === "pending") && (

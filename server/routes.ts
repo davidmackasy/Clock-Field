@@ -4779,197 +4779,30 @@ Return a JSON object with these exact fields:
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
-  // POST /api/field-notes/sessions/:id/suggest-price — AI + formula pricing
-  app.post("/api/field-notes/sessions/:id/suggest-price", fnAuth, async (req, res) => {
-    try {
-      const user = req.user as any;
-      const session = await storage.getFieldNotesSession(req.params.id);
-      if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      const apiKey = process.env.OPENAI_API_KEY;
-      if (!apiKey) return res.status(503).json({ message: "AI not available — OPENAI_API_KEY not configured" });
-      const openaiClient = new OpenAI({ apiKey });
-
-      const {
-        propertyType, commercialSubtype, industrialSubtype, squareFootage,
-        numOffices, numWashrooms, numKitchens, numHallways, numEntrances, numFloors,
-        numDiningAreas, numBoardrooms, numReception, hasKitchen, greaseLevel,
-        bedrooms, bathrooms, stories, conditionLevel, homeType,
-        numOfficeAreas, hasLunchroom, hasLockerRoom, heavySoilLevel,
-        serviceType, daysPerWeek, visitsPerMonth, visitDuration, crewSizeEst,
-        firstCleanType, addOnTags, specialSurfaces, otherAreas,
-        laborHours, hourlyPay, targetMargin, travelAdjust, suppliesAdjust,
-        difficultyMult, minimumCharge,
-        billingMode, serviceDaysPerWeek, quotePeriod, estimatedVisits,
-        addOnList,
-      } = req.body;
-
-      // Gather session photos context
-      const assets: any[] = (session as any).assets ?? [];
-      const photoCount = assets.length;
-      const areaLabels = [...new Set(assets.map((a: any) => a.areaLabel).filter(Boolean))];
-      const entries: any[] = (session as any).entries ?? [];
-      const entryText = entries.map(e => e.body || "").filter(Boolean).join("\n").slice(0, 1500);
-
-      // Determine the primary billing mode for the prompt
-      const primaryBillingMode = billingMode || serviceType || "one-time";
-      const isOneTime = primaryBillingMode.toLowerCase().includes("one") || primaryBillingMode.toLowerCase().includes("time");
-      const isPerVisit = primaryBillingMode.toLowerCase().includes("per visit");
-      const isWeekly = primaryBillingMode.toLowerCase().includes("week") && !primaryBillingMode.toLowerCase().includes("bi");
-      const isBiWeekly = primaryBillingMode.toLowerCase().includes("bi");
-      const isMonthly = primaryBillingMode.toLowerCase().includes("month");
-
-      // Build full prompt
-      const prompt = `You are a pricing assistant for a professional cleaning company. Generate an accurate, competitive price suggestion for the following cleaning quote.
-
-PROPERTY:
-- Type: ${propertyType || "unknown"} ${commercialSubtype || industrialSubtype || ""}
-- ${propertyType === "residential" ? `Home type: ${homeType}, Bedrooms: ${bedrooms}, Bathrooms: ${bathrooms}, Stories: ${stories}, Condition: ${conditionLevel}` : ""}
-- ${propertyType === "commercial" ? `Offices: ${numOffices}, Washrooms: ${numWashrooms}, Kitchens: ${numKitchens}, Hallways: ${numHallways}, Entrances: ${numEntrances}, Floors: ${numFloors}${numDiningAreas ? `, Dining areas: ${numDiningAreas}` : ""}${greaseLevel ? `, Kitchen condition: ${greaseLevel}` : ""}` : ""}
-- ${propertyType === "industrial" ? `Office areas: ${numOfficeAreas}, Washrooms: ${numWashrooms}, Floors: ${numFloors}, Heavy soil: ${heavySoilLevel}, Lunchroom: ${hasLunchroom}, Locker room: ${hasLockerRoom}` : ""}
-- Square footage: ${squareFootage || "not provided"}
-- Special surfaces: ${specialSurfaces || "none noted"}
-- Other areas: ${otherAreas || "none"}
-
-PRICING SCHEDULE (PRIMARY — use this to focus your output):
-- Billing mode: ${primaryBillingMode}
-- Service days per week: ${serviceDaysPerWeek || daysPerWeek || "N/A"}
-- Quote period: ${quotePeriod || "not specified"}
-- Estimated visits in period: ${estimatedVisits || "N/A"}
-
-SERVICE DETAILS:
-- Service type: ${serviceType || "not specified"}
-- Visits/month: ${visitsPerMonth || "N/A"}
-- Visit duration: ${visitDuration || "not specified"}
-- Crew size: ${crewSizeEst || "not specified"}
-- First clean type: ${firstCleanType || "standard"}
-- Add-ons: ${addOnList || addOnTags || "none"}
-
-INTERNAL INPUTS:
-- Labor hours estimate: ${laborHours || "not provided"}
-- Hourly pay per worker: $${hourlyPay || "not provided"}
-- Target margin: ${targetMargin || "50"}%
-- Travel adjustment: $${travelAdjust || "0"}
-- Supplies adjustment: $${suppliesAdjust || "0"}
-- Difficulty multiplier: ${difficultyMult || "1.0"}×
-- Minimum charge: $${minimumCharge || "not set"}
-
-SITE CONTEXT (from field note):
-- Photos captured: ${photoCount}
-- Areas photographed: ${areaLabels.join(", ") || "general"}
-- Field note observations: ${entryText || "none"}
-
-INSTRUCTIONS:
-Calculate professional cleaning prices using these rules:
-1. FOCUS on the selected billing mode: "${primaryBillingMode}" — this is the primary output required
-2. If service days per week and quote period are specified, use them to compute the period total
-   Example: 5 days/week × 4 weeks = 20 visits; 20 × per-visit price = monthly subtotal
-3. If hourly pay and labor hours are provided, use them as the base per-visit cost, then apply margin and adjustments
-4. If internal inputs are not provided, estimate based on property type, size, and condition
-5. Apply difficulty multiplier (${difficultyMult || "1.0"}×) to the per-visit base cost
-6. Apply minimum charge if calculated per-visit price is below it
-7. One-time / deep clean pricing is typically 1.5–3× the regular visit price
-8. Use Canadian market rates if context suggests Canada, US rates otherwise
-
-${isOneTime ? "OUTPUT FOCUS: This is a ONE-TIME quote. Provide suggestedOneTime only. Do not generate weekly/bi-weekly/monthly amounts." : ""}
-${isPerVisit ? "OUTPUT FOCUS: This is a PER-VISIT quote. Provide suggestedPerVisit as the primary output. Optionally include a weekly or monthly estimate as a reference." : ""}
-${isWeekly ? `OUTPUT FOCUS: This is a WEEKLY quote. Provide suggestedPerVisit (price per visit) and suggestedWeekly (total per week based on ${serviceDaysPerWeek || daysPerWeek || "selected"} days/week). Optionally provide suggestedMonthly as a 4-week estimate.` : ""}
-${isBiWeekly ? `OUTPUT FOCUS: This is a BI-WEEKLY quote. Provide suggestedPerVisit and suggestedBiweekly (total for 2-week cycle based on ${serviceDaysPerWeek || daysPerWeek || "selected"} days/week × 2 weeks = ${estimatedVisits || "calculated"} visits). Include suggestedSubtotal for the full period.` : ""}
-${isMonthly ? `OUTPUT FOCUS: This is a MONTHLY quote. Provide suggestedPerVisit and suggestedMonthly (total for the month based on ${serviceDaysPerWeek || daysPerWeek || "selected"} days/week × 4 weeks = ${estimatedVisits || "calculated"} visits). Include suggestedSubtotal for the full period.` : ""}
-
-Return ONLY valid JSON. Include only the keys relevant to the selected billing mode:
-{
-  "suggestedPerVisit": "$X",
-  "suggestedOneTime": "$X",
-  "suggestedWeekly": "$X/week",
-  "suggestedBiweekly": "$X for 2-week period",
-  "suggestedMonthly": "$X/month",
-  "suggestedSubtotal": "$X (period total before taxes)",
-  "suggestedLaborHours": "X hrs per visit",
-  "suggestedCrew": "X cleaners",
-  "pricingExplanation": "2-3 sentence explanation of pricing logic and how visit count factors in",
-  "pricingNotes": "1-2 sentence client-facing pricing note (frequency, what's included)",
-  "pricingConfidence": "High|Medium|Low",
-  "scopeSummary": "1-2 sentence client-facing scope summary",
-  "addOnSuggestions": [
-    { "name": "add-on name exactly as listed", "amount": "$X", "pricingType": "One-time|Per visit|Monthly" }
-  ]
-}
-${addOnList ? `\nADD-ON PRICING: For each add-on in the list "${addOnList}", suggest an appropriate standalone price and whether it is typically one-time, per visit, or monthly. Populate the addOnSuggestions array. If no add-ons, return an empty array.` : ""}
-
-Format all dollar amounts as "$X" or "$X,XXX". Omit keys that don't apply to the selected billing mode.`;
-
-      const completion = await openaiClient.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 700,
-        temperature: 0.3,
-      });
-
-      const rawContent = completion.choices[0]?.message?.content || "";
-      // Extract JSON object from response (handles markdown code fences or raw JSON)
-      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error(`AI returned non-JSON response: ${rawContent.slice(0, 200)}`);
-      const result = JSON.parse(jsonMatch[0]);
-
-      // Persist suggestion to quoteData
-      let existingQuoteData: any = {};
-      try { existingQuoteData = JSON.parse((session as any).quoteData || "{}"); } catch {}
-      Object.assign(existingQuoteData, result);
-      await storage.updateFieldNotesSession(session.id, { quoteData: JSON.stringify(existingQuoteData) } as any);
-
-      res.json(result);
-    } catch (err: any) {
-      console.error("[suggest-price] Error:", err?.message, err?.stack?.slice(0, 500));
-      res.status(500).json({ message: err.message || "Failed to generate suggestion" });
-    }
-  });
-
   // POST /api/field-notes/sessions/:id/generate-scope — AI scope summary
   app.post("/api/field-notes/sessions/:id/generate-scope", fnAuth, async (req, res) => {
     try {
       const user = req.user as any;
       const session = await storage.getFieldNotesSession(req.params.id);
       if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      const apiKey = process.env.OPENAI_API_KEY;
-      if (!apiKey) return res.status(503).json({ message: "AI not available — OPENAI_API_KEY not configured" });
-      const openaiClient = new OpenAI({ apiKey });
-      let storedQuote: any = {};
-      try { storedQuote = JSON.parse((session as any).quoteData || "{}"); } catch {}
-      // Merge with live form values sent in the request body (takes priority)
-      const body = req.body || {};
-      const quoteData: any = { ...storedQuote, ...body };
+      const [openaiClient] = getOpenAIClient();
+      if (!openaiClient) return res.status(503).json({ message: "AI not available" });
+      let quoteData: any = {};
+      try { quoteData = JSON.parse((session as any).quoteData || "{}"); } catch {}
       const entries: any[] = (session as any).entries ?? [];
       const entryText = entries.map(e => e.body || "").filter(Boolean).join("\n");
-      const parseTags = (v: any): string[] => {
-        if (!v) return [];
-        if (Array.isArray(v)) return v;
-        try { const p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch { return String(v).split(",").map(s => s.trim()).filter(Boolean); }
-      };
-      const inclAreas = parseTags(quoteData.includedAreaTags ?? quoteData.includedAreas);
-      const addOns = parseTags(quoteData.addOnTags ?? quoteData.addOns);
-      const propLine = [quoteData.propertyType, quoteData.commercialSubtype || quoteData.industrialSubtype].filter(Boolean).join(" – ");
-      const serviceDetail = quoteData.serviceType === "Weekly" && quoteData.daysPerWeek
-        ? `Weekly (${quoteData.daysPerWeek}x/week)` : quoteData.serviceType || quoteData.serviceFrequency || "";
       const prompt = [
-        "You are an assistant generating a professional service scope summary for a cleaning proposal.",
-        "Write 2–3 concise client-facing sentences describing what cleaning services will be provided.",
-        "Be specific about areas mentioned. Use professional tone, present tense.",
+        "You are an assistant generating a professional service scope summary for a commercial cleaning proposal.",
+        "Based on the field note entries below, write 2–3 concise sentences describing what cleaning services are needed and what was observed.",
+        "Be specific about areas mentioned. Write in third person, professional tone.",
         "",
-        "Property details:",
-        propLine ? `- Property type: ${propLine}` : "",
+        "Property details from quote form:",
         quoteData.squareFootage ? `- Square footage: ${quoteData.squareFootage}` : "",
-        quoteData.numFloors ? `- Floors: ${quoteData.numFloors}` : "",
         quoteData.numOffices ? `- Offices: ${quoteData.numOffices}` : "",
         quoteData.numWashrooms ? `- Washrooms: ${quoteData.numWashrooms}` : "",
         quoteData.numKitchens ? `- Kitchens/break rooms: ${quoteData.numKitchens}` : "",
-        quoteData.numHallways ? `- Hallways: ${quoteData.numHallways}` : "",
-        quoteData.numEntrances ? `- Entrances: ${quoteData.numEntrances}` : "",
-        quoteData.bedrooms ? `- Bedrooms: ${quoteData.bedrooms}` : "",
-        quoteData.bathrooms ? `- Bathrooms: ${quoteData.bathrooms}` : "",
-        serviceDetail ? `- Service frequency: ${serviceDetail}` : "",
-        inclAreas.length ? `- Included areas: ${inclAreas.join(", ")}` : "",
-        addOns.length ? `- Add-on services: ${addOns.join(", ")}` : "",
-        quoteData.firstCleanType && quoteData.firstCleanType !== "Standard" ? `- First clean type: ${quoteData.firstCleanType}` : "",
+        quoteData.serviceFrequency ? `- Service frequency: ${quoteData.serviceFrequency}` : "",
+        quoteData.includedAreas ? `- Included areas: ${quoteData.includedAreas}` : "",
         "",
         "Field note observations:",
         entryText || "(no observations recorded)",
@@ -4984,10 +4817,7 @@ Format all dollar amounts as "$X" or "$X,XXX". Omit keys that don't apply to the
       quoteData.scopeSummary = scopeSummary;
       await storage.updateFieldNotesSession(session.id, { quoteData: JSON.stringify(quoteData) } as any);
       res.json({ scopeSummary });
-    } catch (err: any) {
-      console.error("[generate-scope] Error:", err?.message, err?.stack?.slice(0, 500));
-      res.status(500).json({ message: "Could not generate scope summary. Please try again." });
-    }
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
   // GET /api/field-notes/assets/:assetId/image — serve photo
