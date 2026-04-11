@@ -17,6 +17,7 @@ import {
   Sparkles, NotebookPen, Share2, Copy, Link as LinkIcon,
   EyeOff, User, Printer, ChevronDown, ChevronUp,
   FileCheck, DollarSign, Building, LayoutList, Wand2,
+  CheckCircle2, XCircle,
 } from "lucide-react";
 import { format, parseISO, differenceInMinutes } from "date-fns";
 
@@ -183,23 +184,25 @@ function DocumentObservation({ entry, assets, sessionId, index, onPhotoClick }: 
         <h3 className="text-base font-semibold text-foreground mb-3 leading-snug">{entry.title}</h3>
       )}
 
-      {/* Photos — embedded in context */}
+      {/* Photos — embedded in context, responsive multi-column grid */}
       {linkedAssets.length > 0 && (
         <div className={cn(
-          "mb-4 rounded-xl overflow-hidden",
-          linkedAssets.length === 1 ? "grid grid-cols-1" : "grid grid-cols-2 gap-1.5"
+          "mb-4",
+          linkedAssets.length === 1
+            ? "grid grid-cols-1 rounded-xl overflow-hidden"
+            : "grid grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-1"
         )}>
           {linkedAssets.map((asset: any, i: number) => (
             <div
               key={asset.id}
               data-testid={`img-doc-photo-${asset.id}`}
-              className="overflow-hidden rounded-lg cursor-pointer bg-muted hover:opacity-95 transition-opacity"
+              className="overflow-hidden rounded-lg cursor-pointer bg-muted hover:opacity-95 transition-opacity aspect-square"
               onClick={() => onPhotoClick(asset.fileUrl, entry)}
             >
               <img
                 src={asset.fileUrl}
                 alt={`Photo ${i + 1}`}
-                className={cn("w-full object-cover", linkedAssets.length === 1 ? "max-h-72" : "aspect-[4/3]")}
+                className={cn("w-full h-full object-cover", linkedAssets.length === 1 ? "max-h-72" : "")}
               />
             </div>
           ))}
@@ -319,6 +322,7 @@ function QuoteSection({ sessionId, quoteData, onSave }: {
   quoteData: Record<string, any>;
   onSave: (data: Record<string, any>) => void;
 }) {
+  const { toast } = useToast();
   const [form, setForm] = useState<Record<string, string>>({
     clientName: quoteData.clientName || "",
     siteAddress: quoteData.siteAddress || "",
@@ -351,6 +355,15 @@ function QuoteSection({ sessionId, quoteData, onSave }: {
     onSave(merged);
   };
 
+  const scopeMutation = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/field-notes/sessions/${sessionId}/generate-scope`).then(r => r.json()),
+    onSuccess: (data) => {
+      setForm(f => ({ ...f, scopeSummary: data.scopeSummary || "" }));
+      toast({ title: "Scope summary generated" });
+    },
+    onError: () => toast({ title: "Failed to generate scope", variant: "destructive" }),
+  });
+
   const field = (label: string, key: string, placeholder?: string, wide?: boolean) => (
     <div className={wide ? "col-span-2" : ""}>
       <Label className="text-[11px] text-muted-foreground mb-1 block">{label}</Label>
@@ -364,8 +377,34 @@ function QuoteSection({ sessionId, quoteData, onSave }: {
     </div>
   );
 
+  const quoteStatus = quoteData.quoteStatus;
+
   return (
     <div className="mt-10 pt-6 border-t space-y-6">
+
+      {/* Response status banner */}
+      {quoteStatus === "accepted" && (
+        <div className="flex items-center gap-2.5 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-xl dark:bg-green-950/20 dark:border-green-800 dark:text-green-400" data-testid="banner-admin-quote-accepted">
+          <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+          <div>
+            <p className="text-xs font-semibold">Client accepted this quote</p>
+            {quoteData.quoteAcceptedAt && (
+              <p className="text-[11px] text-green-600 dark:text-green-500">Accepted {format(parseISO(quoteData.quoteAcceptedAt), "MMM d, yyyy 'at' h:mm a")}</p>
+            )}
+          </div>
+        </div>
+      )}
+      {quoteStatus === "declined" && (
+        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-xl dark:bg-red-950/20 dark:border-red-800 dark:text-red-400" data-testid="banner-admin-quote-declined">
+          <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-xs font-semibold">Client declined this quote</p>
+            {quoteData.quoteDeclineReason && <p className="text-[11px] text-red-600 dark:text-red-500 mt-0.5">Reason: {quoteData.quoteDeclineReason}</p>}
+            {quoteData.quoteDeclinedAt && <p className="text-[11px] text-red-500 mt-0.5">{format(parseISO(quoteData.quoteDeclinedAt), "MMM d, yyyy 'at' h:mm a")}</p>}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <DollarSign className="w-4 h-4 text-primary" />
@@ -421,8 +460,20 @@ function QuoteSection({ sessionId, quoteData, onSave }: {
             <Input value={form.includedAreas} onChange={set("includedAreas")} placeholder="e.g. all offices, washrooms, kitchen" className="h-7 text-xs" data-testid="input-quote-includedAreas" />
           </div>
           <div className="col-span-2">
-            <Label className="text-[11px] text-muted-foreground mb-1 block">Scope summary</Label>
-            <Textarea value={form.scopeSummary} onChange={set("scopeSummary")} rows={2} placeholder="Describe what the service includes…" className="text-xs resize-none" data-testid="textarea-quote-scopeSummary" />
+            <div className="flex items-center justify-between mb-1">
+              <Label className="text-[11px] text-muted-foreground">Scope summary</Label>
+              <button
+                type="button"
+                className="flex items-center gap-1 text-[10px] text-primary hover:underline disabled:opacity-50"
+                onClick={() => scopeMutation.mutate()}
+                disabled={scopeMutation.isPending}
+                data-testid="button-ai-scope-summary"
+              >
+                {scopeMutation.isPending ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Wand2 className="w-2.5 h-2.5" />}
+                {scopeMutation.isPending ? "Generating…" : "AI Generate"}
+              </button>
+            </div>
+            <Textarea value={form.scopeSummary} onChange={set("scopeSummary")} rows={3} placeholder="Describe what the service includes…" className="text-xs resize-none" data-testid="textarea-quote-scopeSummary" />
           </div>
           <div className="col-span-2">
             <Label className="text-[11px] text-muted-foreground mb-1 block">Add-ons</Label>
@@ -594,7 +645,24 @@ export default function AdminFieldNotesSession() {
 
   const toggleDocumentMode = () => {
     const newMode = documentMode === "quote" ? "standard" : "quote";
-    updateMutation.mutate({ documentMode: newMode });
+    // Auto-prefill from AI-extracted data when activating quote mode for the first time
+    if (newMode === "quote" && aiExtracted && !quoteData.clientName) {
+      const prefilled = {
+        ...quoteData,
+        squareFootage: quoteData.squareFootage || aiExtracted.squareFootage || "",
+        numFloors: quoteData.numFloors || aiExtracted.numFloors || "",
+        numOffices: quoteData.numOffices || aiExtracted.numOffices || "",
+        numWashrooms: quoteData.numWashrooms || aiExtracted.numWashrooms || "",
+        numKitchens: quoteData.numKitchens || aiExtracted.numKitchens || "",
+        numHallways: quoteData.numHallways || aiExtracted.numHallways || "",
+        numEntrances: quoteData.numEntrances || aiExtracted.numEntrances || "",
+        specialSurfaces: quoteData.specialSurfaces || aiExtracted.specialSurfaces || "",
+        siteAddress: quoteData.siteAddress || session.locationName || "",
+      };
+      updateMutation.mutate({ documentMode: newMode, quoteData: JSON.stringify(prefilled) });
+    } else {
+      updateMutation.mutate({ documentMode: newMode });
+    }
   };
 
   const handleSaveQuote = (data: Record<string, any>) => {
@@ -736,19 +804,48 @@ export default function AdminFieldNotesSession() {
                   </div>
                 )}
 
-                {/* Observations */}
-                <div className="space-y-10">
-                  {entries.map((entry: any, i: number) => (
-                    <DocumentObservation
-                      key={entry.id}
-                      entry={entry}
-                      assets={assets}
-                      sessionId={sessionId!}
-                      index={i + 1}
-                      onPhotoClick={(url, e) => setLightboxPhoto({ url, entry: e })}
-                    />
-                  ))}
-                </div>
+                {/* Observations — grouped by area */}
+                {(() => {
+                  // Group entries by areaName
+                  const areaGroups = new Map<string, any[]>();
+                  for (const entry of entries) {
+                    const key = entry.areaName || "General Overview";
+                    if (!areaGroups.has(key)) areaGroups.set(key, []);
+                    areaGroups.get(key)!.push(entry);
+                  }
+                  const grouped = Array.from(areaGroups.entries());
+                  const multiArea = grouped.length > 1;
+                  let globalIndex = 0;
+                  return (
+                    <div className="space-y-10">
+                      {grouped.map(([area, areaEntries]) => (
+                        <div key={area}>
+                          {multiArea && (
+                            <div className="flex items-center gap-3 mb-5">
+                              <h2 className="text-xs font-bold text-foreground/70 uppercase tracking-wide">{area}</h2>
+                              <div className="flex-1 h-px bg-border" />
+                            </div>
+                          )}
+                          <div className="space-y-10">
+                            {areaEntries.map((entry: any) => {
+                              globalIndex++;
+                              return (
+                                <DocumentObservation
+                                  key={entry.id}
+                                  entry={entry}
+                                  assets={assets}
+                                  sessionId={sessionId!}
+                                  index={globalIndex}
+                                  onPhotoClick={(url, e) => setLightboxPhoto({ url, entry: e })}
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
 
                 {/* Areas to focus on */}
                 {areasToFocusOn.length > 0 && (
@@ -794,11 +891,11 @@ export default function AdminFieldNotesSession() {
                 <p className="font-medium text-sm">No photos captured</p>
               </div>
             ) : (
-              <div className="max-w-2xl mx-auto">
+              <div>
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-4">
                   Site Photos ({assets.length})
                 </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
                   {assets.map((asset: any, i: number) => {
                     const linkedEntry = entries.find(e => {
                       try { const ids = JSON.parse(e.assetIds || "[]"); return ids.includes(asset.id); } catch { return false; }

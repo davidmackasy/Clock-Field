@@ -708,6 +708,8 @@ export const fieldNotesAssets = pgTable("field_notes_assets", {
   sequenceIndex: integer("sequence_index").notNull().default(0),
   capturedAt: text("captured_at").notNull(),
   caption: text("caption"),
+  areaLabel: text("area_label"),
+  areaConfidence: text("area_confidence"),
   createdAt: text("created_at").notNull(),
 });
 

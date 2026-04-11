@@ -4731,9 +4731,10 @@ Return a JSON object with these exact fields:
       const createdByName = creator ? `${creator.firstName} ${creator.lastName}` : "Unknown";
       let locationName = null;
       if (session.locationId) { const loc = await storage.getLocation(session.locationId); locationName = loc?.name ?? null; }
-      const [assets, entries] = await Promise.all([
+      const [assets, entries, chunks] = await Promise.all([
         storage.getFieldNotesAssets(session.id),
         storage.getFieldNotesEntries(session.id),
+        storage.getFieldNotesTranscriptChunks(session.id),
       ]);
       // Filter: only show client-safe entries unless showInternalNotes is on
       const publicEntries = entries.filter(e => doc.showInternalNotes || e.clientSafeSummary || e.body);
@@ -4741,9 +4742,81 @@ Return a JSON object with these exact fields:
         session: { ...session, createdByName, locationName },
         company: { name: companyRow?.name, companyLogoUrl: (companyRow as any)?.companyLogoUrl ?? null },
         entries: publicEntries,
-        assets: assets.map(a => ({ id: a.id, fileUrl: a.fileUrl, capturedAt: a.capturedAt })),
+        assets: assets.map(a => ({ id: a.id, fileUrl: a.fileUrl, capturedAt: a.capturedAt, areaLabel: (a as any).areaLabel ?? null })),
+        transcriptChunks: doc.showInternalNotes ? chunks : [],
+        hasTranscript: chunks.length > 0,
         publicDoc: doc,
       });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // POST /api/public/field-notes/:token/quote-response — accept or decline a quote (no auth)
+  app.post("/api/public/field-notes/:token/quote-response", async (req, res) => {
+    try {
+      const [doc] = await db.select().from(fieldNotesPublicDocuments).where(eq(fieldNotesPublicDocuments.shareToken, req.params.token));
+      if (!doc || !doc.isEnabled) return res.status(404).json({ message: "Not found" });
+      const session = await storage.getFieldNotesSession(doc.sessionId);
+      if (!session) return res.status(404).json({ message: "Session not found" });
+      const { action, reason } = req.body;
+      if (!["accept", "decline"].includes(action)) return res.status(400).json({ message: "Invalid action" });
+      if (action === "decline" && !reason?.trim()) return res.status(400).json({ message: "A reason is required when declining" });
+      let quoteData: any = {};
+      try { quoteData = JSON.parse((session as any).quoteData || "{}"); } catch {}
+      const now = new Date().toISOString();
+      if (action === "accept") {
+        quoteData.quoteStatus = "accepted";
+        quoteData.quoteAcceptedAt = now;
+        delete quoteData.quoteDeclinedAt;
+        delete quoteData.quoteDeclineReason;
+      } else {
+        quoteData.quoteStatus = "declined";
+        quoteData.quoteDeclinedAt = now;
+        quoteData.quoteDeclineReason = reason.trim();
+        delete quoteData.quoteAcceptedAt;
+      }
+      await storage.updateFieldNotesSession(session.id, { quoteData: JSON.stringify(quoteData) } as any);
+      res.json({ success: true, status: action === "accept" ? "accepted" : "declined" });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // POST /api/field-notes/sessions/:id/generate-scope — AI scope summary
+  app.post("/api/field-notes/sessions/:id/generate-scope", fnAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const session = await storage.getFieldNotesSession(req.params.id);
+      if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const [openaiClient] = getOpenAIClient();
+      if (!openaiClient) return res.status(503).json({ message: "AI not available" });
+      let quoteData: any = {};
+      try { quoteData = JSON.parse((session as any).quoteData || "{}"); } catch {}
+      const entries: any[] = (session as any).entries ?? [];
+      const entryText = entries.map(e => e.body || "").filter(Boolean).join("\n");
+      const prompt = [
+        "You are an assistant generating a professional service scope summary for a commercial cleaning proposal.",
+        "Based on the field note entries below, write 2–3 concise sentences describing what cleaning services are needed and what was observed.",
+        "Be specific about areas mentioned. Write in third person, professional tone.",
+        "",
+        "Property details from quote form:",
+        quoteData.squareFootage ? `- Square footage: ${quoteData.squareFootage}` : "",
+        quoteData.numOffices ? `- Offices: ${quoteData.numOffices}` : "",
+        quoteData.numWashrooms ? `- Washrooms: ${quoteData.numWashrooms}` : "",
+        quoteData.numKitchens ? `- Kitchens/break rooms: ${quoteData.numKitchens}` : "",
+        quoteData.serviceFrequency ? `- Service frequency: ${quoteData.serviceFrequency}` : "",
+        quoteData.includedAreas ? `- Included areas: ${quoteData.includedAreas}` : "",
+        "",
+        "Field note observations:",
+        entryText || "(no observations recorded)",
+      ].filter(l => l !== undefined).join("\n");
+      const completion = await openaiClient.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 300,
+        temperature: 0.4,
+      });
+      const scopeSummary = completion.choices[0]?.message?.content?.trim() || "";
+      quoteData.scopeSummary = scopeSummary;
+      await storage.updateFieldNotesSession(session.id, { quoteData: JSON.stringify(quoteData) } as any);
+      res.json({ scopeSummary });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
@@ -4762,6 +4835,33 @@ Return a JSON object with these exact fields:
       res.set("Content-Type", ct).set("Cache-Control", "private, max-age=86400").send(buf);
     } catch (err: any) { res.status(500).end(); }
   });
+
+  // ── Photo area classification (GPT-4o-mini vision) ───────────────────────────
+  async function classifyPhotos(assets: any[], openaiClient: OpenAI) {
+    if (assets.length === 0) return;
+    const BATCH_SIZE = 5;
+    const AREA_OPTIONS = ["Kitchen", "Washroom", "Hallway", "Office", "Entrance", "Break Room", "Storage Room", "Exterior", "Dining Area", "Floor Area", "Common Area", "Mechanical Room", "General Facility"];
+    for (let i = 0; i < assets.length; i += BATCH_SIZE) {
+      const batch = assets.slice(i, i + BATCH_SIZE);
+      try {
+        const imageContent: any[] = [
+          { type: "text", text: `You are classifying facility photos for a cleaning company site visit. For each image below (numbered 1 to ${batch.length}), identify the type of area/room shown. Valid area types: ${AREA_OPTIONS.join(", ")}. Return JSON only: {"classifications":[{"index":1,"area":"...","confidence":"high|medium|low"},...]}.` },
+          ...batch.map(asset => ({ type: "image_url", image_url: { url: asset.fileUrl, detail: "low" } })),
+        ];
+        const result = await openaiClient.chat.completions.create({ model: "gpt-4o-mini", response_format: { type: "json_object" }, max_tokens: 400, messages: [{ role: "user", content: imageContent }] });
+        const parsed = JSON.parse(result.choices[0]?.message?.content ?? "{}");
+        if (Array.isArray(parsed.classifications)) {
+          for (const item of parsed.classifications) {
+            const idx = (item.index ?? 0) - 1;
+            if (idx >= 0 && idx < batch.length) {
+              await db.update(fieldNotesAssets).set({ areaLabel: item.area || "General Facility", areaConfidence: item.confidence || "low" } as any).where(eq(fieldNotesAssets.id, batch[idx].id));
+            }
+          }
+        }
+      } catch (e: any) { console.error("[FieldNotes] Classification batch failed:", e.message); }
+      if (i + BATCH_SIZE < assets.length) await new Promise(r => setTimeout(r, 150));
+    }
+  }
 
   // ── Field Notes AI Processing ────────────────────────────────────────────────
   async function processFieldNoteSession(sessionId: string, companyId: string) {
@@ -4837,15 +4937,23 @@ Return a JSON object with these exact fields:
       }
     }
 
-    // ── Step 3: Build AI prompt with linked photo-transcript data ──────────────
+    // ── Step 3: Classify photos by area (GPT-4o-mini vision) ──────────────────
+    const openaiForClassify = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    await classifyPhotos(assets, openaiForClassify);
+    // Re-fetch assets to pick up area labels
+    const classifiedAssets = await storage.getFieldNotesAssets(sessionId);
+    const assetAreaMap = new Map(classifiedAssets.map(a => [a.id, (a as any).areaLabel ?? null]));
+
+    // ── Step 4: Build AI prompt with linked photo-transcript data ──────────────
     const linkedPhotos = photoLinks.map(({ asset, idx, chunk }) => ({
       photo_id: asset.id,
       photo_index: idx,
       captured_at: asset.capturedAt,
       linked_transcript: chunk?.rawText ?? null,
+      area_label: assetAreaMap.get(asset.id) ?? null,
     }));
 
-    // ── Step 4: Call OpenAI ───────────────────────────────────────────────────
+    // ── Step 5: Call OpenAI ───────────────────────────────────────────────────
     let entryList: any[] = [];
     let sessionSummary = "";
     let clientSafe = "";
@@ -4880,10 +4988,15 @@ CONTENT RULES:
 4. Session summary: 2–3 simple sentences. Say what areas were visited and what the walkthrough was for. Grounded in the actual transcript.
 5. No "standards", "compliance", "critical update required", "follow-up action" wording unless it was explicitly stated.
 
-GROUPING:
-- Group related photos (same area or topic) into ONE entry — not one card per photo.
-- Aim for 2–6 sections for a typical walkthrough session.
-- Use actual area names from the transcript (e.g., "Upstairs hallway", "Main washroom", "Back kitchen").
+GROUPING (most important layout rule):
+- Each photo in linked_photos has an area_label field — use this as the primary grouping signal.
+- Photos with the same area_label should go in the same entry (e.g., all "Kitchen" photos together, all "Washroom" photos together).
+- Do NOT mix photos from different area types into one entry unless they are truly related.
+- Create one entry per distinct area type. If there are 40 kitchen photos and 15 washroom photos, make at least a Kitchen entry and a Washroom entry.
+- For area_label "General Facility" or null, group into a general overview entry.
+- Use the transcript to add context inside each area entry, but do not let lack of transcript prevent you from grouping by area.
+- Aim for 2-8 sections depending on how many distinct areas exist.
+- Use specific area names from transcript when available (e.g., "Main Washroom", "Back Kitchen") or fall back to the area_label.
 
 STRUCTURED DETAIL EXTRACTION:
 Look for any of the following in the transcript and extract if found. Use null if not mentioned:

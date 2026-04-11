@@ -1,0 +1,547 @@
+DEV NOTE
+
+Main objective
+
+Improve Field Notes only.
+Do not touch attendance.
+Do not touch payroll.
+Do not touch schedules.
+Do not touch employee hours.
+Do not touch auth.
+Do not touch anything outside Field Notes, public Field Note links, and the Quote flow that starts from Field Notes.
+
+Everything below must be implemented carefully without breaking any currently working flow.
+
+Field Notes public link layout upgrade
+
+Problem
+
+The public Field Note document is too narrow on desktop.
+It shows too few images per row.
+Users have to scroll too far down to see all images.
+Images from different areas are mixed together, which makes the report look unprofessional.
+
+Required fix
+
+On the public Field Note link, expand the content container on desktop so the page uses much more of the available width.
+Do not leave large empty margins on the left and right.
+
+Desktop public link requirements
+
+The generated Field Note document should display at least 4 images per row on desktop.
+Image rows should stretch properly across the document width.
+Images should stay consistent in size and aligned cleanly.
+The page should look like a professional gallery, not a narrow column.
+
+Mobile public link requirements
+
+On mobile, show 3 images per row where possible.
+Do not leave mobile at 1 image per row for the photo sections.
+Keep spacing tight but still readable.
+Do not break image tap, preview, or scrolling behavior.
+
+Implementation notes
+
+Use responsive grid layout, not fixed narrow columns.
+Target something like:
+desktop xl/2xl = 4 columns minimum
+tablet = 3 columns
+mobile = 3 columns for compact gallery sections
+If some document sections need larger hero images, that is okay, but standard photo sections must stay in a 3-column mobile layout.
+
+Public Field Note transcript and notes must always be included
+
+Problem
+
+If a cleaner or manager is talking while recording, those notes must always appear in the generated Field Note properly.
+Right now that behavior needs to be more reliable and visible.
+
+Required fix
+
+Every Field Note must preserve and surface transcript content when audio exists.
+The public Field Note document must include:
+the spoken transcript
+AI-cleaned notes
+section-level notes tied to the relevant photos or area when possible
+
+If no transcript exists, clearly state that no transcript was recorded.
+Do not hide that state.
+Do not confuse users.
+
+Important
+
+Transcript content should not just exist in the backend.
+It must render clearly inside the generated Field Note document and public link.
+
+Required behavior
+
+If audio exists:
+show transcript summary
+show cleaned notes
+show section-specific observations
+
+If no audio exists:
+show a clear line such as:
+“No audio transcript was recorded for this field note.”
+
+Do not lose transcript text during document generation.
+Do not drop transcript text when switching tabs between Document, Photos, and Transcript.
+Do not remove transcript content from the public link.
+
+AI auto-grouping of images by area
+
+Problem
+
+All images are being mixed together.
+Washroom images should not sit beside kitchen images inside one generic block.
+Users need clear grouped sections.
+
+Required fix
+
+When generating the Field Note document and public link, automatically group images into area-based sections.
+
+Examples of sections
+
+Washroom
+Kitchen
+Hallway
+Office
+Entrance
+Break room
+Storage room
+Floor area
+Common area
+Exterior
+Mechanical or utility room
+Other or Unclassified
+
+How it should work
+
+Use image analysis on the Field Note photos.
+Detect the likely area shown in each image.
+Group related photos into the same block.
+Generate a section title for each block.
+Place related notes and transcript snippets inside the same block when possible.
+
+Example
+
+If images mostly show toilets, sinks, mirrors, stalls, soap dispensers:
+put them under Washroom
+
+If images show stove, fridge, sink, prep table, grease, kitchen equipment:
+put them under Kitchen
+
+If images show corridor flooring, doors, long passageways:
+put them under Hallway
+
+Important fallback behavior
+
+Do not force bad classifications.
+If confidence is low, place photos into General Facility Overview or Other.
+But do not dump everything into one block if the model can clearly separate them.
+
+Required output structure for the document
+
+Section title
+Short area summary
+Related transcript or notes
+Image grid for that area
+
+This applies to:
+the public Field Note link
+the generated Field Note document in admin
+
+Admin Field Notes UI layout upgrade
+
+A. Photos tab
+
+Problem
+
+The admin Photos tab is using too few images per row on desktop.
+There is too much empty space.
+
+Required fix
+
+On desktop admin Photos tab, increase the grid to 4 images per row.
+Use the available width properly.
+Keep the card layout clean and aligned.
+
+Mobile
+
+Keep mobile simple.
+Do not over-expand.
+3 per row on mobile is acceptable if it stays readable.
+Do not break current mobile behavior.
+
+B. Document tab
+
+Problem
+
+The generated document in admin also shows too few images per row.
+It wastes desktop width.
+
+Required fix
+
+In the admin Document view, image blocks inside the generated Field Note should show 5 or 6 images per row on desktop, depending on available width.
+Use responsive breakpoints.
+
+Recommended target
+
+Large desktop = 6 columns
+Medium desktop = 5 columns
+Tablet = 3 or 4 columns
+Mobile = keep current style or max 3 if clean
+
+Important
+
+This desktop expansion is only for admin document rendering.
+Do not make mobile crowded.
+Do not distort image aspect ratios.
+
+Field Note document generation improvement
+
+The generated Field Note document should look more structured and less generic.
+
+Required document structure
+
+Header
+Site name
+Date and time
+Prepared by
+Field Note type
+
+Overview
+Short AI summary of the visit
+
+Area blocks
+Each area must have:
+section title
+short summary
+relevant transcript notes
+image grid
+
+Final notes
+Optional general observations
+optional recommended attention areas
+
+Important
+
+Do not place one giant image dump under one heading.
+The whole point is to break the document into understandable zones.
+
+Quote flow improvement from Field Notes
+
+Scope boundary
+
+Only improve the quote flow that starts from Field Notes.
+Do not redesign the full invoicing system.
+Do not touch other unrelated quote flows unless they depend directly on this Field Note quote feature.
+
+Problem
+
+Too many manual fields.
+Not enough AI help.
+The quote does not intelligently generate scope summary or pricing help.
+Users should not have to enter everything manually.
+
+Required fix
+
+When a user clicks Turn into Quote from a Field Note, the system should prefill as much as possible from the Field Note.
+
+Auto-prefill from Field Note
+
+Client name if known
+Site name
+Address if known
+Detected facility type
+Detected service areas from the photos
+Detected condition level from the images and notes
+Suggested scope summary
+Suggested service frequency
+Suggested labor estimate
+Suggested first-pass pricing estimate
+
+Manual inputs should be reduced to only the most important missing fields.
+
+New minimal quote input flow
+
+Step 1
+Prefill what already exists from the Field Note
+
+Step 2
+Ask only the missing essentials, such as:
+square footage
+cleaning frequency
+estimated hours per visit
+special services if needed
+location confirmation
+any access limitations
+
+Step 3
+Generate:
+scope summary
+service recommendation
+estimated labor hours
+suggested quote price
+client-facing quote text
+
+Important
+
+Do not show all photos in the quote.
+Only show a limited number.
+
+Quote photo rule
+
+Show only the first 6 most relevant photos in the quote.
+Not all photos.
+Use representative photos only.
+
+AI-assisted quote logic
+
+Required behavior
+
+The quote generator must do more than copy fields.
+It should produce:
+a clean scope summary
+recommended cleaning tasks
+estimated effort
+suggested price range
+final suggested quote total
+
+Pricing logic recommendation
+
+Do not rely only on raw AI freeform output.
+Use structured calculation.
+
+Use a hybrid approach:
+AI extracts the scope
+system calculates price from rules
+AI writes the summary cleanly
+
+Suggested inputs to pricing engine
+
+square footage
+service frequency
+estimated labor hours
+facility type
+condition severity from photos
+location
+special tasks
+one-time deep clean or recurring
+number of key areas detected
+
+Suggested output
+
+Estimated labor hours
+Suggested visit duration
+Suggested rate per visit
+Suggested weekly or monthly total if recurring
+Suggested one-time total if one-off
+
+Very important
+
+Do not make live browsing of outside market pricing the only pricing source.
+That will make quoting unstable and inconsistent.
+Instead:
+use internal configurable pricing logic first
+allow optional location-based pricing multiplier
+allow admin override
+allow future market comparison module later if needed
+
+Best safe implementation
+
+Create admin-configurable quote settings:
+base hourly rate
+city or region multiplier
+deep-clean multiplier
+washroom multiplier
+kitchen or grease multiplier
+recurring discount rules
+minimum visit charge
+
+Then use AI to estimate scope and calculator logic to turn that into price.
+
+This is the correct way to keep it accurate, editable, and reliable.
+
+Quote public link actions
+
+Required new status flow
+
+After a quote is generated and shared publicly, the client should be able to:
+Accept quote
+Decline quote
+
+If accepted
+
+Store accepted status on the quote
+Show accepted state inside admin on the related Field Note and quote record
+Capture accepted timestamp
+
+If declined
+
+Require a reason before submission
+Provide both:
+quick decline reasons
+custom text field
+
+Suggested quick reasons
+
+Too expensive
+Not needed right now
+Need fewer services
+Need more services
+Went with another provider
+Other
+
+Admin visibility
+
+When the user returns to the original Field Note or related quote record, they must be able to see:
+quote status
+accepted or declined
+timestamp
+decline reason if declined
+
+Do not bury this information.
+Show it clearly in the quote status area.
+
+Quote output content
+
+When quote is generated from Field Notes, the quote should include:
+
+Client name
+Site name
+Address if available
+Quote date
+Short facility summary
+Scope of work
+Detected service areas
+Suggested service frequency
+Estimated hours
+Suggested price
+Up to 6 representative photos
+Accept or Decline actions on public quote link
+
+Do not overload the quote with all the raw Field Note data.
+Keep it client-friendly.
+
+Technical implementation guidance
+
+Field Note grouping pipeline
+
+Keep existing photo uploads and field note records untouched.
+Add a new analysis layer that:
+classifies each image into an area label
+extracts condition cues
+matches transcript snippets to likely area blocks when possible
+
+Suggested data model additions
+
+field_note_photo.area_label
+field_note_photo.area_confidence
+field_note_photo.condition_tags
+field_note_section.title
+field_note_section.summary
+field_note_section.transcript_excerpt
+field_note_section.photo_ids
+
+Quote data additions
+
+quote.source_field_note_id
+quote.status
+quote.status_reason
+quote.accepted_at
+quote.declined_at
+quote.ai_scope_summary
+quote.ai_pricing_inputs
+quote.ai_pricing_output
+
+Important
+
+Do not rewrite old field notes unless needed.
+Make this backward compatible.
+Old field notes should still open.
+If older records do not have area labels yet, generate them lazily when the document is opened or regenerated.
+
+UI rules
+
+Public Field Note desktop
+Wider container
+4-image rows minimum
+clear grouped sections
+clean spacing
+professional report look
+
+Public Field Note mobile
+3-image rows
+tight clean layout
+clear section headings
+
+Admin Photos tab desktop
+4-image grid
+
+Admin Document tab desktop
+5 to 6-image grid inside document sections
+
+Admin and public
+No giant empty side margins
+No mixed unrelated photo blocks
+No transcript disappearing
+
+Do not break rules
+
+Do not touch attendance
+Do not touch payroll
+Do not touch schedules
+Do not touch employee hours
+Do not touch unrelated reports
+Do not touch auth
+Do not touch welcome emails
+Do not touch broadcast system
+Do not touch unrelated public links
+
+Only update:
+Field Notes public link
+Field Notes document generation
+Field Notes admin photo and document layout
+Field Note to Quote flow
+Quote accept or decline status from Field Note quote link
+
+QA checklist
+
+Field Note public link on desktop shows 4 photos per row minimum
+Field Note public link on mobile shows 3 photos per row
+Admin Photos tab shows 4 photos per row on desktop
+Admin Document view shows 5 or 6 photos per row on desktop
+Images are grouped into area blocks
+Washroom photos do not mix into kitchen blocks
+Transcript appears whenever audio exists
+No transcript state appears clearly when no audio exists
+Generated document is more structured and readable
+Turning Field Note into Quote prefills available data
+Quote shows only up to 6 photos
+Quote can be accepted publicly
+Quote can be declined publicly with a required reason
+Admin can see accepted or declined status and reason
+No unrelated app modules are changed
+No existing Field Note records are broken
+
+Priority order
+
+Priority 1
+Public Field Note layout
+Transcript reliability
+AI grouping by area
+
+Priority 2
+Admin Photos and Document grid expansion
+
+Priority 3
+Field Note to Quote auto-prefill and AI scope summary
+
+Priority 4
+Quote accept or decline flow with reason tracking
+
+Use this exact direction.
+Do not simplify it.
+Do not redesign other parts of the app.
+Do not make unrelated changes.
