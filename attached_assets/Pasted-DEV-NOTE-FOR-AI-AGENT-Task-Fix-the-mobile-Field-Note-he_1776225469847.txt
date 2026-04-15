@@ -1,0 +1,194 @@
+DEV NOTE FOR AI AGENT
+
+Task
+Fix the mobile Field Note header UI on the note detail page so it looks clean, compact, and professional.
+
+Priority
+High
+
+Critical rule
+Do not break or affect anything else.
+Do not change the Field Note logic.
+Do not change document generation.
+Do not change the tabs behavior.
+Do not change share, print, or switch actions.
+Do not change any data structure unless absolutely required for layout only.
+Only fix the visual layout and spacing of the note header area.
+
+Problem
+On the mobile note detail screen, the top metadata block looks unprofessional.
+The date, time, location, business/user name, and note type are stacked with too much empty space.
+The content is not grouped properly.
+The layout feels broken and poorly aligned.
+
+What needs to be fixed
+The note header section on mobile must be reorganized so it is:
+
+* compact
+* aligned
+* easier to scan
+* visually grouped
+* professional looking
+
+Current issues seen
+
+* Too much vertical space between metadata rows
+* Date and time are separated awkwardly
+* Name is floating too low
+* Location is not grouped cleanly
+* Badge placement feels disconnected
+* The entire header block looks stretched and unbalanced
+* The spacing above the tabs is messy
+
+Required layout change
+
+1. Rebuild the note metadata block into a clean compact stack
+
+Suggested structure on mobile
+
+Row 1
+Note title
+Example:
+Site Visit
+
+Row 2
+Single compact metadata line or two tight rows
+Example:
+Apr 10, 11:25 PM • 0m
+Gift Del • David Mackasy
+
+Row 3
+Badges row
+Example:
+Quote
+Proposal
+
+Then below that
+Action buttons row
+
+* Switch to Note
+* Print
+* Share
+
+Then below that
+Tabs row
+
+* Document
+* Photos
+* Transcript
+
+Important
+Do not keep large vertical gaps between these items.
+
+2. Reduce vertical spacing aggressively
+   Tighten spacing between:
+
+* title and metadata
+* metadata lines
+* metadata and badges
+* badges and action buttons
+* action buttons and tabs
+
+The top block should feel like one connected card, not several broken sections.
+
+3. Improve text hierarchy
+   Use clear hierarchy:
+
+* Title should be strongest
+* Metadata should be smaller and muted
+* Badges should be compact and aligned
+* Buttons should stay visible but not oversized
+
+Recommended style direction
+
+* Title: medium-bold
+* Metadata: smaller font, neutral color
+* Badges: small pill badges
+* Buttons: same current function, cleaner spacing
+* Tabs: aligned tightly under the header
+
+4. Group related information properly
+   Do not place each detail on a separate loose line.
+   Group related fields together.
+
+Correct grouping
+
+* Date with time and duration
+* Location with user name
+* Status tags together
+
+Bad grouping
+
+* Date alone
+* Time alone
+* Duration alone
+* Name alone with huge gap
+* Tag floating separately
+
+5. Mobile-specific alignment rules
+
+* Left align the content cleanly
+* Keep all metadata inside the same content width
+* Make sure long names wrap gracefully
+* Make sure nothing overlaps the action buttons
+* Prevent extra padding on the left and right
+* Reduce unnecessary top and bottom padding in the card
+
+6. Badge cleanup
+   The Quote / Proposal badge area should look intentional.
+   If both are badges, place them in one inline badge row.
+   Use consistent pill size and spacing.
+   Do not leave them floating with large empty space around them.
+
+7. Action row cleanup
+   Keep current actions:
+
+* Switch to Note
+* Print
+* Share
+
+But on mobile:
+
+* align them in one clean responsive row
+* reduce button padding if needed
+* make them look balanced
+* avoid oversized spacing between buttons and metadata
+
+8. Tabs spacing cleanup
+   The tabs row:
+
+* should sit directly below the header actions
+* should not have a big empty gap above it
+* should remain horizontally scrollable if needed
+* should not break current behavior
+
+9. Keep desktop untouched unless shared styling is already broken
+   This task is for the mobile UI issue shown.
+   Do not redesign desktop unless the same component is shared and the desktop also benefits without risk.
+
+10. Safe implementation approach
+
+* inspect the note detail header container
+* reduce container padding
+* replace loose stacked blocks with a compact flex/stack layout
+* use small gap utilities consistently
+* keep the current data fields and actions exactly the same
+* only improve layout, spacing, typography, and grouping
+
+11. Acceptance checklist
+    The fix is correct if:
+
+* the title, date, time, duration, location, and user info look clean and compact
+* the header no longer has large awkward empty gaps
+* the note type badges look aligned
+* the action buttons still work
+* the tabs still work
+* no data disappears
+* no other page is affected
+* mobile UI looks professional and readable
+
+12. Final instruction
+    Focus only on this note detail header UI issue.
+    Do not touch any unrelated Field Note logic.
+    Do not touch document, photo, transcript, share, print, or switch functionality.
+    Only clean up the layout and spacing so the mobile page looks polished.

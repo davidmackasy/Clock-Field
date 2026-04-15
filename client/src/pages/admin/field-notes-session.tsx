@@ -844,41 +844,73 @@ export default function AdminFieldNotesSession() {
   return (
     <div className="flex flex-col h-full">
       {/* ── Header ── */}
-      <div className="border-b bg-background px-4 md:px-6 pt-3 pb-3 print:hidden">
+      <div className="border-b bg-background px-4 md:px-6 pt-3 pb-2 print:hidden">
+        {/* Back link */}
         <button data-testid="button-back-session"
           className="flex items-center gap-1 text-muted-foreground hover:text-foreground text-xs mb-2"
           onClick={() => navigate(backPath)}>
           <ChevronLeft className="w-3.5 h-3.5" /> Field Notes
         </button>
-        <div className="flex items-start justify-between gap-2">
+
+        {/* Desktop: side-by-side | Mobile: stacked */}
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between md:gap-2">
+
+          {/* Left / top: title + compact metadata */}
           <div className="flex-1 min-w-0">
+            {/* Title row */}
             {editingTitle ? (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 mb-1">
                 <Input data-testid="input-session-title-edit" value={editTitle} onChange={e => setEditTitle(e.target.value)} className="h-7 text-sm font-semibold" autoFocus />
                 <Button size="icon" variant="ghost" className="w-7 h-7 shrink-0" onClick={() => updateMutation.mutate({ title: editTitle })}><Check className="w-3.5 h-3.5" /></Button>
                 <Button size="icon" variant="ghost" className="w-7 h-7 shrink-0" onClick={() => setEditingTitle(false)}><X className="w-3.5 h-3.5" /></Button>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <h1 className="text-sm font-semibold truncate">{session.title || SESSION_TYPE_LABELS[session.sessionType] || session.sessionType}</h1>
+              <div className="flex items-center gap-1.5 mb-1">
+                <h1 className="text-sm font-semibold leading-tight truncate">{session.title || SESSION_TYPE_LABELS[session.sessionType] || session.sessionType}</h1>
                 <button data-testid="button-edit-title" className="text-muted-foreground hover:text-foreground shrink-0" onClick={() => { setEditTitle(session.title ?? ""); setEditingTitle(true); }}>
                   <Edit3 className="w-3 h-3" />
                 </button>
               </div>
             )}
-            <div className="flex items-center gap-2.5 mt-0.5 text-[11px] text-muted-foreground flex-wrap">
-              {session.locationName && <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3" />{session.locationName}</span>}
-              <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" />{format(parseISO(session.startedAt), "MMM d h:mm a")}{duration !== null ? ` · ${duration}m` : ""}</span>
-              {session.createdByName && <span className="flex items-center gap-0.5"><User className="w-3 h-3" />{session.createdByName}</span>}
+
+            {/* Metadata: row 1 — date · duration + badge */}
+            <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-0.5">
+                <Clock className="w-3 h-3 shrink-0" />
+                {format(parseISO(session.startedAt), "MMM d, h:mm a")}
+                {duration !== null ? ` · ${duration}m` : ""}
+              </span>
               <span className={cn(
-                "text-[10px] px-1.5 py-0 rounded-full border font-medium",
-                documentMode === "quote" ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/20 dark:text-green-400 dark:border-green-800" : "bg-muted text-muted-foreground border-border"
+                "text-[10px] px-1.5 py-px rounded-full border font-medium leading-tight",
+                documentMode === "quote"
+                  ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/20 dark:text-green-400 dark:border-green-800"
+                  : "bg-muted text-muted-foreground border-border"
               )}>
                 {documentMode === "quote" ? "Quote Proposal" : "Site Visit Note"}
               </span>
             </div>
+
+            {/* Metadata: row 2 — location · name */}
+            {(session.locationName || session.createdByName) && (
+              <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground mt-0.5">
+                {session.locationName && (
+                  <span className="flex items-center gap-0.5 min-w-0">
+                    <MapPin className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{session.locationName}</span>
+                  </span>
+                )}
+                {session.createdByName && (
+                  <span className="flex items-center gap-0.5 min-w-0">
+                    <User className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{session.createdByName}</span>
+                  </span>
+                )}
+              </div>
+            )}
           </div>
-          <div className="flex gap-1.5 flex-shrink-0 flex-wrap justify-end">
+
+          {/* Right / below on mobile: action buttons */}
+          <div className="flex gap-1.5 flex-wrap mt-2 md:mt-0 md:flex-shrink-0 md:flex-nowrap md:justify-end">
             {canShare && isReady && (
               <Button
                 data-testid="button-toggle-mode"
