@@ -209,12 +209,28 @@ function DocumentObservation({ entry, assets, sessionId, index, onPhotoClick }: 
         </div>
       )}
 
-      {/* Body text */}
+      {/* Body / Bullets */}
       {editing ? (
         <Textarea data-testid="textarea-entry-body" value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))} rows={4} className="text-sm mb-3" />
-      ) : (
-        <p className="text-sm text-foreground/80 leading-relaxed mb-2">{entry.body}</p>
-      )}
+      ) : (() => {
+        let bullets: string[] | null = null;
+        try { const parsed = JSON.parse(entry.clientSafeSummary || ""); if (Array.isArray(parsed)) bullets = parsed; } catch {}
+        return bullets && bullets.length > 0 ? (
+          <div className="mb-2">
+            {entry.body && <p className="text-sm text-foreground/70 leading-relaxed mb-1.5">{entry.body}</p>}
+            <ul className="space-y-1">
+              {bullets.map((bullet: string, bi: number) => (
+                <li key={bi} className="flex items-start gap-2 text-sm text-foreground/80">
+                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-foreground/30 shrink-0" />
+                  <span className="leading-snug">{bullet}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <p className="text-sm text-foreground/80 leading-relaxed mb-2">{entry.body}</p>
+        );
+      })()}
 
       {/* Recommended action — plain text note, no colored box */}
       {editing ? (
@@ -1019,8 +1035,8 @@ export default function AdminFieldNotesSession() {
                       {grouped.map(([area, areaEntries]) => (
                         <div key={area}>
                           {multiArea && (
-                            <div className="flex items-center gap-3 mb-5">
-                              <h2 className="text-xs font-bold text-foreground/70 uppercase tracking-wide">{area}</h2>
+                            <div className="flex items-center gap-3 mb-4">
+                              <h2 className="text-sm font-bold text-foreground">{area}</h2>
                               <div className="flex-1 h-px bg-border" />
                             </div>
                           )}

@@ -5056,6 +5056,35 @@ Return a JSON object with these exact fields:
     }
   }
 
+  // ── Field Notes: Transcript pre-cleaning ──────────────────────────────────
+  function cleanTranscript(raw: string): string {
+    if (!raw) return raw;
+    // Remove filler words at word boundaries
+    let cleaned = raw
+      .replace(/\b(um+|uh+|er+|ah+|hmm+|mhm|uh-huh)\b/gi, "")
+      .replace(/\blike,?\s+like\b/gi, "like")
+      .replace(/\byou know,?\s+/gi, "")
+      .replace(/\bI mean,?\s+/gi, "")
+      .replace(/\bso,?\s+so\b/gi, "so")
+      .replace(/\band,?\s+and\b/gi, "and")
+      // Collapse multiple spaces
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    // Remove very short fragment repetitions (duplicate 3+ word phrases)
+    const words = cleaned.split(" ");
+    if (words.length > 6) {
+      const deduped: string[] = [];
+      for (let i = 0; i < words.length; i++) {
+        const phrase = words.slice(i, i + 4).join(" ").toLowerCase();
+        const prev = words.slice(Math.max(0, i - 4), i).join(" ").toLowerCase();
+        if (i > 4 && prev.includes(phrase) && phrase.split(" ").length >= 3) continue;
+        deduped.push(words[i]);
+      }
+      cleaned = deduped.join(" ");
+    }
+    return cleaned;
+  }
+
   // ── Field Notes AI Processing ────────────────────────────────────────────────
   async function processFieldNoteSession(sessionId: string, companyId: string) {
     const now = new Date().toISOString();
@@ -5066,7 +5095,8 @@ Return a JSON object with these exact fields:
       storage.getFieldNotesTranscriptChunks(sessionId),
       storage.getFieldNotesAssets(sessionId),
     ]);
-    const fullTranscript = chunks.map(c => c.rawText).join(" ").trim();
+    const rawTranscript = chunks.map(c => c.rawText).join(" ").trim();
+    const fullTranscript = cleanTranscript(rawTranscript);
     if (!fullTranscript && assets.length === 0) {
       await storage.updateFieldNotesSession(sessionId, { status: "ready", aiStatus: "done", aiSummary: "No transcript or photos captured.", clientSafeSummary: "Site visit recorded." });
       return;
@@ -5158,52 +5188,73 @@ Return a JSON object with these exact fields:
         messages: [
           {
             role: "system",
-            content: `You are a field notes assistant helping produce simple, readable site visit documents for commercial cleaning and facility service businesses.
+            content: `You are a professional field report generator for service companies (cleaning, maintenance, construction, inspection). You produce accurate, grounded, structured site visit reports.
 
-TONE — this is the most important rule:
-Write like a person summarizing a walkthrough in plain, professional language. Think of a business letter, not a compliance report.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GROUNDING — THE MOST CRITICAL RULE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ONLY include observations that are directly supported by:
+• The transcript (something the user said)
+• The photo context (area_label from photo classification)
+• Both together
 
-GOOD examples of tone:
-"These are the photos taken during the walkthrough on [date]. The main areas we looked at were the common hallways, the washrooms, and the kitchen area at the back."
-"The carpeted sections near the entrance were noted during the visit as areas that will need regular attention."
-"Based on what was seen during the walkthrough, the corner areas and public-facing spaces are the main focus for the cleaning scope."
+NEVER invent observations, measurements, or conditions not mentioned.
+If confidence is low, omit the detail entirely.
+A short accurate report is far better than a long hallucinated one.
 
-BAD examples — never write like this:
-"Several areas have been identified for updates to meet current standards."
-"Critical compliance risk detected in Zone 3."
-"Recommended follow-up action required to address regulatory requirements."
-"A comprehensive site visit was conducted to assess facility conditions."
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VISIT TYPE CLASSIFICATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Classify this note as one of these visit_type values:
+• "site_visit" — general walkthrough or initial assessment
+• "cleaning_walkthrough" — pre-clean or cleaning service assessment
+• "inspection" — condition inspection or quality check
+• "before_service" — pre-service documentation
+• "after_service" — post-service result documentation
+• "progress_update" — ongoing project or service progress
+• "maintenance_check" — routine maintenance or equipment check
+• "client_update" — general client-facing update
 
-CONTENT RULES:
-1. Keep the original meaning from what was spoken. Do not replace specific observations with vague generalizations.
-2. Lightly clean grammar and turn rough speech into readable paragraphs — do not inflate or formalize the language.
-3. If the transcript says "corner areas need cleaning", write that — do not turn it into "areas were found to require remediation."
-4. Session summary: 2–3 simple sentences. Say what areas were visited and what the walkthrough was for. Grounded in the actual transcript.
-5. No "standards", "compliance", "critical update required", "follow-up action" wording unless it was explicitly stated.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TONE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Write like a professional sending a business email, not a compliance report.
+GOOD: "The washroom floors show buildup near the edges."
+GOOD: "Entrance glass has visible fingerprints."
+BAD: "Critical compliance risk detected."
+BAD: "Recommended remediation required."
+BAD: "A comprehensive assessment was conducted."
 
-GROUPING (most important layout rule):
-- Each photo in linked_photos has an area_label field — use this as the primary grouping signal.
-- Photos with the same area_label should go in the same entry (e.g., all "Kitchen" photos together, all "Washroom" photos together).
-- Do NOT mix photos from different area types into one entry unless they are truly related.
-- Create one entry per distinct area type. If there are 40 kitchen photos and 15 washroom photos, make at least a Kitchen entry and a Washroom entry.
-- For area_label "General Facility" or null, group into a general overview entry.
-- Use the transcript to add context inside each area entry, but do not let lack of transcript prevent you from grouping by area.
-- Aim for 2-8 sections depending on how many distinct areas exist.
-- Use specific area names from transcript when available (e.g., "Main Washroom", "Back Kitchen") or fall back to the area_label.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REPORT STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Generate a professional report title using: location name, visit type, and date context.
+Examples: "Main Office Cleaning Walkthrough", "Unit 204 Pre-Service Inspection", "Anderson House Progress Update"
 
-STRUCTURED DETAIL EXTRACTION:
-Look for any of the following in the transcript and extract if found. Use null if not mentioned:
-- Square footage or dimensions (e.g., "16 by 70", "1,200 square feet")
-- Number of floors, offices, washrooms, kitchens, hallways, entrances
-- Special surfaces (carpet, tile, VCT, hardwood, glass)
-- Service frequency mentioned (e.g., "twice a week", "three times per week")
-- Carpet care or floor care frequency
-- Any pricing or budget amounts mentioned
+SECTION GROUPING (critical):
+• Group all photos with the same area_label into one section
+• One section per distinct area type (Kitchen, Washroom, Hallway, etc.)
+• Use transcript to add context within each section
+• Create 2–8 sections based on distinct areas found
+• Use specific names from transcript when available ("Back Kitchen", "Main Washroom")
 
-Return ONLY valid JSON:
+BULLETS (required per section):
+• Each section must have 2–6 short bullet observations
+• Bullets must be grounded in transcript or photo context
+• Each bullet: 1 sentence, max 12 words, factual and direct
+• GOOD bullet: "Floor edges show buildup near the baseboard"
+• GOOD bullet: "Paper dispensers appear stocked"
+• BAD bullet: "Area requires professional cleaning attention"
+• BAD bullet: "Standards were reviewed during the walkthrough"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RESPONSE FORMAT — return ONLY valid JSON
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {
-  "session_summary": "2-3 plain sentence intro grounded in the actual walkthrough. What areas, what was seen, what the visit was for.",
-  "client_safe_summary": "1-2 sentence plain overview for the client",
+  "visit_type": "site_visit|cleaning_walkthrough|inspection|before_service|after_service|progress_update|maintenance_check|client_update",
+  "report_title": "Professional specific title",
+  "session_summary": "2-3 plain sentences: what areas were visited, what was seen, what the visit was for. Grounded only in actual transcript content.",
+  "client_safe_summary": "1-2 sentences plain overview for the client.",
   "extracted_details": {
     "square_footage": "string or null",
     "num_floors": "string or null",
@@ -5220,34 +5271,38 @@ Return ONLY valid JSON:
   "entries": [
     {
       "sort_order": 0,
-      "entry_type": "observation|issue|cleaning_scope|general_note",
-      "area_name": "specific area name from transcript, or null",
-      "title": "short plain title — e.g. 'Upstairs hallway', 'Main washrooms', 'Entrance and lobby'",
-      "body": "Plain paragraph describing what was seen in this area. Write like a person, not a report generator. Stay close to what was actually said.",
-      "client_safe_summary": null,
-      "priority": "low|normal|high|critical",
+      "entry_type": "observation|issue|general_note",
+      "area_name": "specific area name or null",
+      "title": "Short area heading (e.g. 'Main Washroom', 'Entrance Lobby', 'Back Kitchen')",
+      "body": "1-2 sentences describing this area. Plain, grounded, professional.",
+      "bullets": [
+        "Short grounded observation — max 12 words",
+        "Another grounded observation"
+      ],
+      "priority": "low|normal|high",
       "issue_detected": false,
-      "recommended_action": "Only if something specific needs attention — plain language like 'These carpets will need vacuuming twice per week.' or null",
-      "photo_ids": ["photo-uuid-here"],
-      "related_transcript": "lightly cleaned transcript text for this section",
+      "recommended_action": "Only include if explicitly mentioned or clearly visible. Null otherwise.",
+      "photo_ids": ["exact-uuid-from-linked_photos"],
+      "related_transcript": "relevant excerpt or null",
       "tags": []
     }
   ]
 }
 
-RULES:
-- photo_ids must use exact UUID strings from the photo_id fields provided
-- sort_order must follow photo capture sequence
-- Every photo must appear in at least one entry
-- If no transcript linked to a photo, describe what the photo shows based on context clues
-- Preserve specificity — a specific simple note is always better than a vague polished one`,
+FINAL RULES:
+• photo_ids must use exact UUIDs from the photo_id fields in linked_photos
+• Every photo must appear in exactly one entry
+• Sort entries in photo capture order
+• If no transcript exists, describe only what photos show via area_label
+• If no photos exist, structure sections from transcript content only
+• Specific and short is always better than generic and long`,
           },
           {
             role: "user",
             content: JSON.stringify({
               session_type: session.sessionType,
-              location_name: locationName || "Unnamed location",
-              full_transcript: fullTranscript || "(no voice recording)",
+              location_name: locationName || "Unknown location",
+              full_transcript: fullTranscript || "(no voice recording — base report on photo area labels only)",
               linked_photos: linkedPhotos,
             }),
           },
@@ -5259,6 +5314,19 @@ RULES:
       sessionSummary = parsed.session_summary || "";
       clientSafe = parsed.client_safe_summary || "";
       entryList = Array.isArray(parsed.entries) ? parsed.entries : [];
+      // Store visitType on session
+      const detectedVisitType = parsed.visit_type || null;
+      // Auto-fill title from AI report_title if session has no custom title
+      const aiReportTitle = parsed.report_title || null;
+      if (detectedVisitType || aiReportTitle) {
+        const freshSession = await storage.getFieldNotesSession(sessionId);
+        const updatePatch: any = {};
+        if (detectedVisitType) updatePatch.visitType = detectedVisitType;
+        if (aiReportTitle && !freshSession?.title) updatePatch.title = aiReportTitle;
+        if (Object.keys(updatePatch).length > 0) {
+          await storage.updateFieldNotesSession(sessionId, updatePatch as any);
+        }
+      }
       // Store any extracted property details into quoteData (only if session has none yet)
       if (parsed.extracted_details && typeof parsed.extracted_details === "object") {
         const det = parsed.extracted_details;
@@ -5285,13 +5353,17 @@ RULES:
       entryList.sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999));
       for (let i = 0; i < entryList.length; i++) {
         const e = entryList[i];
+        // Store bullets as JSON in clientSafeSummary for use in rendering
+        const bulletsJson = Array.isArray(e.bullets) && e.bullets.length > 0
+          ? JSON.stringify(e.bullets)
+          : null;
         const entry = await storage.createFieldNotesEntry({
           sessionId,
           entryType: e.entry_type || "observation",
           areaName: e.area_name || null,
           title: e.title || `Note ${i + 1}`,
           body: e.body || "",
-          clientSafeSummary: e.client_safe_summary || null,
+          clientSafeSummary: bulletsJson,
           priority: e.priority || "normal",
           sortOrder: i,
           photoIndexes: Array.isArray(e.photo_ids) ? JSON.stringify(e.photo_ids.map((id: string) => assets.findIndex(a => a.id === id)).filter((n: number) => n >= 0)) : null,

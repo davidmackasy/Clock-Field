@@ -1,0 +1,814 @@
+Here is a fully detailed dev note you can give to your AI agent.
+
+FIELD NOTE UPGRADE DEV NOTE
+
+Main goal
+
+Upgrade Field Note so it feels much more professional, structured, and client-ready, similar to a premium walkthrough or site visit report experience.
+
+Do not change the current core concept.
+Do not remove the current flow.
+Do not touch attendance.
+Do not touch hours.
+Do not touch payroll.
+Do not touch scheduling.
+Do not touch any unrelated pages or data models unless absolutely required for Field Note only.
+
+Keep the same concept:
+User starts a Field Note
+User records voice
+User takes photos during the session
+User stops the session
+System processes everything
+System generates a professional, structured, shareable field report
+
+What must improve
+
+The problem right now is not the concept.
+The concept is good.
+The problem is the quality of understanding, structure, and final presentation.
+
+Current issues to solve
+
+1. Transcription is not reliable enough
+   It sometimes invents or mimics things that do not match what the user is actually seeing or saying.
+
+2. Final generated note does not always make sense
+   It can sound generic, repetitive, or wrong.
+   It sometimes describes the wrong area or uses made-up observations.
+
+3. The final field note does not yet feel premium enough
+   It needs to look like a professional site visit, inspection note, cleaning walkthrough, or progress update that can confidently be shared with clients.
+
+4. Photos and observations are not structured strongly enough
+   The system needs to group photos and text into clear sections with strong headings and meaningful summaries.
+
+5. Public share experience needs to look more polished
+   When shared to a client, it should feel like a clean, professional report page, not just a raw dump of text and photos.
+
+Core instruction
+
+Do not rebuild Field Note from scratch.
+Do not destroy the current working flow.
+Keep the same start/record/capture/stop concept.
+This is an upgrade, not a replacement.
+
+Product direction
+
+Field Note should work for:
+Cleaning walkthroughs
+Before-and-after service documentation
+Site visits
+Inspections
+Maintenance checks
+Construction progress notes
+Client updates
+Internal team notes
+
+The final output should feel like:
+Professional
+Structured
+Accurate
+Readable
+Shareable
+Actionable
+
+Target experience after upgrade
+
+A user records a walkthrough while taking photos.
+The app understands:
+What area they are in
+What they are saying
+What the photos actually show
+What observations are confirmed
+What actions or issues were mentioned
+
+Then the system generates a polished report with:
+Strong title
+Optional subtitle or visit type
+Clean section headings
+Short bullet observations
+Grouped image galleries per section
+Optional action items
+Optional recommendations
+Optional before vs after logic
+Professional public share page
+
+Important product behavior to keep
+
+Keep recording and photo capture in one session.
+Do not split the flow into a confusing multi-step process.
+Do not remove the convenience of recording and snapping at once.
+The “magic” should happen after the user finishes.
+
+Required system upgrade
+
+1. Rebuild Field Note generation pipeline for higher accuracy
+
+Do not rely on raw transcript alone.
+
+New pipeline should be:
+
+Step 1
+Capture clean transcript from audio with timestamps if possible.
+
+Step 2
+Extract photo timeline and associate each photo with capture time.
+
+Step 3
+Use GPT-5.4 to process transcript plus photo sequence together, not separately.
+
+Step 4
+Generate structured intermediate data first, not direct final prose.
+
+Step 5
+Generate final polished report from validated structured data.
+
+This is very important.
+
+Do not go directly from transcript to final note.
+
+Instead use a two-pass or three-pass pipeline.
+
+Recommended pipeline
+
+Pass A. Evidence extraction
+Input:
+Full transcript
+Photo metadata
+Ordered photos
+Optional session metadata like location, cleaner name, admin name, property, timestamp
+
+Output as structured JSON:
+visit_type
+report_title
+summary
+sections[]
+observations[]
+issues[]
+completed_work[]
+recommended_actions[]
+uncertain_items[]
+photo_groups[]
+
+Pass B. Validation and grounding
+Use GPT-5.4 vision + transcript reasoning to validate whether the extracted section content is actually supported by the photos and transcript.
+If unsupported, either remove it or mark it as uncertain internally.
+Do not show hallucinated content to end users.
+
+Pass C. Final report writing
+Generate the clean client-facing report only from the validated structured JSON.
+
+This should reduce made-up or mismatched statements.
+
+2. Add stronger grounding rules
+
+The model must not invent observations.
+It must only state things that are supported by:
+The transcript
+The images
+Or both
+
+If the user says something but the photo is unclear, the system can still include it, but only if the transcript strongly supports it.
+
+If the image shows something clearly but the transcript does not mention it, it can include it only if confidence is high.
+
+If confidence is low, do not include it in the main report.
+
+Internal confidence rules
+
+High confidence
+Mention freely in report
+
+Medium confidence
+Mention only in a softer way
+
+Low confidence
+Do not include in client-facing text
+
+Example
+
+Bad
+“The hallway was cleaned thoroughly” when there is no proof
+
+Better
+“Hallway area was discussed during the walkthrough”
+
+Best
+Only include “Hallway cleaned” if transcript and/or image clearly support it
+
+3. Section-based report generation
+
+The final report should not be one long block of text.
+
+It should be broken into professional sections like this:
+
+Report title
+Project or location name
+Date
+Created by
+Visit type
+
+Executive summary
+One short clean paragraph
+
+Sections
+Each section should have:
+Section heading
+2 to 5 short bullet observations
+Grouped images related to that section
+
+Optional ending blocks
+Issues noted
+Work completed
+Recommended next steps
+Follow-up needed
+
+Examples of section headings
+
+Entrance and lobby condition
+Washroom condition
+Kitchen and breakroom update
+Hallway and common area review
+Floor care observations
+Window and glass condition
+Supply restocking update
+Exterior site walkthrough
+Mechanical room observations
+Before service condition
+After service result
+Progress since last visit
+
+Important
+
+Section titles must be generated based on real content, not generic filler.
+
+4. Photo grouping logic
+
+Photos need to be intelligently grouped into the right section.
+
+Do not dump all photos into one gallery.
+
+Use:
+Photo capture order
+Nearby transcript timestamps
+Visual similarity
+Recognized location clues
+User speech cues like “now we’re in the washroom” or “this side hallway”
+
+Expected result:
+Each section has its own image gallery.
+
+Example
+
+Section
+Washroom condition
+Bullets
+Mirror has water spotting
+Sink area needs detailing
+Paper dispenser is stocked
+Photos
+Only washroom-related photos
+
+Section
+Hallway floor condition
+Bullets
+Baseboards need touch-up
+Floor has visible debris near corner
+Photos
+Only hallway-related photos
+
+5. Improve title generation
+
+The report title should feel professional and specific.
+
+Bad
+Field Note 1
+
+Bad
+Cleaning note for site
+
+Better
+Site Walkthrough Report for Main Office
+
+Better
+Pre-Service Cleaning Assessment for Unit 204
+
+Better
+Post-Cleaning Progress Update for Anderson House
+
+Use available metadata:
+Client name
+Location
+Job type
+Visit type
+Date
+Team name
+
+6. Add visit type classification
+
+Each Field Note should classify itself as one of these:
+Site visit
+Cleaning walkthrough
+Inspection
+Before-service note
+After-service note
+Progress update
+Maintenance walkthrough
+Issue documentation
+Client update
+
+This helps structure the report properly.
+
+7. Add before and after sequence support
+
+This is very important for cleaning companies.
+
+Users may create multiple Field Notes for the same location over time.
+
+The system should support:
+Initial visit
+Follow-up visit
+Before-service documentation
+After-service documentation
+Progress comparison
+
+Do not fully build a heavy comparison system yet unless already easy with your current architecture.
+But at minimum, add the data structure now so future comparisons work cleanly.
+
+Required data model additions
+
+fieldNote.visitType
+fieldNote.sequenceType
+Possible values:
+initial
+follow_up
+before_service
+after_service
+progress_update
+
+fieldNote.relatedFieldNoteId nullable
+This allows future before/after linking
+
+fieldNote.clientFacingSummary
+fieldNote.internalSummary
+fieldNote.processingConfidence
+fieldNote.generatedSectionsJson
+
+This makes future comparison features much easier.
+
+8. Improve transcript quality before GPT generation
+
+Before sending transcript into GPT-5.4:
+Clean filler words
+Remove repeated fragments
+Repair broken sentence splits
+Preserve domain-specific words if possible
+Preserve room/location terms
+Preserve task words
+Preserve issue words
+
+Examples to preserve:
+washroom
+hallway
+baseboard
+strip and wax
+restroom
+janitorial closet
+supply room
+entrance mat
+scuff marks
+grease buildup
+soap dispenser
+toilet partition
+floor drain
+mechanical room
+
+Do not over-clean transcript to the point that meaning is lost.
+
+9. Add domain-aware prompting for Field Note generation
+
+The model should know this is not generic storytelling.
+
+It is a service operations report builder.
+
+Prompt design should tell GPT-5.4:
+You are generating a professional service field report.
+Only include grounded observations.
+Prefer clarity over creativity.
+Use direct professional language.
+Avoid made-up assumptions.
+Group content into logical site sections.
+Write in a way that a client can understand.
+
+Mode-specific prompt variants
+
+Cleaning mode
+Focus on cleanliness, surfaces, supplies, odors if explicitly mentioned, spills, debris, high-touch areas, floors, washrooms, kitchens, glass, before/after quality
+
+Construction/site mode
+Focus on progress, completed work, outstanding items, installations, materials, site condition, next steps
+
+Inspection mode
+Focus on observed conditions, issues, follow-up needs, incomplete items
+
+Use the right prompt template based on visit type or project type.
+
+10. Improve final writing style
+
+The final report must sound:
+Clear
+Professional
+Human
+Short and scannable
+Not robotic
+Not repetitive
+Not exaggerated
+
+Avoid phrases like:
+Everything looks amazing
+The hallway appears beautiful
+The site seems perfect
+
+Use grounded business language like:
+Washroom floors show visible buildup near corners
+Paper towel dispensers are stocked
+Entrance glass needs additional detailing
+South hallway baseboards require touch-up
+Mechanical area was reviewed during the walkthrough
+
+11. Public share page redesign for Field Notes
+
+Upgrade the public share page so it feels premium.
+
+Required layout
+
+Header area
+Report title
+Visit type badge
+Location name
+Date
+Created by
+Optional company branding
+
+Summary block
+1 short professional summary paragraph
+
+Content sections
+Each section shows:
+Heading
+Bullet observations
+Photo gallery
+
+Optional footer blocks
+Issues noted
+Recommended next steps
+Internal reference ID or report ID
+Share/export options
+
+Design direction from attachments
+
+Use strong bold section titles
+Use clean vertical spacing
+Use grouped photo grids
+Use a polished document layout
+Make it easy to scroll on mobile
+Make it look client-safe and professional
+
+Important UI rules
+
+No clutter
+No oversized empty spaces
+No messy raw transcript display
+No giant confusing metadata blocks
+No unstructured image piles
+
+12. Mobile-first Field Note result UI
+
+This has to look good on mobile first.
+
+Because most field activity happens on phones.
+
+Improve:
+Spacing
+Section separation
+Image grid consistency
+Typography hierarchy
+Sticky actions only if necessary
+Cleaner loading state while report is processing
+
+Recommended mobile page structure
+
+Top header
+Field Note title
+Back button
+Share button
+Optional badge like “Processing” or “Ready”
+
+Body
+Summary card
+Section cards
+Image grid per section
+Action items if present
+
+13. Processing states and user feedback
+
+Field Note needs clearer processing states after stopping recording.
+
+Current experience likely feels unclear.
+
+Add these steps visibly:
+Uploading session
+Processing audio
+Matching photos to timeline
+Generating structured report
+Finalizing client-ready page
+
+This makes the system feel smarter and more premium.
+
+Do not expose technical jargon to users.
+
+14. Add editable generated report layer
+
+Do not force users to accept raw generated content.
+
+Allow admin or authorized user to edit:
+Title
+Section headings
+Bullet points
+Summary
+Action items
+
+This is important because no AI output will be perfect every time.
+
+Keep the edit experience simple.
+Do not destroy the generated structure.
+Let them refine before sharing if needed.
+
+15. Keep transcript separate from final report
+
+Do not let the transcript become the report.
+
+Store separately:
+Raw transcript
+Cleaned transcript
+Structured AI extraction
+Final report content
+
+This is important for debugging and future improvements.
+
+16. Add internal debug and observability for Field Note only
+
+Without affecting other systems, add logs for:
+Audio length
+Transcript length
+Photo count
+Section count
+Confidence score
+Report generation duration
+Failure reason
+Whether image grounding succeeded
+Whether transcript cleaning succeeded
+
+This is needed because if quality is bad again, you need to know where it failed:
+speech-to-text
+photo association
+GPT extraction
+final formatting
+
+17. Improve image understanding during report generation
+
+Use image understanding to identify:
+room or area type when possible
+major visible issues
+service-relevant objects
+before/after clues
+whether photos belong together
+
+But do not let image model overreach.
+It should support the transcript, not replace reality.
+
+18. Add section templates based on use case
+
+For cleaning field notes, preferred structure:
+Overview
+Areas observed
+Issues found
+Work completed
+Recommended next steps
+
+For walkthrough/site visit:
+Overview
+Observed sections
+Progress updates
+Items needing follow-up
+Next actions
+
+For before/after cleaning:
+Before condition
+Work performed
+After condition
+Outstanding concerns
+
+19. Add optional “report tone” presets internally
+
+Not necessarily exposed to user yet, but structure code so it can support:
+Client-friendly
+Internal team note
+Formal inspection
+Quick update
+
+Default should be:
+Client-friendly professional
+
+20. Do not allow hallucinated action items
+
+If the user never mentioned a follow-up or recommendation, do not invent major next steps.
+
+Bad
+“Replace flooring in hallway”
+when nobody said that
+
+Better
+“Additional detailing may be needed along hallway baseboards”
+only if supported
+
+21. Support cleaner app and admin app consistently
+
+Same upgraded Field Note intelligence must work whether the note was created by:
+Cleaner
+Supervisor
+Admin
+Owner
+
+Do not create one quality level for admin and another for cleaner.
+
+The core processing engine should be shared.
+
+22. Preserve current shareable public link concept
+
+Do not remove public sharing.
+Just make the shared output far more polished.
+
+Public page should feel like:
+A professional walkthrough page
+A premium inspection report
+A service documentation page
+
+23. UI reference guidance from attachments
+
+Use these visual ideas:
+Bold report headings
+Grouped content by topic
+Image grids beneath the relevant section
+Clean document-style presentation
+Professional readable spacing
+Clear hierarchy from title to section to images
+
+Avoid copying another product exactly.
+Use the concept only:
+organized
+professional
+document-style
+share-ready
+
+24. Suggested final report example structure
+
+Example
+
+Title
+Main Office Cleaning Walkthrough Report
+
+Metadata
+Created April 15, 2026
+Location: Main Office
+Created by: John Doe
+Visit type: Cleaning walkthrough
+
+Summary
+This walkthrough documents the current condition of key service areas, including washrooms, hallways, and common spaces. The report highlights observed issues, completed cleaning progress, and items that may require follow-up.
+
+Section 1
+Washroom condition
+Bullets
+Sink and counter areas show visible spotting
+Paper supplies appear stocked
+Floor edges need additional detail cleaning
+Images
+washroom photo grid
+
+Section 2
+Hallway and entrance
+Bullets
+Entrance glass has visible fingerprints
+Floor condition is generally good
+Baseboards near the corner show dust buildup
+Images
+hallway photo grid
+
+Section 3
+Supply and service readiness
+Bullets
+Cleaning supplies were reviewed during the walkthrough
+Storage area appears organized
+Some materials may need restocking
+Images
+supply room photo grid
+
+Optional
+Recommended next steps
+Recheck washroom floor edges after service
+Touch up entrance glass before final closeout
+
+25. Required technical implementation approach
+
+Recommended backend output structure
+
+fieldNoteReport = {
+title,
+subtitle,
+visitType,
+sequenceType,
+summary,
+sections: [
+{
+id,
+title,
+summary,
+bullets: [],
+photoIds: [],
+confidence
+}
+],
+issues: [],
+completedWork: [],
+recommendedNextSteps: [],
+internalConfidence,
+rawTranscript,
+cleanedTranscript,
+generatedAt
+}
+
+Store this separately from raw session capture data.
+
+26. Safe rollout plan
+
+Do not hard replace old Field Note rendering immediately.
+
+Rollout plan:
+Keep current capture flow
+Build new processing pipeline behind a feature flag
+Test with real existing sessions
+Compare old output vs new output
+Once quality is consistently better, switch the final renderer to the new format
+
+This is important because you do not want to break production.
+
+27. Non-negotiable constraints
+
+Do not touch attendance
+Do not touch hours
+Do not touch payroll
+Do not touch schedule logic
+Do not touch unrelated dashboards
+Do not remove current recording and picture-taking flow
+Do not break existing public share capability
+Do not delete existing Field Notes
+Do not change existing data unless migration is safe and reversible
+
+28. Success criteria
+
+This upgrade is successful if:
+
+A Field Note sounds like a real professional report
+The text matches what was actually said and photographed
+Photos are grouped into logical sections
+The public page looks premium and client-ready
+Cleaning companies can use it for before and after documentation
+Users can trust the report enough to share it externally
+The experience still feels easy and fast
+
+29. Priority order
+
+Priority 1
+Improve transcript-to-report accuracy with structured grounded generation
+
+Priority 2
+Improve section grouping and image-to-section matching
+
+Priority 3
+Upgrade public share page and report layout
+
+Priority 4
+Add editable generated output and future before/after linking structure
+
+30. Final instruction to AI agent
+
+Study the existing Field Note flow carefully before making changes.
+Only improve Field Note.
+Do not refactor unrelated systems.
+Do not break what already works.
+Preserve the simplicity of the current user experience.
+Upgrade the intelligence, structure, and presentation so Field Note feels premium, accurate, and client-ready.
+
+I can also turn this into a shorter “copy and paste for Replit AI agent” version.

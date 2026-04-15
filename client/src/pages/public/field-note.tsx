@@ -17,6 +17,22 @@ const SESSION_TYPE_LABELS: Record<string, string> = {
   post_clean: "Post-Clean", damage_report: "Damage Report", maintenance: "Maintenance",
 };
 
+const VISIT_TYPE_LABELS: Record<string, string> = {
+  site_visit: "Site Visit",
+  cleaning_walkthrough: "Cleaning Walkthrough",
+  inspection: "Inspection",
+  before_service: "Pre-Service",
+  after_service: "Post-Service",
+  progress_update: "Progress Update",
+  maintenance_check: "Maintenance Check",
+  client_update: "Client Update",
+};
+
+function parseBullets(raw: string | null | undefined): string[] | null {
+  if (!raw) return null;
+  try { const parsed = JSON.parse(raw); return Array.isArray(parsed) ? parsed : null; } catch { return null; }
+}
+
 function parseQuoteData(raw: string | null | undefined): Record<string, any> {
   if (!raw) return {};
   try { return JSON.parse(raw); } catch { return {}; }
@@ -314,7 +330,8 @@ export default function PublicFieldNote() {
   const { session, company, entries, assets, transcriptChunks, hasTranscript, publicDoc } = data;
   const docTitle = publicDoc?.title || session?.title || SESSION_TYPE_LABELS[session?.sessionType] || "Field Report";
   const showTimestamps = publicDoc?.showTimestamps ?? false;
-  const sessionType = SESSION_TYPE_LABELS[session?.sessionType] || "Field Note";
+  const visitTypeLabel = (session?.visitType && VISIT_TYPE_LABELS[session.visitType]) || SESSION_TYPE_LABELS[session?.sessionType] || "Field Note";
+  const sessionType = visitTypeLabel;
   const documentMode = session?.documentMode || "standard";
   const quoteData = parseQuoteData(session?.quoteData);
   const currentQuoteStatus = quoteStatus ?? quoteData.quoteStatus;
@@ -434,21 +451,39 @@ export default function PublicFieldNote() {
               return (
                 <section key={area} data-testid={`section-area-${i + 1}`} className="space-y-4">
                   <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-bold text-gray-400">{i + 1}.</span>
                     <h2 className="text-base font-bold text-gray-900">{area}</h2>
                     <div className="flex-1 h-px bg-gray-200" />
                     {allPhotos.length > 0 && (
                       <span className="text-[10px] text-gray-400">{allPhotos.length} photo{allPhotos.length !== 1 ? "s" : ""}</span>
                     )}
                   </div>
-                  {areaEntries.map((e: any) => (
-                    <div key={e.id}>
-                      {e.body && <p className="text-sm text-gray-700 leading-relaxed max-w-3xl">{e.clientSafeSummary || e.body}</p>}
-                      {e.recommendedAction && (
-                        <p className="text-xs text-gray-500 italic mt-1">Note: {e.recommendedAction}</p>
-                      )}
-                    </div>
-                  ))}
+                  {areaEntries.map((e: any) => {
+                    const bullets = parseBullets(e.clientSafeSummary);
+                    return (
+                      <div key={e.id} className="space-y-2">
+                        {/* Entry title (sub-heading when differs from area) */}
+                        {e.title && e.title !== area && e.title !== e.areaName && (
+                          <p className="text-sm font-semibold text-gray-800">{e.title}</p>
+                        )}
+                        {/* Body intro */}
+                        {e.body && <p className="text-sm text-gray-600 leading-relaxed max-w-3xl">{e.body}</p>}
+                        {/* Bullet observations */}
+                        {bullets && bullets.length > 0 && (
+                          <ul className="space-y-1.5 mt-1">
+                            {bullets.map((bullet: string, bi: number) => (
+                              <li key={bi} className="flex items-start gap-2.5 text-sm text-gray-700">
+                                <span className="mt-2 w-1.5 h-1.5 rounded-full bg-gray-400 shrink-0" />
+                                <span className="leading-snug">{bullet}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {e.recommendedAction && (
+                          <p className="text-xs text-gray-500 italic mt-1">↳ {e.recommendedAction}</p>
+                        )}
+                      </div>
+                    );
+                  })}
                   {allPhotos.length > 0 && (() => {
                     const beforePhotos = allPhotos.filter((a: any) => !a.phase || a.phase === "before");
                     const afterPhotos = allPhotos.filter((a: any) => a.phase === "after");

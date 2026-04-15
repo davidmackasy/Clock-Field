@@ -700,6 +700,7 @@ export const fieldNotesSessions = pgTable("field_notes_sessions", {
   aiSummary: text("ai_summary"),
   clientSafeSummary: text("client_safe_summary"),
   documentMode: text("document_mode").default("standard"),
+  visitType: text("visit_type"),
   quoteData: text("quote_data"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
