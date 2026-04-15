@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { setupAuth, hashPassword, comparePasswords, requireAuth, requireRole } from "./auth";
 import OpenAI from "openai";
-import { sendPasswordResetEmail, sendReportEmail } from "./mail";
+import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail } from "./mail";
 import { createHash } from "crypto";
 import passport from "passport";
 import { randomBytes } from "crypto";
@@ -1372,6 +1372,34 @@ Welcome again, and thank you for choosing ClockField.
         status: "active",
         flags: flags.length ? flags : null,
       });
+      // Send late clock-in email alert if enabled
+      if (flags.includes("late_clock_in") && shift) {
+        try {
+          const alertCompany = await storage.getCompany(user.companyId);
+          if (alertCompany?.alertLateClockIn) {
+            const admins = await storage.getAdminsByCompany(user.companyId);
+            const primaryAdmin = admins[0];
+            if (primaryAdmin?.email) {
+              const scheduledStart = shift.scheduledStartAt ? new Date(shift.scheduledStartAt).toLocaleString() : "N/A";
+              const actualClockIn = new Date(now).toLocaleString();
+              const minutesLate = Math.round((new Date(now).getTime() - new Date(shift.scheduledStartAt).getTime()) / 60000);
+              const location = shift.locationId ? await storage.getLocation(shift.locationId) : null;
+              await sendAttendanceLateClockInEmail({
+                to: primaryAdmin.email,
+                adminName: `${primaryAdmin.firstName} ${primaryAdmin.lastName}`,
+                employeeName: `${user.firstName} ${user.lastName}`,
+                locationName: location?.name,
+                scheduledStart,
+                actualClockIn,
+                minutesLate,
+                loginUrl: `${process.env.APP_URL || "https://app.clockfield.com"}`,
+              }).catch(e => console.error("[late-alert] Email failed:", e.message));
+            }
+          }
+        } catch (alertErr: any) {
+          console.error("[late-alert] Error checking alert settings:", alertErr.message);
+        }
+      }
       res.status(201).json(entry);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -2930,6 +2958,24 @@ Welcome again, and thank you for choosing ClockField.
         parentMessageId: null,
         createdAt: new Date().toISOString(),
       });
+      // Send email companion notification to business admin
+      try {
+        const admins = await storage.getAdminsByCompany(req.params.id);
+        const primaryAdmin = admins[0];
+        if (primaryAdmin?.email) {
+          await sendPlatformMessageEmail({
+            to: primaryAdmin.email,
+            adminName: `${primaryAdmin.firstName} ${primaryAdmin.lastName}`,
+            subject: subject.trim(),
+            preview: body.trim(),
+            messageType: messageType || "announcement",
+            loginUrl: `${process.env.APP_URL || "https://app.clockfield.com"}/admin/messages`,
+          });
+          console.log(`[platform-msg] Email sent to ${primaryAdmin.email} for direct message`);
+        }
+      } catch (emailErr: any) {
+        console.error("[platform-msg] Email notification failed:", emailErr.message);
+      }
       res.status(201).json(msg);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -3075,6 +3121,152 @@ Welcome again, and thank you for choosing ClockField.
     try {
       const messages = await storage.getAllPlatformMessages();
       res.json(messages);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Recent businesses endpoint
+  app.get("/api/super-admin/recent-businesses", requireSuperAdmin, async (req, res) => {
+    try {
+      const sortBy = (req.query.sort as string) || "created";
+      const limit = Math.min(parseInt((req.query.limit as string) || "20"), 50);
+      const allCompanies = await storage.getAllCompanies();
+      const results = await Promise.all(allCompanies.map(async (company) => {
+        const [employees, clientsList, admins] = await Promise.all([
+          storage.getEmployeesByCompany(company.id),
+          storage.getClientsByCompany(company.id),
+          storage.getAdminsByCompany(company.id),
+        ]);
+        const plan = getPlan(company.planCode);
+        const primaryAdmin = admins[0];
+        return {
+          id: company.id,
+          name: company.name,
+          planCode: company.planCode,
+          planName: plan.name,
+          billingCycle: company.billingCycle,
+          subscriptionStatus: company.subscriptionStatus,
+          accountStatus: company.accountStatus,
+          employeeCount: employees.length,
+          clientCount: clientsList.length,
+          adminName: primaryAdmin ? `${primaryAdmin.firstName} ${primaryAdmin.lastName}` : "—",
+          adminEmail: primaryAdmin?.email ?? "—",
+          createdAt: company.createdAt,
+          activatedAt: company.activatedAt,
+          internalBypass: company.internalBypass,
+        };
+      }));
+      const sorted = results.sort((a, b) => {
+        if (sortBy === "activated") {
+          const aDate = a.activatedAt ? new Date(a.activatedAt).getTime() : 0;
+          const bDate = b.activatedAt ? new Date(b.activatedAt).getTime() : 0;
+          return bDate - aDate;
+        }
+        const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bDate - aDate;
+      });
+      res.json(sorted.slice(0, limit));
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Activity overview endpoint for super admin dashboard
+  app.get("/api/super-admin/activity-overview", requireSuperAdmin, async (req, res) => {
+    try {
+      const allCompanies = await storage.getAllCompanies();
+      const today = new Date().toISOString().slice(0, 10);
+      let newSignupsToday = 0;
+      let pendingPayment = 0;
+      for (const c of allCompanies) {
+        if (c.createdAt && c.createdAt.slice(0, 10) === today) newSignupsToday++;
+        if (c.accountStatus === "pending_activation" || (c.subscriptionStatus === "past_due") || (c.subscriptionStatus === "unpaid")) pendingPayment++;
+      }
+      // Count unread messages (platform messages that haven't been read, per company)
+      const allMessages = await storage.getAllPlatformMessages();
+      const unreadCompanyIds = new Set<string>();
+      for (const m of allMessages) {
+        if (!m.isRead && m.companyId) unreadCompanyIds.add(m.companyId);
+      }
+      res.json({
+        newSignupsToday,
+        pendingPayment,
+        unreadBusinessMessages: unreadCompanyIds.size,
+        totalActive: allCompanies.filter(c => c.accountStatus === "active").length,
+        totalSuspended: allCompanies.filter(c => c.accountStatus === "suspended").length,
+      });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Activity chart data for super admin dashboard
+  app.get("/api/super-admin/activity-chart", requireSuperAdmin, async (req, res) => {
+    try {
+      const allCompanies = await storage.getAllCompanies();
+      // Build last 7 days signup counts
+      const days: { date: string; signups: number; active: number }[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().slice(0, 10);
+        const signups = allCompanies.filter(c => c.createdAt && c.createdAt.slice(0, 10) === dateStr).length;
+        const active = allCompanies.filter(c =>
+          c.accountStatus === "active" &&
+          c.createdAt && c.createdAt.slice(0, 10) <= dateStr
+        ).length;
+        days.push({ date: dateStr, signups, active });
+      }
+      // Funnel data
+      const funnel = {
+        signedUp: allCompanies.length,
+        pendingPayment: allCompanies.filter(c => c.accountStatus === "pending_activation" || c.subscriptionStatus === "past_due").length,
+        activated: allCompanies.filter(c => c.accountStatus === "active").length,
+        suspended: allCompanies.filter(c => c.accountStatus === "suspended").length,
+      };
+      res.json({ days, funnel });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Company alert settings update
+  app.patch("/api/company/alert-settings", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { alertLateClockIn, alertMissedShift, alertEmployeeClockedIn, alertEmployeeClockedOut, alertDailySummary } = req.body;
+      const updates: Record<string, any> = {};
+      if (alertLateClockIn !== undefined) updates.alertLateClockIn = !!alertLateClockIn;
+      if (alertMissedShift !== undefined) updates.alertMissedShift = !!alertMissedShift;
+      if (alertEmployeeClockedIn !== undefined) updates.alertEmployeeClockedIn = !!alertEmployeeClockedIn;
+      if (alertEmployeeClockedOut !== undefined) updates.alertEmployeeClockedOut = !!alertEmployeeClockedOut;
+      if (alertDailySummary !== undefined) updates.alertDailySummary = !!alertDailySummary;
+      const updated = await storage.updateCompany(user.companyId, updates);
+      if (!updated) return res.status(404).json({ message: "Company not found" });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Field note add-after-photos endpoint
+  app.post("/api/field-notes/sessions/:sessionId/after-photos", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { sessionId } = req.params;
+      const { assets } = req.body; // Array of { fileUrl, capturedAt, areaLabel, caption }
+      if (!Array.isArray(assets) || assets.length === 0) {
+        return res.status(400).json({ message: "No assets provided" });
+      }
+      const now = new Date().toISOString();
+      const created = await Promise.all(assets.map(async (a: any, i: number) => {
+        return storage.addFieldNotesAsset({
+          sessionId,
+          uploadedByUserId: user.id,
+          assetType: "photo",
+          fileUrl: a.fileUrl,
+          sequenceIndex: a.sequenceIndex ?? i,
+          capturedAt: a.capturedAt || now,
+          caption: a.caption || null,
+          areaLabel: a.areaLabel || null,
+          areaConfidence: null,
+          phase: "after",
+          createdAt: now,
+        } as any);
+      }));
+      res.status(201).json(created);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
@@ -4561,7 +4753,7 @@ Return a JSON object with these exact fields:
       const session = await storage.getFieldNotesSession(req.params.sessionId);
       if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       if (user.role === "employee" && session.createdByUserId !== user.id) return res.status(403).json({ message: "Forbidden" });
-      const { fileUrl, caption, sequenceIndex } = req.body;
+      const { fileUrl, caption, sequenceIndex, phase } = req.body;
       if (!fileUrl) return res.status(400).json({ message: "fileUrl required" });
       const now = new Date().toISOString();
       const asset = await storage.addFieldNotesAsset({
@@ -4572,8 +4764,9 @@ Return a JSON object with these exact fields:
         sequenceIndex: sequenceIndex ?? 0,
         capturedAt: now,
         caption: caption || null,
+        phase: phase === "after" ? "after" : "before",
         createdAt: now,
-      });
+      } as any);
       res.json(asset);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });

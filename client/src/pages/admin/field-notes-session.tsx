@@ -17,7 +17,7 @@ import {
   Sparkles, NotebookPen, Share2, Copy, Link as LinkIcon,
   EyeOff, User, Printer, ChevronDown, ChevronUp,
   FileCheck, DollarSign, Building, LayoutList, Wand2,
-  CheckCircle2, XCircle,
+  CheckCircle2, XCircle, Plus, SplitSquareHorizontal,
 } from "lucide-react";
 import { format, parseISO, differenceInMinutes } from "date-fns";
 
@@ -506,6 +506,172 @@ function QuoteSection({ sessionId, quoteData, onSave }: {
   );
 }
 
+// ── Photos tab content with Before/After support ──────────────────────────────
+function PhotosTabContent({
+  assets, entries, sessionId, onPhotoClick, onAssetsAdded
+}: {
+  assets: any[];
+  entries: any[];
+  sessionId: string;
+  onPhotoClick: (url: string, entry: any) => void;
+  onAssetsAdded: () => void;
+}) {
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const beforeAssets = assets.filter(a => !a.phase || a.phase === "before");
+  const afterAssets = assets.filter(a => a.phase === "after");
+
+  const handleAddAfterPhotos = async (files: FileList) => {
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const now = new Date().toISOString();
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const reader = new FileReader();
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          reader.onload = e => resolve(e.target?.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        const res = await apiRequest("POST", `/api/field-notes/sessions/${sessionId}/photo`, {
+          fileUrl: dataUrl,
+          phase: "after",
+          capturedAt: now,
+        });
+        if (!res.ok) throw new Error("Upload failed");
+      }
+      toast({ title: `${files.length} after photo${files.length > 1 ? "s" : ""} added` });
+      onAssetsAdded();
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e.message, variant: "destructive" });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  function PhotoGrid({ items, startIndex }: { items: any[]; startIndex: number }) {
+    return (
+      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+        {items.map((asset: any, i: number) => {
+          const linkedEntry = entries.find(e => {
+            try { const ids = JSON.parse(e.assetIds || "[]"); return ids.includes(asset.id); } catch { return false; }
+          });
+          return (
+            <div
+              key={asset.id}
+              data-testid={`img-photo-${asset.id}`}
+              className="rounded-xl overflow-hidden bg-muted border cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => onPhotoClick(asset.fileUrl, linkedEntry)}
+            >
+              <img src={asset.fileUrl} alt={`Photo ${startIndex + i + 1}`} className="w-full aspect-square object-cover" />
+              <div className="p-2 space-y-0.5">
+                {linkedEntry && (
+                  <p className="text-[11px] font-medium truncate">{linkedEntry.areaName || linkedEntry.title}</p>
+                )}
+                <p className="text-[10px] text-muted-foreground">
+                  {asset.areaLabel ? `${asset.areaLabel} · ` : ""}Photo {startIndex + i + 1}
+                  {asset.capturedAt ? ` · ${format(parseISO(asset.capturedAt), "h:mm a")}` : ""}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (assets.length === 0) {
+    return (
+      <div className="text-center py-14 text-muted-foreground">
+        <Camera className="w-10 h-10 mx-auto mb-3 opacity-30" />
+        <p className="font-medium text-sm">No photos captured</p>
+      </div>
+    );
+  }
+
+  const hasBothPhases = beforeAssets.length > 0 && afterAssets.length > 0;
+  const isAllBefore = afterAssets.length === 0;
+
+  return (
+    <div className="space-y-6">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={e => e.target.files && handleAddAfterPhotos(e.target.files)}
+      />
+
+      {/* Before Photos */}
+      {beforeAssets.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+              {hasBothPhases ? "Before Photos" : "Site Photos"} ({beforeAssets.length})
+            </p>
+          </div>
+          <PhotoGrid items={beforeAssets} startIndex={0} />
+        </div>
+      )}
+
+      {/* After Photos */}
+      {afterAssets.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+              After Photos ({afterAssets.length})
+            </p>
+          </div>
+          <PhotoGrid items={afterAssets} startIndex={beforeAssets.length} />
+        </div>
+      )}
+
+      {/* Add After Photos */}
+      {isAllBefore && (
+        <div className="border border-dashed rounded-xl p-4 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium flex items-center gap-2">
+              <SplitSquareHorizontal className="w-4 h-4 text-muted-foreground" />
+              Add After Photos
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">Upload after-service photos to compare before &amp; after</p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            data-testid="button-add-after-photos"
+          >
+            {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Plus className="w-3.5 h-3.5 mr-1" />}
+            {uploading ? "Uploading..." : "Add After Photos"}
+          </Button>
+        </div>
+      )}
+      {afterAssets.length > 0 && (
+        <div className="border border-dashed rounded-xl p-3 flex items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">Add more after photos</p>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            data-testid="button-add-more-after-photos"
+          >
+            {uploading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Plus className="w-3 h-3 mr-1" />}
+            {uploading ? "Uploading..." : "Add More"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Transcript view ────────────────────────────────────────────────────────────
 function TranscriptView({ chunks, assets }: { chunks: any[]; assets: any[] }) {
   const [lightbox, setLightbox] = useState<string | null>(null);
@@ -885,46 +1051,13 @@ export default function AdminFieldNotesSession() {
 
           {/* ── PHOTOS TAB ── */}
           <TabsContent value="photos" className="flex-1 overflow-y-auto px-4 md:px-6 py-4 mt-0">
-            {assets.length === 0 ? (
-              <div className="text-center py-14 text-muted-foreground">
-                <Camera className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                <p className="font-medium text-sm">No photos captured</p>
-              </div>
-            ) : (
-              <div>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-4">
-                  Site Photos ({assets.length})
-                </p>
-                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
-                  {assets.map((asset: any, i: number) => {
-                    const linkedEntry = entries.find(e => {
-                      try { const ids = JSON.parse(e.assetIds || "[]"); return ids.includes(asset.id); } catch { return false; }
-                    });
-                    return (
-                      <div
-                        key={asset.id}
-                        data-testid={`img-photo-${asset.id}`}
-                        className="rounded-xl overflow-hidden bg-muted border cursor-pointer hover:shadow-md transition-shadow"
-                        onClick={() => setLightboxPhoto({ url: asset.fileUrl, entry: linkedEntry })}
-                      >
-                        <img src={asset.fileUrl} alt={`Photo ${i + 1}`} className="w-full aspect-square object-cover" />
-                        <div className="p-2 space-y-0.5">
-                          {linkedEntry && (
-                            <p className="text-[11px] font-medium truncate">{linkedEntry.areaName || linkedEntry.title}</p>
-                          )}
-                          <p className="text-[10px] text-muted-foreground">
-                            Photo {i + 1}{asset.capturedAt ? ` · ${format(parseISO(asset.capturedAt), "h:mm:ss a")}` : ""}
-                          </p>
-                          {linkedEntry?.relatedTranscript && (
-                            <p className="text-[10px] text-muted-foreground italic truncate">"{linkedEntry.relatedTranscript}"</p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            <PhotosTabContent
+              assets={assets}
+              entries={entries}
+              sessionId={session.id}
+              onPhotoClick={(url, entry) => setLightboxPhoto({ url, entry })}
+              onAssetsAdded={() => queryClient.invalidateQueries({ queryKey: ["/api/field-notes/sessions", session.id] })}
+            />
           </TabsContent>
 
           {/* ── TRANSCRIPT TAB ── */}

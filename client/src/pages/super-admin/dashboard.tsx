@@ -15,10 +15,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import {
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell
+} from "recharts";
+import {
   Building2, Users, DollarSign, TrendingUp, AlertTriangle, Clock,
   Eye, Ban, CheckCircle, ShieldAlert, MessageSquare, ChevronRight,
   ArrowLeft, Send, Globe, RefreshCw, ShieldCheck, ShieldOff, CalendarClock,
-  X, Timer
+  X, Timer, Activity, UserCheck, Bell, Inbox, UserPlus, BarChart2
 } from "lucide-react";
 
 type Business = {
@@ -40,6 +43,8 @@ type Business = {
   manualAccessExpiresAt: string | null;
   manualAccessGrantedBy: string | null;
   manualAccessReason: string | null;
+  createdAt?: string | null;
+  activatedAt?: string | null;
 };
 
 type Stats = {
@@ -49,6 +54,19 @@ type Stats = {
   pendingBusinesses: number;
   mrr: number;
   arr: number;
+};
+
+type ActivityOverview = {
+  newSignupsToday: number;
+  pendingPayment: number;
+  unreadBusinessMessages: number;
+  totalActive: number;
+  totalSuspended: number;
+};
+
+type ActivityChart = {
+  days: { date: string; signups: number; active: number }[];
+  funnel: { signedUp: number; pendingPayment: number; activated: number; suspended: number };
 };
 
 const accountStatusColors: Record<string, string> = {
@@ -83,6 +101,13 @@ function daysRemaining(expiresAt: string) {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
+function formatDateShort(iso: string | null | undefined) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "2-digit" });
+  } catch { return "—"; }
+}
+
 function StatCard({ icon: Icon, label, value, sub, color }: { icon: any; label: string; value: string | number; sub?: string; color?: string }) {
   return (
     <Card>
@@ -100,6 +125,24 @@ function StatCard({ icon: Icon, label, value, sub, color }: { icon: any; label: 
       </CardContent>
     </Card>
   );
+}
+
+function ActivityCard({ icon: Icon, label, value, color, bg }: { icon: any; label: string; value: number; color: string; bg: string }) {
+  return (
+    <div className={`rounded-lg border p-3 flex items-center gap-3 ${bg}`}>
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${color}`}>
+        <Icon className="w-4 h-4" />
+      </div>
+      <div>
+        <p className="text-xs text-muted-foreground font-medium">{label}</p>
+        <p className="text-lg font-bold">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 export default function SuperAdminDashboard() {
@@ -122,6 +165,7 @@ export default function SuperAdminDashboard() {
   const [search, setSearch] = useState("");
   const [accessDays, setAccessDays] = useState("5");
   const [accessReason, setAccessReason] = useState("");
+  const [recentSort, setRecentSort] = useState<"created" | "activated">("created");
 
   if (!isSuperAdmin) {
     return (
@@ -145,6 +189,22 @@ export default function SuperAdminDashboard() {
     queryKey: ["/api/super-admin/businesses"],
   });
 
+  const { data: recentBusinesses = [], isLoading: recentLoading } = useQuery<Business[]>({
+    queryKey: ["/api/super-admin/recent-businesses", recentSort],
+    queryFn: async () => {
+      const res = await fetch(`/api/super-admin/recent-businesses?sort=${recentSort}&limit=15`, { credentials: "include" });
+      return res.json();
+    },
+  });
+
+  const { data: activityOverview } = useQuery<ActivityOverview>({
+    queryKey: ["/api/super-admin/activity-overview"],
+  });
+
+  const { data: chartData } = useQuery<ActivityChart>({
+    queryKey: ["/api/super-admin/activity-chart"],
+  });
+
   const { data: detailData, isLoading: detailLoading } = useQuery<any>({
     queryKey: ["/api/super-admin/businesses", selectedBusiness?.id],
     enabled: detailOpen && !!selectedBusiness?.id,
@@ -158,6 +218,8 @@ export default function SuperAdminDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/super-admin/businesses"] });
       queryClient.invalidateQueries({ queryKey: ["/api/super-admin/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/recent-businesses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/activity-overview"] });
       toast({ title: "Updated successfully" });
     },
     onError: (e: any) => toast({ title: "Failed to update", description: e.message, variant: "destructive" }),
@@ -242,6 +304,13 @@ export default function SuperAdminDashboard() {
     setMessageOpen(true);
   };
 
+  const funnelData = chartData ? [
+    { name: "Signed Up", value: chartData.funnel.signedUp, fill: "#6366f1" },
+    { name: "Pending Payment", value: chartData.funnel.pendingPayment, fill: "#f59e0b" },
+    { name: "Activated", value: chartData.funnel.activated, fill: "#10b981" },
+    { name: "Suspended", value: chartData.funnel.suspended, fill: "#ef4444" },
+  ] : [];
+
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
       {/* Header */}
@@ -288,138 +357,308 @@ export default function SuperAdminDashboard() {
         )}
       </div>
 
-      {/* Business Table */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <CardTitle className="text-base">All Businesses</CardTitle>
-            <Input
-              placeholder="Search by name, email..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-64 h-8 text-sm"
-              data-testid="input-search-businesses"
-            />
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {bizLoading ? (
-            <div className="p-4 space-y-3">
-              {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 rounded" />)}
-            </div>
-          ) : filteredBusinesses.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground text-sm">No businesses found</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/30">
-                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Business</th>
-                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Admin</th>
-                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Plan</th>
-                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Usage</th>
-                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Status</th>
-                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {filteredBusinesses.map(b => (
-                    <tr key={b.id} className="hover:bg-muted/20 transition-colors" data-testid={`row-business-${b.id}`}>
-                      <td className="px-4 py-3">
-                        <p className="font-medium">{b.name}</p>
-                        <p className="text-xs text-muted-foreground">{b.billingCycle}</p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <p className="font-medium">{b.adminName}</p>
-                        <p className="text-xs text-muted-foreground">{b.adminEmail}</p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge className={`${planColors[b.planCode] || "bg-gray-100 text-gray-700"} border-0 font-medium text-xs`}>
-                          {b.planName}
-                        </Badge>
-                        <div className="mt-1">
-                          <Badge className={`${subStatusColors[b.subscriptionStatus] || "bg-gray-100"} border-0 text-[10px]`}>
-                            {b.subscriptionStatus}
-                          </Badge>
+      {/* Business Activity Overview */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Activity className="w-4 h-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold">Business Activity Overview</h2>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          <ActivityCard
+            icon={UserPlus}
+            label="New Signups Today"
+            value={activityOverview?.newSignupsToday ?? 0}
+            color="bg-purple-100 text-purple-700"
+            bg="bg-purple-50/50 border-purple-100"
+          />
+          <ActivityCard
+            icon={Bell}
+            label="Pending Payment"
+            value={activityOverview?.pendingPayment ?? 0}
+            color="bg-amber-100 text-amber-700"
+            bg="bg-amber-50/50 border-amber-100"
+          />
+          <ActivityCard
+            icon={Inbox}
+            label="Unread Messages"
+            value={activityOverview?.unreadBusinessMessages ?? 0}
+            color="bg-blue-100 text-blue-700"
+            bg="bg-blue-50/50 border-blue-100"
+          />
+          <ActivityCard
+            icon={CheckCircle}
+            label="Active Businesses"
+            value={activityOverview?.totalActive ?? 0}
+            color="bg-green-100 text-green-700"
+            bg="bg-green-50/50 border-green-100"
+          />
+        </div>
+      </div>
+
+      {/* Charts */}
+      {chartData && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <BarChart2 className="w-4 h-4 text-muted-foreground" />
+                Signups — Last 7 Days
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={160}>
+                <LineChart data={chartData.days} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <Tooltip labelFormatter={v => new Date(v).toLocaleDateString()} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Line type="monotone" dataKey="signups" stroke="#7c3aed" strokeWidth={2} dot={false} name="New Signups" />
+                  <Line type="monotone" dataKey="active" stroke="#10b981" strokeWidth={2} dot={false} name="Active" />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <BarChart2 className="w-4 h-4 text-muted-foreground" />
+                Signup & Activation Funnel
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={160}>
+                <BarChart data={funnelData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="value" name="Count" radius={[3, 3, 0, 0]}>
+                    {funnelData.map((entry, index) => (
+                      <Cell key={index} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Main content: All Businesses (left) + Recent Businesses (right) */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        {/* All Businesses Table */}
+        <div className="xl:col-span-2">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <CardTitle className="text-base">All Businesses</CardTitle>
+                <Input
+                  placeholder="Search by name, email..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="w-64 h-8 text-sm"
+                  data-testid="input-search-businesses"
+                />
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {bizLoading ? (
+                <div className="p-4 space-y-3">
+                  {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 rounded" />)}
+                </div>
+              ) : filteredBusinesses.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground text-sm">No businesses found</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/30">
+                        <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Business</th>
+                        <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Admin</th>
+                        <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Plan</th>
+                        <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Usage</th>
+                        <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Status</th>
+                        <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {filteredBusinesses.map(b => (
+                        <tr key={b.id} className="hover:bg-muted/20 transition-colors" data-testid={`row-business-${b.id}`}>
+                          <td className="px-4 py-3">
+                            <p className="font-medium">{b.name}</p>
+                            <p className="text-xs text-muted-foreground">{b.billingCycle}</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="font-medium">{b.adminName}</p>
+                            <p className="text-xs text-muted-foreground">{b.adminEmail}</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge className={`${planColors[b.planCode] || "bg-gray-100 text-gray-700"} border-0 font-medium text-xs`}>
+                              {b.planName}
+                            </Badge>
+                            <div className="mt-1">
+                              <Badge className={`${subStatusColors[b.subscriptionStatus] || "bg-gray-100"} border-0 text-[10px]`}>
+                                {b.subscriptionStatus}
+                              </Badge>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="text-xs">{b.employeeCount} emp / {b.clientCount} clients</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge className={`${accountStatusColors[b.accountStatus] || "bg-gray-100"} border-0 text-xs`}>
+                              {b.accountStatus.replace("_", " ")}
+                            </Badge>
+                            {b.internalBypass && (
+                              <div className="mt-1">
+                                <Badge className="bg-purple-100 text-purple-800 border-0 text-[10px] flex items-center gap-0.5 w-fit">
+                                  <ShieldCheck className="w-2.5 h-2.5" />
+                                  bypass
+                                </Badge>
+                              </div>
+                            )}
+                            {isManualAccessActive(b) && (
+                              <div className="mt-1">
+                                <Badge className="bg-amber-100 text-amber-800 border-0 text-[10px] flex items-center gap-0.5 w-fit" data-testid={`badge-temp-access-${b.id}`}>
+                                  <Timer className="w-2.5 h-2.5" />
+                                  temp access · {daysRemaining(b.manualAccessExpiresAt!)}d left
+                                </Badge>
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => openDetail(b)}
+                                data-testid={`button-view-business-${b.id}`}
+                              >
+                                <Eye className="w-3.5 h-3.5 mr-1" />
+                                View
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => openMessage(b)}
+                                data-testid={`button-message-business-${b.id}`}
+                              >
+                                <MessageSquare className="w-3.5 h-3.5 mr-1" />
+                                Msg
+                              </Button>
+                              {b.accountStatus === "active" ? (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 px-2 text-xs text-yellow-700 hover:bg-yellow-50"
+                                  onClick={() => handleStatusChange(b, "suspended")}
+                                  data-testid={`button-suspend-business-${b.id}`}
+                                >
+                                  <Ban className="w-3.5 h-3.5" />
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 px-2 text-xs text-green-700 hover:bg-green-50"
+                                  onClick={() => handleStatusChange(b, "active")}
+                                  data-testid={`button-activate-business-${b.id}`}
+                                >
+                                  <CheckCircle className="w-3.5 h-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Recent Businesses Panel */}
+        <div className="xl:col-span-1">
+          <Card className="h-full">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <UserPlus className="w-4 h-4 text-purple-600" />
+                  Recent Businesses
+                </CardTitle>
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant={recentSort === "created" ? "default" : "ghost"}
+                    className="h-6 px-2 text-[11px]"
+                    onClick={() => setRecentSort("created")}
+                    data-testid="button-sort-newest"
+                  >
+                    Newest
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={recentSort === "activated" ? "default" : "ghost"}
+                    className="h-6 px-2 text-[11px]"
+                    onClick={() => setRecentSort("activated")}
+                    data-testid="button-sort-activated"
+                  >
+                    Activated
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {recentLoading ? (
+                <div className="p-4 space-y-2">
+                  {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 rounded" />)}
+                </div>
+              ) : recentBusinesses.length === 0 ? (
+                <div className="p-6 text-center text-muted-foreground text-sm">No businesses yet</div>
+              ) : (
+                <div className="divide-y">
+                  {recentBusinesses.map(b => (
+                    <button
+                      key={b.id}
+                      className="w-full text-left px-4 py-3 hover:bg-muted/30 transition-colors group"
+                      onClick={() => openDetail(b)}
+                      data-testid={`button-recent-business-${b.id}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-sm truncate">{b.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{b.adminName}</p>
+                          <p className="text-xs text-muted-foreground truncate">{b.adminEmail}</p>
                         </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <p className="text-xs">{b.employeeCount} emp / {b.clientCount} clients</p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge className={`${accountStatusColors[b.accountStatus] || "bg-gray-100"} border-0 text-xs`}>
+                        <div className="shrink-0 text-right">
+                          <Badge className={`${planColors[b.planCode] || "bg-gray-100 text-gray-700"} border-0 text-[10px] mb-1`}>
+                            {b.planName}
+                          </Badge>
+                          <p className="text-[10px] text-muted-foreground">{formatDateShort(recentSort === "activated" ? b.activatedAt : b.createdAt)}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-1.5">
+                        <Badge className={`${accountStatusColors[b.accountStatus] || "bg-gray-100"} border-0 text-[10px]`}>
                           {b.accountStatus.replace("_", " ")}
                         </Badge>
                         {b.internalBypass && (
-                          <div className="mt-1">
-                            <Badge className="bg-purple-100 text-purple-800 border-0 text-[10px] flex items-center gap-0.5 w-fit">
-                              <ShieldCheck className="w-2.5 h-2.5" />
-                              bypass
-                            </Badge>
-                          </div>
+                          <Badge className="bg-purple-100 text-purple-800 border-0 text-[10px]">bypass</Badge>
                         )}
-                        {isManualAccessActive(b) && (
-                          <div className="mt-1">
-                            <Badge className="bg-amber-100 text-amber-800 border-0 text-[10px] flex items-center gap-0.5 w-fit" data-testid={`badge-temp-access-${b.id}`}>
-                              <Timer className="w-2.5 h-2.5" />
-                              temp access · {daysRemaining(b.manualAccessExpiresAt!)}d left
-                            </Badge>
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 px-2 text-xs"
-                            onClick={() => openDetail(b)}
-                            data-testid={`button-view-business-${b.id}`}
-                          >
-                            <Eye className="w-3.5 h-3.5 mr-1" />
-                            View
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 px-2 text-xs"
-                            onClick={() => openMessage(b)}
-                            data-testid={`button-message-business-${b.id}`}
-                          >
-                            <MessageSquare className="w-3.5 h-3.5 mr-1" />
-                            Msg
-                          </Button>
-                          {b.accountStatus === "active" ? (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 px-2 text-xs text-yellow-700 hover:bg-yellow-50"
-                              onClick={() => handleStatusChange(b, "suspended")}
-                              data-testid={`button-suspend-business-${b.id}`}
-                            >
-                              <Ban className="w-3.5 h-3.5" />
-                            </Button>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 px-2 text-xs text-green-700 hover:bg-green-50"
-                              onClick={() => handleStatusChange(b, "active")}
-                              data-testid={`button-activate-business-${b.id}`}
-                            >
-                              <CheckCircle className="w-3.5 h-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                      </div>
+                    </button>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       {/* Business Detail Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
@@ -468,6 +707,18 @@ export default function SuperAdminDashboard() {
                   <p className="text-muted-foreground text-xs">Clients</p>
                   <p className="font-medium">{detailData.usage?.clients} / {detailData.usage?.maxClients}</p>
                 </div>
+                {detailData.createdAt && (
+                  <div>
+                    <p className="text-muted-foreground text-xs">Signed Up</p>
+                    <p className="font-medium">{new Date(detailData.createdAt).toLocaleDateString()}</p>
+                  </div>
+                )}
+                {detailData.activatedAt && (
+                  <div>
+                    <p className="text-muted-foreground text-xs">Activated</p>
+                    <p className="font-medium">{new Date(detailData.activatedAt).toLocaleDateString()}</p>
+                  </div>
+                )}
                 {detailData.currentPeriodEnd && (
                   <div>
                     <p className="text-muted-foreground text-xs">Period End</p>
@@ -767,6 +1018,12 @@ export default function SuperAdminDashboard() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
+            {!isBroadcast && (
+              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700 flex items-center gap-2">
+                <Bell className="w-3.5 h-3.5 shrink-0" />
+                An email notification will also be sent to the business admin.
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>Type</Label>
               <Select value={msgType} onValueChange={setMsgType}>

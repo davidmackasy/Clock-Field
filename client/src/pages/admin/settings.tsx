@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, ExternalLink, Upload } from "lucide-react";
+import { Plus, Trash2, ExternalLink, Upload, Bell } from "lucide-react";
 
 const TIMEZONES = [
   { group: "Canada", options: [
@@ -615,6 +615,66 @@ export default function AdminSettings() {
               />
               <p className="text-xs text-muted-foreground">This intro text appears on all public reports before the work sections. Cleaners can override it per report.</p>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Email Alert Settings */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Bell className="w-4 h-4 text-muted-foreground" />
+              Email Alerts
+            </CardTitle>
+            <CardDescription>
+              Choose which attendance events trigger email notifications to this account's admin.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Late Clock-In</p>
+                <p className="text-xs text-muted-foreground">Email when an employee clocks in late</p>
+              </div>
+              <Switch
+                data-testid="switch-alert-late-clock-in"
+                checked={form.alertLateClockIn ?? false}
+                onCheckedChange={v => setForm((p: any) => ({ ...p, alertLateClockIn: v }))}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Missed Shift</p>
+                <p className="text-xs text-muted-foreground">Email when an employee misses a scheduled shift</p>
+              </div>
+              <Switch
+                data-testid="switch-alert-missed-shift"
+                checked={form.alertMissedShift ?? false}
+                onCheckedChange={v => setForm((p: any) => ({ ...p, alertMissedShift: v }))}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Employee Clocked In</p>
+                <p className="text-xs text-muted-foreground">Email when any employee clocks in</p>
+              </div>
+              <Switch
+                data-testid="switch-alert-clocked-in"
+                checked={form.alertEmployeeClockedIn ?? false}
+                onCheckedChange={v => setForm((p: any) => ({ ...p, alertEmployeeClockedIn: v }))}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Employee Clocked Out</p>
+                <p className="text-xs text-muted-foreground">Email when any employee clocks out</p>
+              </div>
+              <Switch
+                data-testid="switch-alert-clocked-out"
+                checked={form.alertEmployeeClockedOut ?? false}
+                onCheckedChange={v => setForm((p: any) => ({ ...p, alertEmployeeClockedOut: v }))}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground border-t pt-3">Alert emails are sent to the primary admin email on file. Alerts are de-duplicated per event.</p>
           </CardContent>
         </Card>
 

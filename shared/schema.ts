@@ -62,6 +62,12 @@ export const companies = pgTable("companies", {
   companyLogoUrl: text("company_logo_url"),
   brandColor: text("brand_color"),
   defaultReportIntro: text("default_report_intro"),
+  // Attendance alert email settings
+  alertLateClockIn: boolean("alert_late_clock_in").notNull().default(false),
+  alertMissedShift: boolean("alert_missed_shift").notNull().default(false),
+  alertEmployeeClockedIn: boolean("alert_employee_clocked_in").notNull().default(false),
+  alertEmployeeClockedOut: boolean("alert_employee_clocked_out").notNull().default(false),
+  alertDailySummary: boolean("alert_daily_summary").notNull().default(false),
 });
 
 export const users = pgTable("users", {
@@ -710,6 +716,7 @@ export const fieldNotesAssets = pgTable("field_notes_assets", {
   caption: text("caption"),
   areaLabel: text("area_label"),
   areaConfidence: text("area_confidence"),
+  phase: text("phase").notNull().default("before"),
   createdAt: text("created_at").notNull(),
 });
 

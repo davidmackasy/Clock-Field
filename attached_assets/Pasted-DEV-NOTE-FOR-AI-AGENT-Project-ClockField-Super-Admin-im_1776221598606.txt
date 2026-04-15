@@ -1,0 +1,696 @@
+DEV NOTE FOR AI AGENT
+
+Project
+ClockField
+Super Admin improvements
+Business notifications
+Field Note before/after upgrade
+
+Critical rules
+Do not touch anything outside of the items below.
+Do not refactor unrelated pages.
+Do not change the profile card or account block at the bottom left of Super Admin.
+Do not change billing logic, existing email templates, existing auth flow, existing Stripe flow, existing working field note recording flow, or any unrelated attendance logic unless explicitly required for the exact features below.
+Do not remove or rename current working endpoints unless absolutely necessary.
+Keep all existing working UI and actions in place.
+Only add and improve what is requested.
+
+Main goal
+Improve the Super Admin so it feels more alive, more informative, and more useful for fast monitoring.
+Add email reminder notifications tied to platform messages and announcements.
+Add optional business-level employee attendance alert emails.
+Upgrade Field Note so before and after photos can be organized clearly without breaking current Field Note behavior.
+
+1. SUPER ADMIN DASHBOARD UI IMPROVEMENTS
+
+Current state to keep
+Keep the top summary cards that already exist:
+
+* Total businesses
+* Active businesses
+* Suspended
+* Pending
+* Monthly recurring revenue
+* Annual recurring revenue
+
+Do not remove these.
+Do not change the bottom-left user profile block.
+
+New layout change
+Use the empty space on the right side of the Super Admin dashboard.
+Add a right-side panel called:
+Recent Businesses
+
+What it should show
+A live list of the most recent businesses that signed up or were created.
+Newest businesses must appear at the top.
+Each row should show:
+
+* Business name
+* Admin name
+* Admin email
+* Plan
+* Signup date and time
+* Payment status
+* Status badge
+
+Suggested status badges
+
+* Active
+* Trial
+* Pending payment
+* Suspended
+* Bypass
+* Incomplete setup
+
+Behavior
+When Super Admin clicks a recent business, it should open the business detail panel or detail page on the main content side.
+Do not break the current click behavior from the All Businesses list.
+If there is already a business details page, reuse it.
+If there is only a modal today, keep it working but improve it so it can also open from the Recent Businesses panel.
+
+Sorting rules
+Recent Businesses must sort by:
+
+1. Most recently created
+2. Most recently activated
+   Add a toggle so Super Admin can switch between:
+
+* Newest Signups
+* Recently Activated
+
+Do not overcomplicate it.
+Default should be Newest Signups.
+
+2. SUPER ADMIN DASHBOARD METRICS UPGRADE
+
+Important clarification
+Do not redefine the existing business status cards unless requested.
+Instead, add new activity-based cards or graphs below the existing top cards.
+
+Add a new section under the top cards
+Section title:
+Business Activity Overview
+
+This section should show true activity, not just registration count.
+
+New metrics to add
+Add cards or compact graph widgets for:
+
+* Active Today
+* Logged In Today
+* Employee Activity Today
+* Missed Shifts Today
+* Late Clock-Ins Today
+* Unread Business Messages
+* Businesses Pending Payment
+* New Signups Today
+
+Define these carefully
+
+Active Today
+A business counts as Active Today if any of these happened today:
+
+* Business admin logged in
+* Any employee clocked in
+* Any field note was created
+* Any work log or task activity happened
+* Any message was opened or sent inside the platform
+
+Logged In Today
+Count businesses where a business admin logged in today.
+
+Employee Activity Today
+Count businesses where at least one employee performed attendance or work activity today.
+
+Missed Shifts Today
+Count businesses with at least one employee marked missed today.
+
+Late Clock-Ins Today
+Count businesses with at least one late clock-in today.
+
+Unread Business Messages
+Count businesses with unread messages from Super Admin.
+
+Businesses Pending Payment
+Count businesses that signed up but have not completed subscription/payment access flow.
+
+New Signups Today
+Count businesses created today.
+
+Graphs to add
+Add at least 2 useful graphs, simple and readable:
+
+1. Business Activity Last 7 Days
+   Line or bar chart showing:
+
+* logged in businesses
+* businesses with employee activity
+* businesses with field note activity
+
+2. Signup and Activation Funnel
+   Bar chart showing:
+
+* Signed up
+* Payment pending
+* Activated
+* Suspended
+
+Do not add fancy graphics that slow the page down.
+Keep it clean and fast.
+
+3. BUSINESS SIGNUP AND PENDING PAYMENT HANDLING
+
+Need
+Businesses that sign up but do not complete payment must be tracked separately.
+
+Add business lifecycle states if not already present
+
+* Created
+* Welcome sent
+* Payment pending
+* Activated
+* Suspended
+
+Required behavior
+When a business signs up but has not completed payment:
+
+* Send a welcome email
+* Include a clear message that they need to complete payment to access the platform
+* Mark them as Payment Pending
+* Show them in the Super Admin dashboard under Recent Businesses and in Pending Payment metrics
+
+Do not change existing payment processor logic.
+Only hook into existing signup and subscription state updates.
+
+Email requirement
+Keep current email styles/templates as they are if already working.
+Only add the new reminder flow.
+Do not redesign all emails.
+
+4. SUPER ADMIN MESSAGE TO BUSINESS = ALSO SEND EMAIL ALERT
+
+Requirement
+Whenever Super Admin sends a direct message to a business inside the platform, that business must also receive an email alert.
+
+Email content goal
+Do not send the full platform message if that is not safe or if current policy avoids it.
+Minimum requirement:
+
+* You received a new message in ClockField
+* Log in to your account to read it
+
+Optional include
+
+* Message subject or short preview
+* Sender name: Super Admin
+* Button: Open ClockField
+
+Apply this to
+
+* Direct message to one business
+* Broadcast announcement to many businesses
+* Billing-related messages sent through platform messages
+* Warning messages
+* Support-related Super Admin replies
+* Promotion/update announcements sent through Super Admin messaging
+
+Important
+Do not change any unrelated outbound emails.
+Just add the missing email notification companion when a platform message is created/sent.
+
+Suggested implementation
+When a platform message record is created:
+
+* create in-app notification as current flow does
+* enqueue email notification job to the business admin email
+* mark notification delivery status
+* prevent duplicate email sends for the same message event
+
+Recommended database additions if needed
+message_notifications
+
+* id
+* message_id
+* business_id
+* recipient_email
+* email_status
+* sent_at
+* failed_at
+* retry_count
+
+5. BUSINESS-LEVEL EMPLOYEE ALERT EMAIL SETTINGS
+
+Requirement
+Businesses should be able to turn employee attendance alert emails on or off.
+
+Do not force all businesses to receive them.
+Make it configurable per business.
+
+Where to place settings
+Business Admin Settings
+New section:
+Email Alerts
+
+Toggles to add
+
+* Employee clocked in
+* Employee clocked out
+* Employee late clock-in
+* Employee missed shift
+* Employee absent
+* Employee overtime started
+* Daily attendance summary
+
+Minimum required from your request
+Must include:
+
+* late clock-in email alert
+* missed work email alert
+
+Behavior
+If enabled, send email to the business admin when that event happens.
+If disabled, do nothing.
+
+Important
+Do not alter the core attendance calculations.
+Only listen to already-determined attendance outcomes.
+
+Examples
+Late clock-in:
+Subject:
+Employee Clocked In Late
+
+Body:
+Employee name
+Location
+Scheduled start time
+Actual clock-in time
+Minutes late
+Button to view attendance in ClockField
+
+Missed shift:
+Subject:
+Employee Missed Shift
+
+Body:
+Employee name
+Location
+Scheduled shift
+Date
+Button to review attendance
+
+Do not spam
+Add rate limiting or event de-duplication:
+
+* only one email per event
+* if shift state changes later, do not resend duplicates unless it is a different event type
+
+6. FIELD NOTE BEFORE AND AFTER UPGRADE
+
+Current state to preserve
+Current Field Note recording flow is working and users love it.
+Do not break:
+
+* start field note
+* recording/transcript
+* document generation
+* existing photo upload behavior
+* public sharing of field notes
+* admin viewing of field notes
+
+Goal
+Allow users to return to a field note and add after photos in a clean, controlled way.
+
+New concept
+Each field note can support photo phases:
+
+* Before
+* After
+
+This must be optional.
+Users can still create a field note with only before photos or only after photos if they want.
+Do not force both.
+
+Recommended UX
+Option A
+When a field note is completed, show actions:
+
+* View Note
+* Add After Photos
+* Resume Note
+
+Option B
+Inside the field note details page, add:
+
+* Add Before Photos
+* Add After Photos
+
+Best choice
+Use Add After Photos on the completed field note detail screen.
+That is simplest and least disruptive.
+
+Rules
+The original note remains one note.
+Do not create a brand new note for after photos unless the architecture absolutely requires it.
+Prefer a single field note with grouped photo sets.
+
+Data model suggestion
+field_note_photos
+Add:
+
+* phase enum: before | after
+* captured_at
+* uploaded_by
+* sort_order
+* optional area/category
+
+If there is already a photos table, extend it carefully instead of replacing it.
+
+Viewing in admin
+In the field note page, show clear tabs or grouped sections:
+
+* All Photos
+* Before
+* After
+
+For the visual layout inside the note detail page
+Preferred layout:
+
+* Before photos section first
+* After photos section second
+
+Alternative if there is a paired experience
+
+* side by side compare mode for matching before and after groups
+
+Do not force pairing if pairing data does not exist.
+Start with grouped sections first.
+That is safer and faster.
+
+Public share behavior
+If only before photos exist:
+
+* show Before section only
+
+If only after photos exist:
+
+* show After section only
+
+If both exist:
+
+* show Before and After clearly labeled
+* optionally show split layout or grouped blocks
+
+Do not break existing public field note links.
+
+7. FIELD NOTE RESUME OR PAUSE CONCEPT
+
+Need
+User may want to finish the note, then come back later and add after photos.
+
+Safe implementation
+Do not change the recording engine too much.
+Do not create complex pause/resume recording logic unless necessary.
+
+Recommended approach
+Separate transcript recording state from photo phase management.
+
+Simple flow
+
+* User completes note as normal
+* Later opens the note
+* Clicks Add After Photos
+* Uploads or captures after photos
+* Saves
+* Note now contains both phases
+
+This avoids risky audio/transcript resume issues.
+
+If resume is added
+Only allow resume for photo capture or note additions.
+Do not try to stitch multiple audio sessions together unless that logic already exists and is proven stable.
+
+8. FIELD NOTE DISPLAY IMPROVEMENTS
+
+Admin page
+Improve the note detail view so users can understand the note faster.
+
+Add summary badges near the top
+
+* Before photo count
+* After photo count
+* Total photos
+* Transcript available
+* Public share enabled
+
+In the Site Photos section
+Organize by phase:
+Before Photos
+After Photos
+
+Optional improvement
+Add small labels on each card:
+
+* Before
+* After
+
+Optional improvement later only if safe
+Add compare toggle:
+
+* Grid view
+* Compare view
+
+Compare view can wait if it risks breaking anything.
+
+9. BUSINESS DETAIL PAGE IMPROVEMENTS FROM SUPER ADMIN
+
+When clicking a business from All Businesses or Recent Businesses, show richer business details.
+
+Business detail should include
+
+* Business name
+* Plan
+* Signup date
+* Activation date
+* Payment status
+* Business admin name and email
+* Employee count
+* Client count
+* Last login
+* Last employee activity
+* Unread messages count
+* Attendance alerts enabled or disabled
+* Quick actions:
+
+  * View business
+  * Message
+  * Suspend
+  * Activate
+  * View activity
+  * View billing status
+
+Optional right-side insight section
+
+* recent events
+* recent messages
+* recent attendance issues
+* recent field notes
+
+Do not remove existing actions.
+Only improve layout and visibility.
+
+10. ANNOUNCEMENTS AND EMAIL COMPANION DELIVERY
+
+Requirement
+If Super Admin sends an announcement, the business should also get an email saying there is a new announcement in ClockField.
+
+Apply this to
+
+* broadcast announcements
+* product updates
+* warning notices
+* support notices
+* billing notices sent as in-app messages
+
+Email purpose
+Drive them back into the platform.
+Do not replace the in-app message.
+Support both.
+
+Suggested email subject examples
+
+* New Announcement in ClockField
+* You Have a New Message in ClockField
+* Action Needed in Your ClockField Account
+* Employee Attendance Alert for Your Team
+
+11. BACKEND EVENT HOOKS TO ADD
+
+Add safe event listeners or service hooks for:
+
+* business_created
+* business_payment_pending
+* business_activated
+* platform_message_sent
+* announcement_sent
+* employee_clocked_in
+* employee_clocked_out
+* employee_late
+* employee_missed_shift
+* field_note_after_photos_added
+
+Use these hooks to trigger:
+
+* metrics refresh
+* audit logs
+* email jobs
+* notification badges
+
+Do not rewrite existing flows.
+Hook into them.
+
+12. AUDIT AND LOGGING
+
+Add logs for new features only.
+Need logs for:
+
+* message email reminder sent or failed
+* announcement email reminder sent or failed
+* attendance alert email sent or skipped due to business settings
+* field note after photos added
+* super admin recent business query result count
+
+This helps debugging without changing other systems.
+
+13. PERFORMANCE RULES
+
+Super Admin page must stay fast.
+Do not run expensive live queries on every render if avoidable.
+
+Use:
+
+* aggregated stats
+* indexed queries
+* pagination
+* lazy loading for recent activity panels if needed
+
+Recent Businesses panel should load quickly.
+If needed, fetch latest 10 to 20 only, with View All button.
+
+14. EXACT UI ADDITIONS REQUESTED
+
+Super Admin dashboard
+Keep current structure.
+Add:
+
+* Recent Businesses panel in the blank right-side space
+* Business Activity Overview section under existing top cards
+* activity graphs under top cards
+* recent businesses sorted newest first
+* clicking any business opens full business detail view
+
+Business messaging
+Add email companion notifications for all Super Admin to business messages and announcements.
+
+Business admin settings
+Add email alert toggles for attendance events.
+
+Field Note
+Add optional before and after photo grouping inside the same note.
+Allow adding after photos later without breaking current recording flow.
+Show before and after clearly in admin and public share views.
+
+15. WHAT NOT TO CHANGE
+
+Do not touch:
+
+* bottom-left profile section in Super Admin
+* existing working billing flow
+* existing Stripe integration
+* existing working auth
+* unrelated attendance calculations
+* existing employee hour reports
+* existing client-facing report behavior unless needed for field note before/after display
+* existing field note transcript engine unless absolutely required
+* existing support email behavior except where new message reminder companion must be added
+* any unrelated UI pages
+
+16. IMPLEMENTATION ORDER
+
+Do this in phases so nothing breaks.
+
+Phase 1
+Super Admin UI
+
+* Add Recent Businesses panel
+* Add Business Activity Overview cards
+* Add 2 graphs
+* Add improved business detail page or side panel
+* Keep current data working
+
+Phase 2
+Message email reminders
+
+* Direct message to business triggers email
+* Broadcast announcement triggers email
+* Add delivery logs
+
+Phase 3
+Business attendance alert settings
+
+* Add business-level email toggles
+* Trigger missed shift and late clock-in alerts
+* Add de-duplication
+
+Phase 4
+Field Note before and after
+
+* Add photo phase support
+* Add Add After Photos action
+* Update admin and public display
+* Do not disturb existing notes
+
+17. ACCEPTANCE CHECKLIST
+
+Super Admin
+
+* Existing cards still show correctly
+* Bottom-left profile untouched
+* Recent Businesses panel appears in blank right area
+* Newest businesses show first
+* Clicking business opens full business details
+* New activity cards reflect actual business activity today
+* Graphs load correctly
+
+Messaging
+
+* Direct message to one business sends in-app message and email reminder
+* Announcement sends in-app message and email reminder
+* No duplicate reminder emails
+
+Business alerts
+
+* Business can enable or disable attendance alerts
+* Late clock-in email works
+* Missed shift email works
+* Disabled toggles prevent emails
+
+Field Note
+
+* Existing field notes still load normally
+* New field notes can have before photos only
+* Users can later add after photos
+* Admin sees before and after grouped clearly
+* Public shared view also shows before and after clearly when both exist
+* If only one phase exists, only that phase is shown
+* Transcript and existing document generation still work
+
+18. FINAL INSTRUCTION TO AI AGENT
+
+Do not improvise beyond this scope.
+Do not “clean up” unrelated files.
+Do not change anything that is already working outside these requested items.
+If any part of the implementation requires touching unrelated logic, stop and ask for approval first.
+
+I can also turn this into a cleaner copy-paste task list for your developer or AI agent.

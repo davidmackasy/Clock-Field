@@ -357,3 +357,229 @@ If you weren't expecting this invite, you can safely ignore this email.
     html: htmlBody,
   });
 }
+
+export async function sendPlatformMessageEmail(opts: {
+  to: string;
+  adminName: string;
+  subject: string;
+  preview?: string;
+  messageType?: string;
+  loginUrl?: string;
+}) {
+  const { client, domain } = getClient();
+  const from = process.env.MAIL_FROM || "Clockfield <noreply@clockfield.ca>";
+  const loginUrl = opts.loginUrl || "https://app.clockfield.com";
+  const typeLabel = opts.messageType === "billing" ? "Billing Notice"
+    : opts.messageType === "warning" ? "Important Notice"
+    : opts.messageType === "support" ? "Support Message"
+    : opts.messageType === "promotion" ? "Announcement"
+    : "New Message";
+
+  const textBody = `Hi ${opts.adminName},
+
+You have a new ${typeLabel.toLowerCase()} in ClockField.
+
+Subject: ${opts.subject}
+${opts.preview ? `\nPreview:\n${opts.preview}\n` : ""}
+Log in to your account to read the full message:
+${loginUrl}
+
+– The ClockField Team`;
+
+  const htmlBody = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/></head>
+<body style="margin:0;padding:0;background:#f6f7f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7f9;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+        <tr><td style="background:#7c3aed;padding:24px 32px;">
+          <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.3px;">ClockField</span>
+        </td></tr>
+        <tr><td style="padding:36px 32px 24px;">
+          <p style="margin:0 0 6px;font-size:13px;font-weight:600;color:#7c3aed;text-transform:uppercase;letter-spacing:0.5px;">${typeLabel}</p>
+          <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">You have a new message</p>
+          <p style="margin:0 0 20px;font-size:15px;color:#6b7280;line-height:1.6;">Hi ${opts.adminName}, you received a new message in ClockField.</p>
+          <div style="background:#f8f7ff;border:1px solid #e9d5ff;border-radius:6px;padding:16px 20px;margin-bottom:24px;">
+            <p style="margin:0 0 4px;font-size:12px;color:#7c3aed;font-weight:600;text-transform:uppercase;">Subject</p>
+            <p style="margin:0;font-size:15px;color:#111827;font-weight:600;">${opts.subject}</p>
+            ${opts.preview ? `<p style="margin:8px 0 0;font-size:13px;color:#6b7280;line-height:1.5;">${opts.preview.slice(0, 200)}${opts.preview.length > 200 ? "..." : ""}</p>` : ""}
+          </div>
+          <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+            <tr><td style="background:#7c3aed;border-radius:6px;">
+              <a href="${loginUrl}" style="display:inline-block;padding:13px 28px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">Open ClockField</a>
+            </td></tr>
+          </table>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 20px;"/>
+          <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;">This is a notification from ClockField Platform. Log in to reply or view the full message.</p>
+        </td></tr>
+        <tr><td style="background:#f9fafb;padding:18px 32px;border-top:1px solid #e5e7eb;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">&copy; ${new Date().getFullYear()} ClockField. All rights reserved.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  await client.messages.create(domain, {
+    from,
+    to: [opts.to],
+    subject: `${typeLabel}: ${opts.subject}`,
+    text: textBody,
+    html: htmlBody,
+  });
+}
+
+export async function sendAttendanceLateClockInEmail(opts: {
+  to: string;
+  adminName: string;
+  employeeName: string;
+  locationName?: string;
+  scheduledStart: string;
+  actualClockIn: string;
+  minutesLate: number;
+  loginUrl?: string;
+}) {
+  const { client, domain } = getClient();
+  const from = process.env.MAIL_FROM || "Clockfield <noreply@clockfield.ca>";
+  const loginUrl = opts.loginUrl || "https://app.clockfield.com";
+
+  const textBody = `Employee Clocked In Late — ClockField Alert
+
+Hi ${opts.adminName},
+
+An employee has clocked in late.
+
+Employee: ${opts.employeeName}
+${opts.locationName ? `Location: ${opts.locationName}\n` : ""}Scheduled Start: ${opts.scheduledStart}
+Actual Clock-In: ${opts.actualClockIn}
+Minutes Late: ${opts.minutesLate}
+
+View attendance: ${loginUrl}/admin/attendance
+
+– ClockField`;
+
+  const htmlBody = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#f6f7f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7f9;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+        <tr><td style="background:#d97706;padding:24px 32px;">
+          <span style="color:#ffffff;font-size:20px;font-weight:700;">ClockField</span>
+        </td></tr>
+        <tr><td style="padding:36px 32px 24px;">
+          <p style="margin:0 0 6px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;">Attendance Alert</p>
+          <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">Employee Clocked In Late</p>
+          <p style="margin:0 0 20px;font-size:15px;color:#6b7280;">Hi ${opts.adminName}, an employee clocked in late today.</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #fde68a;border-radius:6px;margin-bottom:24px;background:#fffbeb;">
+            <tr><td style="padding:16px 20px;">
+              <table width="100%" cellpadding="0" cellspacing="6">
+                <tr><td style="font-size:12px;color:#92400e;font-weight:600;width:140px;">Employee</td><td style="font-size:14px;color:#111827;font-weight:600;">${opts.employeeName}</td></tr>
+                ${opts.locationName ? `<tr><td style="font-size:12px;color:#92400e;font-weight:600;">Location</td><td style="font-size:14px;color:#374151;">${opts.locationName}</td></tr>` : ""}
+                <tr><td style="font-size:12px;color:#92400e;font-weight:600;">Scheduled</td><td style="font-size:14px;color:#374151;">${opts.scheduledStart}</td></tr>
+                <tr><td style="font-size:12px;color:#92400e;font-weight:600;">Clocked In</td><td style="font-size:14px;color:#374151;">${opts.actualClockIn}</td></tr>
+                <tr><td style="font-size:12px;color:#92400e;font-weight:600;">Minutes Late</td><td style="font-size:14px;color:#dc2626;font-weight:700;">${opts.minutesLate} min</td></tr>
+              </table>
+            </td></tr>
+          </table>
+          <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+            <tr><td style="background:#d97706;border-radius:6px;">
+              <a href="${loginUrl}/admin/attendance" style="display:inline-block;padding:12px 24px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;">View Attendance</a>
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="background:#f9fafb;padding:18px 32px;border-top:1px solid #e5e7eb;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">&copy; ${new Date().getFullYear()} ClockField. All rights reserved.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  await client.messages.create(domain, {
+    from,
+    to: [opts.to],
+    subject: `Late Clock-In: ${opts.employeeName} (${opts.minutesLate} min late)`,
+    text: textBody,
+    html: htmlBody,
+  });
+}
+
+export async function sendAttendanceMissedShiftEmail(opts: {
+  to: string;
+  adminName: string;
+  employeeName: string;
+  locationName?: string;
+  shiftDate: string;
+  scheduledShift: string;
+  loginUrl?: string;
+}) {
+  const { client, domain } = getClient();
+  const from = process.env.MAIL_FROM || "Clockfield <noreply@clockfield.ca>";
+  const loginUrl = opts.loginUrl || "https://app.clockfield.com";
+
+  const textBody = `Employee Missed Shift — ClockField Alert
+
+Hi ${opts.adminName},
+
+An employee missed their scheduled shift.
+
+Employee: ${opts.employeeName}
+${opts.locationName ? `Location: ${opts.locationName}\n` : ""}Date: ${opts.shiftDate}
+Scheduled Shift: ${opts.scheduledShift}
+
+Review attendance: ${loginUrl}/admin/attendance
+
+– ClockField`;
+
+  const htmlBody = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#f6f7f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7f9;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+        <tr><td style="background:#dc2626;padding:24px 32px;">
+          <span style="color:#ffffff;font-size:20px;font-weight:700;">ClockField</span>
+        </td></tr>
+        <tr><td style="padding:36px 32px 24px;">
+          <p style="margin:0 0 6px;font-size:13px;font-weight:600;color:#dc2626;text-transform:uppercase;">Missed Shift Alert</p>
+          <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">Employee Missed Shift</p>
+          <p style="margin:0 0 20px;font-size:15px;color:#6b7280;">Hi ${opts.adminName}, an employee missed their scheduled shift.</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #fca5a5;border-radius:6px;margin-bottom:24px;background:#fef2f2;">
+            <tr><td style="padding:16px 20px;">
+              <table width="100%" cellpadding="0" cellspacing="6">
+                <tr><td style="font-size:12px;color:#991b1b;font-weight:600;width:140px;">Employee</td><td style="font-size:14px;color:#111827;font-weight:600;">${opts.employeeName}</td></tr>
+                ${opts.locationName ? `<tr><td style="font-size:12px;color:#991b1b;font-weight:600;">Location</td><td style="font-size:14px;color:#374151;">${opts.locationName}</td></tr>` : ""}
+                <tr><td style="font-size:12px;color:#991b1b;font-weight:600;">Date</td><td style="font-size:14px;color:#374151;">${opts.shiftDate}</td></tr>
+                <tr><td style="font-size:12px;color:#991b1b;font-weight:600;">Shift</td><td style="font-size:14px;color:#374151;">${opts.scheduledShift}</td></tr>
+              </table>
+            </td></tr>
+          </table>
+          <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+            <tr><td style="background:#dc2626;border-radius:6px;">
+              <a href="${loginUrl}/admin/attendance" style="display:inline-block;padding:12px 24px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;">Review Attendance</a>
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="background:#f9fafb;padding:18px 32px;border-top:1px solid #e5e7eb;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">&copy; ${new Date().getFullYear()} ClockField. All rights reserved.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  await client.messages.create(domain, {
+    from,
+    to: [opts.to],
+    subject: `Missed Shift: ${opts.employeeName} — ${opts.shiftDate}`,
+    text: textBody,
+    html: htmlBody,
+  });
+}

@@ -449,25 +449,46 @@ export default function PublicFieldNote() {
                       )}
                     </div>
                   ))}
-                  {allPhotos.length > 0 && (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-1.5">
-                      {allPhotos.map((asset: any, pi: number) => (
-                        <div
-                          key={asset.id}
-                          data-testid={`img-public-photo-${asset.id}`}
-                          className="overflow-hidden rounded-lg bg-gray-100 cursor-pointer hover:opacity-95 transition-opacity relative aspect-square"
-                          onClick={() => setLightbox(asset.fileUrl)}
-                        >
-                          <img src={asset.fileUrl} alt={`Photo ${pi + 1}`} className="w-full h-full object-cover" />
-                          {showTimestamps && asset.capturedAt && (
-                            <div className="absolute bottom-0 left-0 right-0 bg-black/55 px-1.5 py-0.5">
-                              <span className="text-[9px] text-white">{format(parseISO(asset.capturedAt), "h:mm a")}</span>
+                  {allPhotos.length > 0 && (() => {
+                    const beforePhotos = allPhotos.filter((a: any) => !a.phase || a.phase === "before");
+                    const afterPhotos = allPhotos.filter((a: any) => a.phase === "after");
+                    const hasBothPhases = beforePhotos.length > 0 && afterPhotos.length > 0;
+                    function PhotoRow({ photos, offset = 0 }: { photos: any[]; offset?: number }) {
+                      return (
+                        <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-1.5">
+                          {photos.map((asset: any, pi: number) => (
+                            <div
+                              key={asset.id}
+                              data-testid={`img-public-photo-${asset.id}`}
+                              className="overflow-hidden rounded-lg bg-gray-100 cursor-pointer hover:opacity-95 transition-opacity relative aspect-square"
+                              onClick={() => setLightbox(asset.fileUrl)}
+                            >
+                              <img src={asset.fileUrl} alt={`Photo ${offset + pi + 1}`} className="w-full h-full object-cover" />
+                              {showTimestamps && asset.capturedAt && (
+                                <div className="absolute bottom-0 left-0 right-0 bg-black/55 px-1.5 py-0.5">
+                                  <span className="text-[9px] text-white">{format(parseISO(asset.capturedAt), "h:mm a")}</span>
+                                </div>
+                              )}
                             </div>
-                          )}
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      );
+                    }
+                    return hasBothPhases ? (
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Before</p>
+                          <PhotoRow photos={beforePhotos} offset={0} />
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">After</p>
+                          <PhotoRow photos={afterPhotos} offset={beforePhotos.length} />
+                        </div>
+                      </div>
+                    ) : (
+                      <PhotoRow photos={allPhotos} offset={0} />
+                    );
+                  })()}
                 </section>
               );
             })}
