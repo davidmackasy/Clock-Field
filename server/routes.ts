@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { setupAuth, hashPassword, comparePasswords, requireAuth, requireRole } from "./auth";
 import OpenAI from "openai";
-import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail } from "./mail";
+import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail } from "./mail";
 import { createHash } from "crypto";
 import passport from "passport";
 import { randomBytes } from "crypto";
@@ -1679,6 +1679,40 @@ Welcome again, and thank you for choosing ClockField.
       }
 
       res.status(201).json(request);
+
+      // Fire-and-forget email to admin(s) when employee or client submits a request
+      if (user.role !== "admin") {
+        const requesterName = `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email || "Staff";
+        const hasAttachments = !!(photos && photos.length > 0);
+        const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+        (async () => {
+          try {
+            const [admins, company] = await Promise.all([
+              storage.getAdminsByCompany(user.companyId),
+              storage.getCompany(user.companyId),
+            ]);
+            for (const admin of admins) {
+              if (!admin.email) continue;
+              await sendAdminNewRequestEmail({
+                adminEmail: admin.email,
+                adminName: `${admin.firstName || ""} ${admin.lastName || ""}`.trim() || "Admin",
+                requesterName,
+                requesterRole: user.role,
+                requestTitle: request.title,
+                requestType: request.requestType,
+                priority: request.priority,
+                businessName: company?.name || "Your business",
+                submittedAt: new Date().toLocaleString("en-CA"),
+                hasAttachments,
+                messagePreview: description?.trim() || null,
+                appUrl,
+              });
+            }
+          } catch (emailErr) {
+            console.error("[request-email] Failed to notify admin of new request:", emailErr);
+          }
+        })();
+      }
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
@@ -1949,6 +1983,33 @@ Welcome again, and thank you for choosing ClockField.
         ({ id, caption, fileType, createdAt, requestMessageId, uploadedByUserId })
       );
       res.status(201).json({ ...msg, attachments: attachmentsMeta });
+
+      // Fire-and-forget email to the request creator when admin replies
+      if (user.role === "admin" && !isStatusUpdate && target.createdByUserId && target.createdByRole !== "admin") {
+        const replyBody = body?.trim() || null;
+        const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+        (async () => {
+          try {
+            const [requester, company] = await Promise.all([
+              storage.getUser(target.createdByUserId!),
+              storage.getCompany(user.companyId),
+            ]);
+            if (requester?.email) {
+              await sendEmployeeRequestReplyEmail({
+                to: requester.email,
+                recipientName: `${requester.firstName || ""} ${requester.lastName || ""}`.trim() || "there",
+                requestTitle: target.title,
+                replyPreview: replyBody,
+                businessName: company?.name || "Your admin",
+                repliedAt: new Date().toLocaleString("en-CA"),
+                appUrl,
+              });
+            }
+          } catch (emailErr) {
+            console.error("[request-email] Failed to notify requester of admin reply:", emailErr);
+          }
+        })();
+      }
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

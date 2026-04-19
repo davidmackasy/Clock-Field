@@ -1,0 +1,320 @@
+DEV NOTE FOR AI AGENT
+
+TASK
+Implement request email notifications and image preview behavior for the Requests module only.
+
+CRITICAL RULES
+Do not break, affect, refactor, rename, migrate, or delete anything outside this scope.
+Do not delete or modify production data.
+Do not change existing email integrations, templates, welcome emails, subscription emails, or any other current email flows.
+Reuse the current email service and notification infrastructure already in the app.
+Do not change auth, employees, attendance, payroll, schedule, field notes, work log, reports, storage, or existing messaging behavior unless absolutely required for this exact feature.
+If any extra change appears needed outside this scope, stop and ask for approval first.
+
+MAIN GOAL
+When a request is created in-app, both sides should be notified properly:
+
+Admin gets in-app notification and email when employee sends a request
+Employee gets in-app notification and email when admin replies
+Images attached to requests must be clickable and open in a full-size preview modal/lightbox on both sides
+
+SCOPE
+Only touch:
+Requests creation flow
+Requests reply flow
+Request notification trigger flow
+Request email delivery flow
+Request image preview UI
+
+Do not touch:
+Existing email templates unrelated to requests
+Mail settings
+Welcome email flow
+Broadcast email flow
+Any old notification flow that is not related to requests
+Any unrelated UI layout
+
+FEATURE 1
+ADMIN EMAIL NOTIFICATION WHEN EMPLOYEE SENDS A REQUEST
+
+Required behavior
+When an employee submits a request from the app:
+Save request normally as it already works today
+Keep current in-app request visibility exactly as it already works
+Also trigger an email notification to the business admin
+
+Who should receive it
+Send to the business admin email already configured in the system
+If the system supports multiple management/admin recipients, use the current existing logic for admin/system emails
+Do not hardcode new email addresses
+
+Email trigger
+Trigger only after request creation is successful in database/storage
+Never send email before the request is fully saved
+
+Email subject example
+New employee request: Supplies
+
+Email body should include
+Request title
+Request type/category
+Priority
+Employee full name
+Business name
+Submitted date and time
+Short message preview
+Whether attachments were included
+A CTA button or link such as:
+View request in ClockField
+
+CTA behavior
+Link should take admin to the correct request area in the web app
+If deep linking already exists, use it
+If no deep linking exists, send them to the Requests page safely
+User should log in first if not authenticated
+
+Do not
+Do not alter how request records are created
+Do not duplicate the same request
+Do not create separate message threads unless current system already uses threads
+
+FEATURE 2
+EMPLOYEE EMAIL NOTIFICATION WHEN ADMIN REPLIES TO A REQUEST
+
+Required behavior
+When admin replies to a request:
+Keep current in-app reply behavior exactly as it works
+Also send email to the employee linked to that request
+
+Who should receive it
+The employee email tied to the request owner/creator
+Use existing employee account email
+Do not send to the wrong cleaner or all employees
+
+Email trigger
+Trigger only after reply is successfully stored
+Never send email if reply save fails
+
+Email subject example
+Your request has a reply: Supplies
+
+Email body should include
+Request title
+Reply preview
+Admin/business name
+Reply date and time
+CTA text such as:
+Log in to view the full reply
+
+CTA behavior
+Link should open the app and lead the employee to the request view after login
+If direct deep link is available, use it
+If not, route safely to Requests page or the correct request details screen
+
+Important
+Do not expose sensitive content in email beyond a short preview if the current security approach avoids full message exposure
+If current email patterns are brief and safe, match that pattern
+
+FEATURE 3
+IN-APP NOTIFICATIONS MUST STILL WORK
+
+Do not remove current request visibility from the app
+Do not replace in-app notifications with email
+Email is additional, not a replacement
+
+Required
+Admin should still see new request in the admin/web app
+Employee should still see the admin reply in their app
+If there is already a notification badge or unread state, keep it working
+If there is already a messages/requests count, do not break it
+
+FEATURE 4
+CLICKABLE REQUEST ATTACHMENTS WITH FULL IMAGE PREVIEW
+
+Current issue
+Attached images show as small thumbnails but cannot be clicked to view full size
+
+Required behavior
+On both sides of Requests:
+Admin view
+Employee/mobile app view
+Any request detail modal/page where attachments appear
+
+Make each image thumbnail clickable
+Open image in full preview modal/lightbox when clicked
+Allow user to:
+View image larger
+Close modal
+Navigate between multiple attached images if more than one exists
+Preserve image aspect ratio
+Support desktop and mobile properly
+Use existing image URL/storage source without changing the upload logic
+
+Modal/lightbox requirements
+Clean overlay
+Centered image
+Close button
+Tap outside to close if already supported in app patterns
+Arrow navigation if multiple images exist
+Pinch zoom optional if current mobile image viewer supports it
+At minimum, full-size fit-to-screen view must work
+
+Do not
+Do not reprocess existing images
+Do not move image storage
+Do not break existing uploads
+Do not compress or overwrite old files
+
+TECHNICAL IMPLEMENTATION NOTES
+
+Reuse current email service
+Use the exact existing mail integration already used in the app
+Do not create a second email provider
+Do not touch existing email credentials or config unless strictly necessary for this Requests flow
+Add request-specific email helper functions only
+Create isolated helpers/services such as:
+sendAdminNewRequestEmail(requestId)
+sendEmployeeRequestReplyEmail(requestId, replyId)
+
+These helpers should:
+Fetch the correct request data
+Fetch correct recipient
+Build safe payload
+Use existing mail sender
+Fail gracefully without breaking the main request action
+
+Keep request action successful even if email fails
+Important production-safe rule:
+If request is saved successfully but email fails, do not roll back the request
+Log the email failure
+Surface a non-breaking warning in logs or monitoring only
+Do not show a fatal error that blocks the app flow unless current system explicitly requires it
+Notification flow
+If existing notification table/service exists, reuse it
+Do not invent a second notification system
+Use current patterns for:
+recipient
+type
+title
+body
+link/path
+read/unread state
+
+Recommended notification events
+request_created_for_admin
+request_replied_for_employee
+
+Audit recipient mapping carefully
+Make sure each request belongs to:
+business
+employee sender
+admin recipient side
+
+Avoid cross-company leaks
+A request from Business A must never email Business B
+A reply to Employee X must never go to Employee Y
+
+Deep link route handling
+Use safe routes already in app
+Examples only:
+admin/work-log/requests/:id
+employee/requests/:id
+
+Use actual existing route names in the app, not guessed ones
+If direct detail routes do not exist, send users to the Requests page and highlight/open the correct thread if possible
+
+Frontend image preview
+For request attachments, wrap thumbnails in click handlers
+Use existing modal component if the app already has one
+If no reusable modal exists, create a small isolated request image viewer component only for this module
+Make sure it works in:
+admin modal
+employee request detail screen
+reply thread if attachments appear there too
+Existing records compatibility
+This must work for old requests and new requests
+Any old request that already has images should also become clickable once opened in the updated UI
+Do not require re-saving old requests
+
+QA CHECKLIST
+
+EMAIL FLOW
+Employee submits request
+Request saves successfully
+Admin sees request in app
+Admin receives email
+Email subject is correct
+Email contains correct request info
+CTA link opens correct app location
+
+Admin replies to request
+Reply saves successfully
+Employee sees reply in app
+Employee receives email
+Email subject is correct
+Email contains correct reply preview
+CTA link opens correct app location
+
+FAILSAFE
+Temporarily simulate email failure
+Confirm request still saves
+Confirm reply still saves
+Confirm no data loss
+Confirm logs capture failure cleanly
+
+IMAGE PREVIEW
+Open request with 1 image
+Thumbnail clickable
+Full image opens
+Close works
+
+Open request with multiple images
+Each thumbnail clickable
+Preview opens on selected image
+Can move to next/previous image
+Works on desktop
+Works on mobile
+
+REGRESSION
+Welcome emails still send normally
+Other email flows still work
+No duplicate emails
+No duplicate notifications
+No broken request creation
+No broken request reply
+No broken uploads
+No broken old requests
+No broken employee app navigation
+No broken admin work log navigation
+
+UI NOTES
+Do not redesign the Requests page
+Do not change spacing, tabs, filters, or list behavior unless needed for the image click preview
+Keep the current layout intact
+Only enhance thumbnail interaction and notification/email behavior
+
+LOGGING
+Add safe logs for:
+request email queued/sent to admin
+reply email queued/sent to employee
+email send failure with request id and recipient role
+Do not log sensitive full message bodies in production logs
+
+ROLLBACK SAFETY
+Any schema change should be avoided unless absolutely necessary
+Prefer using existing request and notification models
+If a new field is needed, stop and ask for approval first
+
+DELIVERABLE EXPECTATION
+Implement only:
+Admin email on employee request creation
+Employee email on admin reply
+Clickable full-image preview for request attachments
+Keep all existing behavior intact
+
+FINAL REMINDER TO AGENT
+Production app is active
+Do not break anything else
+Do not touch unrelated modules
+Do not modify existing email formats outside Requests
+Do not make out-of-scope changes without approval

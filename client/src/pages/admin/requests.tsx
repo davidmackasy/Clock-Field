@@ -80,31 +80,47 @@ function UrlLightbox({ urls, startIndex, onClose }: { urls: string[]; startIndex
 
 function ThreadMessage({ msg, clientName }: { msg: any; clientName: string }) {
   const isAdmin = msg.authorRole === "admin";
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const attUrls = (msg.attachments || []).map((att: any) => `/api/attachments/${att.id}/image`);
+
   return (
-    <div className={`flex flex-col gap-1 ${isAdmin ? "items-end" : "items-start"}`}>
-      <div className={`max-w-[85%] rounded-xl px-4 py-3 text-sm shadow-sm ${
-        isAdmin ? "bg-primary text-primary-foreground" :
-        msg.messageType === "status_change" ? "bg-muted border border-border" :
-        "bg-card border border-border"
-      }`}>
-        {msg.messageType === "status_change" ? (
-          <p className="text-xs text-muted-foreground italic">Status: <span className="font-semibold">{STATUS_LABELS[msg.statusValue] || msg.statusValue}</span></p>
-        ) : (
-          <>
-            <p className="text-xs font-medium mb-1 opacity-70">{isAdmin ? "Admin" : clientName}</p>
-            {msg.body && <p className="whitespace-pre-wrap">{msg.body}</p>}
-          </>
-        )}
-        {msg.attachments?.length > 0 && (
-          <div className="grid grid-cols-2 gap-1 mt-2">
-            {msg.attachments.map((att: any) => (
-              <img key={att.id} src={`/api/attachments/${att.id}/image`} alt={att.caption || "photo"} className="w-full h-24 object-cover rounded-md bg-muted" loading="lazy" />
-            ))}
-          </div>
-        )}
+    <>
+      {lightboxIdx !== null && attUrls.length > 0 && (
+        <UrlLightbox urls={attUrls} startIndex={lightboxIdx} onClose={() => setLightboxIdx(null)} />
+      )}
+      <div className={`flex flex-col gap-1 ${isAdmin ? "items-end" : "items-start"}`}>
+        <div className={`max-w-[85%] rounded-xl px-4 py-3 text-sm shadow-sm ${
+          isAdmin ? "bg-primary text-primary-foreground" :
+          msg.messageType === "status_change" ? "bg-muted border border-border" :
+          "bg-card border border-border"
+        }`}>
+          {msg.messageType === "status_change" ? (
+            <p className="text-xs text-muted-foreground italic">Status: <span className="font-semibold">{STATUS_LABELS[msg.statusValue] || msg.statusValue}</span></p>
+          ) : (
+            <>
+              <p className="text-xs font-medium mb-1 opacity-70">{isAdmin ? "Admin" : clientName}</p>
+              {msg.body && <p className="whitespace-pre-wrap">{msg.body}</p>}
+            </>
+          )}
+          {msg.attachments?.length > 0 && (
+            <div className="grid grid-cols-2 gap-1 mt-2">
+              {msg.attachments.map((att: any, i: number) => (
+                <img
+                  key={att.id}
+                  src={`/api/attachments/${att.id}/image`}
+                  alt={att.caption || "photo"}
+                  className="w-full h-24 object-cover rounded-md bg-muted cursor-pointer hover:opacity-90 transition-opacity"
+                  loading="lazy"
+                  onClick={() => setLightboxIdx(i)}
+                  data-testid={`img-attachment-${att.id}`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+        <span className="text-[10px] text-muted-foreground px-1">{formatTime(msg.createdAt)}</span>
       </div>
-      <span className="text-[10px] text-muted-foreground px-1">{formatTime(msg.createdAt)}</span>
-    </div>
+    </>
   );
 }
 

@@ -583,3 +583,120 @@ Review attendance: ${loginUrl}/admin/attendance
     html: htmlBody,
   });
 }
+
+export async function sendAdminNewRequestEmail(opts: {
+  adminEmail: string;
+  adminName: string;
+  requesterName: string;
+  requesterRole: string;
+  requestTitle: string;
+  requestType: string;
+  priority: string;
+  businessName: string;
+  submittedAt: string;
+  hasAttachments: boolean;
+  messagePreview: string | null;
+  appUrl: string;
+}): Promise<void> {
+  const { client, domain } = getClient();
+  const from = process.env.MAIL_FROM || "Clockfield <noreply@mg.clockfield.com>";
+  const ctaUrl = `${opts.appUrl}/admin/requests`;
+  const roleLabel = opts.requesterRole === "employee" ? "Employee" : opts.requesterRole === "client" ? "Client" : "Staff";
+  const typeLabel = opts.requestType.replace(/_/g, " ");
+  const priorityColor = (opts.priority === "urgent" || opts.priority === "high") ? "#dc2626" : "#374151";
+
+  const textBody = `New ${roleLabel} Request — ClockField
+
+Hi ${opts.adminName},
+
+${opts.requesterName} has submitted a new request.
+
+Title: ${opts.requestTitle}
+Type: ${typeLabel}
+Priority: ${opts.priority}
+Submitted by: ${opts.requesterName} (${roleLabel})
+Submitted at: ${opts.submittedAt}
+${opts.messagePreview ? `\nMessage preview:\n${opts.messagePreview}\n` : ""}${opts.hasAttachments ? "Attachments: Yes\n" : ""}
+View the request in ClockField: ${ctaUrl}
+
+– The ClockField Team`;
+
+  const bodyHtml = `
+<p style="margin:0 0 14px;color:#374151;">Hi <strong>${opts.adminName}</strong>,</p>
+<p style="margin:0 0 14px;color:#374151;"><strong>${opts.requesterName}</strong> has submitted a new request for your attention.</p>
+<table style="width:100%;border-collapse:collapse;margin:0 0 20px;border-radius:6px;border:1px solid #e5e7eb;overflow:hidden;">
+  <tr><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:13px;width:120px;">Title</td><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:600;">${opts.requestTitle}</td></tr>
+  <tr><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:13px;">Type</td><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;">${typeLabel}</td></tr>
+  <tr><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:13px;">Priority</td><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:600;color:${priorityColor};">${opts.priority}</td></tr>
+  <tr><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:13px;">Submitted by</td><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;">${opts.requesterName} <span style="color:#9ca3af;">(${roleLabel})</span></td></tr>
+  <tr><td style="padding:10px 14px;${opts.messagePreview || opts.hasAttachments ? "border-bottom:1px solid #e5e7eb;" : ""}color:#6b7280;font-size:13px;">Submitted at</td><td style="padding:10px 14px;${opts.messagePreview || opts.hasAttachments ? "border-bottom:1px solid #e5e7eb;" : ""}font-size:13px;">${opts.submittedAt}</td></tr>
+  ${opts.hasAttachments ? `<tr><td style="padding:10px 14px;${opts.messagePreview ? "border-bottom:1px solid #e5e7eb;" : ""}color:#6b7280;font-size:13px;">Attachments</td><td style="padding:10px 14px;${opts.messagePreview ? "border-bottom:1px solid #e5e7eb;" : ""}font-size:13px;">Yes</td></tr>` : ""}
+  ${opts.messagePreview ? `<tr><td style="padding:10px 14px;color:#6b7280;font-size:13px;vertical-align:top;">Preview</td><td style="padding:10px 14px;font-size:13px;color:#374151;">${opts.messagePreview.slice(0, 200)}${opts.messagePreview.length > 200 ? "…" : ""}</td></tr>` : ""}
+</table>`;
+
+  const html = buildEmailHtml({
+    title: `New request: ${opts.requestTitle}`,
+    bodyHtml,
+    ctaLabel: "View Request",
+    ctaUrl,
+    footerNote: `You are receiving this because a ${roleLabel.toLowerCase()} submitted a request in your ClockField account.`,
+  });
+
+  await client.messages.create(domain, {
+    from,
+    to: [opts.adminEmail],
+    subject: `New ${roleLabel.toLowerCase()} request: ${opts.requestTitle}`,
+    text: textBody,
+    html,
+  });
+}
+
+export async function sendEmployeeRequestReplyEmail(opts: {
+  to: string;
+  recipientName: string;
+  requestTitle: string;
+  replyPreview: string | null;
+  businessName: string;
+  repliedAt: string;
+  appUrl: string;
+}): Promise<void> {
+  const { client, domain } = getClient();
+  const from = process.env.MAIL_FROM || "Clockfield <noreply@mg.clockfield.com>";
+  const ctaUrl = `${opts.appUrl}/employee/requests`;
+
+  const textBody = `Your request has a reply — ClockField
+
+Hi ${opts.recipientName},
+
+Your request "${opts.requestTitle}" has received a reply from ${opts.businessName}.
+
+${opts.replyPreview ? `Reply preview:\n${opts.replyPreview}\n\n` : ""}Log in to view the full reply: ${ctaUrl}
+
+– The ClockField Team`;
+
+  const bodyHtml = `
+<p style="margin:0 0 14px;color:#374151;">Hi <strong>${opts.recipientName}</strong>,</p>
+<p style="margin:0 0 14px;color:#374151;"><strong>${opts.businessName}</strong> has replied to your request.</p>
+<div style="background:#f8f9fa;border:1px solid #e5e7eb;border-radius:6px;padding:16px 20px;margin:0 0 20px;">
+  <p style="margin:0 0 4px;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">Request</p>
+  <p style="margin:0 0 12px;font-size:15px;color:#111827;font-weight:600;">${opts.requestTitle}</p>
+  ${opts.replyPreview ? `<p style="margin:0 0 4px;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">Reply preview</p><p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">${opts.replyPreview.slice(0, 200)}${opts.replyPreview.length > 200 ? "…" : ""}</p>` : ""}
+</div>
+<p style="margin:0 0 4px;font-size:12px;color:#9ca3af;">Replied at: ${opts.repliedAt}</p>`;
+
+  const html = buildEmailHtml({
+    title: `Reply to your request`,
+    bodyHtml,
+    ctaLabel: "View Full Reply",
+    ctaUrl,
+    footerNote: `You are receiving this because you submitted a request in ClockField. Log in to reply or view the full conversation.`,
+  });
+
+  await client.messages.create(domain, {
+    from,
+    to: [opts.to],
+    subject: `Your request has a reply: ${opts.requestTitle}`,
+    text: textBody,
+    html,
+  });
+}
