@@ -1,0 +1,394 @@
+Dev note: Safe attendance hour adjustment feature
+
+Objective
+
+Add a new admin-only attendance adjustment feature that lets management add or subtract paid time for a specific attendance entry without editing or overwriting the original clock-in and clock-out data.
+
+This must be implemented safely.
+Do not break or affect anything else.
+Do not change authentication.
+Do not change payroll logic outside of reading the new adjustment value.
+Do not modify historical raw attendance records.
+Do not recalculate old records unless an adjustment is explicitly added.
+Do not touch any unrelated modules.
+
+What the feature must do
+
+Under Attendance, for each day or each attendance row, give admin a way to:
+
+Add extra paid time
+Reduce paid time
+Save a reason or note for that change
+See who made the change
+See when the change was made
+
+Example:
+Cleaner clocked in 1 hour late because of a login issue or bus issue.
+Admin can open that specific day and add +1h adjustment.
+That adjustment must update the adjusted total hours everywhere totals are shown for attendance and any downstream area that uses payable attendance hours.
+
+Critical rule
+
+Never change the original actual time.
+Never fake the clock-in or clock-out time.
+Keep original attendance data as source truth.
+Store adjustments separately and apply them as an overlay.
+
+Safe implementation approach
+
+Keep raw attendance untouched
+Existing fields like:
+scheduled_start
+scheduled_end
+clock_in
+clock_out
+worked_minutes
+status
+flags
+
+must remain unchanged.
+
+Add a separate adjustment layer
+Create a new table or model for attendance adjustments.
+
+Suggested table:
+attendance_adjustments
+
+Fields:
+id
+attendance_id
+business_id
+employee_id
+adjustment_minutes
+reason
+note
+created_by_admin_id
+created_at
+updated_at
+is_voided or deleted_at if soft delete is needed
+
+Rules:
+adjustment_minutes can be positive or negative
+Use minutes, not decimal hours
+Examples:
++60 = add 1 hour
+-30 = subtract 30 minutes
+
+This is safer than editing the attendance row directly.
+
+Support multiple adjustments if needed
+Best option:
+Allow multiple adjustment records per attendance entry for audit safety
+
+Then compute:
+total_adjustment_minutes = sum of non-voided adjustments
+adjusted_worked_minutes = raw_worked_minutes + total_adjustment_minutes
+
+Also support easy rollback by voiding an adjustment instead of deleting it permanently.
+
+Add audit logging
+Every adjustment action must be logged.
+Store:
+who changed it
+what was changed
+previous total adjustment
+new total adjustment
+reason
+timestamp
+
+If there is already an audit log system, plug into it.
+If not, at minimum keep the adjustment history table complete enough for audits.
+
+UI requirements
+
+Attendance table
+
+Do not redesign the page.
+Do not disturb existing filters, totals, or status badges.
+
+Add one small action per row:
+Adjust Hours
+
+This can be:
+a button
+a dropdown action
+or a modal trigger
+
+Best safe UI:
+small icon/button at row level
+
+Adjustment modal
+
+When admin clicks Adjust Hours on a row, open a modal with:
+
+Employee name
+Attendance date
+Scheduled time
+Actual time
+Raw worked hours
+Current total adjustments
+Adjusted payable hours preview
+
+Input fields:
+Adjustment type:
+Add time
+Reduce time
+
+Adjustment amount:
+Hours
+Minutes
+
+Reason:
+Short required reason
+Examples:
+Bus delay approved
+Login issue approved
+Manager correction
+Missed punch correction
+Payroll correction
+
+Optional note:
+Free text for extra detail
+
+Preview:
+Raw worked: 4h 31m
+Adjustment: +1h 00m
+Adjusted payable: 5h 31m
+
+Buttons:
+Cancel
+Save adjustment
+
+Optional:
+Show adjustment history inside modal for that day
+
+Table display after save
+
+In the attendance row, add a subtle display:
+Adj: +1h
+or
+Adj: -30m
+
+Do not replace actual time.
+Do not hide original values.
+
+Totals cards
+
+Current cards like:
+Total Hours Worked
+Total Shifts
+Avg Hours / Shift
+
+Need clear behavior:
+
+Total Hours Worked should become adjusted payable hours when adjustments exist.
+
+Best safe approach:
+Keep transparency by showing either:
+Total Hours Worked: 47h 21m
+Adjusted Total: 48h 21m
+
+Or rename carefully:
+Payable Hours: 48h 21m
+with raw hours still available somewhere
+
+Safer option for rollout:
+Add a second value or tooltip instead of replacing the existing label without warning.
+
+Recommended:
+Card title stays simple, but show:
+Worked Hours: raw
+Adjusted Hours: payable
+
+This avoids confusion and avoids silently changing meaning.
+
+Where this must update
+
+This feature should update anywhere attendance-based payable hour totals are used, but only through the new adjusted-hours accessor or service.
+
+Do not manually patch numbers in random components.
+
+Create a central calculation path:
+
+raw_worked_minutes
+plus sum(adjustment_minutes)
+equals adjusted_worked_minutes
+
+Use that in:
+Attendance totals
+Employee attendance summaries
+Payroll estimator if it relies on attendance worked hours
+Any export or report that should reflect payable adjusted hours
+
+Important:
+Only replace totals in places where payroll/payable hours matter.
+Leave raw attendance logs visible as raw attendance facts.
+
+Backend logic
+
+Create a central helper/service method such as:
+
+getRawWorkedMinutes(attendance)
+getAttendanceAdjustmentMinutes(attendanceId)
+getAdjustedWorkedMinutes(attendance)
+
+Never duplicate this logic across pages.
+
+Validation rules
+
+Only admins/authorized management can adjust hours
+Cleaner/employee side must not see or edit this unless explicitly wanted later
+Adjustment cannot push payable hours below zero
+Minutes must be valid integers
+Reason is required
+Business scoping must be enforced
+Admin can only adjust attendance rows for their own business
+Soft delete or void instead of hard delete preferred
+
+Permissions
+
+Only admin-side roles with attendance/payroll permission can:
+create adjustment
+edit adjustment
+void adjustment
+view adjustment history
+
+If role permissions already exist, plug into them.
+Do not open this to cleaners.
+
+Migration safety
+
+This must be non-destructive.
+
+Migration rules:
+Do not alter old attendance values
+Do not backfill or rewrite old records
+Add new table only
+Default behavior for all existing attendance rows:
+adjustment = 0
+
+That means all existing data stays exactly the same until an admin adds an adjustment.
+
+Deployment-safe rollout plan
+
+Phase 1
+Add new database table and backend read/write support
+No UI exposure yet
+No behavior changes yet
+
+Phase 2
+Add row-level admin modal for adjustment
+Write adjustments successfully
+Show adjustment badge in attendance row
+
+Phase 3
+Update totals to include adjusted payable hours through central calculation service
+Verify totals on attendance page
+Verify employee-specific filtered totals
+Verify custom date range totals
+
+Phase 4
+If payroll estimator depends on attendance hours, update it to read adjusted payable hours only through shared service, not custom logic
+
+Do not touch any other module unless strictly required for reading adjusted totals.
+
+Testing checklist
+
+Test with no adjustments
+Everything must behave exactly as before
+
+Test with +60 minutes on one row
+Raw actual time remains unchanged
+Row shows adjustment badge
+Adjusted total increases by 1 hour
+Date filters still correct
+Employee filter still correct
+
+Test with -30 minutes
+Adjusted total decreases correctly
+Never below zero
+
+Test multiple adjustments on same row
++60 then -15
+Net = +45
+
+Test history/audit
+See who changed it
+See reason
+See timestamp
+
+Test payroll-related areas
+Only if they use attendance totals
+Ensure new adjusted total is read safely
+
+Test multi-business isolation
+Business A cannot affect Business B records
+
+Test exports/reports if any
+Be explicit whether they show raw or adjusted hours
+Prefer both if possible:
+Worked Hours
+Adjustment
+Payable Hours
+
+Recommended wording in UI
+
+Per row:
+Adjustment: +1h 00m
+
+Modal labels:
+Adjust attendance hours
+Original worked time
+Adjustment amount
+Reason
+Optional note
+Adjusted payable time
+
+History labels:
+Added by
+Date
+Reason
+Change
+
+Important implementation warning
+
+Do not solve this by editing clock_in or clock_out.
+Do not solve this by overwriting worked_minutes directly on the attendance row.
+Do not hide the fact that an adjustment happened.
+Do not push quick fixes into frontend-only math.
+Do not create separate inconsistent formulas across attendance and payroll pages.
+
+Recommended technical structure
+
+If your app already has:
+attendance service
+payroll summary service
+report aggregator
+
+then add one shared function for adjusted time and make those consumers call it.
+
+Example data flow:
+attendance row -> raw worked minutes
+attendance_adjustments -> summed minutes
+shared calculation service -> adjusted payable minutes
+UI/cards/reports -> read from shared service
+
+This is the safest way to avoid breaking other areas.
+
+Final guardrails
+
+Only implement this feature
+Do not touch auth
+Do not touch employee mobile flow
+Do not touch schedule logic
+Do not touch clock-in/out logic
+Do not touch existing data
+Do not remove fields
+Do not rewrite old records
+Do not change anything unrelated without approval
+
+If anything outside this scope appears required, stop and ask for approval first.
+
+Handoff summary for the developer
+
+Build an admin-only attendance adjustment layer that allows adding or subtracting minutes from a specific attendance entry without changing raw clock data. Store adjustments in a separate table with full audit history. Show the adjustment in the attendance row, show adjusted totals safely, and use a shared calculation service so attendance and payroll-related totals stay consistent. Existing data must remain untouched, and all behavior must remain identical when no adjustment exists.

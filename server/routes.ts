@@ -1319,17 +1319,72 @@ Welcome again, and thank you for choosing ClockField.
       const user = req.user as any;
       const { employeeId } = req.query;
 
+      let entries: any[];
       if (user.role === "admin") {
         if (employeeId && typeof employeeId === "string") {
-          res.json(await storage.getTimeEntriesByEmployee(employeeId));
+          entries = await storage.getTimeEntriesByEmployee(employeeId);
         } else {
-          res.json(await storage.getTimeEntriesByCompany(user.companyId));
+          entries = await storage.getTimeEntriesByCompany(user.companyId);
         }
+        const adjustments = await storage.getAttendanceAdjustmentsByCompany(user.companyId);
+        const adjMap = new Map<string, number>();
+        for (const adj of adjustments) {
+          adjMap.set(adj.timeEntryId, (adjMap.get(adj.timeEntryId) || 0) + adj.adjustmentMinutes);
+        }
+        entries = entries.map(e => ({ ...e, totalAdjustmentMinutes: adjMap.get(e.id) || 0 }));
       } else if (user.role === "employee") {
-        res.json(await storage.getTimeEntriesByEmployee(user.id));
+        entries = await storage.getTimeEntriesByEmployee(user.id);
       } else {
-        res.status(403).json({ message: "Forbidden" });
+        return res.status(403).json({ message: "Forbidden" });
       }
+      res.json(entries);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/time-entries/:id/adjustments", requireRole("admin"), async (req, res) => {
+    try {
+      const adjustments = await storage.getAttendanceAdjustmentsByEntry(req.params.id);
+      res.json(adjustments);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/time-entries/:id/adjustments", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const entry = await storage.getTimeEntry(req.params.id);
+      if (!entry || entry.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const { adjustmentMinutes, reason, note } = req.body;
+      if (typeof adjustmentMinutes !== "number" || adjustmentMinutes === 0) {
+        return res.status(400).json({ message: "adjustmentMinutes must be a non-zero integer" });
+      }
+      if (!reason || typeof reason !== "string" || !reason.trim()) {
+        return res.status(400).json({ message: "reason is required" });
+      }
+      const adj = await storage.createAttendanceAdjustment({
+        companyId: user.companyId,
+        timeEntryId: entry.id,
+        employeeId: entry.employeeId,
+        adjustmentMinutes,
+        reason: reason.trim(),
+        note: note?.trim() || null,
+        createdByUserId: user.id,
+        createdAt: new Date().toISOString(),
+        isVoided: false,
+        voidedByUserId: null,
+        voidedAt: null,
+      });
+      res.json(adj);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/attendance-adjustments/:id/void", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const adj = await storage.getAttendanceAdjustmentById(req.params.id);
+      if (!adj || adj.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (adj.isVoided) return res.status(400).json({ message: "Already voided" });
+      const voided = await storage.voidAttendanceAdjustment(req.params.id, user.id);
+      res.json(voided);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

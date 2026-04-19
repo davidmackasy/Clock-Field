@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
-import { ClipboardList, Search, CalendarIcon, Filter, User, Clock, BarChart2, Users2, TrendingUp, AlertCircle, LogOut } from "lucide-react";
+import { ClipboardList, Search, CalendarIcon, Filter, User, Clock, BarChart2, Users2, TrendingUp, AlertCircle, LogOut, SlidersHorizontal, RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
 import { format, subDays, startOfWeek, startOfMonth, startOfDay, endOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { EmployeeAttendanceModal } from "@/components/employee-attendance-modal";
@@ -182,6 +182,303 @@ function ManualClockOutModal({
   );
 }
 
+const ADJUSTMENT_REASONS = [
+  "Bus delay approved",
+  "Login issue approved",
+  "Manager correction",
+  "Missed punch correction",
+  "Payroll correction",
+  "Schedule change",
+  "System error correction",
+  "Other approved reason",
+];
+
+function AdjustHoursModal({ entry, emp, shift, onClose }: { entry: any; emp: any; shift: any; onClose: () => void }) {
+  const { toast } = useToast();
+  const { data: adjustments, isLoading: loadingAdj } = useQuery<any[]>({
+    queryKey: ["/api/time-entries", entry.id, "adjustments"],
+  });
+
+  const [adjType, setAdjType] = useState<"add" | "reduce">("add");
+  const [hours, setHours] = useState("");
+  const [minutes, setMinutes] = useState("");
+  const [reason, setReason] = useState("");
+  const [note, setNote] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
+
+  const rawWorked = entry.workedMinutes ?? 0;
+  const netAdjMinutes = (adjustments || []).filter((a: any) => !a.isVoided).reduce((s: number, a: any) => s + a.adjustmentMinutes, 0);
+  const currentAdjusted = rawWorked + netAdjMinutes;
+
+  const inputMins = (parseInt(hours || "0") * 60) + parseInt(minutes || "0");
+  const effectiveMins = adjType === "add" ? inputMins : -inputMins;
+  const previewAdjusted = Math.max(0, currentAdjusted + effectiveMins);
+
+  const isValid = inputMins > 0 && reason.trim().length > 0;
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/time-entries/${entry.id}/adjustments`, {
+        adjustmentMinutes: effectiveMins,
+        reason: reason.trim(),
+        note: note.trim() || undefined,
+      });
+      if (!res.ok) { const b = await res.json(); throw new Error(b.message); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries", entry.id, "adjustments"] });
+      toast({ title: "Adjustment saved" });
+      setHours(""); setMinutes(""); setReason(""); setNote("");
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const voidMutation = useMutation({
+    mutationFn: async (adjId: string) => {
+      const res = await apiRequest("PATCH", `/api/attendance-adjustments/${adjId}/void`, {});
+      if (!res.ok) { const b = await res.json(); throw new Error(b.message); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries", entry.id, "adjustments"] });
+      toast({ title: "Adjustment voided" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const clockIn = new Date(entry.clockInAt);
+  const clockOut = entry.clockOutAt ? new Date(entry.clockOutAt) : null;
+  const activeAdj = (adjustments || []).filter((a: any) => !a.isVoided);
+  const voidedAdj = (adjustments || []).filter((a: any) => a.isVoided);
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <SlidersHorizontal className="w-4 h-4" />
+            Adjust Attendance Hours
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-1">
+          {/* Entry summary */}
+          <div className="rounded-lg border bg-muted/40 p-3 space-y-1.5 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Employee</span>
+              <span className="font-medium">{emp ? `${emp.firstName} ${emp.lastName}` : "Unknown"}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Date</span>
+              <span className="font-medium">{format(clockIn, "MMM d, yyyy")}</span>
+            </div>
+            {shift && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Scheduled</span>
+                <span className="font-medium">
+                  {format(new Date(shift.scheduledStartAt), "HH:mm")} – {format(new Date(shift.scheduledEndAt), "HH:mm")}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Actual time</span>
+              <span className="font-medium">
+                {format(clockIn, "HH:mm")} – {clockOut ? format(clockOut, "HH:mm") : "In progress"}
+              </span>
+            </div>
+            <div className="flex justify-between border-t pt-1.5 mt-1.5">
+              <span className="text-muted-foreground">Raw worked</span>
+              <span className="font-medium">{formatMinutes(rawWorked)}</span>
+            </div>
+            {netAdjMinutes !== 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Current adjustment</span>
+                <span className={cn("font-medium", netAdjMinutes > 0 ? "text-green-600" : "text-destructive")}>
+                  {netAdjMinutes > 0 ? "+" : ""}{formatMinutes(Math.abs(netAdjMinutes))}
+                  {netAdjMinutes < 0 ? " (reduction)" : ""}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-muted-foreground font-medium">Adjusted payable</span>
+              <span className="font-bold">{formatMinutes(currentAdjusted)}</span>
+            </div>
+          </div>
+
+          {/* New adjustment form */}
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Add new adjustment</p>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={adjType === "add" ? "default" : "outline"}
+                onClick={() => setAdjType("add")}
+                className="flex-1"
+                data-testid="button-adj-type-add"
+              >
+                + Add time
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={adjType === "reduce" ? "destructive" : "outline"}
+                onClick={() => setAdjType("reduce")}
+                className="flex-1"
+                data-testid="button-adj-type-reduce"
+              >
+                − Reduce time
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              <div className="flex-1 space-y-1">
+                <Label htmlFor="adj-hours">Hours</Label>
+                <Input
+                  id="adj-hours"
+                  type="number"
+                  min={0}
+                  max={24}
+                  placeholder="0"
+                  value={hours}
+                  onChange={e => setHours(e.target.value)}
+                  data-testid="input-adj-hours"
+                />
+              </div>
+              <div className="flex-1 space-y-1">
+                <Label htmlFor="adj-minutes">Minutes</Label>
+                <Input
+                  id="adj-minutes"
+                  type="number"
+                  min={0}
+                  max={59}
+                  placeholder="0"
+                  value={minutes}
+                  onChange={e => setMinutes(e.target.value)}
+                  data-testid="input-adj-minutes"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Reason <span className="text-destructive">*</span></Label>
+              <Select value={reason} onValueChange={setReason}>
+                <SelectTrigger data-testid="select-adj-reason">
+                  <SelectValue placeholder="Select a reason…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ADJUSTMENT_REASONS.map(r => (
+                    <SelectItem key={r} value={r}>{r}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="adj-note">Note <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Textarea
+                id="adj-note"
+                placeholder="Additional details…"
+                value={note}
+                onChange={e => setNote(e.target.value)}
+                rows={2}
+                data-testid="input-adj-note"
+              />
+            </div>
+
+            {/* Preview */}
+            {inputMins > 0 && (
+              <div className="rounded-md bg-muted/60 p-3 text-sm space-y-1">
+                <p className="font-medium text-xs text-muted-foreground uppercase tracking-wide mb-1.5">Preview</p>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Raw worked</span>
+                  <span>{formatMinutes(rawWorked)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">This adjustment</span>
+                  <span className={adjType === "add" ? "text-green-600 font-medium" : "text-destructive font-medium"}>
+                    {adjType === "add" ? "+" : "−"}{formatMinutes(inputMins)}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t pt-1.5">
+                  <span className="font-medium">Adjusted payable</span>
+                  <span className="font-bold">{formatMinutes(previewAdjusted)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Adjustment history */}
+          {!loadingAdj && (adjustments || []).length > 0 && (
+            <div className="space-y-2">
+              <button
+                type="button"
+                className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => setShowHistory(h => !h)}
+              >
+                {showHistory ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                Adjustment history ({(adjustments || []).length})
+              </button>
+              {showHistory && (
+                <div className="space-y-1.5">
+                  {[...activeAdj, ...voidedAdj].map((a: any) => (
+                    <div
+                      key={a.id}
+                      className={cn(
+                        "rounded-md border px-3 py-2 text-xs space-y-0.5",
+                        a.isVoided ? "opacity-50 bg-muted/30" : "bg-background"
+                      )}
+                      data-testid={`row-adj-history-${a.id}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={cn("font-semibold", a.adjustmentMinutes > 0 ? "text-green-600" : "text-destructive")}>
+                          {a.adjustmentMinutes > 0 ? "+" : ""}{formatMinutes(Math.abs(a.adjustmentMinutes))}
+                          {a.adjustmentMinutes < 0 ? " reduction" : " addition"}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {a.isVoided ? (
+                            <span className="text-muted-foreground italic">Voided</span>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-destructive"
+                              onClick={() => voidMutation.mutate(a.id)}
+                              disabled={voidMutation.isPending}
+                              data-testid={`button-void-adj-${a.id}`}
+                            >
+                              <RotateCcw className="w-2.5 h-2.5 mr-0.5" />
+                              Void
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-muted-foreground">{a.reason}</p>
+                      {a.note && <p className="text-muted-foreground">{a.note}</p>}
+                      <p className="text-muted-foreground">{format(new Date(a.createdAt), "MMM d, yyyy 'at' h:mm a")}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose} data-testid="button-cancel-adjust">Cancel</Button>
+          <Button
+            onClick={() => mutation.mutate()}
+            disabled={!isValid || mutation.isPending}
+            data-testid="button-save-adjust"
+          >
+            {mutation.isPending ? "Saving…" : "Save Adjustment"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function AdminAttendance() {
   const { toast } = useToast();
@@ -202,6 +499,7 @@ export default function AdminAttendance() {
   const [employeeFilter, setEmployeeFilter] = useState<string>("all");
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
   const [manualClockOutEntry, setManualClockOutEntry] = useState<any>(null);
+  const [adjustingEntry, setAdjustingEntry] = useState<any>(null);
 
   const empMap = useMemo(() => new Map((employees || []).map(e => [e.id, e])), [employees]);
   const shiftMap = useMemo(() => new Map((shifts || []).map(s => [s.id, s])), [shifts]);
@@ -273,15 +571,20 @@ export default function AdminAttendance() {
 
   const summary = useMemo(() => {
     const withHours = filtered.filter(e => e.clockInAt && e.clockOutAt);
-    const totalMinutes = withHours.reduce((sum, e) => {
+    const rawMinutes = withHours.reduce((sum, e) => {
       if (e.workedMinutes != null) return sum + e.workedMinutes;
       const diff = (new Date(e.clockOutAt).getTime() - new Date(e.clockInAt).getTime()) / 60000;
       return sum + Math.max(0, diff);
     }, 0);
+    const adjustedTotalMinutes = withHours.reduce((sum, e) => {
+      const raw = e.workedMinutes != null ? e.workedMinutes : Math.max(0, (new Date(e.clockOutAt).getTime() - new Date(e.clockInAt).getTime()) / 60000);
+      return sum + Math.max(0, raw + (e.totalAdjustmentMinutes || 0));
+    }, 0);
     const totalShifts = withHours.length;
-    const avgMinutes = totalShifts > 0 ? totalMinutes / totalShifts : 0;
+    const avgMinutes = totalShifts > 0 ? adjustedTotalMinutes / totalShifts : 0;
     const uniqueEmployees = new Set(filtered.map((e: any) => e.employeeId)).size;
-    return { totalMinutes, totalShifts, avgMinutes, uniqueEmployees };
+    const hasAdjustments = withHours.some(e => (e.totalAdjustmentMinutes || 0) !== 0);
+    return { rawMinutes, adjustedTotalMinutes, totalShifts, avgMinutes, uniqueEmployees, hasAdjustments };
   }, [filtered]);
 
   const selectedEmployeeName = useMemo(() => {
@@ -460,8 +763,11 @@ export default function AdminAttendance() {
                   <Clock className="w-4 h-4 text-primary" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground truncate">Total Hours Worked</p>
-                  <p className="text-lg font-bold leading-tight" data-testid="text-summary-hours">{formatMinutes(summary.totalMinutes)}</p>
+                  <p className="text-xs text-muted-foreground truncate">{summary.hasAdjustments ? "Payable Hours" : "Total Hours Worked"}</p>
+                  <p className="text-lg font-bold leading-tight" data-testid="text-summary-hours">{formatMinutes(summary.adjustedTotalMinutes)}</p>
+                  {summary.hasAdjustments && (
+                    <p className="text-[10px] text-muted-foreground leading-tight">Raw: {formatMinutes(summary.rawMinutes)}</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -532,6 +838,7 @@ export default function AdminAttendance() {
                     <TableHead>Variance</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Flags</TableHead>
+                    <TableHead className="w-8"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -592,7 +899,26 @@ export default function AdminAttendance() {
                                 {flag.replace(/_/g, " ")}
                               </Badge>
                             ))}
+                            {(entry.totalAdjustmentMinutes || 0) !== 0 && (
+                              <Badge variant="outline" className={cn("text-[10px] h-4 font-medium border", entry.totalAdjustmentMinutes > 0 ? "text-green-600 border-green-300" : "text-destructive border-destructive/30")}>
+                                Adj: {entry.totalAdjustmentMinutes > 0 ? "+" : ""}{formatMinutes(Math.abs(entry.totalAdjustmentMinutes))}
+                              </Badge>
+                            )}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {entry.status === "completed" && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                              onClick={() => setAdjustingEntry(entry)}
+                              title="Adjust hours"
+                              data-testid={`button-adjust-hours-${entry.id}`}
+                            >
+                              <SlidersHorizontal className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
@@ -619,6 +945,15 @@ export default function AdminAttendance() {
           emp={empMap.get(manualClockOutEntry.employeeId)}
           shift={manualClockOutEntry.shiftId ? shiftMap.get(manualClockOutEntry.shiftId) : null}
           onClose={() => setManualClockOutEntry(null)}
+        />
+      )}
+
+      {adjustingEntry && (
+        <AdjustHoursModal
+          entry={adjustingEntry}
+          emp={empMap.get(adjustingEntry.employeeId)}
+          shift={adjustingEntry.shiftId ? shiftMap.get(adjustingEntry.shiftId) : null}
+          onClose={() => setAdjustingEntry(null)}
         />
       )}
     </div>

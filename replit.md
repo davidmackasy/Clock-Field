@@ -73,6 +73,7 @@ A workforce operations platform for service businesses with 3 user roles: Admin,
 - **Employee detail panels** - Clickable employee cards open a detail sheet with Overview, Schedule, and Attendance tabs; includes inline editing
 - **Client detail modals** - Clickable client cards open a detail modal with Overview, Locations, and Requests tabs; includes inline editing
 - **Advanced attendance tracking** - Filters (search, date range, status, employee), variance columns ("+2 min late"), clickable employee names open attendance portfolio with stats + monthly calendar
+- **Attendance Hour Adjustments** - Admin-only adjustment layer on each completed attendance row. Row-level slider icon opens a modal to add or reduce paid time without touching raw clock data. Adjustments stored in `attendance_adjustments` table with reason, note, audit trail, and void support. Adjustment badge shown in row flags. Summary card shows "Payable Hours" (adjusted) with raw hours as sub-text when adjustments exist. Payroll estimator uses adjusted minutes automatically.
 - Clock in/out with live timer and shift compliance flags
 - **Payroll Deductions estimator** - Admin-configurable Canadian payroll deductions (federal/provincial tax, CPP, EI, custom deductions). Toggle per-company, configurable modes (off/manual%), per-period breakdown in payroll table and history modal
 - Payroll estimation based on hourly rates with overtime calculation (per-period history modal, 6 period filter options)
@@ -87,6 +88,7 @@ A workforce operations platform for service businesses with 3 user roles: Admin,
 - shifts (with shiftType, shiftLabel, recurringScheduleId), time_entries, client_requests
 - **payroll_deductions** - Custom per-company deductions (label, type: percent|fixed, value, isActive)
 - **timesheets** - Pay-period summaries (employee_id, company_id, pay_period_start/end, status, worked/regular/overtime minutes, shift counts, late/left_early/missed counts, submitted_at, approved_at)
+- **attendance_adjustments** - Separate adjustment layer per time entry (adjustment_minutes +/-, reason, note, created_by_user_id, is_voided, voided_by_user_id). Never modifies raw attendance records.
 
 ## SaaS Subscription Layer
 - **Plans**: `legacy` (unlimited, grandfathered), `starter` ($29), `growth` ($79), `pro` ($129) — defined in `server/plans.ts`

@@ -785,3 +785,23 @@ export type FieldNotesTranscriptChunk = typeof fieldNotesTranscriptChunks.$infer
 export type FieldNotesEntry = typeof fieldNotesEntries.$inferSelect;
 export type InsertFieldNotesEntry = z.infer<typeof insertFieldNotesEntrySchema>;
 export type FieldNotesEntryTag = typeof fieldNotesEntryTags.$inferSelect;
+
+// ── Attendance Adjustments ────────────────────────────────────────────────────
+export const attendanceAdjustments = pgTable("attendance_adjustments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  timeEntryId: varchar("time_entry_id").notNull(),
+  employeeId: varchar("employee_id").notNull(),
+  adjustmentMinutes: integer("adjustment_minutes").notNull(),
+  reason: text("reason").notNull(),
+  note: text("note"),
+  createdByUserId: varchar("created_by_user_id").notNull(),
+  createdAt: text("created_at").notNull(),
+  isVoided: boolean("is_voided").notNull().default(false),
+  voidedByUserId: varchar("voided_by_user_id"),
+  voidedAt: text("voided_at"),
+});
+
+export const insertAttendanceAdjustmentSchema = createInsertSchema(attendanceAdjustments).omit({ id: true });
+export type AttendanceAdjustment = typeof attendanceAdjustments.$inferSelect;
+export type InsertAttendanceAdjustment = z.infer<typeof insertAttendanceAdjustmentSchema>;

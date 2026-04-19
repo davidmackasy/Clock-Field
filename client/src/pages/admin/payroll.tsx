@@ -145,7 +145,7 @@ function computePayroll(
   const empEntries = allEntries.filter(
     e => e.employeeId === employeeId && e.status === "completed" && isInRange(e.clockInAt, start, end)
   );
-  const totalMinutes = empEntries.reduce((s: number, e: any) => s + (e.workedMinutes || 0), 0);
+  const totalMinutes = empEntries.reduce((s: number, e: any) => s + (e.workedMinutes || 0) + (e.totalAdjustmentMinutes || 0), 0);
   const hours = totalMinutes / 60;
   const regularHours = Math.min(hours, overtimeThreshold);
   const overtimeHours = Math.max(0, hours - overtimeThreshold);

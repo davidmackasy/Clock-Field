@@ -10,6 +10,7 @@ import {
   passwordResetTokens,
   reports, reportSignatures, reportActivityLog, reportAccessTokens,
   fieldNotesSessions, fieldNotesAssets, fieldNotesTranscriptChunks, fieldNotesEntries, fieldNotesEntryTags,
+  attendanceAdjustments,
   type Report, type InsertReport,
   type ReportSignature, type InsertReportSignature,
   type ReportActivityLog,
@@ -42,6 +43,7 @@ import {
   type FieldNotesTranscriptChunk,
   type FieldNotesEntry, type InsertFieldNotesEntry,
   type FieldNotesEntryTag,
+  type AttendanceAdjustment, type InsertAttendanceAdjustment,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -92,6 +94,12 @@ export interface IStorage {
   getTimeEntriesByCompany(companyId: string): Promise<TimeEntry[]>;
   getTimeEntriesByEmployee(employeeId: string): Promise<TimeEntry[]>;
   updateTimeEntry(id: string, data: Partial<InsertTimeEntry>): Promise<TimeEntry | undefined>;
+
+  createAttendanceAdjustment(data: InsertAttendanceAdjustment): Promise<AttendanceAdjustment>;
+  getAttendanceAdjustmentsByEntry(timeEntryId: string): Promise<AttendanceAdjustment[]>;
+  getAttendanceAdjustmentsByCompany(companyId: string): Promise<AttendanceAdjustment[]>;
+  getAttendanceAdjustmentById(id: string): Promise<AttendanceAdjustment | undefined>;
+  voidAttendanceAdjustment(id: string, voidedByUserId: string): Promise<AttendanceAdjustment | undefined>;
 
   createClientRequest(data: InsertClientRequest): Promise<ClientRequest>;
   getClientRequest(id: string): Promise<ClientRequest | undefined>;
@@ -440,6 +448,35 @@ export class DatabaseStorage implements IStorage {
   async updateTimeEntry(id: string, data: Partial<InsertTimeEntry>): Promise<TimeEntry | undefined> {
     const [entry] = await db.update(timeEntries).set(data).where(eq(timeEntries.id, id)).returning();
     return entry;
+  }
+
+  async createAttendanceAdjustment(data: InsertAttendanceAdjustment): Promise<AttendanceAdjustment> {
+    const [row] = await db.insert(attendanceAdjustments).values(data as any).returning();
+    return row;
+  }
+
+  async getAttendanceAdjustmentsByEntry(timeEntryId: string): Promise<AttendanceAdjustment[]> {
+    return db.select().from(attendanceAdjustments)
+      .where(eq(attendanceAdjustments.timeEntryId, timeEntryId))
+      .orderBy(desc(attendanceAdjustments.createdAt));
+  }
+
+  async getAttendanceAdjustmentsByCompany(companyId: string): Promise<AttendanceAdjustment[]> {
+    return db.select().from(attendanceAdjustments)
+      .where(and(eq(attendanceAdjustments.companyId, companyId), eq(attendanceAdjustments.isVoided, false)));
+  }
+
+  async getAttendanceAdjustmentById(id: string): Promise<AttendanceAdjustment | undefined> {
+    const [row] = await db.select().from(attendanceAdjustments).where(eq(attendanceAdjustments.id, id));
+    return row;
+  }
+
+  async voidAttendanceAdjustment(id: string, voidedByUserId: string): Promise<AttendanceAdjustment | undefined> {
+    const [row] = await db.update(attendanceAdjustments)
+      .set({ isVoided: true, voidedByUserId, voidedAt: new Date().toISOString() })
+      .where(eq(attendanceAdjustments.id, id))
+      .returning();
+    return row;
   }
 
   async createClientRequest(data: InsertClientRequest): Promise<ClientRequest> {
