@@ -1,0 +1,319 @@
+Dev note: Sync admin attendance adjustments to employee side safely
+
+Objective
+
+The attendance adjustment feature is working safely on the admin side.
+Now complete the second half of the feature:
+
+When admin adds or deducts attendance time on a specific day, that adjusted time must also appear on the employee side.
+
+This must be transparent and safe.
+Do not break or affect anything else.
+Do not touch authentication.
+Do not touch raw clock-in or clock-out data.
+Do not change old attendance records.
+Do not change unrelated attendance logic.
+Do not touch schedule, payroll, or employee clock flows unless strictly needed to read the same adjusted-hours value.
+
+Main issue to fix
+
+Right now:
+Admin side shows adjusted payable hours correctly.
+Employee side still shows only raw worked time.
+
+Required behavior:
+If admin adds +2h to a 0h 1m attendance entry, employee side must show 2h 1m.
+If admin deducts time, employee side must show the reduced payable time.
+Employee must also clearly see that an admin adjustment happened and why.
+
+Core rule
+
+Keep raw attendance data untouched.
+Do not overwrite actual time.
+Do not overwrite clock-in or clock-out.
+Only make employee-side totals and daily history read from the same safe adjusted-hours source already used on admin.
+
+Safe fix approach
+
+Reuse the same shared adjusted-hours calculation
+Do not create new frontend-only math for employee side.
+
+Employee side must use the same central calculation path as admin side:
+
+raw_worked_minutes
+plus summed adjustment_minutes
+equals adjusted_payable_minutes
+
+If admin is already reading from a shared service, employee side must now read from that same service or endpoint response.
+
+Do not duplicate logic separately across screens.
+
+Update employee “My Hours” summary cards
+On employee side, the main total currently shows raw worked time.
+
+Change it so the employee summary reads adjusted payable hours.
+
+Recommended safe display:
+Total Hours Worked: adjusted payable total
+Optional small subtext:
+Raw: 0h 1m
+
+Or safer wording:
+Payable Hours: 2h 1m
+Raw: 0h 1m
+
+Important:
+Do not remove transparency.
+Employee should still be able to understand that an adjustment happened.
+
+Update employee history rows
+In the employee daily history list, when a day has an adjustment:
+
+Show adjusted payable duration on that row
+Keep original actual clock time visible
+Add a subtle adjustment badge
+
+Example:
+Worked total badge: 2h 1m
+Small label:
+Adj: +2h 0m
+
+Optional:
+tap row to expand and show:
+Original worked: 0h 1m
+Adjustment: +2h 0m
+Reason: Login issue approved
+
+Do not fake the clock time itself.
+The clock time remains 10:07 PM - 10:08 PM.
+Only the payable duration changes.
+
+Add employee-facing transparency message
+Employees need to know when admin changed time.
+
+Add a notification or update indicator when an attendance adjustment is created.
+
+Best safe implementation options
+
+Option A: In-app notification feed
+Create a notification entry like:
+Your attendance for Apr 2 was adjusted by +2h 0m.
+Reason: Login issue approved.
+
+Option B: Attendance alert banner or badge
+On My Hours page, show:
+1 attendance update
+Then let employee view the detail.
+
+Option C: Row-level notice only
+If notification system is not ready, show it directly in the row:
+Adjusted by admin: +2h 0m
+Reason: Login issue approved
+
+Best recommendation:
+Use the existing notifications/messages system only if already stable.
+If not, do not build a risky new notification engine for this.
+Instead, safely add row-level visibility first, then optional notification insert on adjustment save.
+
+Important:
+Do not block this fix behind a full notification rebuild.
+
+What must happen when admin makes an adjustment
+
+When adjustment is saved on admin side:
+
+The employee-side total hours must reflect it
+The employee-side day entry must reflect it
+A transparent note should exist so the employee knows the change happened
+The reason should be visible, or at minimum a simplified label plus a view-details action
+
+Data model guidance
+
+If attendance_adjustments already exists, do not redesign it unless needed.
+
+Use the existing fields such as:
+attendance_id
+employee_id
+business_id
+adjustment_minutes
+reason
+note
+created_by_admin_id
+created_at
+
+If notifications are added, do it safely with either:
+
+Option 1:
+Use existing notifications table/system if already live and stable
+
+Option 2:
+Create a very small attendance-adjustment notification record tied to employee and business, without changing existing message architecture
+
+But only do this if low risk.
+The priority is accurate employee-side syncing first.
+
+Backend requirements
+
+Employee attendance/history endpoint must include adjusted values
+Wherever employee My Hours or history is loaded, include:
+
+raw_worked_minutes
+adjustment_minutes_total
+adjusted_worked_minutes
+adjustment_summary if needed
+latest_adjustment_reason or aggregated reasons if multiple
+
+Do not make the frontend guess this.
+
+Centralize transformation
+Add or reuse a shared serializer/service so both admin and employee responses expose the same safe fields.
+
+Suggested response fields:
+workedMinutesRaw
+workedMinutesAdjusted
+adjustmentMinutes
+hasAdjustment
+adjustmentDisplay
+adjustmentReasonSummary
+
+Keep permissions safe
+Employee can only view adjustments on their own attendance records.
+Admin permissions remain unchanged.
+Employee must not be able to edit or delete adjustments.
+
+Frontend requirements for employee side
+
+My Hours page
+
+Update total card so it reads adjusted payable total.
+If there were no adjustments, behavior should remain exactly as before.
+
+Recommended display:
+Payable Hours
+2h 1m
+Raw: 0h 1m
+
+History section
+
+For each adjusted attendance row:
+Keep original clock time
+Show adjusted total badge
+Show adjustment badge
+Show reason, either directly or inside a details view
+
+Example:
+Thu, Apr 2
+10:07 PM - 10:08 PM
+Adjusted by admin: +2h 0m
+Reason: Missed time approved
+Total: 2h 1m
+
+Do not clutter the page.
+Keep UI minimal and professional.
+
+Notification behavior
+
+Safe notification copy examples:
+Attendance updated: +1h 0m added for Apr 2
+Reason: Login issue approved
+
+Attendance updated: -30m deducted for Apr 2
+Reason: Time correction
+
+If there is already a notification center, insert this there.
+If not, do not build anything large or risky.
+A simple unread info badge or inline row note is enough for this release.
+
+Critical non-destructive rules
+
+Do not recalculate or rewrite historical attendance rows
+Do not modify raw worked_minutes in storage unless already part of the new adjustment-safe architecture
+Do not edit clock times
+Do not touch active clocking flow
+Do not touch employee punch flow
+Do not touch authentication
+Do not touch unrelated messages logic unless it is already built and safe to reuse
+
+Rollout plan
+
+Phase 1
+Update employee attendance APIs to include adjusted payable values from the same shared calculation service
+
+Phase 2
+Update employee My Hours summary card to display adjusted total
+
+Phase 3
+Update employee history rows to display adjustment badges and adjusted totals
+
+Phase 4
+If safe, add employee-facing notification entry when an admin creates or voids an adjustment
+
+Phase 5
+QA all views with and without adjustments
+
+QA checklist
+
+No adjustment case
+Employee side must behave exactly as before
+
+Positive adjustment case
+Raw: 0h 1m
+Adjustment: +2h 0m
+Employee total becomes 2h 1m
+History row shows adjustment
+Clock times stay unchanged
+
+Negative adjustment case
+Raw: 5h 0m
+Adjustment: -1h 0m
+Employee total becomes 4h 0m
+History row shows deduction clearly
+
+Multiple adjustments on same day
++2h then -30m
+Net visible as +1h 30m
+Employee total matches admin total exactly
+
+Cross-check admin vs employee
+Totals must match for same employee and same filter range
+
+Date filter testing
+This week
+Last 2 weeks
+This month
+Custom
+All must include adjustments correctly
+
+No data corruption
+Old attendance rows unchanged
+Raw times unchanged
+Clock events unchanged
+
+Multi-business isolation
+Employees only see their own business records
+No leakage across accounts
+
+Void/edit adjustment case
+If admin voids an adjustment, employee side updates accordingly
+Notification or row note should also reflect the current state
+
+Recommended acceptance criteria
+
+Admin adds or deducts time on an attendance row
+Employee My Hours totals update to the same adjusted value
+Employee daily history reflects adjusted payable time
+Original clock times remain unchanged
+Employee can clearly see that an admin adjustment occurred
+Reason is visible or accessible
+No unrelated module is changed
+No existing attendance data is overwritten
+
+Final implementation reminder
+
+Do not solve this with hardcoded frontend math.
+Do not create separate admin and employee formulas.
+Both sides must read from one shared adjusted-hours source so totals always match and remain safe.
+
+Developer handoff summary
+
+Complete the attendance adjustment feature by syncing admin-made hour adjustments to the employee side. Keep raw attendance untouched. Make employee totals and daily history read from the same adjusted payable hours calculation already used on admin. Show the adjustment transparently with a badge, reason, and if safe, a notification entry. Do not touch unrelated systems, and do not change any raw clocking data.

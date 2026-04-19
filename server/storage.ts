@@ -98,6 +98,7 @@ export interface IStorage {
   createAttendanceAdjustment(data: InsertAttendanceAdjustment): Promise<AttendanceAdjustment>;
   getAttendanceAdjustmentsByEntry(timeEntryId: string): Promise<AttendanceAdjustment[]>;
   getAttendanceAdjustmentsByCompany(companyId: string): Promise<AttendanceAdjustment[]>;
+  getAttendanceAdjustmentsByEmployee(employeeId: string): Promise<AttendanceAdjustment[]>;
   getAttendanceAdjustmentById(id: string): Promise<AttendanceAdjustment | undefined>;
   voidAttendanceAdjustment(id: string, voidedByUserId: string): Promise<AttendanceAdjustment | undefined>;
 
@@ -464,6 +465,11 @@ export class DatabaseStorage implements IStorage {
   async getAttendanceAdjustmentsByCompany(companyId: string): Promise<AttendanceAdjustment[]> {
     return db.select().from(attendanceAdjustments)
       .where(and(eq(attendanceAdjustments.companyId, companyId), eq(attendanceAdjustments.isVoided, false)));
+  }
+
+  async getAttendanceAdjustmentsByEmployee(employeeId: string): Promise<AttendanceAdjustment[]> {
+    return db.select().from(attendanceAdjustments)
+      .where(and(eq(attendanceAdjustments.employeeId, employeeId), eq(attendanceAdjustments.isVoided, false)));
   }
 
   async getAttendanceAdjustmentById(id: string): Promise<AttendanceAdjustment | undefined> {

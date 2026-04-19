@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Clock, Calendar } from "lucide-react";
+import { Clock, Calendar, ChevronDown, ChevronUp } from "lucide-react";
 import { format, startOfWeek, startOfMonth, subDays, parseISO, isWithinInterval, startOfDay, endOfDay } from "date-fns";
 
 type FilterPreset = "this_week" | "last_2_weeks" | "this_month" | "custom";
@@ -34,7 +34,50 @@ const flagColors: Record<string, string> = {
   unscheduled_clock_in: "secondary",
 };
 
-const formatDuration = (min: number) => `${Math.floor(min / 60)}h ${min % 60}m`;
+const formatDuration = (min: number) => `${Math.floor(min / 60)}h ${Math.floor(min % 60)}m`;
+
+function AdjustmentDetail({ entry }: { entry: any }) {
+  const [open, setOpen] = useState(false);
+  const adj = entry.totalAdjustmentMinutes || 0;
+  const reasons: string[] = entry.adjustmentReasons || [];
+  if (adj === 0) return null;
+
+  return (
+    <div className="mt-1.5">
+      <button
+        type="button"
+        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        onClick={() => setOpen(o => !o)}
+        data-testid={`button-adj-expand-${entry.id}`}
+      >
+        <span className={adj > 0 ? "text-green-600 font-medium" : "text-destructive font-medium"}>
+          Adj: {adj > 0 ? "+" : ""}{formatDuration(Math.abs(adj))}
+        </span>
+        {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+      </button>
+      {open && (
+        <div className="mt-1 rounded-md bg-muted/50 px-2.5 py-2 text-xs space-y-0.5">
+          <p className="text-muted-foreground">
+            <span className="font-medium text-foreground">Original worked:</span>{" "}
+            {entry.workedMinutes != null ? formatDuration(entry.workedMinutes) : "-"}
+          </p>
+          <p className="text-muted-foreground">
+            <span className="font-medium text-foreground">Admin adjustment:</span>{" "}
+            <span className={adj > 0 ? "text-green-600" : "text-destructive"}>
+              {adj > 0 ? "+" : ""}{formatDuration(Math.abs(adj))}
+            </span>
+          </p>
+          {reasons.length > 0 && (
+            <p className="text-muted-foreground">
+              <span className="font-medium text-foreground">Reason:</span>{" "}
+              {reasons.join(", ")}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function EmployeeHours() {
   const { user } = useAuth();
@@ -81,11 +124,20 @@ export default function EmployeeHours() {
     [filtered]
   );
 
-  const totalMinutes = completedFiltered.reduce((sum, e) => {
-    if (e.workedMinutes != null) return sum + e.workedMinutes;
-    const diff = (new Date(e.clockOutAt).getTime() - new Date(e.clockInAt).getTime()) / 60000;
-    return sum + Math.max(0, diff);
-  }, 0);
+  const { rawMinutes, adjustedMinutes, hasAdjustments } = useMemo(() => {
+    let raw = 0, adjusted = 0, anyAdj = false;
+    for (const e of completedFiltered) {
+      const worked = e.workedMinutes != null
+        ? e.workedMinutes
+        : Math.max(0, (new Date(e.clockOutAt).getTime() - new Date(e.clockInAt).getTime()) / 60000);
+      const adjMins = e.totalAdjustmentMinutes || 0;
+      raw += worked;
+      adjusted += Math.max(0, worked + adjMins);
+      if (adjMins !== 0) anyAdj = true;
+    }
+    return { rawMinutes: raw, adjustedMinutes: adjusted, hasAdjustments: anyAdj };
+  }, [completedFiltered]);
+
   const totalShifts = completedFiltered.length;
 
   const presets: { key: FilterPreset; label: string }[] = [
@@ -144,8 +196,17 @@ export default function EmployeeHours() {
       <div className="grid grid-cols-2 gap-3">
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Hours Worked</p>
-            <p className="text-2xl font-bold mt-1" data-testid="stat-total-hours">{formatDuration(totalMinutes)}</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">
+              {hasAdjustments ? "Payable Hours" : "Total Hours Worked"}
+            </p>
+            <p className="text-2xl font-bold mt-1" data-testid="stat-total-hours">
+              {formatDuration(adjustedMinutes)}
+            </p>
+            {hasAdjustments && (
+              <p className="text-xs text-muted-foreground mt-0.5" data-testid="stat-raw-hours">
+                Raw: {formatDuration(rawMinutes)}
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -175,6 +236,10 @@ export default function EmployeeHours() {
           <div className="space-y-2">
             {filtered.map((entry: any) => {
               const clockIn = new Date(entry.clockInAt);
+              const adj = entry.totalAdjustmentMinutes || 0;
+              const rawWorked = entry.workedMinutes;
+              const adjustedWorked = rawWorked != null ? Math.max(0, rawWorked + adj) : null;
+
               return (
                 <Card key={entry.id} data-testid={`entry-card-${entry.id}`}>
                   <CardContent className="p-3">
@@ -188,8 +253,8 @@ export default function EmployeeHours() {
                       <Badge variant="secondary" className="text-xs font-mono" data-testid={`stat-duration-${entry.id}`}>
                         {entry.status === "active"
                           ? "In Progress"
-                          : entry.workedMinutes
-                          ? formatDuration(entry.workedMinutes)
+                          : adjustedWorked != null
+                          ? formatDuration(adjustedWorked)
                           : "-"}
                       </Badge>
                     </div>
@@ -211,6 +276,7 @@ export default function EmployeeHours() {
                         ))}
                       </div>
                     )}
+                    <AdjustmentDetail entry={entry} />
                   </CardContent>
                 </Card>
               );

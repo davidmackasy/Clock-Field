@@ -1334,6 +1334,22 @@ Welcome again, and thank you for choosing ClockField.
         entries = entries.map(e => ({ ...e, totalAdjustmentMinutes: adjMap.get(e.id) || 0 }));
       } else if (user.role === "employee") {
         entries = await storage.getTimeEntriesByEmployee(user.id);
+        const empAdj = await storage.getAttendanceAdjustmentsByEmployee(user.id);
+        const empAdjMap = new Map<string, { minutes: number; reasons: string[] }>();
+        for (const adj of empAdj) {
+          const cur = empAdjMap.get(adj.timeEntryId) || { minutes: 0, reasons: [] };
+          cur.minutes += adj.adjustmentMinutes;
+          if (adj.reason && !cur.reasons.includes(adj.reason)) cur.reasons.push(adj.reason);
+          empAdjMap.set(adj.timeEntryId, cur);
+        }
+        entries = entries.map(e => {
+          const adj = empAdjMap.get(e.id);
+          return {
+            ...e,
+            totalAdjustmentMinutes: adj ? adj.minutes : 0,
+            adjustmentReasons: adj ? adj.reasons : [],
+          };
+        });
       } else {
         return res.status(403).json({ message: "Forbidden" });
       }
