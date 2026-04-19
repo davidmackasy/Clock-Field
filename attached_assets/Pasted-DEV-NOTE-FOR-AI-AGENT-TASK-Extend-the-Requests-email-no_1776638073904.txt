@@ -1,0 +1,230 @@
+DEV NOTE FOR AI AGENT
+
+TASK
+Extend the Requests email notification flow so that every new reply inside an existing request thread sends an email notification to the other side.
+
+CRITICAL RULES
+Do not break, affect, refactor, rename, migrate, or delete anything outside this scope.
+Do not delete or modify production data.
+Do not change any unrelated request logic that is already working.
+Do not change request creation flow that is already sending the first email correctly.
+Do not change existing welcome emails, broadcast emails, subscription emails, or any other email flows.
+Do not touch attendance, payroll, schedules, work logs, field notes, reports, auth, storage, or unrelated messaging logic.
+Do not make out-of-scope fixes.
+If anything else appears to need adjustment, stop and ask for approval first.
+
+MAIN ISSUE
+Initial request email notification is working.
+But follow-up replies inside the request thread are not consistently sending email notifications to the other party.
+
+REQUIRED BEHAVIOR
+Every time someone replies inside a request thread, send an email notification to the other side.
+
+That means:
+If employee/cleaner replies to a request thread, notify admin by email
+If admin replies to a request thread, notify employee/cleaner by email
+If client-side request logic exists in the same system, follow the same pattern using the correct recipient mapping already used by the app
+
+IMPORTANT
+This must happen on every new reply message in the thread.
+Not just on the first request creation.
+Not just on one direction.
+Both directions must work.
+
+DO NOT CHANGE
+Do not change how the initial request is created
+Do not change how request status works
+Do not change how request threads display
+Do not change in-app notifications that are already working
+Do not modify unrelated email templates
+Do not replace current email service
+Do not change who owns the request
+Do not change request permissions
+Do not change request tabs or layout
+
+EXPECTED LOGIC
+When a reply is successfully saved to the request thread:
+
+1. detect who sent the reply
+2. identify the other party for that request
+3. send email to the other party
+4. keep current in-app notification behavior intact
+5. do not send email to the same person who authored the reply
+
+RECIPIENT RULES
+If reply author is admin or management user:
+Send email to the employee/cleaner tied to that request
+
+If reply author is employee/cleaner:
+Send email to the admin/business recipient for that request
+
+If current system supports client request threads too:
+Use the same exact reply-to-other-side rule
+Do not guess recipients
+Use the existing request ownership and recipient mapping already in the database/app
+
+EMAIL TRIGGER RULE
+Trigger email only after the reply has been successfully stored.
+Never send before save completes.
+If save fails, do not send email.
+
+FAILSAFE RULE
+If reply saves successfully but email fails:
+Do not fail the reply action
+Do not roll back the saved reply
+Do not break the request thread
+Just log the email failure safely for monitoring
+
+IMPLEMENTATION DIRECTION
+Add or fix the reply-notification hook for request thread messages only.
+
+Likely issue to inspect
+There is probably already logic for:
+new request created -> notify admin
+But missing or incomplete logic for:
+new reply added to existing request -> notify other side
+
+Add isolated logic such as:
+onRequestReplyCreated(replyId)
+or
+sendRequestReplyNotificationEmail(requestId, replyId)
+
+This helper should:
+Fetch reply
+Fetch parent request
+Determine author role
+Determine correct recipient
+Build email payload
+Use existing mail service
+Send correct deep link
+
+DO NOT
+Do not hardcode email addresses
+Do not send to all admins unless that is already how current request emails work
+Do not duplicate emails
+Do not trigger on request read/open events
+Do not send email when status changes without a reply unless current requirement specifically says so
+Do not send email to the same user who posted the reply
+
+EMAIL CONTENT
+Use current Requests email styling/pattern if one already exists.
+Do not redesign the whole email system.
+
+Subject examples
+Admin replied to your request: [Request Title]
+New reply on request: [Request Title]
+
+Body should include
+Request title
+Short preview of the latest reply
+Sender role or sender name if current privacy rules allow
+Date and time
+CTA button or link:
+Log in to view the reply
+or
+View request in ClockField
+
+LINK BEHAVIOR
+Link should go to the correct request area safely.
+Use existing routes only.
+If thread deep link exists, use it.
+If not, link to the Requests page where user can log in and open the thread.
+
+IMPORTANT DETAIL
+This must work for thread replies, not only for brand-new requests.
+
+EXAMPLE EXPECTED FLOW
+
+Scenario 1
+Cleaner creates request
+Admin gets email
+This is already working and should remain untouched
+
+Scenario 2
+Admin opens request and replies
+Cleaner must get email immediately after reply is saved
+Cleaner logs in and sees the reply
+
+Scenario 3
+Cleaner replies again in same request
+Admin must get email immediately after reply is saved
+Admin logs in and sees the new reply
+
+Scenario 4
+Admin replies again later
+Cleaner gets another email again
+This should continue for each new reply
+
+TECHNICAL CHECKS
+Inspect the backend/service/controller used for:
+request reply creation
+thread message insertion
+request comment or reply persistence
+notification dispatch after reply create
+
+Confirm whether the system currently:
+only sends mail on request creation
+or
+checks wrong condition for replies
+or
+does not resolve recipient properly for reply events
+
+Likely fix
+Attach email dispatch to the same code path that stores each reply entry in the request conversation.
+
+IN-APP NOTIFICATIONS
+Keep all current in-app notifications working.
+Email is additional.
+Do not replace app notifications.
+
+TEST CASES
+
+TEST 1
+Cleaner sends initial request
+Admin gets email
+No regressions
+
+TEST 2
+Admin replies to cleaner request
+Cleaner gets email
+Reply still appears in app
+
+TEST 3
+Cleaner replies back
+Admin gets email
+Reply still appears in app
+
+TEST 4
+Multiple back-and-forth replies
+Every new reply sends one email to the opposite side
+No duplicate emails
+No missing emails
+
+TEST 5
+Simulate email failure
+Reply still saves
+Thread still works
+Failure logged only
+
+TEST 6
+Wrong-recipient protection
+Reply from cleaner in Business A never emails Business B
+Reply from admin never sends back to same admin unless system intentionally supports that
+
+LOGGING
+Add safe logs only:
+reply email notification triggered
+recipient role resolved
+request id
+reply id
+email success or failure
+
+Do not log full sensitive message content in production logs.
+
+FINAL REMINDER TO AGENT
+Do not break anything else.
+Do not touch unrelated modules.
+Do not change working email flows outside Requests.
+Do not refactor anything not required for this exact fix.
+Do not make extra improvements unless approval is given first.
+Production is active. Make the smallest safe change possible.

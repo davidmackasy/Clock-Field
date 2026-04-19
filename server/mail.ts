@@ -700,3 +700,56 @@ ${opts.replyPreview ? `Reply preview:\n${opts.replyPreview}\n\n` : ""}Log in to 
     html,
   });
 }
+
+export async function sendAdminRequestReplyEmail(opts: {
+  to: string;
+  adminName: string;
+  replierName: string;
+  replierRole: string;
+  requestTitle: string;
+  replyPreview: string | null;
+  businessName: string;
+  repliedAt: string;
+  appUrl: string;
+}): Promise<void> {
+  const { client, domain } = getClient();
+  const from = process.env.MAIL_FROM || "Clockfield <noreply@mg.clockfield.com>";
+  const ctaUrl = `${opts.appUrl}/admin/requests`;
+  const roleLabel = opts.replierRole === "client" ? "Client" : "Employee";
+
+  const textBody = `New reply on request — ClockField
+
+Hi ${opts.adminName},
+
+${opts.replierName} (${roleLabel}) has replied to the request "${opts.requestTitle}".
+
+${opts.replyPreview ? `Reply preview:\n${opts.replyPreview}\n\n` : ""}Log in to view the full conversation: ${ctaUrl}
+
+– The ClockField Team`;
+
+  const bodyHtml = `
+<p style="margin:0 0 14px;color:#374151;">Hi <strong>${opts.adminName}</strong>,</p>
+<p style="margin:0 0 14px;color:#374151;"><strong>${opts.replierName}</strong> <span style="color:#6b7280;">(${roleLabel})</span> has replied to a request.</p>
+<div style="background:#f8f9fa;border:1px solid #e5e7eb;border-radius:6px;padding:16px 20px;margin:0 0 20px;">
+  <p style="margin:0 0 4px;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">Request</p>
+  <p style="margin:0 0 12px;font-size:15px;color:#111827;font-weight:600;">${opts.requestTitle}</p>
+  ${opts.replyPreview ? `<p style="margin:0 0 4px;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">Reply preview</p><p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">${opts.replyPreview.slice(0, 200)}${opts.replyPreview.length > 200 ? "…" : ""}</p>` : ""}
+</div>
+<p style="margin:0 0 4px;font-size:12px;color:#9ca3af;">Replied at: ${opts.repliedAt}</p>`;
+
+  const html = buildEmailHtml({
+    title: `New reply on request: ${opts.requestTitle}`,
+    bodyHtml,
+    ctaLabel: "View Request",
+    ctaUrl,
+    footerNote: `You are receiving this because a ${roleLabel.toLowerCase()} replied to a request in your ClockField account.`,
+  });
+
+  await client.messages.create(domain, {
+    from,
+    to: [opts.to],
+    subject: `New reply on request: ${opts.requestTitle}`,
+    text: textBody,
+    html,
+  });
+}

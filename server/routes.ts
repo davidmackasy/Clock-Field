@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { setupAuth, hashPassword, comparePasswords, requireAuth, requireRole } from "./auth";
 import OpenAI from "openai";
-import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail } from "./mail";
+import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail, sendAdminRequestReplyEmail } from "./mail";
 import { createHash } from "crypto";
 import passport from "passport";
 import { randomBytes } from "crypto";
@@ -2007,6 +2007,39 @@ Welcome again, and thank you for choosing ClockField.
             }
           } catch (emailErr) {
             console.error("[request-email] Failed to notify requester of admin reply:", emailErr);
+          }
+        })();
+      } else if (user.role !== "admin" && !isStatusUpdate && body?.trim()) {
+        // Fire-and-forget email to all company admins when employee/client replies
+        const replyBody = body.trim();
+        const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+        (async () => {
+          try {
+            const [admins, company, replier] = await Promise.all([
+              storage.getAdminsByCompany(target.companyId),
+              storage.getCompany(target.companyId),
+              storage.getUser(user.id),
+            ]);
+            const replierName = replier
+              ? `${replier.firstName || ""} ${replier.lastName || ""}`.trim() || replier.email || "Staff"
+              : "Staff";
+            const replierRole = user.role === "client" ? "client" : "employee";
+            for (const admin of admins) {
+              if (!admin.email) continue;
+              await sendAdminRequestReplyEmail({
+                to: admin.email,
+                adminName: `${admin.firstName || ""} ${admin.lastName || ""}`.trim() || "Admin",
+                replierName,
+                replierRole,
+                requestTitle: target.title,
+                replyPreview: replyBody,
+                businessName: company?.name || "Your company",
+                repliedAt: new Date().toLocaleString("en-CA"),
+                appUrl,
+              });
+            }
+          } catch (emailErr) {
+            console.error("[request-email] Failed to notify admin of employee/client reply:", emailErr);
           }
         })();
       }
