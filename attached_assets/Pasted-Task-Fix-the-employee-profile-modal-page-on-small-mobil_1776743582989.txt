@@ -1,0 +1,108 @@
+Task
+Fix the employee profile modal/page on small mobile devices and small laptop screens so admins can scroll and access all content inside:
+
+Overview
+Schedule
+Attendance
+
+Main issue
+On smaller screen sizes, the employee profile UI does not fully adapt to the viewport. Admins cannot properly scroll down to:
+
+view all attendance content
+view upcoming schedule items
+reach the bottom of Overview
+access or use actions near the bottom such as saving changes
+
+This is causing the employee profile to feel cut off on short phones and smaller laptop screens.
+
+What to fix
+Only improve responsive behavior and scrolling for the employee profile UI.
+Do not change any logic, data flow, permissions, API behavior, save behavior, attendance calculations, schedule calculations, or anything else outside this UI responsiveness issue.
+
+Required fix
+
+Make the employee profile fully usable on short mobile screens
+Test on smaller phones like iPhone 12 Pro size and similar short-height devices
+Ensure the employee profile container fits within the visible viewport
+Ensure admins can vertically scroll all the way to the bottom in:
+Overview
+Schedule
+Attendance
+Make sure no section gets cut off at the bottom
+Make sure bottom actions such as Save remain reachable and usable
+Fix scroll behavior inside the employee profile
+Check whether the modal, sheet, drawer, page wrapper, tab panel, or inner content area is blocking overflow
+Ensure the correct container has vertical scrolling enabled
+Remove any conflicting fixed height, max-height, overflow hidden, or nested scroll issue that prevents full scrolling
+Prevent the page from getting stuck where the header is visible but the content below cannot continue scrolling
+Improve responsive layout across device sizes
+Make the employee profile adapt properly to small-height phones, narrow-width phones, and smaller laptop screens
+Ensure the layout scales based on available screen height and width
+Reduce any unnecessary fixed spacing that pushes important content below the visible area
+Make form fields, tabs, and sections flow naturally on smaller screens without clipping
+Keep tabs usable on all screen sizes
+Overview, Schedule, and Attendance must remain visible and usable
+Switching tabs must not reset or break scrolling behavior
+Each tab must allow full vertical scrolling through all of its own content
+Make laptop small-screen behavior responsive too
+On smaller laptop screens, ensure the employee profile does not overflow off-screen in a way that hides content or actions
+The profile should remain fully viewable and scrollable even when viewport height is limited
+
+Important constraints
+
+Do not break or affect anything else
+Do not attach any new feature that was not requested
+Do not redesign unrelated parts of the app
+Do not change attendance logic
+Do not change schedule logic
+Do not change employee data logic
+Do not change save logic except making the Save area reachable through proper scrolling
+Do not change desktop behavior on large screens unless required for responsive support
+Do not touch any unrelated modal, page, or settings
+
+What to inspect
+
+Employee profile modal or drawer wrapper
+Tab content container for Overview, Schedule, Attendance
+Parent containers using fixed height, 100vh, calc heights, overflow hidden, sticky sections, or flex layouts
+Mobile-specific CSS and responsive breakpoints
+Any nested scroll containers that may be preventing the main content from scrolling
+Footer or action area positioning if Save buttons are being pushed out of reach
+
+Expected result
+When an admin opens an employee profile on:
+
+short phones
+narrow phones
+small laptops
+reduced browser heights
+
+they should be able to:
+
+scroll all the way through Overview
+scroll all the way through Schedule
+scroll all the way through Attendance
+reach all content at the bottom
+access Save and other relevant actions
+use the employee profile normally without any section being cut off
+
+Testing required
+Please test before closing this task on:
+
+small mobile viewport
+medium mobile viewport
+small laptop viewport
+normal desktop viewport
+
+Confirm that:
+
+scrolling works in all three tabs
+no content is hidden below the fold
+no button becomes unreachable
+no regression is introduced anywhere else
+
+Final reminder
+Do not break or affect anything else.
+Do not change anything outside the employee profile responsive scrolling issue.
+Do not attach anything new.
+Only fix the employee profile UI so it adjusts properly to smaller device sizes and allows full scrolling in Overview, Schedule, and Attendance.
