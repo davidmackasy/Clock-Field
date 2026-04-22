@@ -1,0 +1,225 @@
+Dev note for agents
+
+The current public page layout is still not correct.
+
+What the user wants:
+Match the second image format.
+That means:
+Sections should stay as breakdown blocks like:
+Floor Area
+Washroom
+Other sections
+
+Inside each section:
+Show the section title
+Show the section description and bullets normally
+Then show the photos underneath in a clean 4-per-row grid
+
+Important:
+The text should not be cut off.
+Do not use the current card style where each photo has a fixed small text block underneath that truncates the description.
+The public page should feel like the second screenshot, just improved to support photo descriptions properly without breaking the clean breakdown structure.
+
+Scope only:
+Fix the public shared Field Notes page layout only
+Do not touch admin/editor UI
+Do not touch uploads
+Do not touch saving logic
+Do not touch attendance
+Do not touch payroll
+Do not touch schedules
+Do not touch requests
+Do not touch authentication
+Do not break public links
+Do not break PDF export
+
+Main correction:
+Do not render the public page as a gallery of equal cards with cropped description snippets.
+Instead, render it like a section-by-section breakdown page.
+
+Correct layout structure
+
+Header
+Keep as is:
+Company
+Page title
+Type
+Date
+Prepared by
+Overview
+Keep overview paragraph at the top if present
+Section-by-section breakdown
+For each section, render in this order:
+
+Section title
+Section subtitle if present
+Section body / short description
+Bullets if present
+Then the photo grid
+
+This should look like the second image.
+
+Photo grid rules
+Photos must still be 4 per row on desktop.
+But the photo descriptions must not be cut off.
+
+Correct implementation:
+Each photo item should be vertically structured like this:
+
+[ photo ]
+[ full short description below ]
+
+Not:
+fixed-height card with clipped text
+
+Grid behavior:
+Desktop: 4 columns
+Tablet: 2 columns
+Mobile: 1 column
+
+Photo item behavior:
+Keep equal photo widths in the grid
+Use consistent image aspect ratio
+Description sits below the image and is allowed to wrap naturally
+Do not truncate the description unless it becomes extremely long
+If needed, clamp only at a generous length like 4 to 6 lines, not 1 to 2 lines
+
+What was wrong in the current version:
+The first screenshot is using a compact card layout.
+That is not the requested format.
+It makes the page feel like a product grid instead of a breakdown report.
+It also cuts the text.
+
+What the user actually wants:
+The second screenshot style:
+clean report sections first
+photos grouped under each section
+descriptions readable
+still keep 4 across where possible
+
+Required rendering behavior
+
+For each section:
+
+Keep the text content above the images
+Then render a 4-column photo grid
+Each image block shows:
+image
+full readable description underneath if it exists
+
+This means the section remains a report block, not a tiled photo card dashboard.
+
+Text handling requirements
+Do not cut off section text
+Do not cut off photo description text aggressively
+Allow normal wrapping
+Maintain readable spacing
+Descriptions should stay attached to the correct image
+
+Visual requirements
+Use the second screenshot as the layout reference
+Keep the page airy and professional
+Do not create giant cards
+Do not make it look like ecommerce tiles
+Keep section separation clear
+Keep photo spacing even
+Keep alignment clean
+
+Recommended structure example
+
+General Overview
+[overview text]
+
+Floor Area
+Arena Floor Area
+The main floor areas of the arena were observed post-cleaning.
+• Clear and polished floor surface
+• No visible debris or waste
+
+[4-column image grid]
+photo 1
+description 1
+
+photo 2
+description 2
+
+photo 3
+description 3
+
+Washroom
+Arena Washrooms
+Multiple washrooms at the arena were documented following cleaning.
+• Floor appears clean and shiny
+• Sinks and countertops are spotless
+
+[4-column image grid]
+photo 1
+description 1
+etc.
+
+Implementation guidance
+Use a section wrapper for each grouped block
+Inside each section:
+render textual content first
+then render a CSS grid for the photos
+
+Recommended grid:
+grid-template-columns: repeat(4, minmax(0, 1fr))
+
+Each photo item:
+image at top
+description block below
+description block auto-height
+no fixed card height for the text container
+
+Image styling:
+consistent aspect ratio
+object-fit: cover
+rounded corners consistent with current design
+
+Description styling:
+small readable font
+normal line-height
+muted text color
+top margin from image
+no severe clipping
+
+Important:
+The image blocks can have different overall heights because descriptions may be different lengths.
+That is okay.
+What matters is:
+4 images per row
+readable descriptions
+section report format maintained
+
+Do not do this:
+Do not move all photos into one big “General Overview” card gallery
+Do not flatten all sections into one photo wall
+Do not clip text into tiny snippets
+Do not replace the report structure with cards
+
+Testing required
+
+Page with one section and 4 photos
+Page with one section and 10 photos
+Page with multiple sections
+Photos with short descriptions
+Photos with medium descriptions
+Photos without descriptions
+Desktop 4-column layout
+Tablet 2-column layout
+Mobile 1-column layout
+Confirm text above sections remains readable and unchanged
+
+Acceptance criteria
+Public page matches the second screenshot structure
+Sections remain proper breakdown sections
+Photos render under each section
+Photos display 4 per row on desktop
+Photo descriptions are readable and not cut off
+Nothing else is broken
+
+Priority
+High
+This is a layout correction, not a redesign.
+The public page must follow the second image format with readable text and a 4-per-row image layout.

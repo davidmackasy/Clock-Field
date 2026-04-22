@@ -217,15 +217,11 @@ function AreaSection({ index, title, entries, assets, showTimestamps, onPhotoCli
 
       {/* Photos in a responsive grid */}
       {areaPhotos.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-5">
           {areaPhotos.map((asset: any, i: number) => (
-            <div
-              key={asset.id}
-              data-testid={`img-public-photo-${asset.id}`}
-              className="overflow-hidden rounded-lg bg-gray-100"
-            >
+            <div key={asset.id} data-testid={`img-public-photo-${asset.id}`}>
               <div
-                className="aspect-square cursor-pointer hover:opacity-95 transition-opacity relative"
+                className="aspect-square overflow-hidden rounded-lg bg-gray-100 cursor-pointer hover:opacity-95 transition-opacity relative"
                 onClick={() => onPhotoClick(asset.fileUrl)}
               >
                 <img src={asset.fileUrl} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
@@ -236,7 +232,7 @@ function AreaSection({ index, title, entries, assets, showTimestamps, onPhotoCli
                 )}
               </div>
               {(asset as any).caption && (
-                <p className="px-2.5 py-2 text-xs text-gray-600 leading-snug line-clamp-2">{(asset as any).caption}</p>
+                <p className="mt-1.5 text-xs text-gray-500 leading-relaxed">{(asset as any).caption}</p>
               )}
             </div>
           ))}
@@ -496,15 +492,11 @@ export default function PublicFieldNote() {
                     const hasBothPhases = beforePhotos.length > 0 && afterPhotos.length > 0;
                     function PhotoRow({ photos, offset = 0 }: { photos: any[]; offset?: number }) {
                       return (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-5">
                           {photos.map((asset: any, pi: number) => (
-                            <div
-                              key={asset.id}
-                              data-testid={`img-public-photo-${asset.id}`}
-                              className="overflow-hidden rounded-lg bg-gray-100"
-                            >
+                            <div key={asset.id} data-testid={`img-public-photo-${asset.id}`}>
                               <div
-                                className="aspect-square cursor-pointer hover:opacity-95 transition-opacity relative"
+                                className="aspect-square overflow-hidden rounded-lg bg-gray-100 cursor-pointer hover:opacity-95 transition-opacity relative"
                                 onClick={() => setLightbox(asset.fileUrl)}
                               >
                                 <img src={asset.fileUrl} alt={`Photo ${offset + pi + 1}`} className="w-full h-full object-cover" />
@@ -515,7 +507,7 @@ export default function PublicFieldNote() {
                                 )}
                               </div>
                               {asset.caption && (
-                                <p className="px-2.5 py-2 text-xs text-gray-600 leading-snug line-clamp-2">{asset.caption}</p>
+                                <p className="mt-1.5 text-xs text-gray-500 leading-relaxed">{asset.caption}</p>
                               )}
                             </div>
                           ))}
