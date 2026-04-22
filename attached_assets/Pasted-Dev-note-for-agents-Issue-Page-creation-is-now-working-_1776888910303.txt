@@ -1,0 +1,228 @@
+Dev note for agents
+Issue:
+Page creation is now working, but photo upload inside the new Field Notes Page is failing.
+The page opens correctly.
+The user goes to Photos.
+They choose a photo.
+Upload fails and shows a red toast with the raw filename:
+“Failed to upload 8791b9a9-4315-49eb-a953-d2e606e75415.png”
+This must be fixed without changing anything else that is already working.
+Scope only:
+Fix photo upload for Field Notes Pages
+Fix only the new page photo upload flow
+Do not touch attendance
+Do not touch clock in / clock out
+Do not touch payroll
+Do not touch requests
+Do not touch schedules
+Do not touch authentication
+Do not touch unrelated work log flows unless directly required for shared upload utilities
+Do not break existing walkthrough note photo capture
+Do not break existing field notes
+Do not break public links
+Do not break reports/documents/files tabs
+Main goal:
+Make photo upload inside a Page work reliably and attach uploaded photos to the current page.
+What to investigate first:
+
+
+Frontend upload request
+Check exactly what is being sent when user uploads from the page.
+Verify:
+file object
+multipart/form-data handling
+pageId
+projectId if needed
+company/business/org ID
+auth/session headers
+content-type handling
+single vs multiple upload path
+
+
+Backend upload endpoint
+Check whether the page photo uploader is using:
+a shared existing field note upload endpoint
+or
+a new page-specific upload endpoint
+
+
+Likely issue:
+The new Page flow is calling an endpoint or payload shape that does not match the existing upload service.
+
+
+Storage step
+Check whether the failure is happening:
+before file reaches backend
+during validation
+during upload to storage
+during database attachment to page
+during thumbnail/metadata processing
+
+
+Database attachment
+Even if the file uploads to storage, the DB insert may fail when linking the uploaded asset to the page.
+Check:
+page exists
+pageId is valid
+foreign key constraint
+organization/business scoping
+createdBy
+sort order
+caption default
+status/default fields
+
+
+Likely root causes to test:
+
+
+Wrong request format
+The upload button may be sending JSON or malformed FormData instead of proper multipart upload.
+
+
+Missing pageId or wrong param name
+Backend may expect:
+pageId
+but frontend sends:
+id
+page_id
+documentId
+noteId
+
+
+Auth or tenant context missing
+The page was created under the current business, but the upload route may not be receiving the same tenant/business context.
+
+
+Upload route not wired to new Pages model
+The image may upload successfully in old walkthrough notes but fail in new manual pages because attachment logic still only supports old note entities.
+
+
+File validation mismatch
+PNG may be allowed in UI but blocked in backend validator or MIME-type parser.
+
+
+Storage upload succeeds but DB link fails
+This is common if:
+page_photo row requires fields not being provided
+page relation uses wrong table/model
+organization mismatch blocks insert
+
+
+Required fix behavior:
+When user uploads one or more photos inside a page:
+Upload starts
+Show uploading state
+Store image successfully
+Attach it to current page
+Refresh photo grid immediately
+Do not force refresh
+Do not show raw filename as the primary error message
+User-facing behavior:
+Replace the ugly raw error toast with a better message.
+Examples:
+Photo upload failed. Please try again.
+Could not attach photo to this page. Please try again.
+Some photos could not be uploaded.
+Keep it professional and app-matching.
+Do not show raw internal filenames unless in logs only.
+Implementation requirements:
+
+
+Add logging for the full upload pipeline
+Log:
+selected file name
+mime type
+file size
+page id
+request payload keys
+endpoint called
+server response status
+storage result
+db insert result
+final attached asset id
+
+
+Validate on frontend before submit
+Check:
+allowed image type
+reasonable file size
+pageId present
+user has permission
+Prevent silent failure
+
+
+Validate on backend
+If upload route receives invalid pageId or bad file:
+return clean 400 error
+If storage fails:
+return clean 500 error
+If DB attachment fails:
+return clean error with logged internal reason
+
+
+Reuse existing working upload infrastructure
+If the old walkthrough/field-note image pipeline already works, reuse that exact upload/storage utility instead of creating a separate fragile path.
+Only add the minimum linking layer needed for manual Pages.
+
+
+Attach uploaded files to page model
+After storage succeeds, create the page-photo record with:
+pageId
+file/media id
+sort order
+caption default empty
+source type maybe manual_upload
+createdBy
+timestamp
+
+
+Refresh UI after success
+After upload:
+update photo count
+render thumbnails
+allow next actions such as captioning, AI descriptions, reorder
+
+
+Required tests:
+
+
+Upload one PNG to a new page
+
+
+Upload one JPG to a new page
+
+
+Upload multiple images to a new page
+
+
+Upload on desktop
+
+
+Upload on mobile
+
+
+Upload to page with no project
+
+
+Upload to page with project
+
+
+Verify uploaded photos appear after refresh
+
+
+Verify existing walkthrough uploads still work
+
+
+Verify public field note flow not affected
+
+
+Acceptance criteria:
+Photo upload inside Pages works
+Uploaded photos appear on the page immediately
+Photo count updates correctly
+No raw internal filename toast shown to user
+No regressions in old field note upload/capture flows
+No unrelated features changed or broken
+Priority:
+High
+This blocks the new manual Page workflow because users can create a page but cannot populate it with photos.

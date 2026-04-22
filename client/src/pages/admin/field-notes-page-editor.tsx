@@ -13,23 +13,32 @@ import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   ChevronLeft, Upload, Sparkles, Loader2, Check, X, Plus, Trash2,
-  Share2, Copy, Link as LinkIcon, Printer, FileText, Edit3, Image,
+  Share2, Copy, Link as LinkIcon, Printer, FileText, Edit3, Image as ImageIcon,
   CheckSquare, Square, MapPin, Clock, Camera, NotebookPen,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 
 function compressImage(dataUrl: string, maxW = 1400, quality = 0.82): Promise<string> {
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      const scale = Math.min(1, maxW / Math.max(img.width, img.height));
-      const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
-      const c = document.createElement("canvas");
-      c.width = w; c.height = h;
-      c.getContext("2d")!.drawImage(img, 0, 0, w, h);
-      resolve(c.toDataURL("image/jpeg", quality));
+      try {
+        const w = img.width || 1, h = img.height || 1;
+        const scale = Math.min(1, maxW / Math.max(w, h));
+        const tw = Math.max(1, Math.round(w * scale));
+        const th = Math.max(1, Math.round(h * scale));
+        const c = document.createElement("canvas");
+        c.width = tw; c.height = th;
+        const ctx = c.getContext("2d");
+        if (!ctx) { resolve(dataUrl); return; }
+        ctx.drawImage(img, 0, 0, tw, th);
+        resolve(c.toDataURL("image/jpeg", quality));
+      } catch (e) {
+        resolve(dataUrl);
+      }
     };
+    img.onerror = () => resolve(dataUrl);
     img.src = dataUrl;
   });
 }
@@ -38,7 +47,7 @@ function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = e => resolve(e.target!.result as string);
-    reader.onerror = reject;
+    reader.onerror = () => reject(new Error(`Could not read file: ${file.name}`));
     reader.readAsDataURL(file);
   });
 }
@@ -349,17 +358,23 @@ export default function FieldNotesPageEditor() {
   });
 
   const uploadPhoto = useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Only image files can be uploaded", variant: "destructive" });
+      return;
+    }
     try {
       const raw = await fileToDataUrl(file);
       const compressed = await compressImage(raw);
-      await apiRequest("POST", `/api/field-notes/sessions/${sessionId}/photo`, {
+      const res = await apiRequest("POST", `/api/field-notes/sessions/${sessionId}/photo`, {
         fileUrl: compressed,
         capturedAt: new Date().toISOString(),
         sequenceIndex: assets.length,
       });
+      await res.json();
       queryClient.invalidateQueries({ queryKey: ["/api/field-notes/sessions", sessionId] });
-    } catch {
-      toast({ title: `Failed to upload ${file.name}`, variant: "destructive" });
+    } catch (err: any) {
+      console.error("[PageEditor] Photo upload failed:", err?.message ?? err);
+      toast({ title: "Photo upload failed. Please try again.", variant: "destructive" });
     }
   }, [sessionId, assets.length, toast]);
 
@@ -475,7 +490,7 @@ export default function FieldNotesPageEditor() {
         <div className="flex gap-0">
           {([
             { key: "overview", label: "Overview", icon: FileText },
-            { key: "photos", label: `Photos${assets.length ? ` (${assets.length})` : ""}`, icon: Image },
+            { key: "photos", label: `Photos${assets.length ? ` (${assets.length})` : ""}`, icon: ImageIcon },
             { key: "todos", label: `To-do${todos.length ? ` (${completedTodos}/${todos.length})` : ""}`, icon: CheckSquare },
             { key: "share", label: "Share", icon: Share2 },
           ] as const).map(tab => (
