@@ -1,0 +1,209 @@
+Dev note for agents
+
+Scope only:
+Add a small branded promotional watermark/popup on the public shared Field Notes link.
+
+Do not touch:
+Admin/editor UI
+Attendance
+Clock in / clock out
+Payroll
+Schedules
+Requests
+Authentication
+Photo upload
+Page editing
+Section rendering logic
+Public link routing
+PDF export unless explicitly adding a separate PDF-safe footer later
+
+Goal:
+Add a subtle promotional brand moment on the public shared page so viewers can discover Clockfield and understand they can create and share reports like this too.
+
+Important:
+This must not distract from the report.
+This must not block reading.
+This must not cover important text or photos.
+This must look premium and professional.
+
+Main idea:
+On the public shared link only, add a small floating brand watermark or promo popup that says something like:
+
+“Want to share updates like this with your team or clients? Join Clockfield.”
+
+This should feel like a soft product nudge, not an aggressive ad.
+
+Placement options:
+Preferred:
+Bottom-right floating promo chip or mini card
+
+Alternative:
+Bottom-left floating watermark chip
+
+Do not place it in the center.
+Do not place it over the header.
+Do not place it over section text or image descriptions.
+
+Required behavior:
+
+Show only on the public shared page
+Keep it small and subtle
+Allow user to dismiss it
+Once dismissed, keep it hidden for that visitor for a reasonable period using local storage or session storage
+Do not repeatedly re-open while they are reading the report
+Must work on desktop and mobile
+
+Recommended UI:
+Option A:
+Small floating rounded card with:
+Clockfield logo or icon
+One short line of text
+Small CTA button
+
+Example:
+Create reports like this with Clockfield
+Share updates, photos, and notes in one link.
+[Learn More]
+
+Option B:
+Compact watermark pill:
+Powered by Clockfield
+[Learn More]
+
+Then on tap, expand into a small card.
+
+Recommended copy options:
+Option 1:
+Want to share updates like this?
+Create photo reports, walkthroughs, and client links with Clockfield.
+
+Option 2:
+Powered by Clockfield
+Organize photos, notes, and team updates in one professional link.
+
+Option 3:
+Create and share reports like this with Clockfield.
+
+Important branding note:
+Since this public link is shared using Clockfield, the promo should point to Clockfield, not Pixfield.
+Do not mix brands on this page unless product leadership explicitly wants cross-promotion later.
+
+CTA behavior:
+CTA can go to:
+Clockfield homepage
+Clockfield signup page
+Clockfield learn-more page
+
+Use whichever current public URL is already approved.
+Do not invent a broken landing page.
+
+Dismiss behavior:
+Must include a close icon
+On dismiss:
+Hide for that viewer
+Store dismissed state locally for at least several days
+Do not reappear immediately on refresh
+
+Suggested timing:
+Do not animate in aggressively.
+Either:
+Show immediately in a very subtle way
+Or fade in after 2 to 4 seconds
+
+No loud pop animation.
+No modal.
+No full-screen popup.
+
+Design requirements:
+Small
+Rounded
+Clean shadow
+Brand-matching colors
+Readable but not loud
+High enough contrast
+Not too much text
+
+Do not:
+Use a big banner across the report
+Use auto-playing animation
+Use flashing effect
+Block content
+Interrupt scrolling
+Make it look spammy
+
+Mobile requirements:
+On mobile, scale it down further
+Keep it above the bottom safe area
+Make sure it does not cover important actions or content
+Dismiss must still be easy to tap
+
+Accessibility:
+Close button must be keyboard accessible
+CTA must be keyboard accessible
+Color contrast must be readable
+Screen readers should understand:
+Promotional message
+Dismiss
+Learn more
+
+Implementation guidance:
+Create a public-link-only component such as:
+PublicReportPromoWatermark
+
+Mount it only in the public shared report layout.
+Do not mount it in admin/editor pages.
+Do not mount it in authenticated work log editing views.
+
+Recommended structure:
+
+small floating container
+logo/icon
+1 short headline
+optional 1 short subline
+CTA button
+dismiss icon
+
+Suggested default copy:
+Headline:
+Create reports like this with Clockfield
+
+Subtext:
+Share photos, walkthroughs, and updates in one professional link.
+
+CTA:
+Learn More
+
+Optional enhancement:
+Allow this component to be toggled by admin setting later:
+Show Clockfield branding on public links: on/off
+
+But for now, just implement safely as a default if needed.
+Do not build a full settings system unless already easy to wire.
+
+PDF behavior:
+Do not include the floating popup in exported PDF.
+This is for public shared web links only.
+
+Testing required:
+
+Public page loads and popup appears
+Popup does not cover key content
+Dismiss works
+Dismiss persists on refresh
+CTA works
+Popup looks good on desktop
+Popup looks good on mobile
+Popup does not appear in admin/editor
+Popup does not appear in PDF export
+Public report content is still fully readable
+
+Acceptance criteria:
+Public shared link includes a subtle Clockfield promo watermark/popup
+It looks professional
+It is dismissible
+It does not distract from the report
+It does not affect any other part of the app
+
+Priority:
+Medium-high
+This is a branding and growth enhancement and must be done cleanly without hurting the report experience.

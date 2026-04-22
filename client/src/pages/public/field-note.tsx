@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   NotebookPen, MapPin, Clock, User, AlertTriangle, X,
   Building2, DollarSign, FileCheck, LayoutList, CheckCircle2,
@@ -11,6 +11,68 @@ import {
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
+
+const PROMO_DISMISSED_KEY = "cf_promo_dismissed_until";
+const PROMO_DISMISS_DAYS = 7;
+
+function PublicReportPromoWatermark() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const until = localStorage.getItem(PROMO_DISMISSED_KEY);
+    if (until && Date.now() < Number(until)) return;
+    const timer = setTimeout(() => setVisible(true), 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const dismiss = () => {
+    const until = Date.now() + PROMO_DISMISS_DAYS * 24 * 60 * 60 * 1000;
+    localStorage.setItem(PROMO_DISMISSED_KEY, String(until));
+    setVisible(false);
+  };
+
+  if (!visible) return null;
+
+  return (
+    <div
+      role="complementary"
+      aria-label="Clockfield promotional message"
+      className="fixed bottom-5 right-5 z-40 w-64 rounded-2xl bg-white border border-gray-200 shadow-lg p-4 flex flex-col gap-2.5 animate-in fade-in slide-in-from-bottom-3 duration-500 print:hidden"
+    >
+      <button
+        onClick={dismiss}
+        aria-label="Dismiss"
+        className="absolute top-2.5 right-2.5 w-5 h-5 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
+
+      <div className="flex items-center gap-2 pr-4">
+        <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
+          <NotebookPen className="w-3.5 h-3.5 text-white" />
+        </div>
+        <span className="text-[11px] font-bold text-gray-800 leading-tight">Clockfield</span>
+      </div>
+
+      <p className="text-[12px] font-semibold text-gray-800 leading-snug">
+        Create reports like this with Clockfield
+      </p>
+      <p className="text-[11px] text-gray-500 leading-relaxed -mt-1">
+        Share photos, walkthroughs, and updates in one professional link.
+      </p>
+
+      <a
+        href="https://clockfield.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center justify-center rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold px-3 py-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+        aria-label="Learn more about Clockfield"
+      >
+        Learn More
+      </a>
+    </div>
+  );
+}
 
 const SESSION_TYPE_LABELS: Record<string, string> = {
   site_visit: "Site Visit", inspection: "Inspection", pre_clean: "Pre-Clean",
@@ -701,6 +763,9 @@ export default function PublicFieldNote() {
           </button>
         </div>
       )}
+
+      {/* ── Promo watermark ── */}
+      <PublicReportPromoWatermark />
     </div>
   );
 }
