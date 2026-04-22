@@ -424,11 +424,11 @@ export default function PublicFieldNote() {
       {/* ── Document Body ── */}
       <div className="max-w-5xl mx-auto px-5 md:px-8 py-8">
 
-        {/* Opening paragraph */}
-        {(session?.aiSummary || session?.clientSafeSummary) && (
+        {/* Opening paragraph — prefer user-authored pageIntro, fall back to AI summary */}
+        {(session?.pageIntro || session?.aiSummary || session?.clientSafeSummary) && (
           <section className="pb-8 border-b border-gray-100">
             <p className="text-sm text-gray-600 leading-relaxed max-w-3xl">
-              {session.clientSafeSummary || session.aiSummary}
+              {session.pageIntro || session.clientSafeSummary || session.aiSummary}
             </p>
           </section>
         )}
@@ -674,6 +674,14 @@ export default function PublicFieldNote() {
                 />
               </div>
             )}
+          </section>
+        )}
+
+        {/* ── Page Summary ── */}
+        {session?.pageSummary && (
+          <section className="py-8 border-t border-gray-100">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-4">Summary</p>
+            <p className="text-sm text-gray-600 leading-relaxed max-w-3xl">{session.pageSummary}</p>
           </section>
         )}
 

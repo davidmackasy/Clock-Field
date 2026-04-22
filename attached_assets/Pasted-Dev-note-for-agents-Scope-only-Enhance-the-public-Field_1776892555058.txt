@@ -1,0 +1,235 @@
+Dev note for agents
+
+Scope only:
+Enhance the public Field Notes page (shared link) to include structured text sections:
+Intro (top)
+Mid-section descriptions
+Bottom summary
+
+Do not touch:
+Admin/editor UI
+Photo upload
+Data structure unless adding safe optional fields
+Attendance
+Payroll
+Schedules
+Requests
+Authentication
+Existing walkthrough logic
+Public link routing
+PDF export logic
+
+Goal:
+Make the public page feel like a professional report, not just images + captions.
+
+Right now:
+You have header + overview + photos.
+
+What we need:
+A clear narrative flow:
+Top intro
+Then sections with photos + descriptions
+Then a closing summary
+
+Final structure required
+
+Header (keep as is)
+Company
+Page title
+Type
+Date
+Prepared by
+Intro section (NEW)
+This comes right under header
+
+Title:
+GENERAL OVERVIEW (already exists, keep it)
+
+Content:
+Use Page Introduction field from admin
+
+Behavior:
+If Page Introduction exists → show it here
+If not → hide section completely
+
+Style:
+Clean paragraph
+Max width readable
+No card UI
+No box styling needed
+
+Example:
+“This service includes inspection and maintenance of feminine hygiene dispensers across multiple locations. All units were reviewed for cleanliness, functionality, and accessibility.”
+
+Mid-section breakdown (ENHANCED)
+Each section must now support:
+
+Section title
+Optional section description (NEW behavior)
+Bullet points (existing)
+Photo grid (4 per row)
+Photo descriptions (already fixed earlier)
+
+IMPORTANT:
+Right now sections only show bullets + photos.
+We need a short section description ABOVE the bullets.
+
+Add support for:
+section.description
+
+If it exists → render under section title
+If not → skip
+
+Example:
+
+Washroom
+Arena Washrooms
+
+Short description:
+“All washroom units were inspected post-service to confirm proper cleaning and restocking.”
+
+Then bullets:
+• Floor appears clean and shiny
+• Sinks and countertops are spotless
+
+Then photo grid
+
+Photo section (already mostly fixed)
+Keep:
+4 per row
+Image
+Description below
+
+Do not change this again unless breaking
+
+Bottom summary section (NEW)
+At the end of the page, after all sections
+
+Title:
+SUMMARY
+
+Content:
+Auto-generated OR manual
+
+Option A (preferred):
+Use a new optional field:
+page.summary
+
+Option B (fallback if no field yet):
+Auto-generate from:
+Page introduction
+Section descriptions
+Bullet points
+
+Keep it short and professional
+
+Example:
+“All inspected units are clean, functional, and properly stocked. No major issues were identified during this service. Maintenance standards are being met across all reviewed areas.”
+
+Rules:
+2–4 sentences max
+Clean and professional
+No repetition of full descriptions
+
+Data handling (important)
+Do NOT break existing data
+
+Add OPTIONAL fields only:
+
+page.introduction (already exists)
+section.description (NEW optional)
+page.summary (NEW optional)
+
+If fields do not exist:
+Do not crash
+Do not render empty blocks
+
+Rendering rules
+Only show sections when data exists:
+
+Intro:
+Show only if introduction exists
+
+Section description:
+Show only if exists
+
+Summary:
+Show only if exists OR generated
+
+No empty headings
+No blank spaces
+
+Visual hierarchy
+Keep it clean and professional:
+
+Spacing:
+Large spacing between major sections
+Medium spacing between title and content
+
+Typography:
+Section titles bold
+Descriptions normal weight
+Bullets smaller
+Photo descriptions smaller
+
+Do NOT:
+Add heavy borders
+Add cards everywhere
+Add background boxes unnecessarily
+
+This is a report, not a dashboard
+
+PDF compatibility
+Make sure:
+Intro shows in PDF
+Section descriptions show in PDF
+Summary shows in PDF
+
+Do not break current PDF formatting
+Extend it safely
+
+Example final structure
+
+HEADER
+
+GENERAL OVERVIEW
+[Intro paragraph]
+
+SECTION 1
+[Section description]
+[Bullets]
+[4-column photo grid with descriptions]
+
+SECTION 2
+[Section description]
+[Bullets]
+[4-column photo grid with descriptions]
+
+SECTION 3...
+
+SUMMARY
+[Short final summary]
+
+Testing required
+Page with intro only
+Page with sections only
+Page with sections + descriptions
+Page with no descriptions
+Page with summary
+Page without summary
+Mobile view
+Desktop view
+PDF export
+Acceptance criteria
+Public page reads like a professional report
+Has intro at top
+Has structured sections with descriptions
+Has clean photo grid
+Has summary at bottom
+No empty sections
+No broken layouts
+Nothing else in the app is affected
+
+Priority:
+High
+This directly affects how clients perceive reports.

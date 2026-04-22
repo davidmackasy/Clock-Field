@@ -691,6 +691,7 @@ export const fieldNotesSessions = pgTable("field_notes_sessions", {
   sessionSubtype: text("session_subtype").notNull().default("walkthrough_note"),
   title: text("title"),
   pageIntro: text("page_intro"),
+  pageSummary: text("page_summary"),
   status: text("status").notNull().default("recording"),
   startedAt: text("started_at").notNull(),
   endedAt: text("ended_at"),

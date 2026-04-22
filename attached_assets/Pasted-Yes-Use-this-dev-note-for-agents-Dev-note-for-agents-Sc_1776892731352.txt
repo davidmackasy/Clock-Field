@@ -1,0 +1,205 @@
+Yes. Use this dev note for agents.
+
+Dev note for agents
+
+Scope only:
+Enhance the new Field Notes Pages flow only.
+Add audio input for Page Introduction and To-do items.
+Add translation support for spoken input.
+Use GPT-5.4 to improve grammar and clarity after transcription.
+Do not touch attendance.
+Do not touch clock in / clock out.
+Do not touch payroll.
+Do not touch schedules.
+Do not touch requests.
+Do not touch authentication.
+Do not touch unrelated work log flows.
+Do not break existing walkthrough notes.
+Do not break page creation.
+Do not break page photo upload.
+Do not break public field note links.
+Do not break PDF export.
+
+Goal:
+Make it easier for users to create Page Introductions and To-do list items by speaking instead of typing.
+The user should be able to tap a mic button, talk naturally, have the speech transcribed, optionally translated into the selected page language, then improved with GPT-5.4 for grammar, spelling, and professional wording.
+
+Features to add:
+
+Audio input for Page Introduction
+Inside the Page Introduction editor, add a mic action.
+User flow:
+Tap mic
+Start recording
+Speak naturally
+Stop recording
+Transcribe speech
+Optionally translate
+Run GPT-5.4 grammar improvement
+Insert cleaned text into the Introduction field
+Audio input for To-do list
+Each to-do creation field should support mic input.
+User flow:
+Tap mic
+Speak the to-do
+Transcribe
+Optionally translate
+Run GPT-5.4 grammar improvement
+Insert cleaned to-do text
+
+Examples:
+“check washroom floor and replace broken dispenser”
+becomes
+“Check the washroom floor and replace the broken dispenser.”
+
+“need to inspect ceiling framing near rear window”
+becomes
+“Inspect the ceiling framing near the rear window.”
+
+Translation support
+Add translation option for spoken input before final insertion.
+Support this flow:
+Speech detected in source language
+Transcribe source language
+Translate to target page language or chosen output language
+Then send translated text through GPT-5.4 for cleanup
+
+Important:
+Do not destroy the original meaning.
+Do not over-expand short notes.
+Keep output concise and practical.
+
+Recommended UI:
+For Introduction field:
+Type
+Mic
+Translate
+
+For each To-do item:
+Text input
+Mic icon
+Optional language/translate icon
+
+Suggested controls:
+Source language: Auto detect
+Output language: Same as page language or user-selected language
+Improve grammar: On by default
+
+GPT-5.4 behavior requirements:
+Use GPT-5.4 only for cleanup and wording polish, not for rewriting the user’s meaning.
+It should:
+Fix grammar
+Fix punctuation
+Fix spelling
+Make wording clearer
+Keep notes short
+Keep to-dos actionable
+Avoid turning short notes into long paragraphs
+
+Page Introduction output style:
+Clean, professional, concise
+1 to 4 short sentences unless the user spoke much more
+
+To-do output style:
+Action-based
+Short
+Clear
+No unnecessary fluff
+
+Examples:
+“we checked front lobby and there was dust on vents and marks on wall”
+becomes
+“The front lobby was checked. Dust was found on the vents, and marks were noted on the wall.”
+
+“clean behind toilet and inspect leak”
+becomes
+“Clean behind the toilet and inspect for leaks.”
+
+Technical implementation guidance:
+
+Reuse existing speech pipeline if one already exists
+If walkthrough notes already use audio capture and transcription, reuse that same recording/transcription utility.
+Do not build a second unrelated audio system unless required.
+Add field-level voice actions
+Do not force users into full walkthrough mode just to dictate a page intro or to-do.
+This should work directly inside the page editor.
+Data flow
+Recommended flow:
+Record audio
+Upload audio safely
+Transcribe
+Translate if needed
+Send resulting text to GPT-5.4 cleanup prompt
+Return cleaned text to field
+Save behavior
+Do not auto-publish anything.
+The user should still be able to edit the final text before saving.
+Always insert editable text.
+Error handling
+If transcription fails:
+Show a clean message like:
+“Could not transcribe audio. Please try again.”
+
+If translation fails:
+Keep original transcription and allow manual editing.
+
+If GPT-5.4 cleanup fails:
+Still keep raw transcription so the user does not lose work.
+
+Do not block page editing
+Audio, translation, and grammar improvement should be assistive only.
+The page must remain fully usable even if AI processing fails.
+
+UI/UX requirements:
+Keep the interface clean and spacious.
+Mic button must be easy to tap on mobile.
+Do not clutter the editor.
+Use a small processing state such as:
+Listening...
+Transcribing...
+Translating...
+Improving text...
+Then insert the result.
+
+Suggested placement:
+Page Introduction area:
+Text box
+Mic button at right or below
+Translate/Language option near mic
+
+To-do item row:
+Text input
+Mic icon
+Optional translate icon
+Add item button
+
+Permissions and safety:
+Request microphone access only when needed.
+Do not start recording automatically.
+Clearly show when recording is active.
+Allow cancel before insert.
+
+Testing required:
+
+Record audio for Page Introduction in English
+Record audio for Page Introduction in another language and translate to English
+Record short To-do in English
+Record short To-do in another language and translate
+Confirm GPT-5.4 improves grammar without changing meaning
+Confirm user can still manually edit final result
+Confirm page save still works
+Confirm mobile UI works properly
+Confirm no regressions in walkthrough note voice flow
+Confirm no regressions in photo upload and page creation
+
+Acceptance criteria:
+User can dictate Page Introduction
+User can dictate To-do items
+Speech can be translated
+GPT-5.4 improves grammar and wording
+Final text stays editable
+Nothing else in the app is broken
+
+Priority:
+Medium-high
+This should be added as part of the new Pages productivity upgrade, but it must not destabilize the current field note system.

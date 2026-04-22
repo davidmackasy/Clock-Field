@@ -5003,7 +5003,7 @@ Return a JSON object with these exact fields:
       const session = await storage.getFieldNotesSession(req.params.sessionId);
       if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       if (user.role === "employee" && session.createdByUserId !== user.id) return res.status(403).json({ message: "Forbidden" });
-      const { title, aiSummary, clientSafeSummary, documentMode, quoteData, sessionSubtype, pageIntro, status, aiStatus } = req.body;
+      const { title, aiSummary, clientSafeSummary, documentMode, quoteData, sessionSubtype, pageIntro, pageSummary, status, aiStatus } = req.body;
       const updated = await storage.updateFieldNotesSession(session.id, {
         ...(title !== undefined && { title }),
         ...(aiSummary !== undefined && { aiSummary }),
@@ -5012,6 +5012,7 @@ Return a JSON object with these exact fields:
         ...(quoteData !== undefined && { quoteData: typeof quoteData === "string" ? quoteData : JSON.stringify(quoteData) }),
         ...(sessionSubtype !== undefined && { sessionSubtype }),
         ...(pageIntro !== undefined && { pageIntro }),
+        ...(pageSummary !== undefined && { pageSummary }),
         ...(status !== undefined && { status }),
         ...(aiStatus !== undefined && { aiStatus }),
       });

@@ -53,7 +53,7 @@ function fileToDataUrl(file: File): Promise<string> {
 }
 
 type PageSession = {
-  id: string; title: string | null; pageIntro: string | null;
+  id: string; title: string | null; pageIntro: string | null; pageSummary: string | null;
   sessionType: string; sessionSubtype: string;
   locationId: string | null; locationName: string | null;
   status: string; aiStatus: string;
@@ -326,6 +326,8 @@ export default function FieldNotesPageEditor() {
   const [titleDraft, setTitleDraft] = useState("");
   const [editingIntro, setEditingIntro] = useState(false);
   const [introDraft, setIntroDraft] = useState("");
+  const [editingSummary, setEditingSummary] = useState(false);
+  const [summaryDraft, setSummaryDraft] = useState("");
   const [newTodo, setNewTodo] = useState("");
   const [uploading, setUploading] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "photos" | "todos" | "share">("overview");
@@ -347,7 +349,7 @@ export default function FieldNotesPageEditor() {
 
   const updateMutation = useMutation({
     mutationFn: (body: object) => apiRequest("PATCH", `/api/field-notes/sessions/${sessionId}`, body).then(r => r.json()),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/field-notes/sessions", sessionId] }); setEditingTitle(false); setEditingIntro(false); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/field-notes/sessions", sessionId] }); setEditingTitle(false); setEditingIntro(false); setEditingSummary(false); },
     onError: () => toast({ title: "Failed to save", variant: "destructive" }),
   });
 
@@ -574,6 +576,48 @@ export default function FieldNotesPageEditor() {
                     {session.pageIntro
                       ? <p className="text-sm leading-relaxed">{session.pageIntro}</p>
                       : <p className="text-sm text-muted-foreground italic">Click to add an introduction…</p>
+                    }
+                  </div>
+                )}
+              </div>
+
+              {/* Page summary */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Page Summary</Label>
+                  {!editingSummary && (
+                    <Button size="sm" variant="ghost" className="h-6 text-xs gap-1" onClick={() => { setSummaryDraft(session.pageSummary ?? ""); setEditingSummary(true); }}>
+                      <Edit3 className="w-3 h-3" /> Edit
+                    </Button>
+                  )}
+                </div>
+                {editingSummary ? (
+                  <div className="space-y-2">
+                    <Textarea
+                      value={summaryDraft}
+                      onChange={e => setSummaryDraft(e.target.value)}
+                      placeholder="Write a closing summary for this page (2–4 sentences)…"
+                      className="min-h-[100px] text-sm resize-none"
+                      autoFocus
+                      data-testid="input-page-summary"
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" className="gap-1 text-xs h-7" onClick={() => updateMutation.mutate({ pageSummary: summaryDraft })} disabled={updateMutation.isPending}>
+                        {updateMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                        Save
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingSummary(false)}>Cancel</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className="rounded-lg border bg-muted/30 p-3 min-h-[60px] cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => { setSummaryDraft(session.pageSummary ?? ""); setEditingSummary(true); }}
+                    data-testid="area-page-summary"
+                  >
+                    {session.pageSummary
+                      ? <p className="text-sm leading-relaxed">{session.pageSummary}</p>
+                      : <p className="text-sm text-muted-foreground italic">Click to add a closing summary…</p>
                     }
                   </div>
                 )}
