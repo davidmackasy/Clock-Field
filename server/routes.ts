@@ -5204,7 +5204,7 @@ Return a JSON object with these exact fields:
         session: { ...session, createdByName, locationName },
         company: { name: companyRow?.name, companyLogoUrl: (companyRow as any)?.companyLogoUrl ?? null },
         entries: publicEntries,
-        assets: assets.map(a => ({ id: a.id, fileUrl: a.fileUrl, capturedAt: a.capturedAt, areaLabel: (a as any).areaLabel ?? null })),
+        assets: assets.map(a => ({ id: a.id, fileUrl: a.fileUrl, capturedAt: a.capturedAt, areaLabel: (a as any).areaLabel ?? null, phase: a.phase ?? null, caption: a.caption ?? null })),
         transcriptChunks: doc.showInternalNotes ? chunks : [],
         hasTranscript: chunks.length > 0,
         publicDoc: doc,

@@ -495,14 +495,21 @@ export default function PublicFieldNote() {
                             <div
                               key={asset.id}
                               data-testid={`img-public-photo-${asset.id}`}
-                              className="overflow-hidden rounded-lg bg-gray-100 cursor-pointer hover:opacity-95 transition-opacity relative aspect-square"
-                              onClick={() => setLightbox(asset.fileUrl)}
+                              className="overflow-hidden rounded-lg bg-gray-100"
                             >
-                              <img src={asset.fileUrl} alt={`Photo ${offset + pi + 1}`} className="w-full h-full object-cover" />
-                              {showTimestamps && asset.capturedAt && (
-                                <div className="absolute bottom-0 left-0 right-0 bg-black/55 px-1.5 py-0.5">
-                                  <span className="text-[9px] text-white">{format(parseISO(asset.capturedAt), "h:mm a")}</span>
-                                </div>
+                              <div
+                                className="aspect-square cursor-pointer hover:opacity-95 transition-opacity relative"
+                                onClick={() => setLightbox(asset.fileUrl)}
+                              >
+                                <img src={asset.fileUrl} alt={`Photo ${offset + pi + 1}`} className="w-full h-full object-cover" />
+                                {showTimestamps && asset.capturedAt && (
+                                  <div className="absolute bottom-0 left-0 right-0 bg-black/55 px-1.5 py-0.5">
+                                    <span className="text-[9px] text-white">{format(parseISO(asset.capturedAt), "h:mm a")}</span>
+                                  </div>
+                                )}
+                              </div>
+                              {asset.caption && (
+                                <p className="px-2 py-1.5 text-xs text-gray-600 leading-snug">{asset.caption}</p>
                               )}
                             </div>
                           ))}
