@@ -1,0 +1,293 @@
+Dev note for agents
+
+Scope only:
+Upgrade the Field Notes / Documents / Page experience on the notefield page only.
+Do not touch attendance.
+Do not touch clock in or clock out.
+Do not touch payroll.
+Do not touch requests.
+Do not touch schedules.
+Do not touch authentication.
+Do not touch any other working flow.
+Do not rename or remove any current working feature unless it is directly inside the field notes/page flow.
+Production is active. Do not delete data. Do not change existing field note records. Do not break current public share links. Do not break current AI walkthrough generation.
+
+Goal:
+Upgrade the current field notes experience so it feels and behaves closer to the CompanyCam “Pages” and “Walkthrough Note” concept, while keeping our existing Clockfield field note identity, public link flow, AI generation flow, and current report structure. CompanyCam’s official docs show a Pages-based flow where users can create a blank page inside a project, create a page from selected photos, use AI actions like Walkthrough, Summary, Daily Log, and Progress Recap, then share the result as a link or export it as a PDF. Their mobile flow also supports creating a page from the project, adding photos inside the page editor, opening page settings, adding a cover page, and exporting or sharing afterward.
+
+Primary product direction:
+Keep the existing “walk and talk” AI field note flow.
+Add a second creation path:
+
+Start Walkthrough Note
+Create New Page
+
+The final experience should support both:
+A. Live AI walkthrough capture with camera + voice + auto-organized notes
+B. Manual page creation where users can upload photos, add sections, add descriptions, add to-dos, then export/share as a public field note
+
+Reference behavior from CompanyCam:
+CompanyCam supports blank Pages, AI-generated Pages from selected photos, cover pages, page settings, share link, PDF export, and photo detail controls. Pages are positioned as flexible documentation that can include notes, photos, reports, and AI-generated summaries.
+
+Required UI/UX upgrade:
+Match the attached concept as closely as possible on mobile first.
+The page should feel spacious and clean.
+Users must have enough room to move around without the UI feeling cramped.
+The current bottom-sheet and page actions should be reorganized to match the cleaner layout from the screenshots:
+Start Walkthrough Note
+Progress Recap
+Magic Uploader
+Create New Page
+Export PDF
+Share Link
+Add Cover Page
+Table of Contents
+Save as Template
+Create Checklist
+View Transcript
+Page Settings
+Delete Page
+
+Important:
+Only expose actions that are actually wired and working.
+If a button is not implemented yet, do not show a fake action.
+If an action is planned but not ready, hide it behind a safe feature flag instead of exposing broken UI.
+
+Information architecture to implement:
+Inside each project/location, add a proper Documents hub with tabs:
+Pages
+Files
+Reports
+
+Inside Pages:
+Show all saved field-note-style pages
+Show pending uploads/processing states clearly
+Allow Create New Page from a floating action button or a top action
+Allow Start Walkthrough Note from the same create flow
+Allow AI-created pages from selected photos later in the flow
+
+Inside a single Page:
+Keep the same overall structure every time:
+Cover section if enabled
+Overview / summary block
+Photos section
+Transcription / notes section
+To-do list section
+Attachments / files if present
+Share/export actions
+
+This structure should stay consistent so every public field note looks organized the same way.
+
+Creation flows to support:
+
+Flow 1. Walkthrough Note
+User taps Start Walkthrough Note
+Camera opens in walkthrough mode
+User walks, talks, snaps photos
+Existing AI continues to process voice + images
+When done, generate an editable page
+The generated page must remain fully editable before sharing/export
+This matches CompanyCam’s official walkthrough note behavior where the AI combines voice and photos into an editable page that can then be shared or exported as PDF.
+
+Flow 2. Create New Page
+User taps Create New Page
+Open a blank page editor
+Let them:
+Add title
+Add short intro
+Upload photos
+Reorder photos
+Add short description per photo
+Add section headings
+Add to-do items
+Add manual notes
+Add files if needed
+Generate AI descriptions for selected photos
+Generate AI summary for the page
+Share as public link
+Export as PDF
+
+This should mirror the idea of CompanyCam Pages, where users can start from a blank page, insert photos, and later share/export it.
+
+Photo handling requirements:
+Every uploaded photo inside a page should support:
+Caption / short description
+Optional AI-generated short description
+Optional manual edit after AI fills it
+Drag to reorder
+Section assignment
+Delete from page without deleting the original project asset unless explicitly requested
+
+AI for photo descriptions:
+When the user uploads a photo, give them:
+Write it myself
+Generate with AI
+
+AI output should be short, useful, and professional.
+Example style:
+“Electrical rough-in visible in framing stage.”
+“Window opening prepared and insulation material staged.”
+“Basement framing area photographed for progress documentation.”
+
+Do not generate long paragraphs by default.
+Use 1 to 2 short lines unless the user expands it.
+
+Page settings to build:
+Include/exclude photo descriptions
+Include/exclude timestamps
+Include/exclude location
+Include/exclude author
+Include/exclude transcription
+Include/exclude to-do section
+Include/exclude cover page
+Choose public share visibility settings
+Choose PDF detail level
+
+This is aligned with CompanyCam’s page settings and photo detail controls.
+
+Public link behavior:
+When a page is shared publicly, it should still feel like a professional Clockfield field note.
+Do not break the current public field note link logic.
+Extend it so manually created pages can also publish through the same public presentation system.
+Public page should render:
+Cover page if enabled
+Consistent branding
+Organized sections
+Photo captions
+AI recap / notes
+Transcription if enabled
+To-do list if enabled
+
+PDF behavior:
+Allow Export PDF from the page actions.
+Do not create a second unrelated PDF system.
+Reuse the current field note/report export architecture where possible.
+Manual pages and walkthrough pages should both export through the same polished PDF pipeline.
+CompanyCam explicitly supports exporting pages to PDF and sharing pages by link, so this is the correct model to follow.
+
+Templates:
+Add support for Page Templates in a safe way.
+Minimum templates for phase 1:
+Blank Page
+Walkthrough Note
+Progress Recap
+Site Visit Summary
+Inspection Summary
+
+CompanyCam publicly positions Pages as something users can start blank, use examples/templates for, or generate with AI actions.
+
+Checklist and to-do support:
+Add a simple checklist / to-do section inside pages.
+This should be page-level organization, not a separate app-wide to-do system rewrite.
+Each item should support:
+Checkbox
+Short title
+Optional note
+Optional photo association
+
+CompanyCam also promotes checklists and PDF sharing for them, so the concept is consistent with the requested direction.
+
+Magic Uploader concept:
+Add a smart uploader action for project photos.
+Goal:
+Let users quickly pull existing photos already tied to the project/location into a page instead of forcing recapture.
+If geolocation-based matching already exists, use it.
+If not, safely start with:
+Recent project photos
+Location/project media library
+Multi-select import into page
+
+Do not build risky background photo matching that could pull wrong assets across projects.
+
+Mobile-first layout requirements:
+The screenshots show a cleaner card layout, better spacing, and a more organized action sheet.
+Implement:
+Cleaner cards
+Larger tap targets
+More spacing around tabs and cards
+Bottom action sheet with rounded corners and better spacing
+Floating create button
+Better page list readability
+Better page editor spacing
+No cramped icons
+No overlapping controls with camera capture UI
+
+The walkthrough capture screen must also be improved:
+Keep camera preview visible
+Keep “Done” easy to reach
+Keep mode selector clear
+Keep AI Note mode visually obvious
+Do not let captions, overlays, or controls block critical camera actions
+
+Technical implementation guidance:
+Do not rewrite the entire feature from scratch if the current field note engine already works.
+Refactor around the current data model where possible.
+Introduce a Page entity only if needed, but map it safely to the current field note/public note/report architecture.
+Recommended model separation:
+Project
+Page
+PageSection
+PagePhoto
+PageTodo
+PageShareSettings
+PageExportSettings
+
+But preserve backward compatibility with existing field notes.
+Existing field notes must still open and render properly.
+If needed, migrate in a non-destructive way:
+Existing AI field notes become Pages of type “walkthrough_note”
+Manual pages become Pages of type “manual_page”
+
+Do not remove current field note records.
+Do not rename production tables without migration safety.
+Do not change URLs unless a redirect/backward compatibility layer exists.
+
+Performance requirements:
+Uploading photos to a page should feel fast.
+Pending states must be obvious.
+No blank page after creation.
+No broken action buttons.
+No fake processing states.
+If AI description generation fails, the page should still save and remain editable.
+
+Required safety checks before shipping:
+Test current walkthrough note from start to finish
+Test new blank page flow from start to finish
+Test upload multiple photos into page
+Test manual photo description
+Test AI photo description
+Test page reorder
+Test share public link
+Test export PDF
+Test opening old existing field note
+Test mobile UI on short phones
+Test no regressions in documents/files/reports tabs
+Test no regressions outside the field notes/page area
+
+Do not touch:
+Attendance logic
+Clock-in logic
+Clock-out logic
+Payroll logic
+Employee views
+Schedule flows
+Authentication
+Any unrelated admin page
+Any unrelated public page
+
+Acceptance criteria:
+User can open a project and choose either Walkthrough Note or Create New Page
+User can create a blank page without taking photos first
+User can upload photos into the page
+Each photo can have a short description
+AI can generate short photo descriptions
+Page stays editable
+Page has organized sections
+User can export PDF
+User can share public link
+Existing AI walkthrough field notes still work
+UI looks cleaner and closer to the attached concept
+Nothing else in the app is broken
+
+Research summary for design direction:
+CompanyCam’s current official Pages flow supports blank pages, AI page generation from project photos, Walkthrough Note, Progress Recap, cover pages, page settings, share links, and PDF export. Their AI walkthrough flow is designed around walking the site, talking naturally, capturing photos, then generating an editable page for sharing. That is the correct benchmark for this upgrade, but the implementation must stay within Clockfield’s current field-note architecture and must not impact other parts of the app.

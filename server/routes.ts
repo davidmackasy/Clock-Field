@@ -4994,22 +4994,124 @@ Return a JSON object with these exact fields:
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
-  // PATCH /api/field-notes/sessions/:sessionId — update session title/notes
+  // PATCH /api/field-notes/sessions/:sessionId — update session title/notes/subtype/intro
   app.patch("/api/field-notes/sessions/:sessionId", fnAuth, async (req, res) => {
     try {
       const user = req.user as any;
       const session = await storage.getFieldNotesSession(req.params.sessionId);
       if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       if (user.role === "employee" && session.createdByUserId !== user.id) return res.status(403).json({ message: "Forbidden" });
-      const { title, aiSummary, clientSafeSummary, documentMode, quoteData } = req.body;
+      const { title, aiSummary, clientSafeSummary, documentMode, quoteData, sessionSubtype, pageIntro, status, aiStatus } = req.body;
       const updated = await storage.updateFieldNotesSession(session.id, {
         ...(title !== undefined && { title }),
         ...(aiSummary !== undefined && { aiSummary }),
         ...(clientSafeSummary !== undefined && { clientSafeSummary }),
         ...(documentMode !== undefined && { documentMode }),
         ...(quoteData !== undefined && { quoteData: typeof quoteData === "string" ? quoteData : JSON.stringify(quoteData) }),
+        ...(sessionSubtype !== undefined && { sessionSubtype }),
+        ...(pageIntro !== undefined && { pageIntro }),
+        ...(status !== undefined && { status }),
+        ...(aiStatus !== undefined && { aiStatus }),
       });
       res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // PATCH /api/field-notes/assets/:assetId — update caption or phase
+  app.patch("/api/field-notes/assets/:assetId", fnAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const [asset] = await db.select().from(fieldNotesAssets).where(eq(fieldNotesAssets.id, req.params.assetId));
+      if (!asset) return res.status(404).json({ message: "Not found" });
+      const session = await storage.getFieldNotesSession(asset.sessionId);
+      if (!session || session.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
+      const { caption, phase, areaLabel } = req.body;
+      const updated = await storage.updateFieldNotesAsset(asset.id, {
+        ...(caption !== undefined && { caption }),
+        ...(phase !== undefined && { phase }),
+        ...(areaLabel !== undefined && { areaLabel }),
+      });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // POST /api/field-notes/assets/:assetId/ai-caption — AI-generate short photo caption
+  app.post("/api/field-notes/assets/:assetId/ai-caption", fnAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const [asset] = await db.select().from(fieldNotesAssets).where(eq(fieldNotesAssets.id, req.params.assetId));
+      if (!asset) return res.status(404).json({ message: "Not found" });
+      const session = await storage.getFieldNotesSession(asset.sessionId);
+      if (!session || session.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
+      const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const result = await openaiClient.chat.completions.create({
+        model: "gpt-4o-mini",
+        max_tokens: 80,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "text", text: "Describe this facility/jobsite photo in 1-2 short professional sentences suitable for a field note report. Be concise and factual. Focus on what is shown (equipment, area condition, materials, activity, etc.). Do not use flowery language. Output only the caption, no preamble." },
+            { type: "image_url", image_url: { url: asset.fileUrl, detail: "low" } },
+          ],
+        }],
+      });
+      const caption = result.choices[0]?.message?.content?.trim() ?? "";
+      const updated = await storage.updateFieldNotesAsset(asset.id, { caption });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // GET /api/field-notes/sessions/:sessionId/todos — list todos
+  app.get("/api/field-notes/sessions/:sessionId/todos", fnAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const session = await storage.getFieldNotesSession(req.params.sessionId);
+      if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const todos = await storage.getFieldNotesTodos(req.params.sessionId);
+      res.json(todos);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // POST /api/field-notes/sessions/:sessionId/todos — create todo
+  app.post("/api/field-notes/sessions/:sessionId/todos", fnAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const session = await storage.getFieldNotesSession(req.params.sessionId);
+      if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const { text, sortOrder } = req.body;
+      if (!text?.trim()) return res.status(400).json({ message: "text is required" });
+      const now = new Date().toISOString();
+      const todo = await storage.createFieldNotesTodo({
+        sessionId: req.params.sessionId,
+        text: text.trim(),
+        isComplete: false,
+        sortOrder: sortOrder ?? 0,
+        createdAt: now,
+      });
+      res.status(201).json(todo);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // PATCH /api/field-notes/todos/:todoId — update todo (toggle/rename)
+  app.patch("/api/field-notes/todos/:todoId", fnAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { text, isComplete, sortOrder } = req.body;
+      const updated = await storage.updateFieldNotesTodo(req.params.todoId, {
+        ...(text !== undefined && { text: text.trim() }),
+        ...(isComplete !== undefined && { isComplete: !!isComplete }),
+        ...(sortOrder !== undefined && { sortOrder }),
+      });
+      if (!updated) return res.status(404).json({ message: "Not found" });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // DELETE /api/field-notes/todos/:todoId — delete todo
+  app.delete("/api/field-notes/todos/:todoId", fnAuth, async (req, res) => {
+    try {
+      await storage.deleteFieldNotesTodo(req.params.todoId);
+      res.json({ success: true });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

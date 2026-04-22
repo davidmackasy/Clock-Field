@@ -688,7 +688,9 @@ export const fieldNotesSessions = pgTable("field_notes_sessions", {
   createdByUserId: varchar("created_by_user_id").notNull(),
   createdByRole: text("created_by_role").notNull().default("admin"),
   sessionType: text("session_type").notNull().default("site_visit"),
+  sessionSubtype: text("session_subtype").notNull().default("walkthrough_note"),
   title: text("title"),
+  pageIntro: text("page_intro"),
   status: text("status").notNull().default("recording"),
   startedAt: text("started_at").notNull(),
   endedAt: text("ended_at"),
@@ -773,9 +775,19 @@ export const fieldNotesPublicDocuments = pgTable("field_notes_public_documents",
   updatedAt: text("updated_at").notNull(),
 });
 
+export const fieldNotesTodos = pgTable("field_notes_todos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").notNull(),
+  text: text("text").notNull(),
+  isComplete: boolean("is_complete").notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
 export const insertFieldNotesSessionSchema = createInsertSchema(fieldNotesSessions).omit({ id: true });
 export const insertFieldNotesAssetSchema = createInsertSchema(fieldNotesAssets).omit({ id: true });
 export const insertFieldNotesEntrySchema = createInsertSchema(fieldNotesEntries).omit({ id: true });
+export const insertFieldNotesTodosSchema = createInsertSchema(fieldNotesTodos).omit({ id: true });
 
 export type FieldNotesSession = typeof fieldNotesSessions.$inferSelect;
 export type InsertFieldNotesSession = z.infer<typeof insertFieldNotesSessionSchema>;
@@ -785,6 +797,8 @@ export type FieldNotesTranscriptChunk = typeof fieldNotesTranscriptChunks.$infer
 export type FieldNotesEntry = typeof fieldNotesEntries.$inferSelect;
 export type InsertFieldNotesEntry = z.infer<typeof insertFieldNotesEntrySchema>;
 export type FieldNotesEntryTag = typeof fieldNotesEntryTags.$inferSelect;
+export type FieldNotesTodo = typeof fieldNotesTodos.$inferSelect;
+export type InsertFieldNotesTodo = z.infer<typeof insertFieldNotesTodosSchema>;
 
 // ── Attendance Adjustments ────────────────────────────────────────────────────
 export const attendanceAdjustments = pgTable("attendance_adjustments", {

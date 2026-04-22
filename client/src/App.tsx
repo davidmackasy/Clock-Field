@@ -30,6 +30,7 @@ import AdminWorkLogHub from "@/pages/admin/work-log-hub";
 import AcceptInvitePage from "@/pages/accept-invite";
 import AdminFieldNotesCapture from "@/pages/admin/field-notes-capture";
 import AdminFieldNotesSession from "@/pages/admin/field-notes-session";
+import AdminFieldNotesPageEditor from "@/pages/admin/field-notes-page-editor";
 import EmployeeFieldNotes from "@/pages/employee/field-notes";
 import AdminTimesheets from "@/pages/admin/timesheets";
 import AdminSubscription from "@/pages/admin/subscription";
@@ -102,6 +103,7 @@ function AdminLayout() {
               </Route>
               <Route path="/admin/field-notes/capture" component={AdminFieldNotesCapture} />
               <Route path="/admin/field-notes/session/:id" component={AdminFieldNotesSession} />
+              <Route path="/admin/field-notes/page/:id" component={AdminFieldNotesPageEditor} />
               <Route path="/admin/work-log" component={AdminWorkLogHub} />
               <Route path="/admin/reports"><Redirect to="/admin/work-log?tab=reports" /></Route>
               <Route path="/admin/field-notes"><Redirect to="/admin/work-log?tab=field-notes" /></Route>

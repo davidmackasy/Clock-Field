@@ -6,20 +6,22 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
   NotebookPen, Plus, Search, Camera, Clock, MapPin,
-  ChevronRight, Loader2, User, FileCheck, FileClock, AlertCircle
+  ChevronRight, Loader2, User, FileCheck, FileClock, AlertCircle,
+  FileText, Mic, X,
 } from "lucide-react";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
+import { cn } from "@/lib/utils";
 
 type Session = {
   id: string; title: string | null; locationId: string | null; locationName: string | null;
   createdByUserId: string; createdByName: string; createdByRole: string;
-  sessionType: string; status: string; aiStatus: string; aiSummary: string | null;
+  sessionType: string; sessionSubtype: string; status: string; aiStatus: string; aiSummary: string | null;
   startedAt: string; endedAt: string | null; photoCount: number;
 };
 
@@ -40,16 +42,19 @@ const STATUS_CONFIG: Record<string, { dot: string; badge: string }> = {
   failed: { dot: "bg-gray-400", badge: "bg-gray-100 text-gray-500" },
 };
 
-function DocStatusIcon({ aiStatus, status }: { aiStatus: string; status: string }) {
+function DocStatusIcon({ aiStatus, status, sessionSubtype }: { aiStatus: string; status: string; sessionSubtype: string }) {
+  if (sessionSubtype === "manual_page") {
+    return <span className="flex items-center gap-1 text-[10px] text-purple-600 font-medium"><FileText className="w-3 h-3" /> Page</span>;
+  }
   if (status === "recording") return <span className="text-[10px] text-muted-foreground">In progress…</span>;
   if (aiStatus === "processing" || status === "processing") return (
-    <span className="flex items-center gap-1 text-[10px] text-blue-600"><FileClock className="w-3 h-3" /> Generating doc…</span>
+    <span className="flex items-center gap-1 text-[10px] text-blue-600"><FileClock className="w-3 h-3" /> Generating…</span>
   );
   if (aiStatus === "done") return (
-    <span className="flex items-center gap-1 text-[10px] text-green-600"><FileCheck className="w-3 h-3" /> Document Ready</span>
+    <span className="flex items-center gap-1 text-[10px] text-green-600"><FileCheck className="w-3 h-3" /> Doc Ready</span>
   );
   if (aiStatus === "failed") return (
-    <span className="flex items-center gap-1 text-[10px] text-orange-500"><AlertCircle className="w-3 h-3" /> Needs AI retry</span>
+    <span className="flex items-center gap-1 text-[10px] text-orange-500"><AlertCircle className="w-3 h-3" /> AI failed</span>
   );
   return <span className="text-[10px] text-muted-foreground">—</span>;
 }
@@ -57,27 +62,28 @@ function DocStatusIcon({ aiStatus, status }: { aiStatus: string; status: string 
 function SessionCard({ s, onClick }: { s: Session; onClick: () => void }) {
   const label = SESSION_TYPES.find(t => t.value === s.sessionType)?.label ?? s.sessionType;
   const cfg = STATUS_CONFIG[s.status] ?? STATUS_CONFIG.failed;
+  const isPage = s.sessionSubtype === "manual_page";
 
   return (
     <div
       data-testid={`card-field-note-${s.id}`}
-      className="group rounded-xl border bg-card cursor-pointer hover:shadow-md hover:border-primary/20 transition-all duration-150 flex flex-col overflow-hidden"
+      className={cn(
+        "group rounded-xl border bg-card cursor-pointer hover:shadow-md hover:border-primary/20 transition-all duration-150 flex flex-col overflow-hidden",
+        isPage && "border-purple-100 hover:border-purple-300"
+      )}
       onClick={onClick}
     >
-      {/* Color bar top */}
-      <div className={`h-1 w-full ${s.status === "ready" ? "bg-green-400" : s.status === "processing" ? "bg-blue-400" : s.status === "recording" ? "bg-red-400" : "bg-gray-200"}`} />
+      <div className={cn("h-1 w-full", isPage ? "bg-purple-400" : s.status === "ready" ? "bg-green-400" : s.status === "processing" ? "bg-blue-400" : s.status === "recording" ? "bg-red-400" : "bg-gray-200")} />
 
       <div className="p-3.5 flex flex-col gap-2 flex-1">
-        {/* Title + status */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-sm truncate leading-tight">{s.title || label}</p>
             <p className="text-[11px] text-muted-foreground mt-0.5">{label}</p>
           </div>
-          <div className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${cfg.dot}`} />
+          <div className={cn("w-2 h-2 rounded-full flex-shrink-0 mt-1", isPage ? "bg-purple-400" : cfg.dot)} />
         </div>
 
-        {/* Meta row */}
         <div className="flex flex-col gap-1 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-1 min-w-0">
             <Clock className="w-3 h-3 flex-shrink-0" />
@@ -95,19 +101,24 @@ function SessionCard({ s, onClick }: { s: Session; onClick: () => void }) {
           )}
         </div>
 
-        {/* Status badges */}
         <div className="flex flex-wrap items-center gap-1 mt-auto pt-1 border-t">
-          <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${cfg.badge}`}>
-            {s.status === "processing" && <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />}
-            {s.status}
-          </Badge>
+          {isPage ? (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-purple-50 text-purple-700 border-purple-200">Page</Badge>
+          ) : (
+            <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", cfg.badge)}>
+              {s.status === "processing" && <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />}
+              {s.status}
+            </Badge>
+          )}
           <div className="flex-1" />
-          <DocStatusIcon aiStatus={s.aiStatus} status={s.status} />
+          <DocStatusIcon aiStatus={s.aiStatus} status={s.status} sessionSubtype={s.sessionSubtype ?? "walkthrough_note"} />
         </div>
       </div>
     </div>
   );
 }
+
+type CreateMode = null | "choose" | "walkthrough" | "page";
 
 export default function AdminFieldNotes() {
   const [, navigate] = useLocation();
@@ -115,21 +126,30 @@ export default function AdminFieldNotes() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterType, setFilterType] = useState("all");
-  const [startOpen, setStartOpen] = useState(false);
+  const [createMode, setCreateMode] = useState<CreateMode>(null);
   const [newSession, setNewSession] = useState({ sessionType: "site_visit", locationId: "", title: "" });
 
   const { data: sessions = [], isLoading } = useQuery<Session[]>({ queryKey: ["/api/field-notes"] });
   const { data: locations = [] } = useQuery<any[]>({ queryKey: ["/api/locations"] });
 
-  const startMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/field-notes/sessions", data),
-    onSuccess: async (res) => {
-      const session = await res.json();
+  const startWalkthroughMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", "/api/field-notes/sessions", data).then(r => r.json()),
+    onSuccess: async (session) => {
       queryClient.invalidateQueries({ queryKey: ["/api/field-notes"] });
-      setStartOpen(false);
+      setCreateMode(null);
       navigate(`/admin/field-notes/capture?sessionId=${session.id}&return=/admin/field-notes`);
     },
     onError: () => toast({ title: "Failed to start session", variant: "destructive" }),
+  });
+
+  const createPageMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", "/api/field-notes/sessions", data).then(r => r.json()),
+    onSuccess: async (session) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/field-notes"] });
+      setCreateMode(null);
+      navigate(`/admin/field-notes/page/${session.id}`);
+    },
+    onError: () => toast({ title: "Failed to create page", variant: "destructive" }),
   });
 
   const filtered = sessions.filter(s => {
@@ -139,7 +159,6 @@ export default function AdminFieldNotes() {
     return matchSearch && (filterStatus === "all" || s.status === filterStatus) && (filterType === "all" || s.sessionType === filterType);
   });
 
-  // Group by project then by date
   type DateGroup = Record<string, Session[]>;
   type ProjectGroup = Record<string, DateGroup>;
   const byProject: ProjectGroup = {};
@@ -152,6 +171,34 @@ export default function AdminFieldNotes() {
     byProject[proj][dateKey].push(s);
   }
 
+  const handleCardClick = (s: Session) => {
+    if (s.sessionSubtype === "manual_page") {
+      navigate(`/admin/field-notes/page/${s.id}`);
+    } else {
+      navigate(`/admin/field-notes/session/${s.id}`);
+    }
+  };
+
+  const startPage = () => {
+    createPageMutation.mutate({
+      sessionType: newSession.sessionType,
+      locationId: newSession.locationId || null,
+      title: newSession.title || null,
+      sessionSubtype: "manual_page",
+      status: "ready",
+      aiStatus: "done",
+    });
+  };
+
+  const startWalkthrough = () => {
+    startWalkthroughMutation.mutate({
+      sessionType: newSession.sessionType,
+      locationId: newSession.locationId || null,
+      title: newSession.title || null,
+      sessionSubtype: "walkthrough_note",
+    });
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -160,11 +207,11 @@ export default function AdminFieldNotes() {
           <NotebookPen className="w-5 h-5 text-primary" />
           <div>
             <h1 className="text-base font-semibold leading-none">Field Notes</h1>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Site documentation · photo + voice</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Walkthroughs · Pages · Documents</p>
           </div>
         </div>
-        <Button data-testid="button-new-field-note" onClick={() => setStartOpen(true)} size="sm" className="gap-1.5">
-          <Plus className="w-4 h-4" /> New Session
+        <Button data-testid="button-new-field-note" onClick={() => setCreateMode("choose")} size="sm" className="gap-1.5">
+          <Plus className="w-4 h-4" /> New
         </Button>
       </div>
 
@@ -203,13 +250,12 @@ export default function AdminFieldNotes() {
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <NotebookPen className="w-12 h-12 text-muted-foreground/40 mb-3" />
             <p className="font-medium text-muted-foreground">No field notes yet</p>
-            <p className="text-sm text-muted-foreground/70 mt-1">Start a session to document your next jobsite</p>
-            <Button className="mt-4 gap-1.5" onClick={() => setStartOpen(true)}><Plus className="w-4 h-4" /> Start First Session</Button>
+            <p className="text-sm text-muted-foreground/70 mt-1">Start a walkthrough or create a new page</p>
+            <Button className="mt-4 gap-1.5" onClick={() => setCreateMode("choose")}><Plus className="w-4 h-4" /> Create First Note</Button>
           </div>
         ) : (
           Object.entries(byProject).map(([project, dateGroups]) => (
             <div key={project}>
-              {/* Project heading */}
               <div className="flex items-center gap-2 mb-4">
                 <MapPin className="w-3.5 h-3.5 text-primary flex-shrink-0" />
                 <h2 className="text-sm font-bold">{project}</h2>
@@ -218,18 +264,12 @@ export default function AdminFieldNotes() {
                   {Object.values(dateGroups).flat().length} session{Object.values(dateGroups).flat().length !== 1 ? "s" : ""}
                 </span>
               </div>
-
               {Object.entries(dateGroups).map(([date, list]) => (
                 <div key={date} className="mb-5">
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2 pl-1">{date}</p>
-                  {/* Responsive grid: 1 on mobile, 2 on sm, 3 on lg, 4 on xl */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                     {list.map(s => (
-                      <SessionCard
-                        key={s.id}
-                        s={s}
-                        onClick={() => navigate(`/admin/field-notes/session/${s.id}`)}
-                      />
+                      <SessionCard key={s.id} s={s} onClick={() => handleCardClick(s)} />
                     ))}
                   </div>
                 </div>
@@ -239,10 +279,54 @@ export default function AdminFieldNotes() {
         )}
       </div>
 
-      {/* Start Session dialog */}
-      <Dialog open={startOpen} onOpenChange={setStartOpen}>
+      {/* ── Step 1: Choose creation mode ─────────────────────────────────────── */}
+      <Dialog open={createMode === "choose"} onOpenChange={v => !v && setCreateMode(null)}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><Camera className="w-4 h-4" /> Start Field Note Session</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Plus className="w-4 h-4" /> Create Field Note</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-1">
+            <button
+              data-testid="button-start-walkthrough"
+              className="w-full rounded-xl border-2 border-border hover:border-primary/40 hover:bg-muted/30 transition-all p-4 text-left group"
+              onClick={() => setCreateMode("walkthrough")}
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-50 border border-red-200 flex items-center justify-center flex-shrink-0">
+                  <Mic className="w-5 h-5 text-red-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">Start Walkthrough Note</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">Walk and talk — camera + voice + AI automatically organizes your notes</p>
+                </div>
+              </div>
+            </button>
+
+            <button
+              data-testid="button-create-new-page"
+              className="w-full rounded-xl border-2 border-border hover:border-purple-300 hover:bg-purple-50/30 transition-all p-4 text-left group"
+              onClick={() => setCreateMode("page")}
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-purple-50 border border-purple-200 flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">Create New Page</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">Upload photos, add descriptions and to-dos, share or export as PDF</p>
+                </div>
+              </div>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Step 2a: Walkthrough setup ────────────────────────────────────────── */}
+      <Dialog open={createMode === "walkthrough"} onOpenChange={v => !v && setCreateMode(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Camera className="w-4 h-4 text-red-500" /> Start Walkthrough Note
+            </DialogTitle>
+          </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
               <Label className="text-xs font-medium mb-1.5 block">Session Type</Label>
@@ -266,14 +350,62 @@ export default function AdminFieldNotes() {
               <Input data-testid="input-session-title" placeholder="e.g. Main lobby walkthrough" value={newSession.title} onChange={e => setNewSession(s => ({ ...s, title: e.target.value }))} />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setStartOpen(false)}>Cancel</Button>
-            <Button data-testid="button-start-session" disabled={startMutation.isPending}
-              onClick={() => startMutation.mutate({ sessionType: newSession.sessionType, locationId: newSession.locationId || null, title: newSession.title || null })}
-              className="gap-1.5">
-              {startMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />} Start Capture
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setCreateMode("choose")}>Back</Button>
+            <Button
+              data-testid="button-start-session"
+              disabled={startWalkthroughMutation.isPending}
+              onClick={startWalkthrough}
+              className="flex-1 gap-1.5"
+            >
+              {startWalkthroughMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />} Start Capture
             </Button>
-          </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Step 2b: Create New Page setup ────────────────────────────────────── */}
+      <Dialog open={createMode === "page"} onOpenChange={v => !v && setCreateMode(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-purple-600" /> Create New Page
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-xs font-medium mb-1.5 block">Page Type</Label>
+              <Select value={newSession.sessionType} onValueChange={v => setNewSession(s => ({ ...s, sessionType: v }))}>
+                <SelectTrigger data-testid="select-page-type"><SelectValue /></SelectTrigger>
+                <SelectContent>{SESSION_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs font-medium mb-1.5 block">Project / Location</Label>
+              <Select value={newSession.locationId || "none"} onValueChange={v => setNewSession(s => ({ ...s, locationId: v === "none" ? "" : v }))}>
+                <SelectTrigger data-testid="select-page-location"><SelectValue placeholder="Select project…" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No specific project</SelectItem>
+                  {locations.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs font-medium mb-1.5 block">Page Title (optional)</Label>
+              <Input data-testid="input-page-title" placeholder="e.g. Post-clean site visit" value={newSession.title} onChange={e => setNewSession(s => ({ ...s, title: e.target.value }))} />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setCreateMode("choose")}>Back</Button>
+            <Button
+              data-testid="button-create-page"
+              disabled={createPageMutation.isPending}
+              onClick={startPage}
+              className="flex-1 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              {createPageMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />} Create Page
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -9,7 +9,7 @@ import {
   payRuns, payStubs, payStubEarnings, payStubDeductions, payStubAuditLog,
   passwordResetTokens,
   reports, reportSignatures, reportActivityLog, reportAccessTokens,
-  fieldNotesSessions, fieldNotesAssets, fieldNotesTranscriptChunks, fieldNotesEntries, fieldNotesEntryTags,
+  fieldNotesSessions, fieldNotesAssets, fieldNotesTranscriptChunks, fieldNotesEntries, fieldNotesEntryTags, fieldNotesTodos,
   attendanceAdjustments,
   type Report, type InsertReport,
   type ReportSignature, type InsertReportSignature,
@@ -43,6 +43,7 @@ import {
   type FieldNotesTranscriptChunk,
   type FieldNotesEntry, type InsertFieldNotesEntry,
   type FieldNotesEntryTag,
+  type FieldNotesTodo, type InsertFieldNotesTodo,
   type AttendanceAdjustment, type InsertAttendanceAdjustment,
 } from "@shared/schema";
 
@@ -1217,6 +1218,31 @@ export class DatabaseStorage implements IStorage {
   async getFieldNotesEntryTags(sessionId: string): Promise<FieldNotesEntryTag[]> {
     return db.select().from(fieldNotesEntryTags)
       .where(eq(fieldNotesEntryTags.sessionId, sessionId));
+  }
+
+  async updateFieldNotesAsset(id: string, data: Partial<Pick<FieldNotesAsset, "caption" | "phase" | "areaLabel">>): Promise<FieldNotesAsset | undefined> {
+    const [row] = await db.update(fieldNotesAssets).set(data as any).where(eq(fieldNotesAssets.id, id)).returning();
+    return row;
+  }
+
+  async getFieldNotesTodos(sessionId: string): Promise<FieldNotesTodo[]> {
+    return db.select().from(fieldNotesTodos)
+      .where(eq(fieldNotesTodos.sessionId, sessionId))
+      .orderBy(asc(fieldNotesTodos.sortOrder));
+  }
+
+  async createFieldNotesTodo(data: InsertFieldNotesTodo): Promise<FieldNotesTodo> {
+    const [row] = await db.insert(fieldNotesTodos).values(data as any).returning();
+    return row;
+  }
+
+  async updateFieldNotesTodo(id: string, data: Partial<Pick<FieldNotesTodo, "text" | "isComplete" | "sortOrder">>): Promise<FieldNotesTodo | undefined> {
+    const [row] = await db.update(fieldNotesTodos).set(data as any).where(eq(fieldNotesTodos.id, id)).returning();
+    return row;
+  }
+
+  async deleteFieldNotesTodo(id: string): Promise<void> {
+    await db.delete(fieldNotesTodos).where(eq(fieldNotesTodos.id, id));
   }
 }
 
