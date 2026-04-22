@@ -7,7 +7,7 @@ import { useState } from "react";
 import {
   NotebookPen, MapPin, Clock, User, AlertTriangle, X,
   Building2, DollarSign, FileCheck, LayoutList, CheckCircle2,
-  XCircle, ChevronDown, Mic, MicOff,
+  XCircle, ChevronDown, Mic,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -247,18 +247,7 @@ function TranscriptSection({ chunks, hasTranscript }: { chunks: any[]; hasTransc
   const [expanded, setExpanded] = useState(false);
   const fullText = chunks.map(c => c.rawText || "").join(" ").trim();
 
-  if (!hasTranscript) {
-    return (
-      <section className="py-5 border-t border-gray-200" data-testid="section-no-transcript">
-        <div className="flex items-center gap-2 text-gray-400">
-          <MicOff className="w-4 h-4" />
-          <span className="text-sm">No audio transcript was recorded for this field note.</span>
-        </div>
-      </section>
-    );
-  }
-
-  if (chunks.length === 0) return null;
+  if (!hasTranscript || chunks.length === 0 || fullText.length === 0) return null;
 
   return (
     <section className="border-t border-gray-200 pt-5" data-testid="section-transcript">
