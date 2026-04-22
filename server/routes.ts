@@ -4881,11 +4881,12 @@ Return a JSON object with these exact fields:
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
-  // POST /api/field-notes/sessions — start new session
+  // POST /api/field-notes/sessions — start new session (walkthrough or manual page)
   app.post("/api/field-notes/sessions", fnAuth, async (req, res) => {
     try {
       const user = req.user as any;
-      const { locationId, sessionType, title, deviceType, locationLat, locationLng, locationText } = req.body;
+      const { locationId, sessionType, title, deviceType, locationLat, locationLng, locationText, sessionSubtype, status, aiStatus } = req.body;
+      const isManualPage = sessionSubtype === "manual_page";
       const now = new Date().toISOString();
       const session = await storage.createFieldNotesSession({
         companyId: user.companyId,
@@ -4893,20 +4894,21 @@ Return a JSON object with these exact fields:
         createdByUserId: user.id,
         createdByRole: user.role,
         sessionType: sessionType || "site_visit",
+        sessionSubtype: sessionSubtype || "walkthrough_note",
         title: title || null,
-        status: "recording",
+        status: isManualPage ? "ready" : (status || "recording"),
         startedAt: now,
-        endedAt: null,
+        endedAt: isManualPage ? now : null,
         locationLat: locationLat ? String(locationLat) : null,
         locationLng: locationLng ? String(locationLng) : null,
         locationText: locationText || null,
         deviceType: deviceType || null,
-        aiStatus: "pending",
+        aiStatus: isManualPage ? "done" : (aiStatus || "pending"),
         aiSummary: null,
         clientSafeSummary: null,
         createdAt: now,
         updatedAt: now,
-      });
+      } as any);
       res.json(session);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });

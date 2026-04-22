@@ -1,0 +1,189 @@
+Dev note for agents
+
+Issue:
+The new Field Notes Pages flow is showing a hard failure when creating a page.
+User fills:
+Page Type
+Project / Location
+Optional title
+Then taps Create Page
+Result:
+“Failed to create page”
+
+This must be fixed now without changing anything else that is already working.
+
+Scope only:
+Fix page creation in Field Notes
+Fix only the new page creation flow
+Do not touch attendance
+Do not touch clock in / clock out
+Do not touch payroll
+Do not touch requests
+Do not touch reports unless directly required for page save compatibility
+Do not touch authentication
+Do not touch unrelated project pages
+Do not refactor unrelated APIs
+Do not break existing walkthrough notes
+Do not break existing public field note links
+Do not break existing documents/files/reports tabs
+
+Main goal:
+Make Create New Page work reliably from the modal and open the newly created page correctly.
+
+What to investigate first:
+
+Frontend payload
+Check exactly what the modal is sending on submit.
+Verify:
+pageType
+projectId or locationId
+title
+status/default flags
+createdBy
+organization/company reference
+Any required fields missing from the request body
+Backend validation
+Check the create page endpoint schema.
+Likely issue:
+frontend is sending one shape
+backend expects a different shape
+Possible examples:
+pageType vs type
+projectId missing or null handling broken
+“No specific project” not supported properly
+title optional in UI but required in backend
+enum mismatch for page type like “Maintenance” vs “maintenance”
+Database insert
+Check whether the record is failing at DB level.
+Look for:
+non-null constraint failure
+foreign key failure
+enum mismatch
+missing default value
+organization/company ID not being attached
+slug/publicId generation failure
+createdBy required but missing
+Error handling
+Right now the UI only shows “Failed to create page”
+Return the actual server-safe reason in logs and map user-facing message better.
+Examples:
+Unable to create page. Check required fields and try again.
+Unable to create page for this project.
+Page type is invalid.
+Do not expose raw stack traces to users.
+
+Likely root causes to test:
+
+“No specific project” selection is sending a placeholder string instead of null
+If backend expects null and gets “no-specific-project” or empty string, insert may fail.
+Page Type enum mismatch
+UI shows “Maintenance”
+Backend may expect lowercase enum:
+maintenance
+walkthrough_note
+progress_recap
+inspection
+site_visit
+Map UI values to backend-safe enums before submit.
+Optional title problem
+UI says optional, backend may require title.
+If blank, auto-generate a safe default title.
+Examples:
+Maintenance Page
+Untitled Page
+Site Visit Page
+Do not allow create to fail only because title is blank if UI says optional.
+Missing company/business context
+If pages belong to a business/org/project, make sure the create route attaches the current tenant/business ID exactly like the rest of Field Notes records.
+
+Required fix behavior:
+When user taps Create Page:
+Validate inputs client-side
+Send clean payload
+Create record successfully
+Close modal
+Navigate user directly into the new page editor
+Show success toast styled like the app
+No red harsh error style unless truly needed
+
+Required fallback logic:
+If title is empty:
+Auto-fill a default title based on type + date or simple safe title
+
+If no project selected:
+Allow a true null unassigned page only if supported by product design
+If not supported, block submission with a clean validation message before request
+But do not let the request go through and fail mysteriously
+
+If page type display label differs from backend enum:
+Normalize it before API submission
+
+Implementation requirements:
+
+Add logging around create page submit
+Log:
+payload from modal
+API response status
+backend validation error
+DB insert error
+new page id after success
+Add frontend form validation
+Before submit:
+ensure page type is valid
+ensure project/location value is normalized
+ensure title is sanitized
+disable button while submitting
+prevent double submit
+Add backend defensive defaults
+If title missing, generate one
+If page status missing, default it
+If page type invalid, return 400 with safe message
+If project is optional, convert empty string to null
+Open created page after success
+On successful create:
+route into the page editor
+do not leave user in the modal
+do not require manual refresh
+
+User experience requirements:
+Keep the exact same modal concept
+Keep current styling unless minor cleanup is needed
+Make the create flow feel instant and professional
+Replace generic failure toast with a better app-matching message
+Do not use ugly bright red unless it is a real blocking error
+Use the same polished notification styling as the rest of the app
+
+Test cases required:
+
+Create page with:
+Type selected
+No specific project
+Blank title
+Create page with:
+Type selected
+Project selected
+Blank title
+Create page with:
+Type selected
+Project selected
+Custom title
+Create page from desktop
+Create page from mobile
+Create multiple pages in a row
+Verify created page opens
+Verify page appears in Pages list
+Verify old walkthrough notes still load
+Verify no regressions in documents/files/reports tabs
+
+Acceptance criteria:
+Create Page no longer fails
+Modal submission creates a record every time with valid data
+User is redirected into the page editor after creation
+Blank optional title no longer causes failure
+“No specific project” is handled properly
+Enum/display value mismatch is resolved
+No unrelated feature is changed or broken
+
+Priority:
+High
+This is blocking the new Field Notes Pages upgrade and must be fixed before any further UI expansion.

@@ -321,9 +321,7 @@ export default function FieldNotesPageEditor() {
   const [uploading, setUploading] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "photos" | "todos" | "share">("overview");
 
-  const { data: sessionData, isLoading } = useQuery<{
-    session: PageSession & { assets: Asset[]; publicDoc?: PublicDoc };
-  }>({
+  const { data: session, isLoading } = useQuery<PageSession & { assets: Asset[]; publicDoc?: PublicDoc | null }>({
     queryKey: ["/api/field-notes/sessions", sessionId],
     queryFn: () => fetch(`/api/field-notes/sessions/${sessionId}`, { credentials: "include" }).then(r => r.json()),
     enabled: !!sessionId,
@@ -335,7 +333,6 @@ export default function FieldNotesPageEditor() {
     enabled: !!sessionId,
   });
 
-  const session = sessionData?.session;
   const assets = session?.assets ?? [];
   const publicDoc = session?.publicDoc ?? null;
 
