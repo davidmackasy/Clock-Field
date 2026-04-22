@@ -217,19 +217,26 @@ function AreaSection({ index, title, entries, assets, showTimestamps, onPhotoCli
 
       {/* Photos in a responsive grid */}
       {areaPhotos.length > 0 && (
-        <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-5 gap-1.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {areaPhotos.map((asset: any, i: number) => (
             <div
               key={asset.id}
               data-testid={`img-public-photo-${asset.id}`}
-              className="overflow-hidden rounded-lg bg-gray-100 cursor-pointer hover:opacity-95 transition-opacity relative aspect-square"
-              onClick={() => onPhotoClick(asset.fileUrl)}
+              className="overflow-hidden rounded-lg bg-gray-100"
             >
-              <img src={asset.fileUrl} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
-              {showTimestamps && asset.capturedAt && (
-                <div className="absolute bottom-0 left-0 right-0 bg-black/55 px-1.5 py-0.5">
-                  <span className="text-[9px] text-white">{format(parseISO(asset.capturedAt), "h:mm a")}</span>
-                </div>
+              <div
+                className="aspect-square cursor-pointer hover:opacity-95 transition-opacity relative"
+                onClick={() => onPhotoClick(asset.fileUrl)}
+              >
+                <img src={asset.fileUrl} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                {showTimestamps && asset.capturedAt && (
+                  <div className="absolute bottom-0 left-0 right-0 bg-black/55 px-1.5 py-0.5">
+                    <span className="text-[9px] text-white">{format(parseISO(asset.capturedAt), "h:mm a")}</span>
+                  </div>
+                )}
+              </div>
+              {(asset as any).caption && (
+                <p className="px-2.5 py-2 text-xs text-gray-600 leading-snug line-clamp-2">{(asset as any).caption}</p>
               )}
             </div>
           ))}
@@ -376,7 +383,7 @@ export default function PublicFieldNote() {
 
       {/* ── Document Header ── */}
       <div className="bg-white border-b shadow-sm print:shadow-none">
-        <div className="max-w-7xl mx-auto px-5 md:px-8 py-6">
+        <div className="max-w-5xl mx-auto px-5 md:px-8 py-6">
           <div className="flex items-start gap-4">
             {company?.companyLogoUrl ? (
               <img src={company.companyLogoUrl} alt={company.name} className="h-12 w-12 rounded-xl object-contain border flex-shrink-0" />
@@ -419,21 +426,20 @@ export default function PublicFieldNote() {
       </div>
 
       {/* ── Document Body ── */}
-      <div className="max-w-7xl mx-auto px-5 md:px-8 py-8 space-y-0">
+      <div className="max-w-5xl mx-auto px-5 md:px-8 py-8">
 
         {/* Opening paragraph */}
         {(session?.aiSummary || session?.clientSafeSummary) && (
-          <section className="mb-8">
-            <p className="text-sm text-gray-700 leading-relaxed max-w-3xl">
+          <section className="pb-8 border-b border-gray-100">
+            <p className="text-sm text-gray-600 leading-relaxed max-w-3xl">
               {session.clientSafeSummary || session.aiSummary}
             </p>
-            <div className="h-px bg-gray-200 mt-7" />
           </section>
         )}
 
         {/* ── Area sections ── */}
         {areaGroupList.length > 0 && (
-          <div className="space-y-10 mb-10">
+          <div className="divide-y divide-gray-100 mb-10">
             {areaGroupList.map(([area, areaEntries], i) => {
               // Get unlinked photos for this area too
               const unlinkedForArea = unlinkedByArea.get(area) ?? [];
@@ -449,12 +455,12 @@ export default function PublicFieldNote() {
               );
 
               return (
-                <section key={area} data-testid={`section-area-${i + 1}`} className="space-y-4">
+                <section key={area} data-testid={`section-area-${i + 1}`} className="space-y-5 py-8">
                   <div className="flex items-center gap-3">
-                    <h2 className="text-base font-bold text-gray-900">{area}</h2>
+                    <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide">{area}</h2>
                     <div className="flex-1 h-px bg-gray-200" />
                     {allPhotos.length > 0 && (
-                      <span className="text-[10px] text-gray-400">{allPhotos.length} photo{allPhotos.length !== 1 ? "s" : ""}</span>
+                      <span className="text-[10px] font-medium text-gray-400">{allPhotos.length} photo{allPhotos.length !== 1 ? "s" : ""}</span>
                     )}
                   </div>
                   {areaEntries.map((e: any) => {
@@ -490,7 +496,7 @@ export default function PublicFieldNote() {
                     const hasBothPhases = beforePhotos.length > 0 && afterPhotos.length > 0;
                     function PhotoRow({ photos, offset = 0 }: { photos: any[]; offset?: number }) {
                       return (
-                        <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-1.5">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                           {photos.map((asset: any, pi: number) => (
                             <div
                               key={asset.id}
@@ -509,7 +515,7 @@ export default function PublicFieldNote() {
                                 )}
                               </div>
                               {asset.caption && (
-                                <p className="px-2 py-1.5 text-xs text-gray-600 leading-snug">{asset.caption}</p>
+                                <p className="px-2.5 py-2 text-xs text-gray-600 leading-snug line-clamp-2">{asset.caption}</p>
                               )}
                             </div>
                           ))}

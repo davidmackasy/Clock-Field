@@ -1,0 +1,181 @@
+Dev note for agents
+Scope only:
+Improve the public Field Notes page layout (shared link view only).
+Do not touch admin/editor UI.
+Do not touch upload logic.
+Do not touch data structure.
+Do not touch attendance, payroll, schedules, requests.
+Do not break existing public links.
+Do not break PDF export.
+Goal:
+Make the public page look like a clean breakdown report similar to CompanyCam style.
+Clear sections.
+Short descriptions.
+Photos displayed in a consistent 4-per-row grid.
+Current issue:
+Photos are large and inconsistent.
+Layout feels loose and not structured.
+Sections exist but don’t feel like clear report blocks.
+Required layout upgrade:
+
+
+Section structure (top to bottom)
+Keep existing data, just restructure visually:
+
+
+Header:
+Company name
+Page title
+Type (Maintenance / Post-Service)
+Date
+Prepared by
+Overview section:
+Short paragraph (already exists)
+Keep it clean and readable
+Then structured sections:
+Example:
+Floor Area
+Washroom
+Any other sections
+Each section must have:
+Section title
+Optional short description
+Bullet points if present
+Photo grid under it
+
+
+Photo grid (critical)
+All photos MUST render in a strict 4-column grid on desktop.
+
+
+Rules:
+Max 4 per row
+Equal width cards
+Consistent spacing
+Uniform height ratio (use fixed aspect ratio like 1:1 or 4:3)
+No stretching
+No uneven rows
+Responsive behavior:
+Desktop: 4 per row
+Tablet: 2 per row
+Mobile: 1 per row
+
+
+Photo card structure
+Each photo should be:
+
+
+Image
+Description (if exists)
+Layout:
+[ IMAGE ]
+[ short description text ]
+Do not show empty description blocks.
+Only render description if it exists.
+Text style:
+Small
+Clean
+1–2 lines max visible (truncate with ellipsis if needed)
+No long paragraphs
+
+
+Section breakdown styling
+Each section should feel like a block:
+
+
+Spacing between sections
+Divider or subtle separation
+Consistent margins
+Structure:
+Section Title
+Short description (optional)
+Bullet points (if exist)
+Photo grid (4 per row)
+
+
+Match CompanyCam feel (without copying UI exactly)
+What to replicate:
+Clean spacing
+Clear hierarchy
+Section grouping
+Compact photo grid
+Readable summaries
+
+
+What NOT to do:
+Do not redesign entire branding
+Do not change colors drastically
+Do not change fonts globally
+Do not introduce new components outside this page
+
+
+Preserve existing data behavior
+Do not change:
+How sections are generated
+How photos are grouped
+How descriptions are stored
+
+
+Only change:
+Rendering layout
+Grid system
+Spacing
+Visual hierarchy
+
+
+Technical implementation
+Use a proper grid system:
+
+
+Example:
+grid-template-columns: repeat(4, 1fr)
+With responsive breakpoints:
+1024px+: 4 columns
+768px–1024px: 2 columns
+<768px: 1 column
+Add gap spacing between items.
+Ensure images:
+object-fit: cover
+consistent height
+
+
+Edge cases
+If section has 1–3 photos:
+Still align left in 4-column grid
+
+
+If section has no description:
+Skip description block
+If section has no photos:
+Do not render empty grid
+If many photos:
+Wrap cleanly into multiple rows
+
+
+Do not break PDF
+Ensure the same structure can still be used for PDF rendering.
+If PDF uses same component, keep it stable.
+
+
+Testing
+Test with:
+1 section with 2 photos
+1 section with 4 photos
+1 section with 10+ photos
+Multiple sections
+Photos with descriptions
+Photos without descriptions
+Mobile view
+Tablet view
+Desktop wide view
+
+
+Acceptance criteria:
+Photos display in clean 4-per-row grid on desktop
+Sections feel structured and readable
+Descriptions appear under correct images
+Layout looks like a professional breakdown report
+No existing functionality is broken
+Priority:
+High
+This directly affects how clients see shared reports.
