@@ -1,0 +1,144 @@
+Yes. You should switch Field Notes public links to short share IDs instead of those long hashes.
+
+Use this dev note:
+
+DEV NOTE: Generate short public links for Field Notes only
+
+Goal
+Replace the current long public Field Notes URLs with short, clean public share links.
+
+Examples
+Current:
+
+* /public/field-notes/5d6a84157f26aaa6fc7c88e2dc4d0d651dbc0366052939d7
+* /public/field-notes/1cfce9a981526171946a3460f9c8b0701ef64064438f79df
+
+Target style:
+
+* /public/field-notes/fn-7K2M9Q
+* /public/field-notes/fn-A4X8LP
+  or even cleaner:
+* /f/fn-7K2M9Q
+
+Important
+Do not break or affect anything else.
+Do not change existing Field Notes content, layout, permissions, photo handling, audio, or public page rendering.
+Only improve the public link generation and resolution logic.
+
+What to implement
+
+1. Add a short public ID field to Field Notes
+   Create a new unique field for each field note record, for example:
+
+* publicShortId
+* shareSlug
+* shortCode
+
+Recommended format:
+
+* prefix: fn-
+* then 6 to 8 random uppercase letters/numbers
+
+Examples:
+
+* fn-7K2M9Q
+* fn-X92LMA
+* fn-B8Q3ZT1
+
+2. Auto-generate the short ID when a field note is created
+   On creation of a new Field Note:
+
+* generate a short unique code
+* save it to the record
+* keep the existing internal ID/hash untouched in the database if needed for compatibility
+
+3. Update public routing
+   Allow the public Field Notes page to resolve by short ID.
+
+Example:
+
+* /public/field-notes/:shortId
+
+When someone opens:
+
+* /public/field-notes/fn-7K2M9Q
+
+the backend should look up the field note by publicShortId and render the exact same public page as before.
+
+4. Backward compatibility
+   Do not break old links.
+   If there are already existing long public links in the system, they should still continue to work.
+
+Support both:
+
+* old long token/hash links
+* new short public links
+
+5. Backfill old records
+   For existing field notes that do not yet have a short public ID:
+
+* generate one once
+* store it permanently
+* do not regenerate every time
+* make sure each one is unique
+
+6. Use the short link everywhere in UI
+   Anywhere the public Field Notes link is shown, copied, shared, or generated, use the short version instead of the long version.
+
+This includes:
+
+* copy link button
+* public link display
+* share actions
+* email/share outputs if applicable
+
+7. Keep full security behavior unchanged
+   Do not make links guessable in a weak way.
+   Use enough randomness to prevent easy enumeration.
+   Recommended:
+
+* 6 to 8 mixed uppercase letters/numbers minimum
+* uniqueness check before save
+
+Suggested implementation logic
+
+On create:
+
+* generate short code like fn-XXXXXX
+* check database for collision
+* if exists, regenerate
+* save once
+
+On public page request:
+
+* first try finding by short code
+* if not found, optionally fall back to old long token lookup
+* render the same public page component as now
+
+Preferred URL format
+Best option:
+
+* [https://clockfield.com/public/field-notes/fn-7K2M9Q](https://clockfield.com/public/field-notes/fn-7K2M9Q)
+
+Optional even cleaner option if routing allows:
+
+* [https://clockfield.com/f/fn-7K2M9Q](https://clockfield.com/f/fn-7K2M9Q)
+
+But only use the shorter route if it will not affect anything else.
+
+Acceptance checklist
+
+* New field notes get short public links automatically
+* Existing field notes get backfilled with short links
+* Old long links still work
+* Copy/share buttons now use short links
+* Public page loads exactly the same as before
+* No changes to any other module or behavior
+
+Recommended note to agent
+Do not refactor unrelated routing.
+Do not touch auth, reports, reviews, worklogs, or any other public pages.
+Do not change public Field Notes design in this task.
+Only add stable short link support for Field Notes and swap the displayed/shared URL to the short version.
+
+I can also turn this into a stricter Replit/Claude-code style dev note if you want.

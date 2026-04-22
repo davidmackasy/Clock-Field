@@ -72,7 +72,7 @@ type Todo = {
 };
 
 type PublicDoc = {
-  id: string; shareToken: string; isEnabled: boolean;
+  id: string; shareToken: string; publicShortId: string | null; isEnabled: boolean;
   title: string | null; showTimestamps: boolean; showInternalNotes: boolean;
 };
 
@@ -253,13 +253,13 @@ function SharePanel({ session, publicDoc, sessionId }: { session: PageSession; p
   const [showTimestamps, setShowTimestamps] = useState(publicDoc?.showTimestamps ?? false);
   const [showInternalNotes, setShowInternalNotes] = useState(publicDoc?.showInternalNotes ?? false);
   const [shareUrl, setShareUrl] = useState<string | null>(
-    publicDoc?.isEnabled ? `${window.location.origin}/public/field-notes/${publicDoc.shareToken}` : null
+    publicDoc?.isEnabled ? `${window.location.origin}/public/field-notes/${publicDoc.publicShortId || publicDoc.shareToken}` : null
   );
 
   const shareMutation = useMutation({
     mutationFn: () => apiRequest("POST", `/api/field-notes/sessions/${sessionId}/share`, { title: shareTitle || null, showTimestamps, showInternalNotes }).then(r => r.json()),
     onSuccess: (data) => {
-      const url = `${window.location.origin}/public/field-notes/${data.rawToken || data.shareToken}`;
+      const url = `${window.location.origin}/public/field-notes/${data.publicShortId || data.rawToken || data.shareToken}`;
       setShareUrl(url);
       queryClient.invalidateQueries({ queryKey: ["/api/field-notes/sessions", sessionId] });
       toast({ title: "Public link generated" });

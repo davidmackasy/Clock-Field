@@ -5136,6 +5136,22 @@ Return a JSON object with these exact fields:
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  // Generate a short public ID for field notes: fn-XXXXXX (6 uppercase alphanumeric)
+  async function generateUniqueShortId(): Promise<string> {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    for (let attempt = 0; attempt < 20; attempt++) {
+      let id = "fn-";
+      for (let i = 0; i < 6; i++) id += chars[Math.floor(Math.random() * chars.length)];
+      const [existing] = await db.select({ id: fieldNotesPublicDocuments.id })
+        .from(fieldNotesPublicDocuments).where(eq(fieldNotesPublicDocuments.publicShortId, id));
+      if (!existing) return id;
+    }
+    // Fallback: 8-char ID after collision exhaustion
+    let id = "fn-";
+    for (let i = 0; i < 8; i++) id += chars[Math.floor(Math.random() * chars.length)];
+    return id;
+  }
+
   // POST /api/field-notes/sessions/:id/share — generate public share link
   app.post("/api/field-notes/sessions/:id/share", fnAuth, async (req, res) => {
     try {
@@ -5148,16 +5164,24 @@ Return a JSON object with these exact fields:
       // Check if one already exists
       const [existing] = await db.select().from(fieldNotesPublicDocuments).where(eq(fieldNotesPublicDocuments.sessionId, session.id));
       if (existing) {
+        // Backfill publicShortId if missing on existing doc
+        let shortId = existing.publicShortId;
+        if (!shortId) {
+          shortId = await generateUniqueShortId();
+          await db.update(fieldNotesPublicDocuments).set({ publicShortId: shortId }).where(eq(fieldNotesPublicDocuments.id, existing.id));
+        }
         const updated = await db.update(fieldNotesPublicDocuments)
           .set({ isEnabled: true, title: title ?? existing.title, showTimestamps: !!showTimestamps, showInternalNotes: !!showInternalNotes, updatedAt: now })
           .where(eq(fieldNotesPublicDocuments.id, existing.id)).returning();
-        return res.json({ ...updated[0], rawToken: existing.shareToken });
+        return res.json({ ...updated[0], publicShortId: shortId, rawToken: existing.shareToken });
       }
       const rawToken = randomBytes(24).toString("hex");
+      const publicShortId = await generateUniqueShortId();
       const [doc] = await db.insert(fieldNotesPublicDocuments).values({
         sessionId: session.id,
         companyId: user.companyId,
         shareToken: rawToken,
+        publicShortId,
         title: title || session.title || null,
         isEnabled: true,
         showTimestamps: !!showTimestamps,
@@ -5183,9 +5207,13 @@ Return a JSON object with these exact fields:
   });
 
   // GET /api/public/field-notes/:token — public view (no auth)
+  // Supports both short IDs (fn-XXXXXX) and legacy long hash tokens
   app.get("/api/public/field-notes/:token", async (req, res) => {
     try {
-      const [doc] = await db.select().from(fieldNotesPublicDocuments).where(eq(fieldNotesPublicDocuments.shareToken, req.params.token));
+      const token = req.params.token;
+      // Try short ID first, then fall back to legacy long shareToken
+      let [doc] = await db.select().from(fieldNotesPublicDocuments).where(eq(fieldNotesPublicDocuments.publicShortId, token));
+      if (!doc) [doc] = await db.select().from(fieldNotesPublicDocuments).where(eq(fieldNotesPublicDocuments.shareToken, token));
       if (!doc || !doc.isEnabled) return res.status(404).json({ message: "Not found or disabled" });
       const session = await storage.getFieldNotesSession(doc.sessionId);
       if (!session) return res.status(404).json({ message: "Session not found" });
@@ -5216,7 +5244,9 @@ Return a JSON object with these exact fields:
   // POST /api/public/field-notes/:token/quote-response — accept or decline a quote (no auth)
   app.post("/api/public/field-notes/:token/quote-response", async (req, res) => {
     try {
-      const [doc] = await db.select().from(fieldNotesPublicDocuments).where(eq(fieldNotesPublicDocuments.shareToken, req.params.token));
+      const token = req.params.token;
+      let [doc] = await db.select().from(fieldNotesPublicDocuments).where(eq(fieldNotesPublicDocuments.publicShortId, token));
+      if (!doc) [doc] = await db.select().from(fieldNotesPublicDocuments).where(eq(fieldNotesPublicDocuments.shareToken, token));
       if (!doc || !doc.isEnabled) return res.status(404).json({ message: "Not found" });
       const session = await storage.getFieldNotesSession(doc.sessionId);
       if (!session) return res.status(404).json({ message: "Session not found" });
