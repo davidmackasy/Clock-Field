@@ -821,3 +821,34 @@ export const attendanceAdjustments = pgTable("attendance_adjustments", {
 export const insertAttendanceAdjustmentSchema = createInsertSchema(attendanceAdjustments).omit({ id: true });
 export type AttendanceAdjustment = typeof attendanceAdjustments.$inferSelect;
 export type InsertAttendanceAdjustment = z.infer<typeof insertAttendanceAdjustmentSchema>;
+
+// ── Priority Clean Alerts ─────────────────────────────────────────────────────
+export const priorityCleanAlerts = pgTable("priority_clean_alerts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  locationId: varchar("location_id"),
+  submissionId: varchar("submission_id"),
+  title: text("title").notNull(),
+  message: text("message"),
+  status: text("status").notNull().default("open"),
+  visibleOnPublicLink: boolean("visible_on_public_link").notNull().default(true),
+  resolvedAt: text("resolved_at"),
+  createdByUserId: varchar("created_by_user_id").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const priorityCleanPhotos = pgTable("priority_clean_photos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  alertId: varchar("alert_id").notNull(),
+  fileUrl: text("file_url").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertPriorityCleanAlertSchema = createInsertSchema(priorityCleanAlerts).omit({ id: true });
+export const insertPriorityCleanPhotoSchema = createInsertSchema(priorityCleanPhotos).omit({ id: true });
+
+export type PriorityCleanAlert = typeof priorityCleanAlerts.$inferSelect;
+export type InsertPriorityCleanAlert = z.infer<typeof insertPriorityCleanAlertSchema>;
+export type PriorityCleanPhoto = typeof priorityCleanPhotos.$inferSelect;
+export type InsertPriorityCleanPhoto = z.infer<typeof insertPriorityCleanPhotoSchema>;

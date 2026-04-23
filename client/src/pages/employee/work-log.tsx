@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Trash2, Camera, CheckCircle, Clock, ChevronRight, Image, AlertCircle, Pencil } from "lucide-react";
+import { Plus, MapPin, Trash2, Camera, CheckCircle, Clock, ChevronRight, Image, AlertCircle, Pencil, Zap, X as XIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon } from "lucide-react";
 
 const SECTIONS = ["Washrooms", "Offices", "Floors", "Kitchen", "Stairs", "Common Area", "Reception", "Garbage", "Supplies", "Other"];
 
@@ -176,6 +176,20 @@ export default function EmployeeWorkLog() {
     enabled: !!activeSub?.id,
     refetchInterval: activeSub?.status === "draft" ? 5000 : false,
   });
+
+  const { data: priorityAlerts } = useQuery<any[]>({
+    queryKey: ["/api/priority-alerts/location", activeSub?.locationId],
+    queryFn: async () => {
+      if (!activeSub?.locationId) return [];
+      const res = await fetch(`/api/priority-alerts/location/${activeSub.locationId}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!activeSub?.locationId,
+    refetchInterval: 30000,
+  });
+
+  const [paLightbox, setPaLightbox] = useState<{ alertId: string; photoIds: string[]; idx: number } | null>(null);
 
   const createSubMut = useMutation({
     mutationFn: async (data: any) => {
@@ -357,6 +371,37 @@ export default function EmployeeWorkLog() {
               </div>
               <Badge variant="secondary" className="text-[10px]">{items.length} item{items.length !== 1 ? "s" : ""}</Badge>
             </div>
+
+            {/* Priority Clean Alert(s) */}
+            {priorityAlerts && priorityAlerts.length > 0 && (
+              <div className="rounded-xl border-2 border-red-400 bg-red-50 dark:bg-red-950/30 dark:border-red-700 p-3 space-y-2">
+                {priorityAlerts.map((alert: any) => (
+                  <div key={alert.id}>
+                    <div className="flex items-start gap-2 mb-1.5">
+                      <Zap className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-bold text-red-700 dark:text-red-400">{alert.title}</p>
+                        {alert.message && <p className="text-xs text-red-600 dark:text-red-300 mt-0.5 leading-relaxed">{alert.message}</p>}
+                      </div>
+                    </div>
+                    {alert.photos && alert.photos.length > 0 && (
+                      <div className="flex gap-1.5 flex-wrap mt-1">
+                        {alert.photos.map((p: any, i: number) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => setPaLightbox({ alertId: alert.id, photoIds: alert.photos.map((x: any) => x.id), idx: i })}
+                            className="w-16 h-16 rounded-md overflow-hidden border-2 border-red-300 focus:outline-none focus:ring-2 focus:ring-red-400"
+                          >
+                            <img src={`/api/priority-alert-photos/${p.id}/image`} alt="" className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Service Summary field */}
             <div>
@@ -870,6 +915,41 @@ function SubmissionDetail({ subId }: { subId: string }) {
             )}
           </div>
         ))
+      )}
+
+      {/* Priority Clean Photo Lightbox */}
+      {paLightbox && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
+          onClick={() => setPaLightbox(null)}
+        >
+          <button className="absolute top-4 right-4 text-white/60 hover:text-white p-2" onClick={() => setPaLightbox(null)}>
+            <XIcon className="w-6 h-6" />
+          </button>
+          <button
+            className="absolute left-2 top-1/2 -translate-y-1/2 text-white/50 hover:text-white p-2 disabled:opacity-20"
+            disabled={paLightbox.idx === 0}
+            onClick={e => { e.stopPropagation(); setPaLightbox(prev => prev ? { ...prev, idx: prev.idx - 1 } : null); }}
+          >
+            <ChevronLeftIcon className="w-8 h-8" />
+          </button>
+          <img
+            src={`/api/priority-alert-photos/${paLightbox.photoIds[paLightbox.idx]}/image`}
+            alt=""
+            className="max-h-[85vh] max-w-[90vw] object-contain rounded-xl"
+            onClick={e => e.stopPropagation()}
+          />
+          <button
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-white/50 hover:text-white p-2 disabled:opacity-20"
+            disabled={paLightbox.idx === paLightbox.photoIds.length - 1}
+            onClick={e => { e.stopPropagation(); setPaLightbox(prev => prev ? { ...prev, idx: prev.idx + 1 } : null); }}
+          >
+            <ChevronRightIcon className="w-8 h-8" />
+          </button>
+          {paLightbox.photoIds.length > 1 && (
+            <p className="absolute bottom-6 text-white/60 text-sm">{paLightbox.idx + 1} / {paLightbox.photoIds.length}</p>
+          )}
+        </div>
       )}
     </div>
   );

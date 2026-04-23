@@ -1,0 +1,214 @@
+You want a new emergency clean / priority clean flow inside the existing Work Log session flow, not inside Field Notes.
+The idea is:
+An admin can flag a problem area that needs urgent attention.
+The admin can attach photos and a short instruction.
+When the assigned cleaner clocks in and starts that work session, they immediately see a clear alert with those issue photos and what needs to be fixed.
+The cleaner then completes the job using the normal before/after work log flow.
+When the work is submitted, the public work log link should also show that this was a priority required clean, with the issue shown clearly at the top before the normal submission content, so the client can see what was reported and what was fixed.
+That makes sense.
+Use this dev note for your agent:
+DEV NOTE: ADD EMERGENCY CLEAN / PRIORITY CLEAN FLOW TO WORK LOG WITHOUT BREAKING ANYTHING ELSE
+Important:
+Do not break, remove, refactor, rename, or affect any existing working flow.
+Do not change Field Notes.
+Do not change normal Work Log behavior for jobs that are not marked as emergency/priority.
+Do not touch attendance, payroll, clock in/out logic, reports, schedules, public links, auth, or any unrelated UI.
+Only extend the current Work Log session system safely.
+Production is active. No destructive changes. No data loss. No schema changes that risk old submissions becoming unreadable.
+If anything needs migration, make it backward compatible.
+Goal:
+Add a professional emergency clean / priority clean workflow to the existing Work Log feature so that:
+
+
+Admin can create or flag a priority issue that needs urgent cleaning.
+
+
+Admin can attach one or more issue photos and short instructions.
+
+
+Cleaner sees the priority alert as soon as they clock in and open/start that work session.
+
+
+Cleaner can still use the normal before/after Work Log submission flow.
+
+
+Public Work Log link shows a “Priority Required Clean” section at the top so the client can see what issue was reported and what was fixed.
+
+
+What to build
+
+
+Add a new “Priority Required Clean” data layer to Work Log jobs
+Add a lightweight extension to the Work Log session model or linked job/task model with fields similar to:
+
+
+priorityRequired: boolean
+priorityTitle: string
+priorityMessage: string
+priorityPhotos: array
+priorityStatus: open | acknowledged | completed
+priorityCreatedBy: admin id
+priorityCreatedAt
+priorityCompletedAt
+priorityVisibleOnPublicLink: boolean default true
+Keep this separate from the normal before/after work log media so old sessions still work exactly the same.
+
+
+Admin-side creation flow
+Inside the admin side where work log submissions / job context / service issue context makes sense, add a safe option like:
+
+
+Report Missing Clean
+Mark as Priority Clean
+Create Emergency Clean Alert
+This should allow admin to:
+select the location / client / cleaner or assigned shift if needed
+enter a short title
+enter instructions
+upload issue photos
+mark it as urgent / priority
+save it to the related work session or the next relevant cleaner session
+Suggested professional labels:
+Priority Required Clean
+Reported Issue
+Needs Attention ASAP
+Required Fix Before Completion
+Do not make this look like a separate report product.
+It should feel like an extension of the Work Log workflow.
+
+
+Cleaner mobile experience
+When the cleaner clocks in and starts the work session, if there is an active priority item tied to that session/job/location, show a very clear in-app alert card above the normal work session content.
+
+
+This alert should include:
+a strong but clean badge such as Priority Required
+short title
+admin instruction text
+photo slider or swipe gallery
+clear message like:
+This issue was reported and needs to be fixed during this session.
+Review the photos before starting.
+The cleaner should see it immediately without needing to open another page.
+UI behavior:
+show it right inside the active session card area before the “Add Area” section
+support multiple photos in a swipe carousel
+preserve image aspect ratio properly
+do not crop in a way that hides the issue
+allow tap to enlarge
+keep it mobile first and clean
+make it visually important but not ugly or overly red
+professional urgency, not error panic
+Optional action buttons:
+Acknowledge
+Start Fix
+These can simply update status to acknowledged if useful, but do not overcomplicate phase one.
+
+
+Submission flow stays normal
+Do not replace the current before/after work log flow.
+Cleaner should still:
+clock in
+open active session
+add areas
+take before/after photos
+submit work
+
+
+The only addition is that if a priority item exists, the cleaner sees it at the top and works from it.
+
+
+Public Work Log link update
+On the public Work Log submission link, add a new top section only when a session had a priority clean attached.
+
+
+Section title:
+Priority Required Clean
+Inside that section show:
+reported issue title
+short issue description/instructions
+priority issue photos from admin
+optional label like Resolved During This Visit once session is submitted
+then continue with the normal existing work log layout below
+Important:
+Do not change the rest of the public submission layout unless required for spacing.
+Do not affect old public links.
+Only render this section when priorityRequired is true and there is actual content.
+The client should clearly understand:
+what problem was reported
+what was expected to be fixed
+then see the normal before/after work log evidence below
+
+
+History / status behavior
+Once the cleaner submits the session tied to a priority clean:
+mark priorityStatus as completed
+optionally store completedAt
+keep the record visible for audit/history
+do not remove the issue photos from the session history
+
+
+Suggested UX wording
+Admin side:
+Report Missing Clean
+Mark as Priority Required
+Attach Issue Photos
+Add Fix Instructions
+
+
+Cleaner side:
+Priority Required Clean
+This issue was reported and needs attention during this visit.
+Review the photos and complete the fix before submitting work.
+Public link:
+Priority Required Clean
+Reported issue
+Resolved during this visit
+
+
+Technical expectations
+Keep all existing Work Log APIs working.
+Add backward-compatible fields only.
+Do not break existing session creation.
+Do not break start work session.
+Do not break add area.
+Do not break before/after upload.
+Do not break submit work.
+Do not break public report rendering for old records.
+
+
+Handle cases where:
+priority flag exists but no photos
+photos exist but no message
+old work logs have no priority data
+cleaner opens session with no priority item
+multiple priority photos need slider support
+public link must hide section if no priority data exists
+
+
+UI placement guidance
+Cleaner mobile page:
+show priority alert card directly inside Active Session, above Service Summary or just below the session header
+make it impossible to miss
+keep button spacing mobile friendly
+do not push core actions off screen on smaller phones
+
+
+Public link:
+show Priority Required Clean section near the top before the normal work summary and before regular area entries
+
+
+Final requirement
+This must feel like a premium, professional operational workflow.
+Not a separate incident report.
+Not a Field Notes clone.
+It is a Work Log priority fix flow tied to clock-in, job completion, and public proof of resolution.
+
+
+Again:
+Do not break or affect anything else.
+Do not change unrelated flows.
+Do not touch Field Notes.
+Do not alter working report logic outside this new priority-clean extension.
+Keep everything backward compatible.
+If you want, I can also turn this into an even stricter step-by-step implementation note with database fields, UI sections, API endpoints, and exact component placement.

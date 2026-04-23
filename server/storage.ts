@@ -5,6 +5,7 @@ import {
   requestMessages, requestAttachments,
   timesheets,
   workSubmissions, workSubmissionItems, workSubmissionPhotos, workSubmissionReviews,
+  priorityCleanAlerts, priorityCleanPhotos,
   platformMessages, broadcastEmailDeliveries, welcomeEmailDeliveries,
   payRuns, payStubs, payStubEarnings, payStubDeductions, payStubAuditLog,
   passwordResetTokens,
@@ -45,6 +46,8 @@ import {
   type FieldNotesEntryTag,
   type FieldNotesTodo, type InsertFieldNotesTodo,
   type AttendanceAdjustment, type InsertAttendanceAdjustment,
+  type PriorityCleanAlert, type InsertPriorityCleanAlert,
+  type PriorityCleanPhoto, type InsertPriorityCleanPhoto,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -224,6 +227,20 @@ export interface IStorage {
   getWorkSubmissionReviewBySubmissionId(submissionId: string): Promise<WorkSubmissionReview | undefined>;
   getWorkSubmissionReviewsByCompany(companyId: string): Promise<WorkSubmissionReview[]>;
   getSubmissionIdsWithReviews(companyId: string): Promise<Set<string>>;
+
+  // Priority Clean Alerts
+  createPriorityCleanAlert(data: InsertPriorityCleanAlert): Promise<PriorityCleanAlert>;
+  getPriorityCleanAlert(id: string): Promise<PriorityCleanAlert | undefined>;
+  getPriorityCleanAlertsByCompany(companyId: string): Promise<PriorityCleanAlert[]>;
+  getOpenPriorityCleanAlertsByLocation(locationId: string, companyId: string): Promise<PriorityCleanAlert[]>;
+  updatePriorityCleanAlert(id: string, data: Partial<InsertPriorityCleanAlert>): Promise<PriorityCleanAlert | undefined>;
+  deletePriorityCleanAlert(id: string): Promise<void>;
+  resolveAlertsForLocation(locationId: string, companyId: string, submissionId: string): Promise<void>;
+  createPriorityCleanPhoto(data: InsertPriorityCleanPhoto): Promise<PriorityCleanPhoto>;
+  getPriorityCleanPhoto(id: string): Promise<PriorityCleanPhoto | undefined>;
+  getPriorityCleanPhotosByAlertId(alertId: string): Promise<PriorityCleanPhoto[]>;
+  deletePriorityCleanPhotosByAlertId(alertId: string): Promise<void>;
+  getPriorityCleanAlertBySubmissionId(submissionId: string): Promise<PriorityCleanAlert | undefined>;
 
   // Reports
   createReport(data: InsertReport): Promise<Report>;
@@ -1243,6 +1260,82 @@ export class DatabaseStorage implements IStorage {
 
   async deleteFieldNotesTodo(id: string): Promise<void> {
     await db.delete(fieldNotesTodos).where(eq(fieldNotesTodos.id, id));
+  }
+
+  // ── Priority Clean Alerts ─────────────────────────────────────────────────
+  async createPriorityCleanAlert(data: InsertPriorityCleanAlert): Promise<PriorityCleanAlert> {
+    const [row] = await db.insert(priorityCleanAlerts).values(data as any).returning();
+    return row;
+  }
+
+  async getPriorityCleanAlert(id: string): Promise<PriorityCleanAlert | undefined> {
+    const [row] = await db.select().from(priorityCleanAlerts).where(eq(priorityCleanAlerts.id, id));
+    return row;
+  }
+
+  async getPriorityCleanAlertsByCompany(companyId: string): Promise<PriorityCleanAlert[]> {
+    return db.select().from(priorityCleanAlerts)
+      .where(eq(priorityCleanAlerts.companyId, companyId))
+      .orderBy(desc(priorityCleanAlerts.createdAt));
+  }
+
+  async getOpenPriorityCleanAlertsByLocation(locationId: string, companyId: string): Promise<PriorityCleanAlert[]> {
+    return db.select().from(priorityCleanAlerts)
+      .where(and(
+        eq(priorityCleanAlerts.locationId, locationId),
+        eq(priorityCleanAlerts.companyId, companyId),
+        eq(priorityCleanAlerts.status, "open"),
+      ))
+      .orderBy(desc(priorityCleanAlerts.createdAt));
+  }
+
+  async updatePriorityCleanAlert(id: string, data: Partial<InsertPriorityCleanAlert>): Promise<PriorityCleanAlert | undefined> {
+    const [row] = await db.update(priorityCleanAlerts)
+      .set({ ...data, updatedAt: new Date().toISOString() } as any)
+      .where(eq(priorityCleanAlerts.id, id)).returning();
+    return row;
+  }
+
+  async deletePriorityCleanAlert(id: string): Promise<void> {
+    await db.delete(priorityCleanPhotos).where(eq(priorityCleanPhotos.alertId, id));
+    await db.delete(priorityCleanAlerts).where(eq(priorityCleanAlerts.id, id));
+  }
+
+  async resolveAlertsForLocation(locationId: string, companyId: string, submissionId: string): Promise<void> {
+    const now = new Date().toISOString();
+    await db.update(priorityCleanAlerts)
+      .set({ status: "resolved", submissionId, resolvedAt: now, updatedAt: now } as any)
+      .where(and(
+        eq(priorityCleanAlerts.locationId, locationId),
+        eq(priorityCleanAlerts.companyId, companyId),
+        eq(priorityCleanAlerts.status, "open"),
+      ));
+  }
+
+  async createPriorityCleanPhoto(data: InsertPriorityCleanPhoto): Promise<PriorityCleanPhoto> {
+    const [row] = await db.insert(priorityCleanPhotos).values(data as any).returning();
+    return row;
+  }
+
+  async getPriorityCleanPhoto(id: string): Promise<PriorityCleanPhoto | undefined> {
+    const [row] = await db.select().from(priorityCleanPhotos).where(eq(priorityCleanPhotos.id, id));
+    return row;
+  }
+
+  async getPriorityCleanPhotosByAlertId(alertId: string): Promise<PriorityCleanPhoto[]> {
+    return db.select().from(priorityCleanPhotos)
+      .where(eq(priorityCleanPhotos.alertId, alertId))
+      .orderBy(asc(priorityCleanPhotos.createdAt));
+  }
+
+  async deletePriorityCleanPhotosByAlertId(alertId: string): Promise<void> {
+    await db.delete(priorityCleanPhotos).where(eq(priorityCleanPhotos.alertId, alertId));
+  }
+
+  async getPriorityCleanAlertBySubmissionId(submissionId: string): Promise<PriorityCleanAlert | undefined> {
+    const [row] = await db.select().from(priorityCleanAlerts)
+      .where(eq(priorityCleanAlerts.submissionId, submissionId));
+    return row;
   }
 }
 

@@ -2598,6 +2598,10 @@ Welcome again, and thank you for choosing ClockField.
       const updates: any = { ...req.body, updatedAt: now };
       if (req.body.status === "submitted" && !sub.submittedAt) updates.submittedAt = now;
       const updated = await storage.updateWorkSubmission(req.params.id, updates);
+      // Auto-resolve open priority alerts for this location when work is submitted
+      if (req.body.status === "submitted" && sub.locationId) {
+        try { await storage.resolveAlertsForLocation(sub.locationId, sub.companyId, sub.id); } catch {}
+      }
       res.json(updated);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -2715,6 +2719,120 @@ Welcome again, and thank you for choosing ClockField.
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  // ── Priority Clean Alerts ───────────────────────────────────────────────────
+  app.post("/api/priority-alerts", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { title, message, locationId, visibleOnPublicLink, photos } = req.body;
+      if (!title || !title.trim()) return res.status(400).json({ message: "Title is required" });
+      const now = new Date().toISOString();
+      const alert = await storage.createPriorityCleanAlert({
+        companyId: user.companyId,
+        locationId: locationId || null,
+        submissionId: null,
+        title: title.trim(),
+        message: message ? message.trim() : null,
+        status: "open",
+        visibleOnPublicLink: visibleOnPublicLink !== false,
+        resolvedAt: null,
+        createdByUserId: user.id,
+        createdAt: now,
+        updatedAt: now,
+      });
+      if (Array.isArray(photos) && photos.length > 0) {
+        await Promise.all(photos.map((fileUrl: string) =>
+          storage.createPriorityCleanPhoto({ alertId: alert.id, fileUrl, createdAt: now })
+        ));
+      }
+      res.status(201).json(alert);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/priority-alerts", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const alerts = await storage.getPriorityCleanAlertsByCompany(user.companyId);
+      const allPhotos = await Promise.all(alerts.map(a => storage.getPriorityCleanPhotosByAlertId(a.id)));
+      const result = alerts.map((a, i) => ({
+        ...a,
+        photos: allPhotos[i].map(p => ({ id: p.id })),
+      }));
+      res.json(result);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/priority-alerts/location/:locationId", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const alerts = await storage.getOpenPriorityCleanAlertsByLocation(req.params.locationId, user.companyId);
+      const allPhotos = await Promise.all(alerts.map(a => storage.getPriorityCleanPhotosByAlertId(a.id)));
+      const result = alerts.map((a, i) => ({
+        ...a,
+        photos: allPhotos[i].map(p => ({ id: p.id })),
+      }));
+      res.json(result);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/priority-alerts/:id", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const alert = await storage.getPriorityCleanAlert(req.params.id);
+      if (!alert || alert.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const updates: any = {};
+      if (req.body.status !== undefined) {
+        updates.status = req.body.status;
+        if (req.body.status === "resolved" && !alert.resolvedAt) updates.resolvedAt = new Date().toISOString();
+      }
+      if (req.body.title !== undefined) updates.title = req.body.title;
+      if (req.body.message !== undefined) updates.message = req.body.message;
+      if (req.body.visibleOnPublicLink !== undefined) updates.visibleOnPublicLink = req.body.visibleOnPublicLink;
+      const updated = await storage.updatePriorityCleanAlert(req.params.id, updates);
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/priority-alerts/:id", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const alert = await storage.getPriorityCleanAlert(req.params.id);
+      if (!alert || alert.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      await storage.deletePriorityCleanAlert(req.params.id);
+      res.status(204).end();
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/priority-alert-photos/:photoId/image", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const photo = await storage.getPriorityCleanPhoto(req.params.photoId);
+      if (!photo) return res.status(404).json({ message: "Not found" });
+      const alert = await storage.getPriorityCleanAlert(photo.alertId);
+      if (!alert || alert.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
+      const match = photo.fileUrl.match(/^data:([^;]+);base64,(.+)$/s);
+      if (!match) return res.status(400).json({ message: "Invalid image data" });
+      const buffer = Buffer.from(match[2], "base64");
+      res.set("Content-Type", match[1]);
+      res.set("Cache-Control", "private, max-age=86400");
+      res.send(buffer);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/public/priority-alert-photos/:photoId/image", async (req, res) => {
+    try {
+      const photo = await storage.getPriorityCleanPhoto(req.params.photoId);
+      if (!photo) return res.status(404).json({ message: "Not found" });
+      const alert = await storage.getPriorityCleanAlert(photo.alertId);
+      if (!alert || !alert.visibleOnPublicLink) return res.status(403).json({ message: "Forbidden" });
+      const match = photo.fileUrl.match(/^data:([^;]+);base64,(.+)$/s);
+      if (!match) return res.status(400).json({ message: "Invalid image data" });
+      const buffer = Buffer.from(match[2], "base64");
+      res.set("Content-Type", match[1]);
+      res.set("Cache-Control", "public, max-age=86400");
+      res.send(buffer);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   // ── Public Share Links ──────────────────────────────────────────────────────
   // Generate / return share token (admin only)
   app.post("/api/work-submissions/:id/share", requireRole("admin"), async (req, res) => {
@@ -2789,6 +2907,19 @@ Welcome again, and thank you for choosing ClockField.
       // Resolve service summary: report-specific → company default → null
       const serviceSummary = (sub as any).serviceSummary || company?.defaultReportIntro || null;
 
+      // Load priority alert if one was resolved for this submission
+      let priorityAlert: any = null;
+      const paRecord = await storage.getPriorityCleanAlertBySubmissionId(sub.id);
+      if (paRecord && paRecord.visibleOnPublicLink) {
+        const paPhotos = await storage.getPriorityCleanPhotosByAlertId(paRecord.id);
+        priorityAlert = {
+          id: paRecord.id,
+          title: paRecord.title,
+          message: paRecord.message,
+          photos: paPhotos.map(p => ({ id: p.id })),
+        };
+      }
+
       res.json({
         id: sub.id,
         workDate: sub.workDate,
@@ -2803,6 +2934,7 @@ Welcome again, and thank you for choosing ClockField.
         employeeName,
         items: itemsWithPhotos,
         googleReviewUrl,
+        priorityAlert,
         review: existingReview ? {
           clientName: existingReview.clientName,
           companyName: existingReview.companyName,

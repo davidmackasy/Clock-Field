@@ -102,6 +102,29 @@ A workforce operations platform for service businesses with 3 user roles: Admin,
 - **Plan enforcement**: POST /api/employees returns 403 PLAN_LIMIT_EMPLOYEES; POST /api/clients returns 403 PLAN_LIMIT_CLIENTS
 - **Legacy/bypass accounts**: All 4 existing companies (MackasyInc, Sparkle, Masterpiece, Icon) have `plan_code='legacy'` and `internal_bypass=true` for uninterrupted access
 
+## Work Log Feature
+The Work Log feature allows employees to document cleaning/service work and share reports with clients.
+
+### Architecture
+- `work_submissions` — parent record (employee, location, date, status: draft→submitted→reviewed)
+- `work_submission_items` — sections/areas logged within a submission (section, subArea, notes)
+- `work_submission_photos` — before/after photos per item (stored as base64 data URLs)
+- `work_submission_reviews` — client reviews submitted via public report link
+- `priority_clean_alerts` — urgent clean alerts created by admins, linked to a location + optionally resolved to a submission
+- `priority_clean_photos` — issue photos attached to priority clean alerts
+
+### Priority Clean Workflow
+1. Admin creates a priority clean alert (title, message, issue photos, target location) via the "Priority Clean" button in Work Log → Submissions
+2. Alert is shown in a red banner on the admin Work Log page until resolved
+3. Cleaners starting a work session at the alerted location see the alert (title + message + photos) prominently in their active session card
+4. When the cleaner submits their work session, all open alerts for that location are automatically resolved and linked to the submission
+5. The public work report link for that submission shows a "Priority Clean Completed" section with the original alert info and issue photos
+
+### Public Report
+- Admin generates share link: `/r/SHORTCODE` (7-char) → `/public/work-report/:token`
+- Public API: GET /api/public/work-report/:token — returns priorityAlert if one exists for the submission
+- Photos served via: GET /api/public/priority-alert-photos/:photoId/image
+
 ## API Routes (server/routes.ts)
 - Auth: POST /api/auth/login, /api/auth/employee-login, /api/auth/change-password, /api/auth/logout, GET /api/auth/me, GET /api/auth/company
 - Billing: POST /api/billing/checkout, /api/billing/portal, /api/billing/webhook
@@ -119,6 +142,8 @@ A workforce operations platform for service businesses with 3 user roles: Admin,
 - Client Requests: GET/POST /api/client-requests, PATCH /api/client-requests/:id
 - Payroll Deductions: GET/POST /api/payroll-deductions, PATCH/DELETE /api/payroll-deductions/:id
 - Timesheets: GET /api/timesheets, POST /api/timesheets/generate, GET /api/timesheets/:id, POST /api/timesheets/:id/submit|approve
+- Priority Clean Alerts: GET/POST /api/priority-alerts, PATCH/DELETE /api/priority-alerts/:id, GET /api/priority-alerts/location/:locationId, GET /api/priority-alert-photos/:photoId/image
+- Public: GET /api/public/priority-alert-photos/:photoId/image
 
 ## Project Structure
 ```

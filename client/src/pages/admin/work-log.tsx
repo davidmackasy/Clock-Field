@@ -10,10 +10,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   MapPin, User, Calendar, ChevronRight, CheckCircle, Search, Eye, X,
   ChevronLeft, ChevronRight as ChevronRightIcon, Link, Copy, ExternalLink,
   Star, Shield, MessageSquare, Quote, Share2, Download, Pencil, Plus, Trash2, Camera,
+  AlertTriangle, Zap,
 } from "lucide-react";
 
 function fmt(iso: string) {
@@ -709,6 +711,15 @@ export default function AdminWorkLog() {
   const [isEditSaving, setIsEditSaving] = useState(false);
   const editRef = useRef<SubmissionDetailHandle>(null);
 
+  // Priority Clean state
+  const [paOpen, setPaOpen] = useState(false);
+  const [paTitle, setPaTitle] = useState("Priority Clean Required");
+  const [paMessage, setPaMessage] = useState("");
+  const [paLocationId, setPaLocationId] = useState("");
+  const [paPhotos, setPaPhotos] = useState<Array<{ preview: string; dataUrl: string }>>([]);
+  const [paCompressing, setPaCompressing] = useState(false);
+  const paFileRef = useRef<HTMLInputElement>(null);
+
   async function handleSaveEdits() {
     if (!editRef.current) return;
     setIsEditSaving(true);
@@ -734,6 +745,69 @@ export default function AdminWorkLog() {
     refetchInterval: 30 * 1000,
   });
   const { data: employees } = useQuery<any[]>({ queryKey: ["/api/employees"] });
+  const { data: allLocations } = useQuery<any[]>({ queryKey: ["/api/locations"] });
+  const { data: priorityAlerts, refetch: refetchAlerts } = useQuery<any[]>({
+    queryKey: ["/api/priority-alerts"],
+    refetchInterval: 60 * 1000,
+  });
+
+  const createPaMut = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/priority-alerts", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      refetchAlerts();
+      setPaOpen(false);
+      setPaTitle("Priority Clean Required");
+      setPaMessage("");
+      setPaLocationId("");
+      setPaPhotos([]);
+      toast({ title: "Priority clean alert created" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const resolvePaMut = useMutation({
+    mutationFn: async (alertId: string) => {
+      const res = await apiRequest("PATCH", `/api/priority-alerts/${alertId}`, { status: "resolved" });
+      return res.json();
+    },
+    onSuccess: () => { refetchAlerts(); toast({ title: "Alert resolved" }); },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const deletePaMut = useMutation({
+    mutationFn: async (alertId: string) => {
+      await apiRequest("DELETE", `/api/priority-alerts/${alertId}`);
+    },
+    onSuccess: () => { refetchAlerts(); toast({ title: "Alert deleted" }); },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  async function handlePaPhotoAdd(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setPaCompressing(true);
+    try {
+      const dataUrls = await Promise.all(files.map(f => compressPhoto(f)));
+      setPaPhotos(prev => [...prev, ...dataUrls.map(d => ({ preview: d, dataUrl: d }))]);
+    } finally {
+      setPaCompressing(false);
+      if (paFileRef.current) paFileRef.current.value = "";
+    }
+  }
+
+  function handleCreatePa() {
+    if (!paTitle.trim()) { toast({ title: "Title is required", variant: "destructive" }); return; }
+    createPaMut.mutate({
+      title: paTitle.trim(),
+      message: paMessage.trim() || null,
+      locationId: (paLocationId && paLocationId !== "none") ? paLocationId : null,
+      photos: paPhotos.map(p => p.dataUrl),
+      visibleOnPublicLink: true,
+    });
+  }
 
   const markReviewedMut = useMutation({
     mutationFn: async (subId: string) => {
@@ -813,6 +887,15 @@ export default function AdminWorkLog() {
               {filtered.length} submission{filtered.length !== 1 ? "s" : ""}
             </Badge>
           )}
+          <Button
+            size="sm"
+            className="h-9 gap-1.5 bg-red-600 hover:bg-red-700 text-white border-0"
+            onClick={() => setPaOpen(true)}
+            data-testid="button-report-priority-clean"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            Priority Clean
+          </Button>
         </div>
       </div>
 
@@ -854,6 +937,68 @@ export default function AdminWorkLog() {
           </Button>
         </div>
       </div>
+
+      {/* Open Priority Alerts banner */}
+      {priorityAlerts && priorityAlerts.filter(a => a.status === "open").length > 0 && (
+        <div className="rounded-xl border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-red-600 shrink-0" />
+            <p className="text-sm font-semibold text-red-700 dark:text-red-400">
+              {priorityAlerts.filter(a => a.status === "open").length} Open Priority Clean Alert{priorityAlerts.filter(a => a.status === "open").length !== 1 ? "s" : ""}
+            </p>
+          </div>
+          <div className="space-y-2">
+            {priorityAlerts.filter(a => a.status === "open").map((alert: any) => {
+              const loc = (allLocations || []).find((l: any) => l.id === alert.locationId);
+              return (
+                <div key={alert.id} className="bg-white dark:bg-red-950/30 rounded-lg border border-red-100 dark:border-red-800 p-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="text-sm font-semibold text-red-800 dark:text-red-300">{alert.title}</p>
+                    {loc && <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1"><MapPin className="w-3 h-3" />{loc.name}</p>}
+                    {alert.message && <p className="text-xs text-red-600/80 dark:text-red-400/80 line-clamp-2">{alert.message}</p>}
+                    <p className="text-[10px] text-red-400">Created {fmt(alert.createdAt)}</p>
+                    {alert.photos && alert.photos.length > 0 && (
+                      <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                        {alert.photos.map((p: any) => (
+                          <img
+                            key={p.id}
+                            src={`/api/priority-alert-photos/${p.id}/image`}
+                            alt=""
+                            className="w-12 h-12 object-cover rounded-md border border-red-200"
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-1.5 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs border-red-200 text-red-600 hover:bg-red-50"
+                      onClick={() => resolvePaMut.mutate(alert.id)}
+                      disabled={resolvePaMut.isPending}
+                      data-testid={`button-resolve-alert-${alert.id}`}
+                    >
+                      <CheckCircle className="w-3 h-3 mr-1" />
+                      Resolve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
+                      onClick={() => deletePaMut.mutate(alert.id)}
+                      disabled={deletePaMut.isPending}
+                      data-testid={`button-delete-alert-${alert.id}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Submissions list */}
       {isLoading ? (
@@ -912,6 +1057,106 @@ export default function AdminWorkLog() {
           })}
         </div>
       )}
+
+      {/* Create Priority Clean Alert Dialog */}
+      <Dialog open={paOpen} onOpenChange={v => { setPaOpen(v); if (!v) { setPaTitle("Priority Clean Required"); setPaMessage(""); setPaLocationId(""); setPaPhotos([]); } }}>
+        <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-red-600" />
+              Report Priority Clean
+            </DialogTitle>
+            <DialogDescription>Create an urgent clean alert that cleaners will see when they start their next work session at this location.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-1">
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Location (optional)</Label>
+              <Select value={paLocationId} onValueChange={setPaLocationId}>
+                <SelectTrigger className="mt-1" data-testid="select-pa-location">
+                  <SelectValue placeholder="All locations / unspecified" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">All locations / unspecified</SelectItem>
+                  {(allLocations || []).map((loc: any) => (
+                    <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Alert Title *</Label>
+              <Input
+                className="mt-1 text-sm"
+                value={paTitle}
+                onChange={e => setPaTitle(e.target.value)}
+                placeholder="Priority Clean Required"
+                data-testid="input-pa-title"
+              />
+            </div>
+
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Instructions / Notes</Label>
+              <Textarea
+                className="mt-1 text-sm resize-none"
+                rows={3}
+                value={paMessage}
+                onChange={e => setPaMessage(e.target.value)}
+                placeholder="Describe what needs special attention — e.g. 'Deep clean the main bathroom. Check under sinks for mold.'"
+                data-testid="textarea-pa-message"
+              />
+            </div>
+
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Issue Photos (optional)</Label>
+              <div className="mt-1.5 space-y-2">
+                {paPhotos.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {paPhotos.map((p, i) => (
+                      <div key={i} className="relative w-16 h-16 rounded-md overflow-hidden border border-border">
+                        <img src={p.preview} alt="" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setPaPhotos(prev => prev.filter((_, j) => j !== i))}
+                          className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/60 flex items-center justify-center"
+                        >
+                          <X className="w-2.5 h-2.5 text-white" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs"
+                  disabled={paCompressing}
+                  onClick={() => paFileRef.current?.click()}
+                  data-testid="button-pa-add-photos"
+                >
+                  <Camera className="w-3 h-3 mr-1" />
+                  {paCompressing ? "Processing…" : "Add Issue Photos"}
+                </Button>
+                <input ref={paFileRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePaPhotoAdd} />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" className="flex-1" onClick={() => setPaOpen(false)} data-testid="button-pa-cancel">Cancel</Button>
+              <Button
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                onClick={handleCreatePa}
+                disabled={createPaMut.isPending || !paTitle.trim()}
+                data-testid="button-pa-submit"
+              >
+                <Zap className="w-4 h-4 mr-1" />
+                {createPaMut.isPending ? "Creating..." : "Create Alert"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Review Popup — rendered on top of the detail dialog */}
       {showReviewPopup && detailSub && (

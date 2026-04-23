@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, X, Clock, MapPin, User, Calendar, CheckCircle, Star, MessageSquare, Shield } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Clock, MapPin, User, Calendar, CheckCircle, Star, MessageSquare, Shield, Zap } from "lucide-react";
 
 const DEFAULT_BRAND = "#2563eb";
 const DEFAULT_INTRO = "This report provides a summary of the work completed, observations recorded, and supporting service photos for this visit. It is intended to give you a clear record of the completed service.";
@@ -430,6 +430,41 @@ export default function PublicWorkReport() {
           )}
         </div>
       </div>
+
+      {/* ── Priority Clean Alert ──────────────────────────────────────── */}
+      {data.priorityAlert && (
+        <div className="max-w-4xl mx-auto px-4 mt-5">
+          <div className="rounded-2xl border-2 border-red-300 bg-red-50 overflow-hidden shadow-sm">
+            <div className="flex items-center gap-2 px-5 py-3 bg-red-600">
+              <Zap className="w-4 h-4 text-white shrink-0" />
+              <p className="text-xs font-bold uppercase tracking-widest text-white">Priority Clean Completed</p>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <h3 className="text-base font-bold text-red-800">{data.priorityAlert.title}</h3>
+              {data.priorityAlert.message && (
+                <p className="text-sm text-red-700 leading-relaxed">{data.priorityAlert.message}</p>
+              )}
+              {data.priorityAlert.photos && data.priorityAlert.photos.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-red-500 mb-2">Issue Photos</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {data.priorityAlert.photos.map((p: any) => (
+                      <div key={p.id} className="aspect-square rounded-xl overflow-hidden border border-red-200">
+                        <img
+                          src={`/api/public/priority-alert-photos/${p.id}/image`}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Service Summary / Intro ───────────────────────────────────── */}
       <div className="max-w-4xl mx-auto px-4 mt-5">
