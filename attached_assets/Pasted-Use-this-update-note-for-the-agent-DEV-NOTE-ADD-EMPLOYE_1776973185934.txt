@@ -1,0 +1,147 @@
+Use this update note for the agent:
+
+DEV NOTE: ADD EMPLOYEE SELECTION TO PRIORITY CLEAN ALERT MODAL WITHOUT AFFECTING ANYTHING ELSE
+
+Important:
+Do not touch anything else.
+Do not refactor unrelated pages.
+Do not change existing work log submission flow.
+Do not affect attendance, scheduling, payroll, reports, field notes, public links, clock in/out, or mobile navigation.
+Do not restyle unrelated modals or forms.
+Only update this Priority Clean alert flow so admin can also choose which employee should receive and see the alert.
+Keep everything backward compatible.
+
+Goal:
+Update the current “Report Priority Clean” modal so the admin can:
+
+Select the employee who should receive the alert
+Select the correct location cleanly and professionally
+Save the alert tied to both the selected employee and selected location
+Ensure only the selected employee sees that alert when starting their next work session for that location
+
+Required UI changes in the modal
+
+Current modal fields shown:
+Location
+Alert Title
+Instructions / Notes
+Issue Photos
+
+Add this new required field:
+Employee *
+
+Place it near the top of the modal in this order:
+
+Location
+Employee
+Alert Title
+Instructions / Notes
+Issue Photos
+
+Or, if better for logic and UX:
+
+Employee
+Location
+Alert Title
+Instructions / Notes
+Issue Photos
+
+Use the order that best matches how assignments are already handled elsewhere in Clockfield. Do not invent a new pattern if an employee selector already exists in the app.
+
+Employee field requirements:
+Label: Employee *
+Type: searchable dropdown or select
+Show employee full name clearly
+If useful, show secondary helper text like role or email in dropdown only
+Must save employeeId and enough display info for rendering
+Do not allow alert creation without selecting an employee unless there is already a valid business rule for “all employees,” which should not be added right now unless it already exists
+
+Location field improvements:
+Keep location selection professional and clear
+Make sure the location dropdown is properly populated with the relevant locations already available in the system
+If a location is optional by business logic, keep it optional
+If the alert must be tied to a worksite for matching, then require it
+Do not break existing location selection behavior elsewhere
+Do not create duplicate location data
+Use the current source of truth for locations
+
+Behavior required
+
+When admin creates a priority clean alert:
+the alert must now save:
+selected employeeId
+selected locationId or location value
+title
+instructions
+issue photos
+status
+timestamps
+
+Cleaner visibility rule:
+Only the selected employee should see that alert
+And only in the appropriate session or location context you already designed for this feature
+
+Expected logic:
+If alert is assigned to Employee A, Employee B must not see it
+If alert is assigned to Employee A and Location X, it should appear when Employee A starts work for that relevant location or matching session
+Do not show unassigned or wrong alerts to other cleaners
+
+Backend/data update
+Extend the new priority clean record safely with fields like:
+assignedEmployeeId
+assignedEmployeeName
+locationId or normalized location reference
+
+Do not remove existing fields
+Do not break existing alerts already created
+If old alerts exist without employee assignment, handle gracefully:
+either treat them as unassigned and do not show them
+or apply the safest fallback already used in your current implementation
+Do not crash on null employee values in old data
+
+Validation
+Create Alert button should require:
+employee selected
+title filled
+instructions optional or required based on your existing logic
+photos optional if that is already intentional
+location based on current business rule
+
+Show clean inline validation only inside this modal
+Do not change global validation styles
+
+Admin UX expectations
+The modal should still feel simple and fast
+Do not overcrowd the layout
+Keep spacing aligned with current Clockfield form styling
+On mobile, ensure dropdowns fit properly and are easy to tap
+Do not let the keyboard or select overlay break the modal layout
+
+Suggested modal copy
+Title:
+Report Priority Clean
+
+Description:
+Create an urgent clean alert that the selected employee will see when starting their next work session at this location.
+
+Field labels:
+Location
+Employee
+Alert Title
+Instructions / Notes
+Issue Photos
+
+Cleaner-side expectation
+No major UI change needed beyond current feature
+Just make sure the alert shown to the cleaner is filtered by the selected employee properly
+Do not show alerts meant for another employee
+
+Public link behavior
+No change needed other than continuing to show the linked priority clean on the finished submission if that session completed the assigned alert
+Do not alter public rendering rules beyond the employee-assignment linkage already needed
+
+Final reminder
+Do not touch anything else.
+Do not affect any other page or workflow.
+Do not change unrelated styles, logic, database structures, or existing Work Log behavior.
+Only add employee assignment cleanly to this Priority Clean alert flow and make location selection work properly.

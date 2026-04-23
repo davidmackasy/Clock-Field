@@ -2723,8 +2723,12 @@ Welcome again, and thank you for choosing ClockField.
   app.post("/api/priority-alerts", requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
-      const { title, message, locationId, visibleOnPublicLink, photos } = req.body;
+      const { title, message, locationId, visibleOnPublicLink, photos, assignedEmployeeId } = req.body;
       if (!title || !title.trim()) return res.status(400).json({ message: "Title is required" });
+      if (!assignedEmployeeId) return res.status(400).json({ message: "Employee is required" });
+      // Verify the employee belongs to this company
+      const assignedEmp = await storage.getUser(assignedEmployeeId);
+      if (!assignedEmp || assignedEmp.companyId !== user.companyId) return res.status(400).json({ message: "Invalid employee" });
       const now = new Date().toISOString();
       const alert = await storage.createPriorityCleanAlert({
         companyId: user.companyId,
@@ -2734,6 +2738,7 @@ Welcome again, and thank you for choosing ClockField.
         message: message ? message.trim() : null,
         status: "open",
         visibleOnPublicLink: visibleOnPublicLink !== false,
+        assignedEmployeeId: assignedEmployeeId,
         resolvedAt: null,
         createdByUserId: user.id,
         createdAt: now,
@@ -2764,7 +2769,7 @@ Welcome again, and thank you for choosing ClockField.
   app.get("/api/priority-alerts/location/:locationId", requireAuth, async (req, res) => {
     try {
       const user = req.user as any;
-      const alerts = await storage.getOpenPriorityCleanAlertsByLocation(req.params.locationId, user.companyId);
+      const alerts = await storage.getOpenPriorityCleanAlertsByLocation(req.params.locationId, user.companyId, user.id);
       const allPhotos = await Promise.all(alerts.map(a => storage.getPriorityCleanPhotosByAlertId(a.id)));
       const result = alerts.map((a, i) => ({
         ...a,

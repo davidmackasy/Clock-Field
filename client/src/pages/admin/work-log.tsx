@@ -716,6 +716,7 @@ export default function AdminWorkLog() {
   const [paTitle, setPaTitle] = useState("Priority Clean Required");
   const [paMessage, setPaMessage] = useState("");
   const [paLocationId, setPaLocationId] = useState("");
+  const [paEmployeeId, setPaEmployeeId] = useState("");
   const [paPhotos, setPaPhotos] = useState<Array<{ preview: string; dataUrl: string }>>([]);
   const [paCompressing, setPaCompressing] = useState(false);
   const paFileRef = useRef<HTMLInputElement>(null);
@@ -762,6 +763,7 @@ export default function AdminWorkLog() {
       setPaTitle("Priority Clean Required");
       setPaMessage("");
       setPaLocationId("");
+      setPaEmployeeId("");
       setPaPhotos([]);
       toast({ title: "Priority clean alert created" });
     },
@@ -799,8 +801,10 @@ export default function AdminWorkLog() {
   }
 
   function handleCreatePa() {
+    if (!paEmployeeId) { toast({ title: "Employee is required", variant: "destructive" }); return; }
     if (!paTitle.trim()) { toast({ title: "Title is required", variant: "destructive" }); return; }
     createPaMut.mutate({
+      assignedEmployeeId: paEmployeeId,
       title: paTitle.trim(),
       message: paMessage.trim() || null,
       locationId: (paLocationId && paLocationId !== "none") ? paLocationId : null,
@@ -950,11 +954,13 @@ export default function AdminWorkLog() {
           <div className="space-y-2">
             {priorityAlerts.filter(a => a.status === "open").map((alert: any) => {
               const loc = (allLocations || []).find((l: any) => l.id === alert.locationId);
+              const emp = (employees || []).find((e: any) => e.id === alert.assignedEmployeeId);
               return (
                 <div key={alert.id} className="bg-white dark:bg-red-950/30 rounded-lg border border-red-100 dark:border-red-800 p-3 flex items-start justify-between gap-3">
                   <div className="min-w-0 space-y-0.5">
                     <p className="text-sm font-semibold text-red-800 dark:text-red-300">{alert.title}</p>
                     {loc && <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1"><MapPin className="w-3 h-3" />{loc.name}</p>}
+                    {emp && <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1"><User className="w-3 h-3" />{emp.firstName} {emp.lastName}</p>}
                     {alert.message && <p className="text-xs text-red-600/80 dark:text-red-400/80 line-clamp-2">{alert.message}</p>}
                     <p className="text-[10px] text-red-400">Created {fmt(alert.createdAt)}</p>
                     {alert.photos && alert.photos.length > 0 && (
@@ -1059,14 +1065,14 @@ export default function AdminWorkLog() {
       )}
 
       {/* Create Priority Clean Alert Dialog */}
-      <Dialog open={paOpen} onOpenChange={v => { setPaOpen(v); if (!v) { setPaTitle("Priority Clean Required"); setPaMessage(""); setPaLocationId(""); setPaPhotos([]); } }}>
+      <Dialog open={paOpen} onOpenChange={v => { setPaOpen(v); if (!v) { setPaTitle("Priority Clean Required"); setPaMessage(""); setPaLocationId(""); setPaEmployeeId(""); setPaPhotos([]); } }}>
         <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-red-600" />
               Report Priority Clean
             </DialogTitle>
-            <DialogDescription>Create an urgent clean alert that cleaners will see when they start their next work session at this location.</DialogDescription>
+            <DialogDescription>Create an urgent clean alert that the selected employee will see when starting their next work session at this location.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-1">
             <div>
@@ -1079,6 +1085,22 @@ export default function AdminWorkLog() {
                   <SelectItem value="none">All locations / unspecified</SelectItem>
                   {(allLocations || []).map((loc: any) => (
                     <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Employee *</Label>
+              <Select value={paEmployeeId} onValueChange={setPaEmployeeId}>
+                <SelectTrigger className="mt-1" data-testid="select-pa-employee">
+                  <SelectValue placeholder="Select employee…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(employees || []).filter((e: any) => e.role !== "admin").map((emp: any) => (
+                    <SelectItem key={emp.id} value={emp.id}>
+                      {emp.firstName} {emp.lastName}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>

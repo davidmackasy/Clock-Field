@@ -832,6 +832,7 @@ export const priorityCleanAlerts = pgTable("priority_clean_alerts", {
   message: text("message"),
   status: text("status").notNull().default("open"),
   visibleOnPublicLink: boolean("visible_on_public_link").notNull().default(true),
+  assignedEmployeeId: varchar("assigned_employee_id"),
   resolvedAt: text("resolved_at"),
   createdByUserId: varchar("created_by_user_id").notNull(),
   createdAt: text("created_at").notNull(),
