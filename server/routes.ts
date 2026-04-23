@@ -11,8 +11,8 @@ import { randomBytes } from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { isNotNull, eq, and, isNull, inArray } from "drizzle-orm";
-import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments } from "@shared/schema";
+import { isNotNull, eq, and, isNull, inArray, desc } from "drizzle-orm";
+import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments, supplies, supplyUpdates } from "@shared/schema";
 import { getPlan } from "./plans";
 import { generateReviewOgImage } from "./og-image";
 
@@ -5870,6 +5870,185 @@ FINAL RULES:
   void migrateUploadsToBase64();
   // Run once at startup to migrate any disk-based company logos to base64 in DB
   void migrateLogoToBase64();
+
+  // ── SUPPLIES MODULE ────────────────────────────────────────────────────────
+
+  // GET /api/supplies — list all for company, filterable by locationId/category/status
+  app.get("/api/supplies", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { locationId, category, status } = req.query as Record<string, string>;
+      let rows = await db.select().from(supplies)
+        .where(eq(supplies.companyId, user.companyId))
+        .orderBy(desc(supplies.updatedAt));
+      if (locationId) rows = rows.filter(s => s.locationId === locationId);
+      if (category) rows = rows.filter(s => s.category === category);
+      if (status) rows = rows.filter(s => s.status === status);
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/supplies — create new supply
+  app.post("/api/supplies", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const now = new Date().toISOString();
+      const { name, category, locationId, locationName, description, imageData, status, quantityLabel } = req.body;
+      if (!name || !category) return res.status(400).json({ message: "name and category are required" });
+      const [row] = await db.insert(supplies).values({
+        companyId: user.companyId,
+        locationId: locationId || null,
+        locationName: locationName || null,
+        name, category,
+        description: description || null,
+        imageData: imageData || null,
+        status: status || "in_stock",
+        quantityLabel: quantityLabel || null,
+        isActive: true,
+        createdByUserId: user.id,
+        createdAt: now, updatedAt: now,
+      }).returning();
+      // Log creation activity
+      await db.insert(supplyUpdates).values({
+        supplyId: row.id, companyId: user.companyId,
+        locationId: locationId || null,
+        updatedByRole: "admin",
+        updateType: "status_changed",
+        note: `Supply created with status: ${status || "in_stock"}`,
+        newStatus: status || "in_stock",
+        createdAt: now,
+      });
+      res.status(201).json(row);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // GET /api/supplies/:id — supply detail with updates
+  app.get("/api/supplies/:id", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const [supply] = await db.select().from(supplies).where(eq(supplies.id, req.params.id));
+      if (!supply || supply.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const updates = await db.select().from(supplyUpdates)
+        .where(eq(supplyUpdates.supplyId, supply.id))
+        .orderBy(desc(supplyUpdates.createdAt));
+      res.json({ ...supply, updates });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // PATCH /api/supplies/:id — update supply (admin)
+  app.patch("/api/supplies/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const [existing] = await db.select().from(supplies).where(eq(supplies.id, req.params.id));
+      if (!existing || existing.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const now = new Date().toISOString();
+      const { name, category, locationId, locationName, description, imageData, status, quantityLabel, isActive, note, updateType } = req.body;
+      const updated = await db.update(supplies).set({
+        ...(name !== undefined && { name }),
+        ...(category !== undefined && { category }),
+        ...(locationId !== undefined && { locationId }),
+        ...(locationName !== undefined && { locationName }),
+        ...(description !== undefined && { description }),
+        ...(imageData !== undefined && { imageData }),
+        ...(status !== undefined && { status }),
+        ...(quantityLabel !== undefined && { quantityLabel }),
+        ...(isActive !== undefined && { isActive }),
+        updatedAt: now,
+      }).where(eq(supplies.id, req.params.id)).returning();
+      // Log activity
+      if (status !== undefined && status !== existing.status) {
+        await db.insert(supplyUpdates).values({
+          supplyId: existing.id, companyId: user.companyId,
+          locationId: existing.locationId,
+          updatedByRole: "admin",
+          updateType: updateType || "status_changed",
+          note: note || null,
+          previousStatus: existing.status,
+          newStatus: status,
+          createdAt: now,
+        });
+      } else if (note) {
+        await db.insert(supplyUpdates).values({
+          supplyId: existing.id, companyId: user.companyId,
+          locationId: existing.locationId,
+          updatedByRole: "admin",
+          updateType: updateType || "note_added",
+          note,
+          createdAt: now,
+        });
+      }
+      res.json(updated[0]);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/supplies/:id/updates — add activity (admin or employee)
+  app.post("/api/supplies/:id/updates", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const [supply] = await db.select().from(supplies).where(eq(supplies.id, req.params.id));
+      if (!supply || supply.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const now = new Date().toISOString();
+      const { updateType, note, photoData, newStatus } = req.body;
+      if (!updateType) return res.status(400).json({ message: "updateType is required" });
+      // If newStatus provided, update the supply status
+      if (newStatus && newStatus !== supply.status) {
+        await db.update(supplies).set({ status: newStatus, updatedAt: now }).where(eq(supplies.id, supply.id));
+      }
+      const [row] = await db.insert(supplyUpdates).values({
+        supplyId: supply.id, companyId: user.companyId,
+        locationId: supply.locationId,
+        employeeId: user.role === "employee" ? user.id : null,
+        employeeName: user.role === "employee" ? `${user.firstName} ${user.lastName}` : null,
+        updatedByRole: user.role === "admin" ? "admin" : "employee",
+        updateType,
+        note: note || null,
+        photoData: photoData || null,
+        previousStatus: supply.status,
+        newStatus: newStatus || null,
+        createdAt: now,
+      }).returning();
+      res.status(201).json(row);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // GET /api/employee/supplies — employee view, location-aware
+  app.get("/api/employee/supplies", requireAuth, requireRole("employee"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      // Get locationIds from shifts, recurring_schedules, time_entries for this employee
+      const locRows = await pool.query(
+        `SELECT DISTINCT location_id FROM (
+          SELECT location_id FROM shifts WHERE employee_id = $1 AND location_id IS NOT NULL
+          UNION
+          SELECT location_id FROM recurring_schedules WHERE employee_id = $1 AND location_id IS NOT NULL
+          UNION
+          SELECT location_id FROM time_entries WHERE employee_id = $1 AND location_id IS NOT NULL
+        ) t`,
+        [user.id]
+      );
+      const locationIds = locRows.rows.map((r: any) => r.location_id).filter(Boolean);
+      let rows: any[];
+      if (locationIds.length === 0) {
+        // No location assignments — show all active supplies for company
+        rows = await db.select().from(supplies)
+          .where(and(eq(supplies.companyId, user.companyId), eq(supplies.isActive, true)))
+          .orderBy(desc(supplies.updatedAt));
+      } else {
+        rows = await db.select().from(supplies)
+          .where(and(eq(supplies.companyId, user.companyId), eq(supplies.isActive, true)))
+          .orderBy(desc(supplies.updatedAt));
+        rows = rows.filter(s => !s.locationId || locationIds.includes(s.locationId));
+      }
+      // Group by locationId
+      const byLocation: Record<string, { locationId: string | null; locationName: string | null; items: any[] }> = {};
+      for (const s of rows) {
+        const key = s.locationId || "__none__";
+        if (!byLocation[key]) byLocation[key] = { locationId: s.locationId, locationName: s.locationName, items: [] };
+        byLocation[key].items.push(s);
+      }
+      res.json({ locationIds, locations: Object.values(byLocation), allSupplies: rows });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
 
   return httpServer;
 }

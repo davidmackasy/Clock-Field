@@ -854,3 +854,47 @@ export type PriorityCleanAlert = typeof priorityCleanAlerts.$inferSelect;
 export type InsertPriorityCleanAlert = z.infer<typeof insertPriorityCleanAlertSchema>;
 export type PriorityCleanPhoto = typeof priorityCleanPhotos.$inferSelect;
 export type InsertPriorityCleanPhoto = z.infer<typeof insertPriorityCleanPhotoSchema>;
+
+// ── Supplies ──────────────────────────────────────────────────────────────────
+export const supplies = pgTable("supplies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  locationId: varchar("location_id"),
+  locationName: text("location_name"),
+  name: text("name").notNull(),
+  category: text("category").notNull(),
+  description: text("description"),
+  imageData: text("image_data"),
+  status: text("status").notNull().default("in_stock"),
+  quantityLabel: text("quantity_label"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdByUserId: varchar("created_by_user_id").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const supplyUpdates = pgTable("supply_updates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  supplyId: varchar("supply_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  locationId: varchar("location_id"),
+  employeeId: varchar("employee_id"),
+  employeeName: text("employee_name"),
+  updatedByRole: text("updated_by_role").notNull(),
+  updateType: text("update_type").notNull(),
+  note: text("note"),
+  photoData: text("photo_data"),
+  previousStatus: text("previous_status"),
+  newStatus: text("new_status"),
+  createdAt: text("created_at").notNull(),
+  resolvedAt: text("resolved_at"),
+  resolvedBy: text("resolved_by"),
+});
+
+export const insertSupplySchema = createInsertSchema(supplies).omit({ id: true });
+export const insertSupplyUpdateSchema = createInsertSchema(supplyUpdates).omit({ id: true });
+
+export type Supply = typeof supplies.$inferSelect;
+export type InsertSupply = z.infer<typeof insertSupplySchema>;
+export type SupplyUpdate = typeof supplyUpdates.$inferSelect;
+export type InsertSupplyUpdate = z.infer<typeof insertSupplyUpdateSchema>;

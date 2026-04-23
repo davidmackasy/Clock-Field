@@ -48,7 +48,9 @@ import EmployeeRequests from "@/pages/employee/requests";
 import EmployeeTimesheets from "@/pages/employee/timesheets";
 import EmployeeWorkLog from "@/pages/employee/work-log";
 import EmployeePayStubs from "@/pages/employee/pay-stubs";
+import EmployeeSupplies from "@/pages/employee/supplies";
 import SetPasswordPage from "@/pages/employee/set-password";
+import AdminSupplies from "@/pages/admin/supplies";
 import ClientDashboard from "@/pages/client/dashboard";
 import ClientRequestsPage from "@/pages/client/requests";
 import ClientProfile from "@/pages/client/profile";
@@ -108,6 +110,7 @@ function AdminLayout() {
               <Route path="/admin/reports"><Redirect to="/admin/work-log?tab=reports" /></Route>
               <Route path="/admin/field-notes"><Redirect to="/admin/work-log?tab=field-notes" /></Route>
               <Route path="/admin/requests"><Redirect to="/admin/work-log?tab=requests" /></Route>
+              <Route path="/admin/supplies" component={AdminSupplies} />
               <Route path="/admin/settings" component={AdminSettings} />
               <Route path="/admin/subscription" component={AdminSubscription} />
               <Route path="/admin/platform-messages" component={AdminPlatformMessages} />
@@ -181,6 +184,7 @@ function EmployeeLayout() {
           <Route path="/employee/timesheets" component={EmployeeTimesheets} />
           <Route path="/employee/work-log" component={EmployeeWorkLog} />
           <Route path="/employee/pay-stubs" component={EmployeePayStubs} />
+          <Route path="/employee/supplies" component={EmployeeSupplies} />
           <Route path="/employee/field-notes/capture" component={AdminFieldNotesCapture} />
           <Route path="/employee/field-notes/session/:id" component={AdminFieldNotesSession} />
           <Route path="/employee/field-notes" component={EmployeeFieldNotes} />

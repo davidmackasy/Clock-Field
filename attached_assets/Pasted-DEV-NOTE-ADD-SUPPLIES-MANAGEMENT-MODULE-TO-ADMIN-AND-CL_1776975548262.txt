@@ -1,0 +1,480 @@
+DEV NOTE: ADD SUPPLIES MANAGEMENT MODULE TO ADMIN AND CLEANER APP WITHOUT BREAKING OR AFFECTING ANYTHING ELSE
+
+Important:
+Do not break or affect anything else.
+Do not refactor unrelated pages.
+Do not touch attendance, schedules, payroll, paystubs, work log, field notes, reports, clock in/out, public links, authentication, or any other existing production flow.
+Do not rename existing modules unless explicitly required for this new feature.
+Do not remove any current profile items on employee side.
+Only add this as a new Supplies module and connect it safely.
+Production is active. No destructive changes. No risky migrations. Everything must be backward compatible.
+
+Goal:
+Add a full Supplies feature so admins can manage supplies by location, and cleaners can view and update supply status from their mobile app.
+
+Main concept:
+
+Admin has a dedicated Supplies page.
+Supplies are organized by location.
+Admin can create supplies with name, category, location, image, and status.
+Cleaner has a new Supply section under Profile.
+Cleaner can open supplies for their assigned location(s), view what exists, and send updates when an item is running low, empty, damaged, or needs replacement.
+Cleaner can take a photo and add a note about the supply issue.
+Admin can review updates, refill/replace the supply, upload an updated photo if needed, and mark it resolved.
+Changes should reflect on both admin and cleaner sides.
+Must be mobile friendly on both sides, especially cleaner side.
+
+FEATURE OVERVIEW
+
+Admin side:
+Add a new main page/module called Supplies.
+This page should work on desktop and mobile admin UI.
+
+Cleaner side:
+Add a new section under Profile called Supplies.
+Do not remove Hours, Paystub, Timesheet, or anything else already there.
+Just add Supplies as a new profile item cleanly.
+
+DATA MODEL
+
+Create this safely as a backward-compatible new module.
+
+Supply master record
+Each supply item should include fields like:
+
+id
+businessId
+locationId
+locationName
+name
+category
+description optional
+imageUrl optional
+status
+quantityLabel optional
+isActive
+createdBy
+createdAt
+updatedAt
+
+Suggested status values:
+in_stock
+running_low
+out_of_stock
+damaged
+needs_replacement
+refilled
+
+Supply update / activity record
+Track every cleaner or admin update separately so history is preserved.
+
+Fields:
+id
+supplyId
+businessId
+locationId
+employeeId optional
+employeeName optional
+updatedByRole admin or employee
+updateType
+note
+photoUrl optional
+previousStatus optional
+newStatus optional
+createdAt
+resolvedAt optional
+resolvedBy optional
+
+Suggested updateType values:
+reported_low
+reported_out
+reported_damaged
+reported_concern
+refilled
+replaced
+photo_updated
+note_added
+status_changed
+
+Cleaner-location visibility mapping
+Do not invent a risky new assignment system.
+Use the existing employee-to-location or employee-to-client assignment logic already in Clockfield if it exists.
+Only show cleaners supplies for their relevant assigned location(s).
+
+ADMIN PAGE REQUIREMENTS
+
+Create a new page called Supplies in admin.
+
+This page should include:
+
+Top summary area
+Show quick filters and counts like:
+Total Supplies
+Running Low
+Out of Stock
+Damaged
+Needs Attention
+Recently Updated
+Filters
+Allow admin to filter by:
+Location
+Category
+Status
+Employee-reported only
+Recently updated
+Supply list/grid
+Each supply record should show:
+image thumbnail
+supply name
+category
+location
+status badge
+last updated time
+latest note preview if available
+Add supply flow
+Admin must be able to add a new supply with:
+Location
+Supply name
+Category
+Optional description
+Optional photo
+Optional initial status
+
+Suggested categories:
+Chemicals
+Paper Products
+PPE
+Tools
+Equipment
+Linens / Rags
+Washroom Supplies
+Floor Supplies
+Waste Supplies
+Other
+
+Examples:
+Neutral cleaner
+Degreaser
+Garbage bags
+Rags
+Gloves
+Masks
+Mop
+Mop head
+Toilet paper
+Paper towels
+Spray bottle
+Vacuum bags
+
+Supply detail view
+When admin opens a supply item, show:
+large image
+name
+category
+location
+current status
+description
+activity history
+cleaner reports
+latest photos
+buttons for update actions
+Admin actions
+Admin must be able to:
+Edit supply
+Change status
+Upload new photo
+Add note
+Mark as refilled
+Mark as replaced
+Mark as resolved
+Archive inactive item
+
+When admin refills or replaces a supply, that updated status must reflect on the cleaner side too.
+
+Admin mobile behavior
+This page must work on mobile admin UI too.
+Use stacked cards instead of dense desktop-only tables on smaller screens.
+Do not create a layout that breaks on phones.
+
+CLEANER SIDE REQUIREMENTS
+
+Add Supplies under Profile on cleaner side.
+
+Inside Supplies, cleaner should see only the supplies relevant to their assigned location(s).
+
+Cleaner supplies page should include:
+
+Location-aware supply list
+If cleaner works at one location, show that location’s supplies directly.
+If cleaner works across multiple locations, allow a clean location selector at the top.
+Supply cards
+Each supply item should show:
+photo thumbnail
+name
+category
+status badge
+location if needed
+last update info
+Cleaner update action
+Cleaner should be able to tap a supply and submit an update.
+
+Update form should allow:
+status selection
+note/reason
+take/upload photo
+save update
+
+Suggested status choices for cleaner:
+Running Low
+Out of Stock
+Damaged
+Needs Replacement
+Concern / Issue
+
+Suggested note examples:
+Running low
+Almost finished
+Completely empty
+Bottle leaking
+Need new mop
+Gloves are finished
+Masks are low
+Rags need replacement
+
+Camera/photo flow
+Cleaner must be able to:
+take a photo directly from mobile
+or upload from gallery if allowed by existing app pattern
+
+Do not make this complicated.
+Keep it fast and mobile-friendly.
+
+Cleaner permissions
+Cleaner should not be able to create brand new supply master items unless you intentionally add a safe request flow.
+For phase one, cleaner should update existing supply items created by admin.
+If needed, add a simple “Report new supply needed” later, but do not force that into this phase unless it fits cleanly.
+Cleaner confirmation
+After saving an update, show a clean confirmation like:
+Supply update submitted
+or
+Supply report sent successfully
+
+Then reflect the pending/current updated status in the cleaner view if appropriate.
+
+WORKFLOW LOGIC
+
+Required flow:
+
+Admin creates supplies by location.
+Example:
+Location: 22 Winnipeg Ave
+Supply: Neutral Cleaner
+Category: Chemicals
+Photo: uploaded
+Status: In Stock
+Cleaner opens Profile > Supplies.
+They see supplies for their assigned location.
+Cleaner taps Neutral Cleaner.
+They can mark:
+Running Low
+Note: only a little left
+Photo: uploaded
+Admin sees this on Supplies page in activity/history and status summary.
+Admin refills the product.
+Admin updates:
+Status: Refilled or In Stock
+New photo optional
+Note: refilled on site
+Cleaner later sees the updated status and photo from admin side.
+
+This must sync properly on both ends.
+
+LOCATION LOGIC
+
+This feature must be location-based.
+
+Admin side:
+Every supply belongs to a location.
+Use existing business location/client location source of truth.
+Do not duplicate location systems.
+
+Cleaner side:
+Only show supplies tied to locations the cleaner should access.
+If cleaner is assigned to multiple locations, allow switching/filtering.
+If cleaner is assigned to one location, auto-show it.
+
+If there is existing shift/location assignment logic, reuse that safely.
+Do not invent new access rules that can expose wrong client data.
+
+PROFILE INTEGRATION
+
+Cleaner side location:
+Profile
+
+Hours
+Paystub
+Timesheet
+Supplies
+
+Do not remove or disturb current profile items.
+Do not break profile page layout.
+Just add Supplies cleanly in the same style.
+
+DESIGN / UX REQUIREMENTS
+
+General:
+Keep it professional, clean, and operational.
+Not cluttered.
+Not too many steps.
+Fast for cleaners on phones.
+
+Admin UI:
+Desktop: allow grid/list layout with filters
+Mobile: use stacked cards and compact filters
+
+Cleaner UI:
+Mobile first
+Large tap targets
+Simple card layout
+Fast camera upload
+No tiny controls
+No heavy scrolling if avoidable
+
+Supply card should visually include:
+photo
+name
+category
+status badge
+small note or last update
+
+Status badge colors should be consistent and professional.
+Do not use overly harsh colors unless they already match the design system.
+
+IMAGE HANDLING
+
+Both admin and cleaner must be able to attach photos safely.
+
+Image rules:
+preserve aspect ratio
+tap to preview if a reusable safe image viewer already exists
+avoid ugly cropping
+store photos properly
+show latest photo clearly
+keep history if cleaner and admin both upload updates
+
+Do not alter global image systems unless reusing safe existing components.
+
+ACTIVITY HISTORY
+
+Each supply detail should keep a clean activity log.
+
+Examples:
+Reported low by John on Apr 23
+Photo added by John
+Refilled by Admin on Apr 24
+Status changed to In Stock
+
+This is important so admin can track what happened and when.
+
+OPTIONAL HELPFUL SECTIONS
+
+If it fits safely, include these in admin detail view:
+Assigned cleaners for that location
+Recent schedule context for that location
+Recent visits to that location
+
+But keep the main purpose focused on supplies.
+Do not overbuild this part.
+If these relationships already exist, show light contextual info only.
+Do not build a new scheduling dashboard inside Supplies.
+
+NOTIFICATIONS
+
+If safe and easy with existing notification system, add lightweight in-app visibility for admin on new cleaner supply reports.
+Example:
+new report badge or count on Supplies page
+
+Do not build a full notification system from scratch for this feature unless it already exists and can be reused safely.
+
+API / BACKEND EXPECTATIONS
+
+Add isolated endpoints or handlers for:
+create supply
+list supplies by business/location
+get supply detail
+update supply status
+create supply activity/update
+list supply activities
+resolve/refill/replace supply
+
+Keep them scoped to this module.
+Do not interfere with existing report/worklog APIs.
+
+VALIDATION
+
+Admin create supply:
+location required
+name required
+category required
+photo optional
+status optional with default in_stock
+
+Cleaner update:
+supply selection required
+status required
+note optional but recommended
+photo optional unless your current UX requires it
+
+Show clean inline validation only within this feature.
+
+PERMISSIONS
+
+Admin:
+full create/edit/update/archive access
+
+Cleaner:
+view supplies for allowed location(s)
+submit updates
+upload issue photos
+cannot edit unrelated admin-level data
+cannot see supplies for locations they should not access
+
+BACKWARD COMPATIBILITY
+
+Do not affect any current employee profile data.
+Do not affect any current admin data.
+Do not break existing assignments, locations, or media uploads.
+This feature must stand alone safely.
+
+ACCEPTANCE RESULT
+
+Admin:
+Can open Supplies page
+Can create supplies by location
+Can upload image, name, category, and status
+Can see cleaner reports
+Can mark supply refilled/replaced/resolved
+Can view updated status and image history
+
+Cleaner:
+Can open Profile > Supplies
+Can view supplies for their location
+Can tap a supply
+Can report running low / out / damaged / needs replacement
+Can upload a photo and note
+Can save update easily from mobile
+
+System:
+Updates show on admin side
+Admin resolution shows on cleaner side
+Everything is mobile-friendly
+Nothing else is broken or affected
+
+FINAL REMINDER
+
+Do not break or affect anything else.
+Do not touch unrelated modules.
+Do not change existing workflows outside what is needed for this new Supplies module.
+Keep it responsive on desktop and mobile.
+Keep cleaner flow fast and simple.
+Keep admin flow organized and professional.
