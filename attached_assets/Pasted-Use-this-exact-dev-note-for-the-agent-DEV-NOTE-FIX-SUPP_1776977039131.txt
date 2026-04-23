@@ -1,0 +1,227 @@
+Use this exact dev note for the agent.
+
+DEV NOTE: FIX SUPPLIES PHOTO UPLOAD ERROR IN ADMIN WITHOUT BREAKING OR AFFECTING ANYTHING ELSE
+
+Important:
+Do not touch anything else.
+Do not refactor unrelated pages.
+Do not change supplies data structure unless absolutely necessary for this upload fix.
+Do not affect Work Log, Priority Clean, Field Notes, Reports, Attendance, Payroll, Employees, Clients, Settings, Auth, or any other existing feature.
+Do not change the whole media system unless the exact issue is there and the change is fully isolated.
+Only fix the Supplies photo upload/update flow in admin.
+Production-safe only. No destructive changes.
+
+Issue:
+When updating or uploading a supply photo from the admin Supplies page, the frontend throws a runtime error and the upload fails.
+
+Current affected flow:
+Admin > Supplies > open/edit a supply item > click Update Photo / upload photo > runtime error overlay appears
+
+Goal:
+Fix the supply photo upload so admin can:
+
+Upload a photo when creating a supply
+Update/replace a photo when editing a supply
+Save changes successfully
+See the new photo reflected immediately on admin side
+Ensure the updated photo also reflects correctly on cleaner side where applicable
+
+Main requirement:
+Fix only this upload error cleanly without breaking anything else.
+
+What the agent needs to investigate
+
+Frontend upload handler for Supplies
+Check the exact component handling:
+create supply photo upload
+edit supply photo upload
+preview state
+form state update
+save payload submission
+
+Likely issues to inspect:
+undefined file object
+wrong event target handling
+reading file from wrong input property
+null state access
+incorrect image preview state shape
+attempting to use array method on non-array
+mismatch between create form and edit form photo field
+broken onChange handler
+broken upload callback after introducing update-photo flow
+
+Shared upload component mismatch
+If Supplies is reusing an upload component from Work Log, Reports, or elsewhere, check whether:
+the component expects a different prop shape
+the callback signature is different
+the returned uploaded asset shape changed
+the Supplies page is reading imageUrl, url, fileUrl, or photo interchangeably
+
+Very likely issue:
+response shape mismatch between uploader result and Supplies form state.
+
+Save payload
+Check whether the frontend is sending:
+photo
+photoUrl
+image
+imageUrl
+attachment
+attachments
+or nested object incorrectly
+
+Make sure the create/edit supply payload matches what the backend expects.
+
+Backend endpoint for supply image updates
+Inspect the create and update supply endpoints/handlers.
+Confirm they properly accept and store the uploaded image field.
+Make sure they do not expect a different property name than what the frontend sends.
+Preview rendering
+Check if the runtime error happens:
+immediately on file selection
+during preview generation
+or after clicking Save Changes
+
+Add temporary logging locally if needed to pinpoint whether failure is:
+file selection
+upload request
+response parsing
+state update
+rendering preview
+
+Required fix behavior
+
+A. Create supply flow
+Admin should be able to:
+open Add Supply
+choose or take a supply photo
+see preview if preview already exists in UI
+save successfully
+new supply should store and display the image
+
+B. Edit supply flow
+Admin should be able to:
+open existing supply
+click Update Photo
+choose new image
+see updated preview if supported
+click Save Changes
+photo should replace or update correctly without crash
+
+C. Graceful fallback
+If no photo is selected:
+form should still work
+no crash
+existing photo should remain unchanged unless replaced intentionally
+
+D. Safe rendering
+All supply photo rendering should safely handle:
+null
+undefined
+empty string
+old records with no photo
+broken image URL
+
+Use defensive rendering so the page never crashes because a photo is missing.
+
+Implementation guidance
+
+Normalize the image field
+Use one consistent field across create, update, read, and render.
+Example:
+imageUrl
+
+If backend already uses another field, keep compatibility, but normalize safely in the frontend.
+
+Add null-safe guards
+Before rendering or updating preview:
+check file exists
+check uploaded response exists
+check URL exists
+
+Never assume shape blindly.
+
+Keep preview state isolated
+Use separate state for:
+existing saved image URL
+new local preview URL
+pending upload file if needed
+
+Do not overwrite one with the wrong object type.
+
+Recommended pattern:
+existingImageUrl
+newImageFile
+newImagePreviewUrl
+
+Revoke object URLs if used
+If using URL.createObjectURL for previews, clean it up properly to avoid weird state issues.
+Preserve old photo if upload fails
+If a new photo upload fails, do not wipe out the existing saved photo in the UI.
+Error handling
+Instead of crashing with runtime error overlay, show a clean inline or toast error such as:
+Photo upload failed. Please try again.
+
+Do not expose raw runtime error to the admin user.
+
+Keep mobile and desktop working
+This fix must work on both desktop admin UI and mobile admin UI.
+
+Specific acceptance checks
+
+Add new supply with photo
+Create supply with:
+name
+category
+location
+status
+photo
+Result:
+saves successfully
+photo shows on supply card/detail
+Edit existing supply without changing photo
+Open supply
+change text fields only
+save
+Result:
+works
+existing photo remains
+Edit existing supply and replace photo
+Open supply
+choose new photo
+save
+Result:
+no runtime error
+new photo appears correctly
+Edit existing supply with no prior photo
+Open supply with no photo
+upload one
+save
+Result:
+works normally
+Broken/null image records
+Open old supply record with no image
+Result:
+page still renders
+no crash
+
+Likely areas to inspect first
+The modal/drawer form shown in the screenshot
+The Update Photo button handler
+The file input change handler
+The local preview logic
+The form submit payload builder
+The supply update API client
+The supply image render component on detail/edit view
+
+Do not change
+Do not redesign the Supplies page.
+Do not change unrelated form styling.
+Do not touch cleaner-side supply flow unless the same broken shared uploader is used there and the fix is safely shared.
+Do not alter unrelated upload systems.
+Do not disable Vite overlay as the solution.
+Fix the actual code error.
+
+Final reminder:
+Do not break or affect anything else.
+Only fix the Supplies photo upload/update runtime error safely and professionally.

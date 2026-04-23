@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { db } from "./db";
+import { db, pool } from "./db";
 import { setupAuth, hashPassword, comparePasswords, requireAuth, requireRole } from "./auth";
 import OpenAI from "openai";
 import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail, sendAdminRequestReplyEmail } from "./mail";

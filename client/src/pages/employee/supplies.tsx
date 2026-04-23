@@ -47,23 +47,31 @@ async function compressImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = e => {
+      const dataUrl = e.target?.result as string | null;
+      if (!dataUrl) { reject(new Error("Failed to read file")); return; }
       const img = new window.Image();
       img.onload = () => {
-        let { width, height } = img;
-        if (width > MAX_DIM || height > MAX_DIM) {
-          const ratio = Math.min(MAX_DIM / width, MAX_DIM / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
+        try {
+          let { width, height } = img;
+          if (width > MAX_DIM || height > MAX_DIM) {
+            const ratio = Math.min(MAX_DIM / width, MAX_DIM / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width; canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) { reject(new Error("Canvas 2D context unavailable")); return; }
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", JPEG_Q));
+        } catch (err) {
+          reject(err instanceof Error ? err : new Error("Image compression failed"));
         }
-        const canvas = document.createElement("canvas");
-        canvas.width = width; canvas.height = height;
-        canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", JPEG_Q));
       };
-      img.onerror = reject;
-      img.src = e.target!.result as string;
+      img.onerror = () => reject(new Error("Failed to load image for compression"));
+      img.src = dataUrl;
     };
-    reader.onerror = reject;
+    reader.onerror = () => reject(new Error("Failed to read image file"));
     reader.readAsDataURL(file);
   });
 }
@@ -210,7 +218,11 @@ function SupplyUpdateSheet({ supply, submitted, onSubmitted, onClose }: {
   const handleImg = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setPhoto(await compressImage(file));
+    try {
+      setPhoto(await compressImage(file));
+    } catch {
+      toast({ title: "Photo upload failed", description: "Please try a different image.", variant: "destructive" });
+    }
   };
 
   return (
