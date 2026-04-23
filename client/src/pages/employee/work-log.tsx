@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Trash2, Camera, CheckCircle, Clock, ChevronRight, Image, AlertCircle, Pencil, Zap, X as XIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon } from "lucide-react";
+import { Plus, MapPin, Trash2, Camera, CheckCircle, Clock, ChevronRight, Image, AlertCircle, Pencil, Zap, X as XIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon, Maximize2 } from "lucide-react";
 
 const SECTIONS = ["Washrooms", "Offices", "Floors", "Kitchen", "Stairs", "Common Area", "Reception", "Garbage", "Supplies", "Other"];
 
@@ -190,6 +190,17 @@ export default function EmployeeWorkLog() {
   });
 
   const [paLightbox, setPaLightbox] = useState<{ alertId: string; photoIds: string[]; idx: number } | null>(null);
+
+  useEffect(() => {
+    if (!paLightbox) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") { setPaLightbox(null); return; }
+      if (e.key === "ArrowLeft") setPaLightbox(p => p && p.idx > 0 ? { ...p, idx: p.idx - 1 } : p);
+      if (e.key === "ArrowRight") setPaLightbox(p => p && p.idx < p.photoIds.length - 1 ? { ...p, idx: p.idx + 1 } : p);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [paLightbox]);
 
   const createSubMut = useMutation({
     mutationFn: async (data: any) => {
@@ -391,9 +402,13 @@ export default function EmployeeWorkLog() {
                             key={p.id}
                             type="button"
                             onClick={() => setPaLightbox({ alertId: alert.id, photoIds: alert.photos.map((x: any) => x.id), idx: i })}
-                            className="w-16 h-16 rounded-md overflow-hidden border-2 border-red-300 focus:outline-none focus:ring-2 focus:ring-red-400"
+                            className="relative w-16 h-16 rounded-md overflow-hidden border-2 border-red-300 focus:outline-none focus:ring-2 focus:ring-red-400 cursor-pointer group active:scale-95 transition-transform"
+                            data-testid={`pa-photo-thumb-${p.id}`}
                           >
-                            <img src={`/api/priority-alert-photos/${p.id}/image`} alt="" className="w-full h-full object-cover" />
+                            <img src={`/api/priority-alert-photos/${p.id}/image`} alt={`Issue photo ${i + 1}`} className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 group-active:bg-black/35 transition-colors flex items-center justify-center">
+                              <Maximize2 className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity drop-shadow-md" />
+                            </div>
                           </button>
                         ))}
                       </div>
