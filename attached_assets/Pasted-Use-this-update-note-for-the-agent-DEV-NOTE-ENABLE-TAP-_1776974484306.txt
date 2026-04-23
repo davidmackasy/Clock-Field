@@ -1,0 +1,117 @@
+Use this update note for the agent:
+
+DEV NOTE: ENABLE TAP-TO-OPEN PRIORITY CLEAN PHOTOS IN CLEANER ACTIVE SESSION WITHOUT AFFECTING ANYTHING ELSE
+
+Important:
+Do not touch anything else.
+Do not refactor unrelated components.
+Do not modify normal Work Log image flows.
+Do not affect before/after uploads, public links, reports, field notes, attendance, schedules, payroll, or clock in/out logic.
+Do not change unrelated modal systems or gallery systems unless the exact same safe shared viewer is already being used and can be reused without side effects.
+Only add proper click/tap image viewing for the Priority Clean photos inside the cleaner Active Session alert card.
+Keep everything backward compatible.
+
+Goal:
+When a cleaner sees the “Priority Clean Required” alert inside Active Session, they must be able to tap any issue photo thumbnail and open a proper image popup / viewer so they can inspect the issue clearly.
+
+Required behavior
+
+Tap any priority clean thumbnail to open image viewer
+Inside the Active Session priority alert card:
+if the cleaner taps any image
+open a popup / modal / lightbox viewer
+show the tapped image at full readable size
+Support browsing all attached issue photos
+Once the popup is open, the cleaner should be able to:
+view the selected image clearly
+move to the next image
+move to the previous image
+
+Use either:
+left/right arrows
+swipe on mobile
+or both if your existing UI system supports it safely
+
+Start on the tapped image
+If the cleaner taps the second or third thumbnail, the popup must open on that exact image first, not always the first image.
+Mobile-first image viewer behavior
+This is mainly for mobile use, so make sure:
+image fits the screen properly
+aspect ratio is preserved
+no awkward cropping
+portrait and landscape images both display properly
+user can close easily with X or close button
+background overlay is clean and professional
+scroll locking works correctly while popup is open
+viewer does not break bottom nav or session layout underneath
+Thumbnail behavior inside the alert card
+Keep thumbnails visible in the alert card as they are now, but make them clearly interactive:
+cursor/tap affordance where applicable
+subtle hover/tap state if already supported
+do not distort thumbnail aspect ratio
+do not break card spacing
+
+Implementation guidance
+
+Preferred approach:
+Reuse an existing safe image modal/lightbox/gallery viewer already used elsewhere in the app if one already exists and can be reused without affecting other flows.
+
+If no safe reusable viewer exists:
+create a very small isolated viewer only for Priority Clean images
+scope it to this feature only
+do not introduce global side effects
+
+Data handling:
+Use the existing attached priority issue photos array
+Do not duplicate images
+Do not transform or compress differently unless existing image viewer already does that safely
+
+UI expectations
+The popup should feel premium and simple.
+Not clunky.
+Not like a browser tab opening.
+Not like downloading the image.
+This should be an in-app image preview experience.
+
+Suggested viewer controls:
+close button in top corner
+left/right navigation if multiple photos
+image counter like 2 of 3 if easy to add safely
+tap backdrop to close only if that matches existing modal behavior and is safe on mobile
+
+Accessibility and usability
+Make sure:
+tap targets are large enough
+close button is easy to hit on small phones
+keyboard escape closes on desktop if applicable
+images have alt/fallback labels where possible
+broken image states fail gracefully
+
+Edge cases
+Handle these safely:
+1 image only: open viewer without arrows if preferred
+multiple images: show navigation
+missing image URL: skip broken image gracefully
+old alerts with no images: no viewer should open
+very tall images: contain properly within viewport
+very wide images: contain properly within viewport
+
+Do not change
+Do not change the Priority Clean card styling outside what is necessary for clickable thumbnails.
+Do not alter the admin creation flow.
+Do not alter public link rendering.
+Do not alter normal Work Log area image behavior unless intentionally reusing the same stable viewer.
+Do not touch anything unrelated.
+
+Acceptance result
+A cleaner opens Active Session
+They see the Priority Clean Required alert
+They tap any issue photo
+A proper popup/lightbox opens on that exact photo
+They can inspect it and browse the rest
+They close it and continue their work session normally
+
+Final reminder
+Do not break or affect anything else.
+Do not touch unrelated pages, logic, components, styles, or workflows.
+Only add safe tap-to-view popup behavior for Priority Clean issue photos in the cleaner Active Session.

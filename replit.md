@@ -1,169 +1,34 @@
 # ClockField - Employee Tracking System
 
 ## Overview
-A workforce operations platform for service businesses with 3 user roles: Admin, Employee, and Client. Built with React/Express/PostgreSQL.
+ClockField is a comprehensive workforce operations platform designed for service businesses. It streamlines management for Admins, Employees, and Clients through a React/Express/PostgreSQL stack. The platform aims to enhance efficiency in scheduling, attendance, payroll, and client management, offering a robust solution for businesses to manage their workforce effectively. Its modular design supports scalability and a rich feature set to cover diverse operational needs.
 
-## Architecture
-- **Frontend**: React + Vite + Tailwind + shadcn/ui + wouter routing + TanStack Query
-- **Backend**: Express.js + Passport.js (local strategy) + express-session (pg-backed sessions)
-- **Database**: PostgreSQL with Drizzle ORM
-- **Auth**: Session-based with password hashing (scrypt), role-based access control
+## User Preferences
+I prefer that the agent focuses on understanding the existing architecture and implementing new features or fixing bugs within that established framework. I value clear and concise communication, preferring direct answers and actionable suggestions over lengthy explanations. When making changes, please outline the proposed modifications before implementation, especially for significant architectural adjustments or database schema changes. I prefer an iterative development approach, with regular updates on progress and opportunities for feedback.
 
-## Public Routes
-- **Landing page**: `/` — public SaaS marketing homepage (visible to unauthenticated visitors)
-- **Login**: `/login` — auth page with 3 tabs (Employee, Admin/Client, Register). Supports `?tab=register` and `?tab=login` query params for pre-selecting tabs
-- **Unauthenticated protected routes**: redirect to `/login`
-- **Authenticated users at `/` or `/login`**: redirect to their role dashboard
+## System Architecture
+The application is built as a full-stack JavaScript application.
+**Frontend**: Developed with React, utilizing Vite for tooling, Tailwind CSS for styling, shadcn/ui for UI components, wouter for routing, and TanStack Query for data fetching and state management. The UI/UX is designed with role-specific layouts; Admin features a desktop-first sidebar navigation and a mobile-optimized bottom tab navigation, while Employee and Client interfaces are mobile-first with bottom tab navigation.
+**Backend**: Implemented using Express.js. It handles API requests, authentication, and business logic.
+**Database**: PostgreSQL is used as the relational database, with Drizzle ORM providing a type-safe interface for database interactions.
+**Authentication**: A session-based authentication system is employed, featuring Passport.js with dual local strategies (email+password for Admin/Client and employeeId+PIN for Employees). Password hashing is secured using scrypt. Role-based access control (RBAC) is enforced across the application.
+**Core Features**:
+- **Authentication & Authorization**: Secure, role-based access with distinct login flows for Admins/Clients and Employees, including employee activation and forced password changes.
+- **User Management**: Comprehensive CRUD operations for employees and clients, including login access management (enable/disable, PIN reset). Admin users can also be invited and managed.
+- **Scheduling**: Robust recurring shift scheduling with various frequencies and calendar views (Day, Week, Month).
+- **Attendance & Time Tracking**: Clock-in/out functionality with live timers, shift compliance flags, and advanced attendance tracking features including variance analysis and admin adjustments.
+- **Payroll**: An integrated payroll deductions estimator (configurable for Canadian taxes) and a payroll estimation module with overtime calculation.
+- **Timesheets**: Generation of pay-period timesheets for employees, with submission and approval workflows.
+- **Client & Request Management**: Tools for managing client information and tracking service requests.
+- **Work Log**: A system for employees to document service work, including priority clean alerts, photo uploads, and public report generation.
+- **SaaS Layer**: Includes a subscription management system with different plans (legacy, starter, growth, pro), Stripe integration for billing, and a Super Admin dashboard for platform-wide management and feature gating.
 
-## Demo Credentials
-- **Admin**: admin@sparkle.com / admin123
-- **Client**: tom@riverside.com / client123
-- **Employees**: Use Employee ID + PIN via the Employee tab on login page (admin enables access per employee)
-
-## Authentication Model
-- **Admin/Client login**: Email + Password via "Admin / Client" tab
-- **Employee login**: Employee ID (e.g. EMP-1001) + PIN via "Employee" tab (default tab)
-- **Employee activation flow**: Admin enables access → generates Employee ID + temp PIN → employee logs in → forced password change → active account
-- **Dual Passport strategies**: `local` (email+password) and `employee-local` (employeeId+pin)
-
-## User Roles
-- **Admin**: Full dashboard. Desktop: sidebar nav. Mobile: native-app style bottom tab nav (Dashboard, Employees, Schedule, Attendance, More) + fixed top header with profile/sign-out. Manages employees, schedules, attendance, payroll estimation, clients, requests, admin management, and company settings.
-- **Employee**: Mobile-first bottom nav. Home with clock in/out + live timer, schedule view (Today/Week/Upcoming), hours tracking, profile (with change password).
-- **Client**: Mobile-first bottom nav. Service request submission + tracking, profile. Login created by admin from Clients page.
-
-## Employee Account Statuses
-- `profile_only` - Record created but no login access
-- `pending_activation` - Access enabled, awaiting first login and password change
-- `active` - Fully activated, can log in
-- `disabled` - Login access blocked
-
-## Employee Onboarding Flow
-1. Admin creates employee profile (email is optional)
-2. Admin clicks "Enable Login Access" → system generates Employee ID + 6-digit temp PIN
-3. Admin shares credentials with employee
-4. Employee logs in via Employee tab → forced to set a new password
-5. Employee reaches their dashboard
-
-## Super Admin / SaaS Layer (additive)
-- **is_super_admin** boolean on users table — grants access to Platform Admin mode
-- **Subscription columns on companies**: plan_code (starter/growth/pro/legacy), billing_cycle, subscription_status, account_status, stripe_customer_id, stripe_subscription_id, stripe_price_id, current_period_start/end, cancel_at_period_end, activated_at, suspended_at, suspended_reason
-- **platform_messages table**: super admin → business messaging, broadcast support
-- **server/plans.ts**: 4 plan configs (legacy/starter/growth/pro) with maxEmployees, maxClients, feature flags
-- **Super Admin routes**: /api/super-admin/stats, /api/super-admin/businesses, /api/super-admin/businesses/:id (PATCH, POST message), /api/super-admin/messages (GET, broadcast)
-- **Admin routes**: /api/admin/plan (plan+usage), /api/admin/platform-messages (read/mark-read)
-- **Billing routes**: /api/billing/checkout (Stripe checkout), /api/billing/portal (customer portal), /api/billing/webhook (event sync)
-- **Plan enforcement**: POST /api/employees and POST /api/clients return 403 PLAN_LIMIT_* when over limit
-- **Super Admin UI**: /super-admin route + SuperAdminLayout with purple sidebar, business table, detail modal, plan change, messaging
-- **Admin Subscription page**: /admin/subscription — current plan, usage bars, feature access grid, plan cards with Stripe checkout
-- **Admin Platform Messages page**: /admin/platform-messages — inbox with mark-read
-- **Mode switcher**: super admins see "Platform" section in sidebar + profile sheet shortcut on mobile
-- **Stripe**: Dynamic import (`await import("stripe")`), configured via STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET + STRIPE_PRICE_* env vars
-
-## Key Features
-- Role-based authentication with secure session management
-- Employee CRUD management with hourly rate tracking
-- Employee login access management (enable, disable, reset PIN) from admin panel
-- **Admin management** - Invite additional admins with temp PIN, reset PIN, deactivate/reactivate
-- **Client login enablement** - Enable/disable login for clients from Clients page, generates email+PIN credentials
-- Email-free employee accounts supported (Employee ID + PIN login)
-- Forced password change on first login (all roles: admin, employee, client)
-- **Recurring shift scheduling** - Create one-time, recurring (daily/weekly/biweekly), or extra shifts with day-of-week selection and 90-day auto-generation
-- **Schedule calendar views** - Day, Week, and Month calendar views with shift indicators
-- **Recurring schedule management** - List, pause, resume, end, or delete recurring schedules
-- **Employee detail panels** - Clickable employee cards open a detail sheet with Overview, Schedule, and Attendance tabs; includes inline editing
-- **Client detail modals** - Clickable client cards open a detail modal with Overview, Locations, and Requests tabs; includes inline editing
-- **Advanced attendance tracking** - Filters (search, date range, status, employee), variance columns ("+2 min late"), clickable employee names open attendance portfolio with stats + monthly calendar
-- **Attendance Hour Adjustments** - Admin-only adjustment layer on each completed attendance row. Row-level slider icon opens a modal to add or reduce paid time without touching raw clock data. Adjustments stored in `attendance_adjustments` table with reason, note, audit trail, and void support. Adjustment badge shown in row flags. Summary card shows "Payable Hours" (adjusted) with raw hours as sub-text when adjustments exist. Payroll estimator uses adjusted minutes automatically.
-- Clock in/out with live timer and shift compliance flags
-- **Payroll Deductions estimator** - Admin-configurable Canadian payroll deductions (federal/provincial tax, CPP, EI, custom deductions). Toggle per-company, configurable modes (off/manual%), per-period breakdown in payroll table and history modal
-- Payroll estimation based on hourly rates with overtime calculation (per-period history modal, 6 period filter options)
-- Client request management (service requests, complaints, issues)
-- **Timesheets module** - Pay-period timesheets generated from attendance records. Admin: generate all-employee timesheets, per-period drill-down with daily breakdown + approve action + print/download. Employee: view own timesheets via Profile → My Timesheets, submit for review, print. Status flow: draft → submitted → approved.
-- Company settings configuration (grace period, overtime, report requirements, payroll deductions)
-- Ownership/tenant authorization on all mutating endpoints
-
-## Database Schema (shared/schema.ts)
-- companies (with deductionsEnabled, provinceCode, federalTaxMode/Percent, provincialTaxMode/Percent, cppMode/Percent, eiMode/Percent), users (all roles), clients (linked to users via userId), locations
-- **recurring_schedules** - Recurring shift rules (days, frequency, start/end dates, continuous toggle)
-- shifts (with shiftType, shiftLabel, recurringScheduleId), time_entries, client_requests
-- **payroll_deductions** - Custom per-company deductions (label, type: percent|fixed, value, isActive)
-- **timesheets** - Pay-period summaries (employee_id, company_id, pay_period_start/end, status, worked/regular/overtime minutes, shift counts, late/left_early/missed counts, submitted_at, approved_at)
-- **attendance_adjustments** - Separate adjustment layer per time entry (adjustment_minutes +/-, reason, note, created_by_user_id, is_voided, voided_by_user_id). Never modifies raw attendance records.
-
-## SaaS Subscription Layer
-- **Plans**: `legacy` (unlimited, grandfathered), `starter` ($29), `growth` ($79), `pro` ($129) — defined in `server/plans.ts`
-- **Billing**: Stripe checkout + portal, monthly & yearly (10% off), webhook handler for `invoice.payment_failed`, `customer.subscription.updated/deleted`
-- **Company fields**: `plan_code`, `billing_cycle`, `subscription_status`, `account_status`, `stripe_customer_id`, `stripe_subscription_id`, `current_period_end`, `cancel_at_period_end`, `internal_bypass`
-- **Paywall flow**: New companies start as `account_status='pending_subscription'` → redirected to `/subscribe` (pricing page) → after Stripe checkout → `active`
-- **Access logic**: `internal_bypass=true` OR `plan_code='legacy'` OR (`account_status='active'` AND `subscription_status='active'`)
-- **Feature gating**: `FeatureGate` component wraps payroll/requests/work-log/timesheets — shows locked UI for plans that don't include the feature
-- **Billing blocked page**: `/billing-blocked` — for `past_due`, `canceled`, `unpaid`, `suspended` states
-- **Super admin**: `/super-admin` dashboard — manage all businesses, toggle `internalBypass`, change plans, send messages, broadcast announcements
-- **Plan enforcement**: POST /api/employees returns 403 PLAN_LIMIT_EMPLOYEES; POST /api/clients returns 403 PLAN_LIMIT_CLIENTS
-- **Legacy/bypass accounts**: All 4 existing companies (MackasyInc, Sparkle, Masterpiece, Icon) have `plan_code='legacy'` and `internal_bypass=true` for uninterrupted access
-
-## Work Log Feature
-The Work Log feature allows employees to document cleaning/service work and share reports with clients.
-
-### Architecture
-- `work_submissions` — parent record (employee, location, date, status: draft→submitted→reviewed)
-- `work_submission_items` — sections/areas logged within a submission (section, subArea, notes)
-- `work_submission_photos` — before/after photos per item (stored as base64 data URLs)
-- `work_submission_reviews` — client reviews submitted via public report link
-- `priority_clean_alerts` — urgent clean alerts created by admins, linked to a location + optionally resolved to a submission
-- `priority_clean_photos` — issue photos attached to priority clean alerts
-
-### Priority Clean Workflow
-1. Admin creates a priority clean alert (title, message, issue photos, target location) via the "Priority Clean" button in Work Log → Submissions
-2. Alert is shown in a red banner on the admin Work Log page until resolved
-3. Cleaners starting a work session at the alerted location see the alert (title + message + photos) prominently in their active session card
-4. When the cleaner submits their work session, all open alerts for that location are automatically resolved and linked to the submission
-5. The public work report link for that submission shows a "Priority Clean Completed" section with the original alert info and issue photos
-
-### Public Report
-- Admin generates share link: `/r/SHORTCODE` (7-char) → `/public/work-report/:token`
-- Public API: GET /api/public/work-report/:token — returns priorityAlert if one exists for the submission
-- Photos served via: GET /api/public/priority-alert-photos/:photoId/image
-
-## API Routes (server/routes.ts)
-- Auth: POST /api/auth/login, /api/auth/employee-login, /api/auth/change-password, /api/auth/logout, GET /api/auth/me, GET /api/auth/company
-- Billing: POST /api/billing/checkout, /api/billing/portal, /api/billing/webhook
-- Admin Plan: GET /api/admin/plan
-- Super Admin: GET /api/super-admin/stats|businesses, GET/PATCH /api/super-admin/businesses/:id, POST /api/super-admin/businesses/:id/message, POST /api/super-admin/messages/broadcast
-- Employees: GET/POST /api/employees, PATCH /api/employees/:id, POST /api/employees/:id/enable-access|reset-pin|disable-access
-- Admins: GET /api/admins, POST /api/admins/invite, POST /api/admins/:id/reset-pin, PATCH /api/admins/:id
-- Company: GET/PATCH /api/company
-- Dashboard: GET /api/dashboard/stats
-- Clients: GET/POST/PATCH /api/clients/:id, POST /api/clients/:id/enable-login|reset-pin|disable-login
-- Locations: GET/POST /api/locations
-- Recurring Schedules: GET/POST /api/recurring-schedules, PATCH/DELETE /api/recurring-schedules/:id
-- Shifts: GET/POST /api/shifts, GET /api/shifts/date/:date, PATCH/DELETE /api/shifts/:id
-- Time Entries: GET /api/time-entries, GET /api/time-entries/active, POST /api/time-entries/clock-in|clock-out
-- Client Requests: GET/POST /api/client-requests, PATCH /api/client-requests/:id
-- Payroll Deductions: GET/POST /api/payroll-deductions, PATCH/DELETE /api/payroll-deductions/:id
-- Timesheets: GET /api/timesheets, POST /api/timesheets/generate, GET /api/timesheets/:id, POST /api/timesheets/:id/submit|approve
-- Priority Clean Alerts: GET/POST /api/priority-alerts, PATCH/DELETE /api/priority-alerts/:id, GET /api/priority-alerts/location/:locationId, GET /api/priority-alert-photos/:photoId/image
-- Public: GET /api/public/priority-alert-photos/:photoId/image
-
-## Project Structure
-```
-client/src/
-  App.tsx - Main router with role-based layouts (AdminLayout, EmployeeLayout, ClientLayout)
-  lib/auth.tsx - Auth context provider with login/register/logout
-  lib/queryClient.ts - TanStack Query setup with default fetcher
-  components/admin-sidebar.tsx - Admin sidebar navigation
-  components/mobile-nav.tsx - Mobile bottom navigation for employee/client
-  pages/auth-page.tsx - Login/Register with split layout
-  pages/admin/ - dashboard, employees, schedule, attendance, payroll, timesheets, clients, requests, settings
-  pages/employee/ - home (clock in/out + timer), schedule, hours, timesheets, profile
-  pages/client/ - dashboard, requests, profile
-server/
-  index.ts - Express server entry with seed on startup
-  routes.ts - All API routes with ownership checks
-  storage.ts - Database storage layer (IStorage interface + DatabaseStorage)
-  auth.ts - Passport auth setup with scrypt password hashing
-  db.ts - Database connection pool
-  seed.ts - Realistic seed data (company, employees, clients, locations, shifts, time entries, requests)
-shared/
-  schema.ts - Drizzle schema + Zod validators + TypeScript types
-```
+## External Dependencies
+- **PostgreSQL**: Primary database for all application data.
+- **Stripe**: Used for subscription management, payment processing (checkout), customer portals, and webhook handling for billing events.
+- **Passport.js**: Authentication middleware for Express.js.
+- **TanStack Query**: Frontend data fetching, caching, and synchronization.
+- **Tailwind CSS**: Utility-first CSS framework for styling.
+- **shadcn/ui**: UI component library.
+- **Vite**: Frontend build tool.
+- **Drizzle ORM**: TypeScript ORM for PostgreSQL.

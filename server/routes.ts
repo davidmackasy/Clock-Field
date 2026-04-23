@@ -2649,6 +2649,46 @@ Welcome again, and thank you for choosing ClockField.
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  // Convert a priority alert into a priority work area (copies alert photos as before photos)
+  app.post("/api/work-submissions/:id/items/from-priority/:alertId", requireRole("employee"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getWorkSubmission(req.params.id);
+      if (!sub) return res.status(404).json({ message: "Not found" });
+      if (sub.employeeId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      if (sub.status !== "draft") return res.status(400).json({ message: "Submission already submitted" });
+      // Prevent duplicate conversion
+      const existingItems = await storage.getWorkSubmissionItems(sub.id);
+      const existing = existingItems.find((i: any) => i.priorityAlertId === req.params.alertId);
+      if (existing) {
+        const photos = await storage.getWorkSubmissionPhotosByItem(existing.id);
+        return res.json({ ...existing, photos: photos.map(p => ({ id: p.id, photoType: p.photoType, caption: p.caption, createdAt: p.createdAt })) });
+      }
+      // Validate alert
+      const alert = await storage.getPriorityCleanAlert(req.params.alertId);
+      if (!alert || alert.companyId !== user.companyId) return res.status(404).json({ message: "Alert not found" });
+      const now = new Date().toISOString();
+      // Create the priority work item sorted to the top (sortOrder = -1)
+      const item = await storage.createWorkSubmissionItem({
+        submissionId: sub.id,
+        section: "Priority Required Clean",
+        subArea: alert.title,
+        notes: null,
+        sortOrder: -1,
+        priorityAlertId: req.params.alertId,
+        createdAt: now,
+      } as any);
+      // Copy alert photos as before photos
+      const alertPhotos = await storage.getPriorityCleanPhotosByAlertId(req.params.alertId);
+      await Promise.all(alertPhotos.map(p =>
+        storage.createWorkSubmissionPhoto({ submissionItemId: item.id, photoType: "before", fileUrl: p.fileUrl, caption: null, createdAt: now })
+      ));
+      await storage.updateWorkSubmission(sub.id, { updatedAt: now });
+      const photos = await storage.getWorkSubmissionPhotosByItem(item.id);
+      res.status(201).json({ ...item, photos: photos.map(p => ({ id: p.id, photoType: p.photoType, caption: p.caption, createdAt: p.createdAt })) });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   app.patch("/api/work-submissions/:id/items/:itemId", requireRole("employee"), async (req, res) => {
     try {
       const user = req.user as any;

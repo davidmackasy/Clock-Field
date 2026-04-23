@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Trash2, Camera, CheckCircle, Clock, ChevronRight, Image, AlertCircle, Pencil, Zap, X as XIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon, Maximize2 } from "lucide-react";
+import { Plus, MapPin, Trash2, Camera, CheckCircle, Clock, ChevronRight, Image, AlertCircle, Pencil, Zap, X as XIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon, Maximize2, Mic } from "lucide-react";
 
 const SECTIONS = ["Washrooms", "Offices", "Floors", "Kitchen", "Stairs", "Common Area", "Reception", "Garbage", "Supplies", "Other"];
 
@@ -121,6 +121,40 @@ function AddPhotoButton({ onAdd, disabled, label }: { onAdd: (photos: PhotoItem[
   );
 }
 
+function VoiceNoteButton({ onResult }: { onResult: (text: string) => void }) {
+  const [listening, setListening] = useState(false);
+  const supported = typeof window !== "undefined" && ("webkitSpeechRecognition" in window || "SpeechRecognition" in window);
+  function startListening() {
+    const SR = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    if (!SR) return;
+    const recognition = new SR();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = "en-US";
+    recognition.onstart = () => setListening(true);
+    recognition.onend = () => setListening(false);
+    recognition.onresult = (e: any) => {
+      const transcript = Array.from(e.results).map((r: any) => r[0].transcript).join(" ");
+      onResult(transcript);
+    };
+    recognition.onerror = () => setListening(false);
+    recognition.start();
+  }
+  if (!supported) return null;
+  return (
+    <button
+      type="button"
+      onClick={startListening}
+      disabled={listening}
+      className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
+      data-testid="button-voice-note"
+    >
+      <Mic className={`w-3.5 h-3.5 ${listening ? "text-red-500 animate-pulse" : ""}`} />
+      {listening ? "Listening…" : "Add voice note"}
+    </button>
+  );
+}
+
 export default function EmployeeWorkLog() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -190,6 +224,7 @@ export default function EmployeeWorkLog() {
   });
 
   const [paLightbox, setPaLightbox] = useState<{ alertId: string; photoIds: string[]; idx: number } | null>(null);
+  const [paStartingAlertId, setPaStartingAlertId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!paLightbox) return;
@@ -241,6 +276,24 @@ export default function EmployeeWorkLog() {
     },
   });
 
+  const startPriorityWorkMut = useMutation({
+    mutationFn: async (alertId: string) => {
+      setPaStartingAlertId(alertId);
+      const res = await apiRequest("POST", `/api/work-submissions/${activeSub.id}/items/from-priority/${alertId}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/work-submissions", activeSub.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/work-submissions"] });
+      setPaStartingAlertId(null);
+      toast({ title: "Priority work area created", description: "Issue photos loaded as before photos." });
+    },
+    onError: (e: any) => {
+      setPaStartingAlertId(null);
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    },
+  });
+
   const updateItemMut = useMutation({
     mutationFn: async ({ itemId, data }: { itemId: string; data: any }) => {
       const res = await apiRequest("PATCH", `/api/work-submissions/${activeSub.id}/items/${itemId}`, data);
@@ -276,6 +329,12 @@ export default function EmployeeWorkLog() {
 
   const isClocked = !!activeEntry;
   const items = subDetail?.items || [];
+  const convertedAlertIds = new Set(items.filter((i: any) => i.priorityAlertId).map((i: any) => i.priorityAlertId));
+  const sortedItems = [...items].sort((a: any, b: any) => {
+    if (a.priorityAlertId && !b.priorityAlertId) return -1;
+    if (!a.priorityAlertId && b.priorityAlertId) return 1;
+    return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+  });
   const today = new Date().toLocaleDateString("en-CA", { weekday: "long", month: "long", day: "numeric" });
 
   function handleStartWork() {
@@ -384,39 +443,57 @@ export default function EmployeeWorkLog() {
             </div>
 
             {/* Priority Clean Alert(s) */}
-            {priorityAlerts && priorityAlerts.length > 0 && (
-              <div className="rounded-xl border-2 border-red-400 bg-red-50 dark:bg-red-950/30 dark:border-red-700 p-3 space-y-2">
-                {priorityAlerts.map((alert: any) => (
-                  <div key={alert.id}>
-                    <div className="flex items-start gap-2 mb-1.5">
-                      <Zap className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-bold text-red-700 dark:text-red-400">{alert.title}</p>
-                        {alert.message && <p className="text-xs text-red-600 dark:text-red-300 mt-0.5 leading-relaxed">{alert.message}</p>}
-                      </div>
-                    </div>
-                    {alert.photos && alert.photos.length > 0 && (
-                      <div className="flex gap-1.5 flex-wrap mt-1">
-                        {alert.photos.map((p: any, i: number) => (
-                          <button
-                            key={p.id}
-                            type="button"
-                            onClick={() => setPaLightbox({ alertId: alert.id, photoIds: alert.photos.map((x: any) => x.id), idx: i })}
-                            className="relative w-16 h-16 rounded-md overflow-hidden border-2 border-red-300 focus:outline-none focus:ring-2 focus:ring-red-400 cursor-pointer group active:scale-95 transition-transform"
-                            data-testid={`pa-photo-thumb-${p.id}`}
-                          >
-                            <img src={`/api/priority-alert-photos/${p.id}/image`} alt={`Issue photo ${i + 1}`} className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 group-active:bg-black/35 transition-colors flex items-center justify-center">
-                              <Maximize2 className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity drop-shadow-md" />
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
+            {priorityAlerts && priorityAlerts.length > 0 && priorityAlerts.map((alert: any) => {
+              const isConverted = convertedAlertIds.has(alert.id);
+              const isStarting = paStartingAlertId === alert.id;
+              if (isConverted) {
+                return (
+                  <div key={alert.id} className="rounded-xl border border-green-300 bg-green-50 dark:bg-green-950/20 dark:border-green-800 px-3 py-2 flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
+                    <p className="text-xs font-semibold text-green-700 dark:text-green-400">Priority work area ready — see below</p>
                   </div>
-                ))}
-              </div>
-            )}
+                );
+              }
+              return (
+                <div key={alert.id} className="rounded-xl border-2 border-red-400 bg-red-50 dark:bg-red-950/30 dark:border-red-700 p-3 space-y-2.5">
+                  <div className="flex items-start gap-2">
+                    <Zap className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-red-700 dark:text-red-400">{alert.title}</p>
+                      {alert.message && <p className="text-xs text-red-600 dark:text-red-300 mt-0.5 leading-relaxed">{alert.message}</p>}
+                    </div>
+                  </div>
+                  {alert.photos && alert.photos.length > 0 && (
+                    <div className="flex gap-1.5 flex-wrap">
+                      {alert.photos.map((p: any, i: number) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setPaLightbox({ alertId: alert.id, photoIds: alert.photos.map((x: any) => x.id), idx: i })}
+                          className="relative w-16 h-16 rounded-md overflow-hidden border-2 border-red-300 focus:outline-none focus:ring-2 focus:ring-red-400 cursor-pointer group active:scale-95 transition-transform"
+                          data-testid={`pa-photo-thumb-${p.id}`}
+                        >
+                          <img src={`/api/priority-alert-photos/${p.id}/image`} alt={`Issue photo ${i + 1}`} className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 group-active:bg-black/35 transition-colors flex items-center justify-center">
+                            <Maximize2 className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity drop-shadow-md" />
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <Button
+                    size="sm"
+                    className="w-full bg-red-600 hover:bg-red-700 text-white h-9 text-xs font-semibold"
+                    disabled={isStarting || startPriorityWorkMut.isPending}
+                    onClick={() => startPriorityWorkMut.mutate(alert.id)}
+                    data-testid={`button-start-priority-work-${alert.id}`}
+                  >
+                    <Zap className="w-3.5 h-3.5 mr-1.5" />
+                    {isStarting ? "Starting…" : "Tap to Start Priority Work"}
+                  </Button>
+                </div>
+              );
+            })}
 
             {/* Service Summary field */}
             <div>
@@ -439,18 +516,26 @@ export default function EmployeeWorkLog() {
               <p className="text-xs text-muted-foreground text-center py-3">No work items yet. Add your first area.</p>
             ) : (
               <div className="space-y-2">
-                {items.map((item: any) => {
+                {sortedItems.map((item: any) => {
+                  const isPriority = !!item.priorityAlertId;
                   const beforeCount = item.photos?.filter((p: any) => p.photoType === "before").length || 0;
                   const afterCount = item.photos?.filter((p: any) => p.photoType === "after").length || 0;
                   return (
                     <div
                       key={item.id}
-                      className="flex items-center justify-between bg-background rounded-lg px-3 py-2.5 border border-border hover:border-primary/40 transition-colors cursor-pointer"
+                      className={`flex items-center justify-between rounded-lg px-3 py-2.5 border transition-colors cursor-pointer ${
+                        isPriority
+                          ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800 hover:border-red-300"
+                          : "bg-background border-border hover:border-primary/40"
+                      }`}
                       onClick={() => openEditItem(item)}
                       data-testid={`card-work-item-${item.id}`}
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{item.section}</p>
+                        <div className="flex items-center gap-1.5">
+                          {isPriority && <Zap className="w-3.5 h-3.5 text-red-500 shrink-0" />}
+                          <p className={`text-sm font-medium truncate ${isPriority ? "text-red-700 dark:text-red-400" : ""}`}>{item.section}</p>
+                        </div>
                         <p className="text-xs text-muted-foreground truncate">{item.subArea}</p>
                         {(beforeCount > 0 || afterCount > 0) && (
                           <div className="flex items-center gap-2 mt-0.5">
@@ -741,9 +826,12 @@ export default function EmployeeWorkLog() {
       }}>
         <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Edit Work Area</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              {editItem?.priorityAlertId && <Zap className="w-4 h-4 text-red-500 shrink-0" />}
+              {editItem?.priorityAlertId ? "Priority Work Area" : "Edit Work Area"}
+            </DialogTitle>
             <DialogDescription>
-              {editItem?.section} — {editItem?.subArea}
+              {editItem?.priorityAlertId ? "Add after photos and describe the work completed." : `${editItem?.section} — ${editItem?.subArea}`}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-1">
@@ -759,58 +847,79 @@ export default function EmployeeWorkLog() {
               </div>
             </div>
 
-            {/* Notes */}
+            {/* Notes — priority items get voice-to-text label */}
             <div>
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Notes (optional)</Label>
+              <div className="flex items-center justify-between mb-1">
+                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  {editItem?.priorityAlertId ? "Work Completed Notes" : "Notes (optional)"}
+                </Label>
+                {editItem?.priorityAlertId && (
+                  <VoiceNoteButton onResult={(text) => setEditDraft(d => ({ ...d, notes: d.notes ? d.notes + " " + text : text }))} />
+                )}
+              </div>
               <Textarea
-                placeholder="Any notes about this area..."
+                placeholder={editItem?.priorityAlertId ? "Describe what was cleaned or fixed — e.g. 'Washroom surfaces disinfected and restocked.'" : "Any notes about this area..."}
                 value={editDraft.notes}
                 onChange={e => setEditDraft(d => ({ ...d, notes: e.target.value }))}
-                className="mt-1 resize-none text-sm"
-                rows={2}
+                className="resize-none text-sm"
+                rows={editItem?.priorityAlertId ? 3 : 2}
                 data-testid="textarea-edit-notes"
               />
             </div>
 
-            {/* Before photos */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Before Photos</Label>
-                <AddPhotoButton
-                  label="Add Before"
-                  disabled={false}
-                  onAdd={(photos) => setEditDraft(d => ({ ...d, newBeforePhotos: [...d.newBeforePhotos, ...photos] }))}
-                />
-              </div>
-              {/* Existing before photos */}
-              {editItem?.photos?.filter((p: any) => p.photoType === "before" && !editDraft.removePhotoIds.includes(p.id)).length > 0 && (
+            {/* Before photos — read-only for priority items */}
+            {editItem?.priorityAlertId ? (
+              editItem?.photos?.filter((p: any) => p.photoType === "before").length > 0 && (
                 <div className="space-y-1.5">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Saved</p>
-                  <div className="flex flex-wrap gap-2">
-                    {editItem.photos.filter((p: any) => p.photoType === "before" && !editDraft.removePhotoIds.includes(p.id)).map((p: any) => (
-                      <div key={p.id} className="relative w-20 h-20 rounded-md overflow-hidden border border-border bg-muted">
-                        <img src={`/api/work-submission-photos/${p.id}/image`} alt="" className="w-full h-full object-cover" loading="lazy" />
-                        <button
-                          type="button"
-                          onClick={() => setEditDraft(d => ({ ...d, removePhotoIds: [...d.removePhotoIds, p.id] }))}
-                          className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center"
-                        >
-                          <Trash2 className="w-3 h-3 text-white" />
-                        </button>
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Reported Issue Photos</Label>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {editItem.photos.filter((p: any) => p.photoType === "before").map((p: any) => (
+                      <div key={p.id} className="w-20 h-20 rounded-md overflow-hidden border-2 border-red-200 bg-muted">
+                        <img src={`/api/work-submission-photos/${p.id}/image`} alt="Reported issue" className="w-full h-full object-cover" loading="lazy" />
                       </div>
                     ))}
                   </div>
+                  <p className="text-[10px] text-muted-foreground">Loaded from admin-reported issue. Read-only.</p>
                 </div>
-              )}
-              {/* New before photos */}
-              {editDraft.newBeforePhotos.length > 0 && (
-                <PhotoGrid
-                  photos={editDraft.newBeforePhotos}
-                  label="New"
-                  onRemove={(i) => setEditDraft(d => ({ ...d, newBeforePhotos: d.newBeforePhotos.filter((_, idx) => idx !== i) }))}
-                />
-              )}
-            </div>
+              )
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Before Photos</Label>
+                  <AddPhotoButton
+                    label="Add Before"
+                    disabled={false}
+                    onAdd={(photos) => setEditDraft(d => ({ ...d, newBeforePhotos: [...d.newBeforePhotos, ...photos] }))}
+                  />
+                </div>
+                {editItem?.photos?.filter((p: any) => p.photoType === "before" && !editDraft.removePhotoIds.includes(p.id)).length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Saved</p>
+                    <div className="flex flex-wrap gap-2">
+                      {editItem.photos.filter((p: any) => p.photoType === "before" && !editDraft.removePhotoIds.includes(p.id)).map((p: any) => (
+                        <div key={p.id} className="relative w-20 h-20 rounded-md overflow-hidden border border-border bg-muted">
+                          <img src={`/api/work-submission-photos/${p.id}/image`} alt="" className="w-full h-full object-cover" loading="lazy" />
+                          <button
+                            type="button"
+                            onClick={() => setEditDraft(d => ({ ...d, removePhotoIds: [...d.removePhotoIds, p.id] }))}
+                            className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center"
+                          >
+                            <Trash2 className="w-3 h-3 text-white" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {editDraft.newBeforePhotos.length > 0 && (
+                  <PhotoGrid
+                    photos={editDraft.newBeforePhotos}
+                    label="New"
+                    onRemove={(i) => setEditDraft(d => ({ ...d, newBeforePhotos: d.newBeforePhotos.filter((_, idx) => idx !== i) }))}
+                  />
+                )}
+              </div>
+            )}
 
             {/* After photos */}
             <div className="space-y-2">

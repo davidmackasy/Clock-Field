@@ -341,8 +341,10 @@ export default function PublicWorkReport() {
 
   const brandColor = data.brandColor || DEFAULT_BRAND;
 
+  const priorityItems = (data.items || []).filter((item: any) => item.priorityAlertId);
+  const normalItems = (data.items || []).filter((item: any) => !item.priorityAlertId);
   const sections: Record<string, any[]> = {};
-  (data.items || []).forEach((item: any) => {
+  normalItems.forEach((item: any) => {
     if (!sections[item.section]) sections[item.section] = [];
     sections[item.section].push(item);
   });
@@ -431,8 +433,69 @@ export default function PublicWorkReport() {
         </div>
       </div>
 
-      {/* ── Priority Clean Alert ──────────────────────────────────────── */}
-      {data.priorityAlert && (
+      {/* ── Priority Required Clean Section (from work items) ────────── */}
+      {priorityItems.length > 0 && priorityItems.map((item: any) => {
+        const before = (item.photos || []).filter((p: any) => p.photoType === "before");
+        const after = (item.photos || []).filter((p: any) => p.photoType === "after");
+        return (
+          <div key={item.id} className="max-w-4xl mx-auto px-4 mt-5">
+            <div className="rounded-2xl border-2 border-red-300 bg-white overflow-hidden shadow-sm">
+              <div className="flex items-center gap-2 px-5 py-3 bg-red-600">
+                <Zap className="w-4 h-4 text-white shrink-0" />
+                <p className="text-xs font-bold uppercase tracking-widest text-white">Priority Required Clean</p>
+              </div>
+              <div className="px-5 py-4 space-y-4">
+                <h3 className="text-base font-bold text-gray-900">{item.subArea}</h3>
+                {item.notes && (
+                  <div className="bg-red-50 rounded-xl px-4 py-3 border-l-2 border-red-400">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-red-500 mb-1">Work Completed Notes</p>
+                    <p className="text-sm text-gray-700 leading-relaxed">{item.notes}</p>
+                  </div>
+                )}
+                {before.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Reported Issue</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {before.map((p: any, i: number) => (
+                        <button key={p.id} className="group relative aspect-square focus:outline-none focus:ring-2 focus:ring-red-400 rounded-xl overflow-hidden" onClick={() => {}}>
+                          <img
+                            src={`/api/public/work-report/${token}/photos/${p.id}`}
+                            alt={`Issue photo ${i + 1}`}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            loading="lazy"
+                          />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-xl" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {after.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Completed During This Visit</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {after.map((p: any, i: number) => (
+                        <button key={p.id} className="group relative aspect-square focus:outline-none focus:ring-2 focus:ring-red-400 rounded-xl overflow-hidden" onClick={() => {}}>
+                          <img
+                            src={`/api/public/work-report/${token}/photos/${p.id}`}
+                            alt={`After photo ${i + 1}`}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            loading="lazy"
+                          />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-xl" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* ── Priority Clean Alert (legacy — shown when no priority work item) ── */}
+      {priorityItems.length === 0 && data.priorityAlert && (
         <div className="max-w-4xl mx-auto px-4 mt-5">
           <div className="rounded-2xl border-2 border-red-300 bg-red-50 overflow-hidden shadow-sm">
             <div className="flex items-center gap-2 px-5 py-3 bg-red-600">
@@ -522,7 +585,7 @@ export default function PublicWorkReport() {
           </div>
         ))}
 
-        {data.items?.length === 0 && (
+        {normalItems.length === 0 && priorityItems.length === 0 && (
           <div className="text-center py-12 text-gray-400">
             <p className="text-sm">No work items in this report.</p>
           </div>

@@ -298,6 +298,7 @@ export const workSubmissionItems = pgTable("work_submission_items", {
   subArea: text("sub_area").notNull(),
   notes: text("notes"),
   sortOrder: integer("sort_order").notNull().default(0),
+  priorityAlertId: varchar("priority_alert_id"),
   createdAt: text("created_at").notNull(),
 });
 

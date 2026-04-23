@@ -1,0 +1,287 @@
+DEV NOTE: CONVERT PRIORITY CLEAN INTO A CLICK-TO-START PRIORITY WORK AREA WITH AUTO-LOADED BEFORE PHOTOS, OPTIONAL VOICE NOTES, AND PUBLIC LINK PRIORITY SECTION ON TOP
+Important:
+Do not break or affect anything else.
+Do not change normal Work Log behavior for non-priority jobs.
+Do not change Field Notes.
+Do not change attendance, payroll, schedules, reports, public links outside this priority extension, auth, profile, or any unrelated page.
+Do not remove current Add Area flow.
+Do not force this behavior on regular work areas.
+Only improve the Priority Clean flow so it becomes easier and more professional for the cleaner to action immediately.
+Production is active. No destructive changes. Keep all old sessions and old public links backward compatible.
+Goal:
+When a cleaner starts a session and sees a Priority Clean Required alert, they should be able to tap that priority card and turn it into a proper Work Log area automatically.
+What should happen:
+
+
+Cleaner taps the Priority Clean card.
+
+
+A new work area is created automatically from that priority issue.
+
+
+The admin issue photos become the before photos for that new work area.
+
+
+The title/area name is auto-filled as a priority work section.
+
+
+Cleaner then only needs to add after photos and optional notes.
+
+
+Cleaner should be able to add notes by typing or by voice-to-text.
+
+
+When submitted, the public client link should show the priority work section at the top, then continue the rest of the report as normal.
+
+
+Core behavior to implement
+
+
+Priority card must be clickable
+Inside Active Session, the “Priority Clean Required” alert card should become an actionable item, not just a warning box.
+
+
+When tapped:
+it should open/create a dedicated priority work entry inside the current Work Log session
+Do not make the cleaner manually recreate the same issue as a new area from scratch.
+
+
+Auto-create a new Work Log area from the priority alert
+On tap, create a special work area record tied to the current session.
+
+
+Suggested default title options:
+Priority Required Clean
+Priority Area
+Urgent Issue Fix
+Priority Work
+Use one clean consistent label.
+Best option:
+Priority Required Clean
+This new area should behave like a real work area in Work Log, not a separate floating alert.
+
+
+Auto-load admin issue photos as before photos
+The issue photos attached by admin must automatically populate as the before photos for that new priority area.
+
+
+This is the key part.
+Cleaner should not need to re-upload those same issue photos.
+Requirements:
+copy or reference the existing priority issue photos into the before-photo slot for that generated work area
+preserve image quality and aspect ratio
+do not duplicate badly or create broken references
+do not require cleaner to retake the before photos
+show them clearly inside the area once created
+
+
+Priority alert should stop being a separate loose block after conversion
+After the cleaner taps the priority alert and the priority work area is created:
+the UI should no longer feel like there is a separate “alert box” sitting above while the cleaner is also adding random sections below
+
+
+Preferred behavior:
+once converted, the priority card either:
+a. collapses into a compact “Priority work added” state
+or
+b. disappears and the generated priority work area becomes the visible working item
+Best implementation:
+replace the large clickable priority alert card with the actual created priority work area state after tap
+This will feel cleaner and reduce confusion.
+
+
+Priority area must support after photos
+Once the priority area is created:
+the cleaner should be able to add after photos just like a normal work area
+
+
+Do not break existing area photo behavior.
+Do not remove normal edit/delete behavior unless intentionally restricted for this special area.
+
+
+Add notes/specification for what was cleaned
+Because this is priority work, the cleaner must be able to explain what they fixed.
+
+
+Add a dedicated field inside this priority work area such as:
+Work Completed Notes
+What was cleaned
+Resolution Notes
+This should support:
+typed text
+or voice input that transcribes into text
+Cleaner should be able to review and edit the transcribed text before saving.
+
+
+Voice-to-text support
+Inside the priority work area, add a simple option such as:
+Add voice note
+Speak to describe work completed
+
+
+Expected behavior:
+cleaner taps record
+speaks what was cleaned
+speech is converted into text
+text appears in the notes field
+cleaner can edit the text manually
+cleaner saves it
+This must be lightweight and mobile-friendly.
+Important:
+Do not turn this into full Field Notes.
+Do not overbuild.
+This is only for a short work-completed note inside the priority area.
+If a reusable speech-to-text component already exists safely in the app, reuse it.
+If not, create a very small isolated voice-to-text control only for this note field.
+Do not introduce side effects elsewhere.
+Suggested note examples:
+Cleaned and disinfected washroom surfaces
+Replaced liner and cleaned dispenser area
+Toilet area deep cleaned and restocked
+Priority issue resolved during this visit
+
+
+Allow submit if priority work is the only thing needed
+If the only task for that visit is the priority clean, the cleaner should be able to:
+tap priority
+review auto-loaded before photos
+add after photos
+add optional typed/voice note
+submit work
+
+
+They should not be forced to create extra areas unless needed.
+
+
+Public link behavior
+On the public client link for the submitted Work Log:
+show the priority work section at the top
+keep everything else the same below
+
+
+Public section requirements:
+Priority Required Clean title at top
+show the before photos from the admin-reported issue
+show the after photos from the cleaner
+show the cleaner’s completed note / resolution note if provided
+then continue the rest of the normal work log layout unchanged
+Do not redesign the whole public page.
+Do not affect old public links.
+Only add this priority work section on top when such a priority area exists in that session.
+
+
+Data model / linkage
+Add this safely and backward compatibly.
+
+
+Suggested approach:
+When admin creates a priority alert, store it as priority issue data.
+When cleaner taps it, create a linked work area such as:
+sourceType: priority_clean
+priorityAlertId: linked id
+areaTitle: Priority Required Clean
+beforePhotos: inherited from alert photos
+resolutionNote: text field
+resolutionVoiceTranscript: text field optional
+afterPhotos: cleaner uploads
+status: in_progress / completed
+Keep the relationship clear so public rendering knows this area came from a priority issue.
+
+
+Prevent duplicate conversion
+Make sure the cleaner cannot keep tapping the same priority alert and accidentally create 3 duplicate priority work areas.
+
+
+Required rule:
+one priority alert should create one linked priority work area only
+After conversion:
+disable repeated creation
+show the existing linked priority area instead
+
+
+Cleaner UX flow
+Expected mobile flow:
+
+
+Cleaner starts work session
+Priority Clean Required appears
+Cleaner taps the priority card
+System creates Priority Required Clean work area
+Admin issue photos appear as before photos automatically
+Cleaner adds after photos
+Cleaner types or speaks a short resolution note
+Cleaner submits work
+This should feel smooth and obvious.
+
+
+UI placement guidance
+Inside Active Session:
+priority action should be at the top and easy to spot
+after tap, show the generated priority work area in the same area list style as other work sections
+keep Add Area button for normal extra sections if needed
+do not clutter the screen
+
+
+Inside the priority work area card show:
+title
+before photos
+after photo uploader
+resolution note field
+voice-to-text action
+edit controls if needed
+
+
+Suggested labels
+Cleaner-facing:
+Priority Clean Required
+Tap to start priority work
+Before photos loaded from reported issue
+Work completed notes
+Add voice note
+After photos
+Priority work ready to submit
+
+
+Public link:
+Priority Required Clean
+Reported issue
+Completed during this visit
+Work completed notes
+
+
+Edge cases
+Handle safely:
+priority alert with no photos: still create area, but before section may be empty
+priority alert already converted: open existing priority area instead of creating another
+voice transcription fails: cleaner can still type manually
+cleaner adds other normal areas too: priority area still stays on top in public link
+session with only priority area: submit normally
+old sessions with older priority alert format: fail gracefully
+
+
+Do not change
+Do not change regular Add Area behavior.
+Do not force voice input on normal work areas.
+Do not turn every area into a transcription tool.
+Do not touch Field Notes.
+Do not alter unrelated media upload systems.
+Do not redesign the public work log page beyond showing priority section first.
+Do not break current work submission logic.
+
+
+Acceptance result
+Admin creates a priority alert with photos
+Cleaner starts session and sees the priority alert
+Cleaner taps it once
+A new Priority Required Clean work area is auto-created
+Admin issue photos appear automatically as before photos
+Cleaner adds after photos
+Cleaner types or speaks what was cleaned
+Cleaner submits work
+Public client link shows the priority work first, then the rest of the normal work log
+
+
+Final reminder:
+Do not break or affect anything else.
+Do not touch unrelated workflows, components, routes, APIs, or layouts.
+Only upgrade the Priority Clean flow so it becomes a tappable, auto-created priority work area with inherited before photos, optional voice-to-text notes, and top placement on the public link.
