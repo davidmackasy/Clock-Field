@@ -875,12 +875,12 @@ export default function AdminWorkLog() {
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold">Work Log</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Review cleaner work submissions</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {totalReviews > 0 && (
             <Badge variant="outline" className="text-xs gap-1 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30">
               <Star className="w-3 h-3 fill-emerald-500 text-emerald-500" />
