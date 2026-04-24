@@ -6151,17 +6151,39 @@ FINAL RULES:
       const pub = await storage.getPublication(req.params.id);
       if (!pub || pub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
 
-      const updates: Record<string, any> = { ...req.body, updatedAt: new Date().toISOString() };
+      const b = req.body;
+      const now = new Date().toISOString();
 
-      if (updates.slug) {
-        updates.slug = slugify(updates.slug);
-        if (await storage.isSlugTaken(updates.slug, pub.id)) {
-          return res.status(400).json({ message: "This URL slug is already taken. Please choose a different one." });
-        }
+      let resolvedSlug = b.slug ? slugify(b.slug) : undefined;
+      if (resolvedSlug && await storage.isSlugTaken(resolvedSlug, pub.id)) {
+        return res.status(400).json({ message: "This URL slug is already taken. Please choose a different one." });
       }
 
-      if (updates.status === "published" && !pub.publishedAt) {
-        updates.publishedAt = new Date().toISOString();
+      const updates: Record<string, any> = {
+        updatedAt: now,
+        ...(b.title !== undefined && { title: b.title }),
+        ...(b.subtitle !== undefined && { subtitle: b.subtitle }),
+        ...(resolvedSlug !== undefined && { slug: resolvedSlug }),
+        ...(b.introText !== undefined && { introText: b.introText }),
+        ...(b.category !== undefined && { category: b.category }),
+        ...(b.seoTitle !== undefined && { seoTitle: b.seoTitle }),
+        ...(b.seoDescription !== undefined && { seoDescription: b.seoDescription }),
+        ...(b.coverImageData !== undefined && { coverImageData: b.coverImageData }),
+        ...(b.helpfulVotingEnabled !== undefined && { helpfulVotingEnabled: b.helpfulVotingEnabled }),
+        ...(b.status !== undefined && { status: b.status }),
+        ...(b.contactCtaEnabled !== undefined && { contactCtaEnabled: b.contactCtaEnabled }),
+        ...(b.contactUseDefault !== undefined && { contactUseDefault: b.contactUseDefault }),
+        ...(b.contactCompanyName !== undefined && { contactCompanyName: b.contactCompanyName }),
+        ...(b.contactPhone !== undefined && { contactPhone: b.contactPhone }),
+        ...(b.contactEmail !== undefined && { contactEmail: b.contactEmail }),
+        ...(b.contactAddress !== undefined && { contactAddress: b.contactAddress }),
+        ...(b.contactWebsite !== undefined && { contactWebsite: b.contactWebsite }),
+        ...(b.contactCtaText !== undefined && { contactCtaText: b.contactCtaText }),
+        ...(b.contactCtaLink !== undefined && { contactCtaLink: b.contactCtaLink }),
+      };
+
+      if (b.status === "published" && !pub.publishedAt) {
+        updates.publishedAt = now;
       }
 
       const updated = await storage.updatePublication(pub.id, updates);
@@ -6205,7 +6227,14 @@ FINAL RULES:
       const user = req.user as any;
       const pub = await storage.getPublication(req.params.id);
       if (!pub || pub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      const updates = { ...req.body, updatedAt: new Date().toISOString() };
+      const b = req.body;
+      const updates: Record<string, any> = {
+        updatedAt: new Date().toISOString(),
+        ...(b.title !== undefined && { title: b.title }),
+        ...(b.body !== undefined && { body: b.body }),
+        ...(b.sectionType !== undefined && { sectionType: b.sectionType }),
+        ...(b.pricingItems !== undefined && { pricingItems: b.pricingItems }),
+      };
       const section = await storage.updatePublicationSection(req.params.sectionId, updates);
       if (!section) return res.status(404).json({ message: "Section not found" });
       const media = await storage.getPublicationMediaBySection(section.id);

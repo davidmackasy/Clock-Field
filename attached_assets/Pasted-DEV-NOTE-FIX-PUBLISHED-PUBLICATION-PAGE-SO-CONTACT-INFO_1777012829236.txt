@@ -1,0 +1,102 @@
+DEV NOTE: FIX PUBLISHED PUBLICATION PAGE SO CONTACT INFO AND SECTION PRICING DISPLAY PROPERLY
+
+Important:
+Do not touch anything else.
+Do not change Field Notes, Work Log, Supplies, Reports, Payroll, Attendance, Schedule, Auth, or public Work Log links.
+Only fix the Publications public page rendering and save/load mapping.
+Do not redesign the whole Publications module.
+Do not break existing published pages.
+
+Issue:
+In the publication editor, the admin added:
+
+1. Custom Contact Information
+2. Per-section Pricing
+
+But on the published public page, those sections are not showing.
+
+Required fix:
+Make sure all saved Publication data renders correctly on the published public link.
+
+Fix areas to check:
+
+1. Save payload
+   Confirm the editor is saving:
+   contactInfo
+   useDefaultBusinessContactInfo
+   section.pricingItems
+   section images
+   section content
+
+2. Backend storage
+   Confirm the backend stores:
+   custom contact fields
+   default contact toggle
+   pricing items for each section
+
+3. Fetch/public response
+   Confirm the public publication endpoint returns:
+   contact info
+   section pricing data
+   all section fields
+
+4. Public page rendering
+   Update the public publication page to render:
+
+Per-section pricing:
+Show pricing directly under the matching section content/images.
+
+Example:
+Push-Button Feminine Product Dispenser
+Description text
+Images
+Pricing card:
+Push-Button Feminine Product Dispenser
+$399.40
+Unit if available
+Description if available
+
+Hide pricing if no pricing exists.
+
+Contact information:
+Show near the bottom before “Was this helpful?” or footer.
+
+Section title:
+Contact Information
+
+Show only fields that exist:
+Company Name
+Phone Number
+Email Address
+Address
+Website
+CTA button
+
+CTA behavior:
+If CTA Button Link exists, use it.
+If no CTA link but phone exists, use tel:
+If no CTA link but email exists, use mailto:
+If website exists, open website in new tab.
+
+5. Default vs custom contact
+   If “Use default business contact info” is on:
+   public page should use business settings contact info.
+
+If off:
+public page should use the custom contact fields saved on this publication.
+
+Do not show blank contact fields.
+
+6. Backward compatibility
+   Old publications without pricing should still render.
+   Old publications without contact info should still render.
+   No crashes if pricingItems is missing or empty.
+   No crashes if contactInfo is missing.
+
+Acceptance:
+Admin adds pricing inside a section, saves, publishes, and opens public link.
+The pricing appears under that exact section.
+Admin adds custom contact info, saves, publishes, and opens public link.
+The contact information appears near the bottom.
+Empty fields stay hidden.
+Nothing else is affected.

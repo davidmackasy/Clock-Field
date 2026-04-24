@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -147,16 +147,12 @@ function parsePricingItems(raw: string | null | undefined): SectionPricingItem[]
   try { return JSON.parse(raw); } catch { return []; }
 }
 
-function SectionCard({
-  section,
-  pubId,
-  index,
-  total,
-  onMoveUp,
-  onMoveDown,
-  onDelete,
-  onSaved,
-}: {
+type SectionCardHandle = {
+  isDirty: () => boolean;
+  save: () => Promise<void>;
+};
+
+const SectionCard = forwardRef<SectionCardHandle, {
   section: any;
   pubId: string;
   index: number;
@@ -165,7 +161,16 @@ function SectionCard({
   onMoveDown: () => void;
   onDelete: () => void;
   onSaved: (updated: any) => void;
-}) {
+}>(function SectionCard({
+  section,
+  pubId,
+  index,
+  total,
+  onMoveUp,
+  onMoveDown,
+  onDelete,
+  onSaved,
+}, ref) {
   const { toast } = useToast();
   const [expanded, setExpanded] = useState(true);
   const [title, setTitle] = useState(section.title || "");
@@ -178,6 +183,11 @@ function SectionCard({
   const fileRef = useRef<HTMLInputElement>(null);
 
   const media: any[] = section.media || [];
+
+  useImperativeHandle(ref, () => ({
+    isDirty: () => dirty,
+    save: () => dirty ? save() : Promise.resolve(),
+  }));
 
   const save = async () => {
     setSaving(true);
@@ -485,7 +495,7 @@ function SectionCard({
       )}
     </Card>
   );
-}
+});
 
 function PricingCard({ item, pubId, onDelete, onSaved }: {
   item: any; pubId: string; onDelete: () => void; onSaved: (updated: any) => void;
@@ -571,6 +581,7 @@ export default function AdminPublicationEditor() {
   const [deleteSection, setDeleteSection] = useState<string | null>(null);
   const [deletePricingItem, setDeletePricingItem] = useState<string | null>(null);
   const coverRef = useRef<HTMLInputElement>(null);
+  const sectionRefs = useRef<Map<string, SectionCardHandle>>(new Map());
   const [saving, setSaving] = useState(false);
   const [pubId, setPubId] = useState<string | null>(isNew ? null : params?.id || null);
   const [status, setStatus] = useState("draft");
@@ -614,6 +625,11 @@ export default function AdminPublicationEditor() {
   const saveMeta = async (overrides: Record<string, any> = {}) => {
     setSaving(true);
     try {
+      const dirtyRefs = Array.from(sectionRefs.current.values()).filter(r => r && r.isDirty());
+      if (dirtyRefs.length > 0) {
+        await Promise.all(dirtyRefs.map(r => r.save()));
+      }
+
       const contactPayload = {
         contactCtaEnabled,
         contactUseDefault,
@@ -1158,6 +1174,10 @@ export default function AdminPublicationEditor() {
           {sections.map((section, idx) => (
             <SectionCard
               key={section.id}
+              ref={(r) => {
+                if (r) sectionRefs.current.set(section.id, r);
+                else sectionRefs.current.delete(section.id);
+              }}
               section={section}
               pubId={pubId || ""}
               index={idx}
