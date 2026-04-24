@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { X, ChevronLeft, ChevronRight, ThumbsUp, ThumbsDown, Phone, Mail, MapPin, ExternalLink, Clock } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, ThumbsUp, ThumbsDown, Phone, Mail, MapPin, ExternalLink, Clock, Globe } from "lucide-react";
 
 function Lightbox({
   images,
@@ -69,45 +69,34 @@ function Lightbox({
   );
 }
 
-function ImageGrid({ media, allMedia }: { media: any[]; allMedia: { src: string; caption?: string }[] }) {
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-
-  if (!media || media.length === 0) return null;
-
-  const cols = media.length === 1 ? "grid-cols-1" :
-    media.length === 2 ? "grid-cols-2" :
-    media.length === 3 ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-4";
+function SectionPricingBlock({ pricingItems }: { pricingItems: any[] }) {
+  if (!pricingItems || pricingItems.length === 0) return null;
 
   return (
-    <>
-      <div className={`grid ${cols} gap-2 my-4`}>
-        {media.map((m: any) => {
-          const globalIdx = allMedia.findIndex(i => i.src === m.imageData);
-          return (
-            <div
-              key={m.id}
-              className="cursor-zoom-in group"
-              onClick={() => globalIdx >= 0 && setLightboxIndex(globalIdx)}
-              data-testid={`img-pub-${m.id}`}
-            >
-              <div className="relative overflow-hidden rounded-lg border border-gray-100 bg-gray-50">
-                <img
-                  src={m.imageData}
-                  alt={m.caption || ""}
-                  className="w-full object-cover aspect-video group-hover:scale-105 transition-transform duration-300"
-                />
-              </div>
-              {m.caption && (
-                <p className="text-xs text-gray-500 mt-1 text-center italic">{m.caption}</p>
-              )}
+    <div className="mt-4 border border-gray-200 rounded-xl overflow-hidden" data-testid="section-pricing-block">
+      {pricingItems.map((item: any, idx: number) => (
+        <div
+          key={item.id || idx}
+          className={`flex items-start gap-4 px-4 py-3 ${idx < pricingItems.length - 1 ? "border-b border-gray-100" : ""} ${idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}`}
+          data-testid={`section-pricing-item-${item.id || idx}`}
+        >
+          <div className="flex-1 min-w-0">
+            {item.title && (
+              <p className="font-semibold text-gray-900 text-sm">{item.title}</p>
+            )}
+            {item.description && (
+              <p className="text-xs text-gray-500 mt-0.5">{item.description}</p>
+            )}
+          </div>
+          {item.price && (
+            <div className="text-right shrink-0">
+              <p className="font-bold text-gray-900 text-sm">{item.price}</p>
+              {item.unit && <p className="text-xs text-gray-400">{item.unit}</p>}
             </div>
-          );
-        })}
-      </div>
-      {lightboxIndex !== null && (
-        <Lightbox images={allMedia} startIndex={lightboxIndex} onClose={() => setLightboxIndex(null)} />
-      )}
-    </>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -183,11 +172,11 @@ export default function PublicPublication() {
 
   const pub = data;
   const company = data.company;
+  const contactInfo = data.contactInfo;
   const sections: any[] = data.sections || [];
   const pricing: any[] = data.pricing || [];
   const votes: { yes: number; no: number } = data.votes || { yes: 0, no: 0 };
 
-  // Collect all images for global lightbox
   const allImages = sections.flatMap((s: any) =>
     (s.media || []).map((m: any) => ({ src: m.imageData, caption: m.caption || undefined }))
   );
@@ -204,7 +193,6 @@ export default function PublicPublication() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* SEO meta tags (injected via document title) */}
       {(() => {
         document.title = `${pub.seoTitle || pub.title} | ${company?.name || "Publication"}`;
         return null;
@@ -286,6 +274,9 @@ export default function PublicPublication() {
           const sectionMedia: any[] = section.media || [];
           const sectionImages = sectionMedia.map((m: any) => ({ src: m.imageData, caption: m.caption || undefined }));
           const containerClass = SECTION_TYPE_STYLE[section.sectionType] || "";
+          const sectionPricing = section.pricingItems
+            ? (() => { try { return JSON.parse(section.pricingItems); } catch { return []; } })()
+            : [];
 
           return (
             <section
@@ -294,7 +285,7 @@ export default function PublicPublication() {
               data-testid={`section-${section.id}`}
             >
               {section.title && (
-                <h2 className={`font-bold text-gray-900 mb-3 ${section.sectionType === "cta" ? "text-xl" : "text-xl"}`}>
+                <h2 className="font-bold text-gray-900 mb-3 text-xl">
                   {section.title}
                 </h2>
               )}
@@ -303,13 +294,13 @@ export default function PublicPublication() {
                   {section.body}
                 </p>
               )}
-              {section.sectionType === "cta" && company?.email && (
+              {section.sectionType === "cta" && contactInfo?.email && (
                 <a
-                  href={`mailto:${company.email}`}
+                  href={`mailto:${contactInfo.email}`}
                   className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors mt-2"
                   data-testid="button-section-cta"
                 >
-                  Contact {company.name}
+                  Contact {contactInfo.name || company?.name}
                 </a>
               )}
               {sectionImages.length > 0 && (
@@ -340,11 +331,14 @@ export default function PublicPublication() {
                   </div>
                 </div>
               )}
+
+              {/* Per-section pricing */}
+              <SectionPricingBlock pricingItems={sectionPricing} />
             </section>
           );
         })}
 
-        {/* ── Pricing ──────────────────────────────────────────────────────── */}
+        {/* ── Publication-level Pricing (legacy/global) ─────────────────── */}
         {pricing.length > 0 && (
           <section className="mb-10" data-testid="section-pricing">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Pricing</h2>
@@ -377,36 +371,55 @@ export default function PublicPublication() {
         )}
 
         {/* ── Contact Business ─────────────────────────────────────────────── */}
-        {pub.contactCtaEnabled && company && (company.phone || company.email || company.address) && (
+        {contactInfo && (contactInfo.phone || contactInfo.email || contactInfo.address || contactInfo.website) && (
           <section className="mb-10 bg-gray-50 rounded-2xl border border-gray-200 p-6" data-testid="section-contact">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">Contact {company.name}</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">
+              Contact {contactInfo.name || company?.name || "Us"}
+            </h2>
             <div className="space-y-2.5">
-              {company.phone && (
+              {contactInfo.phone && (
                 <div className="flex items-center gap-3 text-sm text-gray-600">
                   <Phone className="w-4 h-4 text-gray-400 shrink-0" />
-                  <a href={`tel:${company.phone}`} className="hover:text-blue-600 transition-colors">{company.phone}</a>
+                  <a href={`tel:${contactInfo.phone}`} className="hover:text-blue-600 transition-colors">{contactInfo.phone}</a>
                 </div>
               )}
-              {company.email && (
+              {contactInfo.email && (
                 <div className="flex items-center gap-3 text-sm text-gray-600">
                   <Mail className="w-4 h-4 text-gray-400 shrink-0" />
-                  <a href={`mailto:${company.email}`} className="hover:text-blue-600 transition-colors">{company.email}</a>
+                  <a href={`mailto:${contactInfo.email}`} className="hover:text-blue-600 transition-colors">{contactInfo.email}</a>
                 </div>
               )}
-              {company.address && (
+              {contactInfo.address && (
                 <div className="flex items-start gap-3 text-sm text-gray-600">
                   <MapPin className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
-                  <span>{company.address}</span>
+                  <span>{contactInfo.address}</span>
+                </div>
+              )}
+              {contactInfo.website && (
+                <div className="flex items-center gap-3 text-sm text-gray-600">
+                  <Globe className="w-4 h-4 text-gray-400 shrink-0" />
+                  <a
+                    href={contactInfo.website.startsWith("http") ? contactInfo.website : `https://${contactInfo.website}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-blue-600 transition-colors truncate"
+                  >
+                    {contactInfo.website}
+                  </a>
                 </div>
               )}
             </div>
-            {company.email && (
+
+            {/* CTA button */}
+            {(contactInfo.ctaLink || contactInfo.email) && (
               <a
-                href={`mailto:${company.email}`}
+                href={contactInfo.ctaLink || `mailto:${contactInfo.email}`}
+                target={contactInfo.ctaLink && !contactInfo.ctaLink.startsWith("mailto") && !contactInfo.ctaLink.startsWith("tel") ? "_blank" : undefined}
+                rel="noopener noreferrer"
                 className="mt-4 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors"
                 data-testid="button-contact-cta"
               >
-                Contact {company.name}
+                {contactInfo.ctaText || `Contact ${contactInfo.name || company?.name || "Us"}`}
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             )}
@@ -481,7 +494,6 @@ export default function PublicPublication() {
         </div>
       </footer>
 
-      {/* Global lightbox */}
       {showLightbox && lightboxImages.length > 0 && (
         <Lightbox images={lightboxImages} startIndex={lightboxStart} onClose={() => setShowLightbox(false)} />
       )}

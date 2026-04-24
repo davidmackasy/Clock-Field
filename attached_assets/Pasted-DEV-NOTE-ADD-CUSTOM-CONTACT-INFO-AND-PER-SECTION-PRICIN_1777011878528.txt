@@ -1,0 +1,135 @@
+DEV NOTE: ADD CUSTOM CONTACT INFO AND PER-SECTION PRICING TO PUBLICATIONS WITHOUT AFFECTING ANYTHING ELSE
+
+Important:
+Do not touch anything else.
+Do not change Field Notes, Work Log, Supplies, Reports, Payroll, Attendance, Schedule, Auth, or existing public links.
+Only update the new Publications module.
+Do not break existing published publications.
+
+Goal:
+Update Publications with two improvements:
+
+Optional custom contact information per publication
+Optional pricing inside each publication section
+
+PART 1: CUSTOM CONTACT INFORMATION
+
+Add a Contact Information section in the publication editor before publishing.
+
+Fields:
+Use default business contact info toggle
+Company Name
+Address
+Email Address
+Phone Number
+Website optional
+CTA Button Text optional
+CTA Button Link optional
+
+Behavior:
+Default should be:
+Use default business contact info from Settings
+
+If enabled:
+Pull contact info from business settings.
+
+If disabled:
+Allow admin to enter custom contact info for this specific publication.
+
+Public page:
+Show the selected contact information near the bottom of the publication.
+Do not show empty fields.
+Do not expose private admin/employee data.
+
+Suggested public section title:
+Contact [Company Name]
+
+Suggested CTA:
+Contact Us
+Call Now
+Email Us
+Visit Website
+
+PART 2: PER-SECTION PRICING
+
+Update each publication content section so it can include optional pricing.
+
+Each section should support:
+Pricing enabled toggle
+Price title
+Price amount
+Unit optional
+Price description optional
+Multiple price items optional
+
+Important:
+Pricing should not only live at the bottom of the whole publication.
+Each section should be able to have its own pricing because one publication may include multiple products or services.
+
+Example:
+Section 1:
+GLOBE Feminine Dispenser
+Price: $___ per unit
+
+Section 2:
+Installation Service
+Price: $___ per install
+
+Section 3:
+Monthly Refill Service
+Price: $___ per month
+
+If no pricing is added to a section, hide pricing completely for that section.
+
+Editor UI:
+Inside every section card, add a small optional Pricing area.
+Keep it collapsed by default if possible.
+Label:
+Add Pricing
+
+Fields:
+Item Name
+Price
+Unit
+Description
+
+Allow multiple pricing rows per section if simple to add safely.
+If multiple rows are too much right now, add one pricing block per section first, but structure it so multiple can be added later.
+
+Public page:
+Display pricing directly under the matching section content, not only at the bottom.
+Keep it clean and professional.
+Do not make it look like a shopping cart.
+This is informational pricing.
+
+Data model update:
+Add section pricing safely.
+
+Suggested:
+PublicationSection.pricingItems JSON array
+
+or a separate table:
+PublicationSectionPricing
+id
+publicationId
+sectionId
+title
+price
+unit
+description
+sortOrder
+
+Use the safest option based on the current implementation.
+
+Backward compatibility:
+Existing publications without contact info should still work.
+Existing publications without section pricing should still work.
+Do not break the current published GLOBE Feminine Dispensers page.
+
+Acceptance:
+Admin can choose default contact info or enter custom contact info.
+Public publication shows the correct contact info.
+Each section can optionally include pricing.
+Pricing appears under the related section.
+Empty pricing does not show.
+Nothing else is affected.

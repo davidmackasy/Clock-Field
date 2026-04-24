@@ -25,7 +25,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft, Save, Globe, EyeOff, Plus, Trash2, ImagePlus, Mic, MicOff,
   Sparkles, ChevronDown, ChevronUp, GripVertical, Copy, ExternalLink,
-  DollarSign, ChevronRight, Loader2, X, FileText
+  DollarSign, ChevronRight, Loader2, X, FileText, Phone, Mail, MapPin,
+  Link2, Tag
 } from "lucide-react";
 
 const SECTION_TYPES = [
@@ -139,6 +140,13 @@ function AIAssistButton({ text, action, onResult, context }: {
   );
 }
 
+type SectionPricingItem = { id: string; title: string; price: string; unit: string; description: string };
+
+function parsePricingItems(raw: string | null | undefined): SectionPricingItem[] {
+  if (!raw) return [];
+  try { return JSON.parse(raw); } catch { return []; }
+}
+
 function SectionCard({
   section,
   pubId,
@@ -165,6 +173,8 @@ function SectionCard({
   const [sectionType, setSectionType] = useState(section.sectionType || "text");
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pricingOpen, setPricingOpen] = useState(false);
+  const [pricingItems, setPricingItems] = useState<SectionPricingItem[]>(() => parsePricingItems(section.pricingItems));
   const fileRef = useRef<HTMLInputElement>(null);
 
   const media: any[] = section.media || [];
@@ -176,6 +186,7 @@ function SectionCard({
         title: title || null,
         body: body || null,
         sectionType,
+        pricingItems: pricingItems.length > 0 ? JSON.stringify(pricingItems) : null,
       });
       const updated = await resp.json();
       onSaved({ ...updated, media });
@@ -185,6 +196,25 @@ function SectionCard({
     } finally {
       setSaving(false);
     }
+  };
+
+  const addPricingItem = () => {
+    const newItem: SectionPricingItem = {
+      id: Math.random().toString(36).slice(2),
+      title: "", price: "", unit: "", description: "",
+    };
+    setPricingItems(prev => [...prev, newItem]);
+    setDirty(true);
+  };
+
+  const updatePricingItem = (id: string, field: keyof SectionPricingItem, value: string) => {
+    setPricingItems(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
+    setDirty(true);
+  };
+
+  const removePricingItem = (id: string) => {
+    setPricingItems(prev => prev.filter(p => p.id !== id));
+    setDirty(true);
   };
 
   const uploadImages = async (files: FileList) => {
@@ -364,6 +394,87 @@ function SectionCard({
             )}
           </div>
 
+          {/* Per-section pricing */}
+          <Collapsible open={pricingOpen} onOpenChange={setPricingOpen}>
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors py-1"
+                data-testid={`button-section-pricing-toggle-${section.id}`}
+              >
+                <Tag className="w-3 h-3" />
+                {pricingItems.length > 0
+                  ? `Pricing (${pricingItems.length} item${pricingItems.length !== 1 ? "s" : ""})`
+                  : "Add Pricing"}
+                {pricingOpen
+                  ? <ChevronDown className="w-3 h-3 ml-auto" />
+                  : <ChevronRight className="w-3 h-3 ml-auto" />}
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="mt-2 space-y-2 border-t border-gray-100 pt-2">
+                {pricingItems.map((item, pIdx) => (
+                  <div key={item.id} className="bg-gray-50 rounded-lg p-2.5 space-y-2"
+                    data-testid={`section-pricing-item-${item.id}`}>
+                    <div className="flex items-center gap-1">
+                      <Input
+                        value={item.title}
+                        onChange={e => updatePricingItem(item.id, "title", e.target.value)}
+                        placeholder="Item name (e.g. Monthly Refill)"
+                        className="h-7 text-xs flex-1"
+                        data-testid={`input-section-pricing-title-${pIdx}`}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="w-7 h-7 text-gray-400 hover:text-destructive shrink-0"
+                        onClick={() => removePricingItem(item.id)}
+                        data-testid={`button-remove-section-pricing-${item.id}`}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <Input
+                        value={item.price}
+                        onChange={e => updatePricingItem(item.id, "price", e.target.value)}
+                        placeholder="Price (e.g. $25)"
+                        className="h-7 text-xs"
+                        data-testid={`input-section-pricing-price-${pIdx}`}
+                      />
+                      <Input
+                        value={item.unit}
+                        onChange={e => updatePricingItem(item.id, "unit", e.target.value)}
+                        placeholder="Unit (e.g. /month)"
+                        className="h-7 text-xs w-28"
+                        data-testid={`input-section-pricing-unit-${pIdx}`}
+                      />
+                    </div>
+                    <Input
+                      value={item.description}
+                      onChange={e => updatePricingItem(item.id, "description", e.target.value)}
+                      placeholder="Description (optional)"
+                      className="h-7 text-xs"
+                      data-testid={`input-section-pricing-desc-${pIdx}`}
+                    />
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addPricingItem}
+                  className="gap-1.5 text-xs h-7 w-full"
+                  data-testid={`button-add-section-pricing-${section.id}`}
+                >
+                  <Plus className="w-3 h-3" />
+                  Add Pricing Item
+                </Button>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
           {dirty && (
             <Button size="sm" onClick={save} disabled={saving} className="text-xs" data-testid="button-save-section">
               {saving ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
@@ -444,6 +555,15 @@ export default function AdminPublicationEditor() {
   const [seoDescription, setSeoDescription] = useState("");
   const [helpfulVotingEnabled, setHelpfulVotingEnabled] = useState(true);
   const [contactCtaEnabled, setContactCtaEnabled] = useState(true);
+  const [contactUseDefault, setContactUseDefault] = useState(true);
+  const [contactCompanyName, setContactCompanyName] = useState("");
+  const [contactAddress, setContactAddress] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [contactWebsite, setContactWebsite] = useState("");
+  const [contactCtaText, setContactCtaText] = useState("");
+  const [contactCtaLink, setContactCtaLink] = useState("");
+  const [contactOpen, setContactOpen] = useState(false);
   const [coverImageData, setCoverImageData] = useState<string | null>(null);
   const [seoOpen, setSeoOpen] = useState(false);
   const [sections, setSections] = useState<any[]>([]);
@@ -473,6 +593,14 @@ export default function AdminPublicationEditor() {
       setSeoDescription(pubData.seoDescription || "");
       setHelpfulVotingEnabled(pubData.helpfulVotingEnabled !== false);
       setContactCtaEnabled(pubData.contactCtaEnabled !== false);
+      setContactUseDefault(pubData.contactUseDefault !== false);
+      setContactCompanyName(pubData.contactCompanyName || "");
+      setContactAddress(pubData.contactAddress || "");
+      setContactEmail(pubData.contactEmail || "");
+      setContactPhone(pubData.contactPhone || "");
+      setContactWebsite(pubData.contactWebsite || "");
+      setContactCtaText(pubData.contactCtaText || "");
+      setContactCtaLink(pubData.contactCtaLink || "");
       setCoverImageData(pubData.coverImageData || null);
       setSections(pubData.sections || []);
       setPricing(pubData.pricing || []);
@@ -486,13 +614,25 @@ export default function AdminPublicationEditor() {
   const saveMeta = async (overrides: Record<string, any> = {}) => {
     setSaving(true);
     try {
+      const contactPayload = {
+        contactCtaEnabled,
+        contactUseDefault,
+        contactCompanyName: contactCompanyName || null,
+        contactAddress: contactAddress || null,
+        contactEmail: contactEmail || null,
+        contactPhone: contactPhone || null,
+        contactWebsite: contactWebsite || null,
+        contactCtaText: contactCtaText || null,
+        contactCtaLink: contactCtaLink || null,
+      };
+
       if (isNew || !pubId) {
         const resp = await apiRequest("POST", "/api/publications", {
           title, subtitle: subtitle || null, slug: slug || autoSlug(title),
           introText: introText || null, category: category || null,
           seoTitle: seoTitle || null, seoDescription: seoDescription || null,
           coverImageData: coverImageData || null,
-          helpfulVotingEnabled, contactCtaEnabled,
+          helpfulVotingEnabled, ...contactPayload,
           ...overrides,
         });
         if (!resp.ok) {
@@ -513,7 +653,7 @@ export default function AdminPublicationEditor() {
           introText: introText || null, category: category || null,
           seoTitle: seoTitle || null, seoDescription: seoDescription || null,
           coverImageData: coverImageData || null,
-          helpfulVotingEnabled, contactCtaEnabled,
+          helpfulVotingEnabled, ...contactPayload,
           ...overrides,
         });
         if (!resp.ok) {
@@ -870,6 +1010,126 @@ export default function AdminPublicationEditor() {
             </div>
           </CardContent>
         </Card>
+
+        {/* ── Contact Information ──────────────────────────────────────────── */}
+        {contactCtaEnabled && (
+          <Collapsible open={contactOpen} onOpenChange={setContactOpen}>
+            <CollapsibleTrigger asChild>
+              <button
+                className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                data-testid="button-contact-toggle"
+              >
+                <span className="flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-gray-400" />
+                  Contact Information
+                </span>
+                {contactOpen
+                  ? <ChevronDown className="w-4 h-4 text-gray-400" />
+                  : <ChevronRight className="w-4 h-4 text-gray-400" />}
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <Card className="mt-2 border-gray-200">
+                <CardContent className="pt-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Use default business contact info</p>
+                      <p className="text-xs text-gray-400">Pull phone, email and address from your Settings</p>
+                    </div>
+                    <Switch
+                      checked={contactUseDefault}
+                      onCheckedChange={setContactUseDefault}
+                      data-testid="switch-contact-use-default"
+                    />
+                  </div>
+
+                  {!contactUseDefault && (
+                    <div className="space-y-3 border-t border-gray-100 pt-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs flex items-center gap-1.5">
+                          <Tag className="w-3 h-3" /> Company Name
+                        </Label>
+                        <Input
+                          value={contactCompanyName}
+                          onChange={e => setContactCompanyName(e.target.value)}
+                          placeholder="e.g. Globe Hygiene Solutions"
+                          data-testid="input-contact-company-name"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs flex items-center gap-1.5">
+                            <Phone className="w-3 h-3" /> Phone Number
+                          </Label>
+                          <Input
+                            value={contactPhone}
+                            onChange={e => setContactPhone(e.target.value)}
+                            placeholder="e.g. (555) 123-4567"
+                            data-testid="input-contact-phone"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs flex items-center gap-1.5">
+                            <Mail className="w-3 h-3" /> Email Address
+                          </Label>
+                          <Input
+                            value={contactEmail}
+                            onChange={e => setContactEmail(e.target.value)}
+                            placeholder="e.g. info@company.com"
+                            type="email"
+                            data-testid="input-contact-email"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs flex items-center gap-1.5">
+                          <MapPin className="w-3 h-3" /> Address
+                        </Label>
+                        <Input
+                          value={contactAddress}
+                          onChange={e => setContactAddress(e.target.value)}
+                          placeholder="e.g. 123 Main Street, Toronto, ON"
+                          data-testid="input-contact-address"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs flex items-center gap-1.5">
+                          <Link2 className="w-3 h-3" /> Website <span className="text-gray-400">(optional)</span>
+                        </Label>
+                        <Input
+                          value={contactWebsite}
+                          onChange={e => setContactWebsite(e.target.value)}
+                          placeholder="e.g. https://www.company.com"
+                          data-testid="input-contact-website"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 border-t border-gray-100 pt-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">CTA Button Text <span className="text-gray-400">(optional)</span></Label>
+                          <Input
+                            value={contactCtaText}
+                            onChange={e => setContactCtaText(e.target.value)}
+                            placeholder="e.g. Contact Us, Call Now"
+                            data-testid="input-contact-cta-text"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">CTA Button Link <span className="text-gray-400">(optional)</span></Label>
+                          <Input
+                            value={contactCtaLink}
+                            onChange={e => setContactCtaLink(e.target.value)}
+                            placeholder="e.g. mailto:… or tel:…"
+                            data-testid="input-contact-cta-link"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
 
         {/* ── Content Sections ──────────────────────────────────────────────── */}
         <div className="space-y-3">

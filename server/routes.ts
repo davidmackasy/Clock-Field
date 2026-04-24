@@ -6373,6 +6373,30 @@ FINAL RULES:
         media: allMedia.filter(m => m.sectionId === s.id).sort((a, b) => a.sortOrder - b.sortOrder),
       }));
 
+      const contactInfo = pub.contactCtaEnabled
+        ? (pub.contactUseDefault !== false)
+          ? {
+              name: company?.name || null,
+              logoUrl: company?.companyLogoUrl || null,
+              phone: company?.companyPhone || null,
+              email: company?.companyEmail || null,
+              address: company?.address || null,
+              website: null,
+              ctaText: null,
+              ctaLink: null,
+            }
+          : {
+              name: pub.contactCompanyName || company?.name || null,
+              logoUrl: company?.companyLogoUrl || null,
+              phone: pub.contactPhone || null,
+              email: pub.contactEmail || null,
+              address: pub.contactAddress || null,
+              website: pub.contactWebsite || null,
+              ctaText: pub.contactCtaText || null,
+              ctaLink: pub.contactCtaLink || null,
+            }
+        : null;
+
       res.json({
         ...pub,
         sections: sectionsWithMedia,
@@ -6385,6 +6409,7 @@ FINAL RULES:
           email: company.companyEmail,
           address: company.address,
         } : null,
+        contactInfo,
       });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
