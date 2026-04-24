@@ -9,15 +9,19 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Link } from "wouter";
-import { Clock, Play, Square, Calendar, ShieldAlert, ChevronRight } from "lucide-react";
+import { Link, useLocation as useWouterLocation } from "wouter";
+import { Clock, Play, Square, Calendar, ShieldAlert, ChevronRight, Zap, X as XIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon } from "lucide-react";
 
 export default function EmployeeHome() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, navigate] = useWouterLocation();
   const [elapsed, setElapsed] = useState(0);
   const [blockClockOutOpen, setBlockClockOutOpen] = useState(false);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [paDismissed, setPaDismissed] = useState(false);
+  const [paClockInDialogOpen, setPaClockInDialogOpen] = useState(false);
+  const [paLightbox, setPaLightbox] = useState<{ photoIds: string[]; idx: number } | null>(null);
 
   const { data: tzData } = useQuery<{ timezone: string }>({
     queryKey: ["/api/settings/timezone"],
@@ -39,6 +43,11 @@ export default function EmployeeHome() {
     enabled: !!activeEntry,
     staleTime: 30_000,
     refetchInterval: activeEntry ? 60_000 : false,
+  });
+
+  const { data: myPriorityAlerts = [] } = useQuery<any[]>({
+    queryKey: ["/api/employee/priority-alerts"],
+    refetchInterval: 5 * 60_000,
   });
 
   const clockInMut = useMutation({
@@ -169,6 +178,83 @@ export default function EmployeeHome() {
         </Link>
       )}
 
+      {/* Priority Clean reminder banner */}
+      {!paDismissed && myPriorityAlerts.length > 0 && (
+        <div className="rounded-xl border-2 border-red-400 bg-red-50 dark:bg-red-950/30 dark:border-red-700 p-3 space-y-2.5" data-testid="priority-clean-reminder">
+          <div className="flex items-start gap-2">
+            <Zap className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              {myPriorityAlerts.length === 1 ? (
+                <>
+                  <p className="text-sm font-bold text-red-700 dark:text-red-400">{myPriorityAlerts[0].title}</p>
+                  {myPriorityAlerts[0].locationName && (
+                    <p className="text-xs text-red-600 dark:text-red-300 mt-0.5">
+                      Our client at <span className="font-semibold">{myPriorityAlerts[0].locationName}</span> reported an issue that needs attention.
+                    </p>
+                  )}
+                  {myPriorityAlerts[0].message && !myPriorityAlerts[0].locationName && (
+                    <p className="text-xs text-red-600 dark:text-red-300 mt-0.5 leading-relaxed">{myPriorityAlerts[0].message}</p>
+                  )}
+                  <p className="text-[10px] text-red-400 mt-0.5">
+                    Created {new Date(myPriorityAlerts[0].createdAt).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-bold text-red-700 dark:text-red-400">{myPriorityAlerts.length} Open Priority Clean Alerts</p>
+                  <div className="space-y-0.5 mt-0.5">
+                    {myPriorityAlerts.map((a: any) => (
+                      <p key={a.id} className="text-xs text-red-600 dark:text-red-300">
+                        {a.locationName ? `${a.locationName} — ` : ""}{a.title}
+                      </p>
+                    ))}
+                  </div>
+                </>
+              )}
+              {myPriorityAlerts[0]?.photos?.length > 0 && myPriorityAlerts.length === 1 && (
+                <div className="flex gap-1.5 mt-2 flex-wrap">
+                  {myPriorityAlerts[0].photos.map((p: any, i: number) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setPaLightbox({ photoIds: myPriorityAlerts[0].photos.map((x: any) => x.id), idx: i })}
+                      className="relative w-14 h-14 rounded-md overflow-hidden border-2 border-red-300 focus:outline-none focus:ring-2 focus:ring-red-400 cursor-pointer group active:scale-95 transition-transform"
+                      data-testid={`home-pa-photo-${p.id}`}
+                    >
+                      <img src={`/api/priority-alert-photos/${p.id}/image`} alt="" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 group-active:bg-black/35 transition-colors" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setPaDismissed(true)}
+              className="text-red-400 hover:text-red-600 p-0.5 shrink-0 transition-colors"
+              data-testid="button-dismiss-priority-reminder"
+            >
+              <XIcon className="w-4 h-4" />
+            </button>
+          </div>
+          <Button
+            size="sm"
+            className="w-full bg-red-600 hover:bg-red-700 text-white h-9 text-xs font-semibold"
+            onClick={() => {
+              if (!isActive) {
+                setPaClockInDialogOpen(true);
+              } else {
+                navigate("/employee/work-log");
+              }
+            }}
+            data-testid="button-priority-reminder-action"
+          >
+            <Zap className="w-3.5 h-3.5 mr-1.5" />
+            {myPriorityAlerts.length === 1 ? "View Priority Work" : `View ${myPriorityAlerts.length} Priority Alerts`}
+          </Button>
+        </div>
+      )}
+
       <Card className={isActive ? "border-primary/30 bg-primary/5 dark:bg-primary/10" : ""}>
         <CardContent className="p-5">
           {entryLoading ? (
@@ -291,6 +377,67 @@ export default function EmployeeHome() {
               </Card>
             ))}
           </div>
+        </div>
+      )}
+      {/* Clock-in first dialog for priority alert action */}
+      <Dialog open={paClockInDialogOpen} onOpenChange={setPaClockInDialogOpen}>
+        <DialogContent className="max-w-sm" data-testid="dialog-pa-clock-in-first">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-700">
+              <Zap className="w-5 h-5" /> Priority Clean — Clock In First
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            You need to clock in before you can view and complete your priority clean assignment. Please clock in first, then visit your Work Log.
+          </p>
+          <Button
+            className="w-full"
+            onClick={() => setPaClockInDialogOpen(false)}
+            data-testid="button-pa-clock-in-dismiss"
+          >
+            Got It
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Priority Alert Photo Lightbox */}
+      {paLightbox && (
+        <div
+          className="fixed inset-0 z-[300] bg-black/95 flex items-center justify-center"
+          onClick={() => setPaLightbox(null)}
+        >
+          <button
+            className="absolute top-4 right-4 text-white/70 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors"
+            onClick={() => setPaLightbox(null)}
+            data-testid="button-home-pa-lightbox-close"
+          >
+            <XIcon className="w-6 h-6" />
+          </button>
+          <button
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white p-2 rounded-full hover:bg-white/10 disabled:opacity-20 transition-colors"
+            disabled={paLightbox.idx === 0}
+            onClick={e => { e.stopPropagation(); setPaLightbox(p => p ? { ...p, idx: p.idx - 1 } : null); }}
+            data-testid="button-home-pa-lightbox-prev"
+          >
+            <ChevronLeftIcon className="w-8 h-8" />
+          </button>
+          <img
+            src={`/api/priority-alert-photos/${paLightbox.photoIds[paLightbox.idx]}/image`}
+            alt=""
+            className="max-h-[85vh] max-w-[90vw] object-contain rounded-xl"
+            onClick={e => e.stopPropagation()}
+          />
+          <button
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white p-2 rounded-full hover:bg-white/10 disabled:opacity-20 transition-colors"
+            disabled={paLightbox.idx === paLightbox.photoIds.length - 1}
+            onClick={e => { e.stopPropagation(); setPaLightbox(p => p ? { ...p, idx: p.idx + 1 } : null); }}
+            data-testid="button-home-pa-lightbox-next"
+          >
+            <ChevronRightIcon className="w-8 h-8" />
+          </button>
+          {paLightbox.photoIds.length > 1 && (
+            <p className="absolute bottom-6 text-white/60 text-sm">{paLightbox.idx + 1} / {paLightbox.photoIds.length}</p>
+          )}
         </div>
       )}
     </div>

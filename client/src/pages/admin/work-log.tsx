@@ -15,7 +15,7 @@ import {
   MapPin, User, Calendar, ChevronRight, CheckCircle, Search, Eye, X,
   ChevronLeft, ChevronRight as ChevronRightIcon, Link, Copy, ExternalLink,
   Star, Shield, MessageSquare, Quote, Share2, Download, Pencil, Plus, Trash2, Camera,
-  AlertTriangle, Zap,
+  AlertTriangle, Zap, Maximize2,
 } from "lucide-react";
 
 function fmt(iso: string) {
@@ -712,6 +712,7 @@ export default function AdminWorkLog() {
   const editRef = useRef<SubmissionDetailHandle>(null);
 
   // Priority Clean state
+  const [paPhotoLightbox, setPaPhotoLightbox] = useState<{ photoIds: string[]; idx: number } | null>(null);
   const [paOpen, setPaOpen] = useState(false);
   const [paTitle, setPaTitle] = useState("Priority Clean Required");
   const [paMessage, setPaMessage] = useState("");
@@ -965,13 +966,19 @@ export default function AdminWorkLog() {
                     <p className="text-[10px] text-red-400">Created {fmt(alert.createdAt)}</p>
                     {alert.photos && alert.photos.length > 0 && (
                       <div className="flex gap-1.5 mt-1.5 flex-wrap">
-                        {alert.photos.map((p: any) => (
-                          <img
+                        {alert.photos.map((p: any, pi: number) => (
+                          <button
                             key={p.id}
-                            src={`/api/priority-alert-photos/${p.id}/image`}
-                            alt=""
-                            className="w-12 h-12 object-cover rounded-md border border-red-200"
-                          />
+                            type="button"
+                            onClick={() => setPaPhotoLightbox({ photoIds: alert.photos.map((x: any) => x.id), idx: pi })}
+                            className="relative w-12 h-12 rounded-md overflow-hidden border border-red-200 cursor-pointer group focus:outline-none focus:ring-2 focus:ring-red-400 active:scale-95 transition-transform"
+                            data-testid={`pa-admin-photo-${p.id}`}
+                          >
+                            <img src={`/api/priority-alert-photos/${p.id}/image`} alt="" className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 flex items-center justify-center transition-colors">
+                              <Maximize2 className="w-3 h-3 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                            </div>
+                          </button>
                         ))}
                       </div>
                     )}
@@ -1325,6 +1332,47 @@ export default function AdminWorkLog() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Priority Alert Photo Lightbox */}
+      {paPhotoLightbox && (
+        <div
+          className="fixed inset-0 z-[300] bg-black/95 flex items-center justify-center"
+          onClick={() => setPaPhotoLightbox(null)}
+        >
+          <button
+            className="absolute top-4 right-4 text-white/70 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors"
+            onClick={() => setPaPhotoLightbox(null)}
+            data-testid="button-pa-lightbox-close"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <button
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white p-2 rounded-full hover:bg-white/10 disabled:opacity-20 transition-colors"
+            disabled={paPhotoLightbox.idx === 0}
+            onClick={e => { e.stopPropagation(); setPaPhotoLightbox(p => p ? { ...p, idx: p.idx - 1 } : null); }}
+            data-testid="button-pa-lightbox-prev"
+          >
+            <ChevronLeft className="w-8 h-8" />
+          </button>
+          <img
+            src={`/api/priority-alert-photos/${paPhotoLightbox.photoIds[paPhotoLightbox.idx]}/image`}
+            alt=""
+            className="max-h-[85vh] max-w-[90vw] object-contain rounded-xl"
+            onClick={e => e.stopPropagation()}
+          />
+          <button
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white p-2 rounded-full hover:bg-white/10 disabled:opacity-20 transition-colors"
+            disabled={paPhotoLightbox.idx === paPhotoLightbox.photoIds.length - 1}
+            onClick={e => { e.stopPropagation(); setPaPhotoLightbox(p => p ? { ...p, idx: p.idx + 1 } : null); }}
+            data-testid="button-pa-lightbox-next"
+          >
+            <ChevronRightIcon className="w-8 h-8" />
+          </button>
+          {paPhotoLightbox.photoIds.length > 1 && (
+            <p className="absolute bottom-6 text-white/60 text-sm">{paPhotoLightbox.idx + 1} / {paPhotoLightbox.photoIds.length}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

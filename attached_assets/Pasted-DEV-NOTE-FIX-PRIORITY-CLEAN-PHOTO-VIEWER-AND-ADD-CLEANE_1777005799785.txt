@@ -1,0 +1,138 @@
+DEV NOTE: FIX PRIORITY CLEAN PHOTO VIEWER AND ADD CLEANER HOME PRIORITY REMINDER WITHOUT BREAKING ANYTHING ELSE
+
+Important:
+Do not break or affect anything else.
+Do not touch Field Notes, Supplies, Reports, Payroll, Attendance, Schedule, Auth, or unrelated Work Log logic.
+Do not redesign the whole cleaner app.
+Only fix Priority Clean image viewing and add a small cleaner-side priority reminder.
+Production is active. Keep all changes isolated and backward compatible.
+
+Issue 1: Priority Clean photos are still not opening
+
+Fix this in both places:
+
+Cleaner app
+When the cleaner sees Priority Clean photos:
+On Home priority reminder
+Inside Active Session
+Inside the Priority Clean card
+Inside converted priority work area if applicable
+
+The cleaner must be able to tap any photo and open a full image viewer.
+
+Admin side
+When admin views Priority Clean alerts/photos under Work Log, the admin must also be able to click any attached priority photo and open a full image viewer.
+
+Required image viewer behavior:
+
+Tap/click thumbnail opens popup/lightbox
+Open on the exact image clicked
+Show full image clearly
+Preserve image aspect ratio
+Support portrait and landscape photos
+Show next/previous controls when multiple photos exist
+Allow swipe on mobile if supported
+Show close button
+Do not crop important details
+Do not open a new browser tab
+Do not crash if an image URL is missing
+Handle one image and multiple images properly
+
+Use the existing app image viewer if one exists and works safely.
+If not, create one isolated PriorityCleanImageViewer component and use it only for this priority feature.
+
+Suggested component:
+PriorityCleanImageViewer
+Props:
+images: string[]
+initialIndex: number
+isOpen: boolean
+onClose: function
+
+Acceptance:
+Cleaner taps the second photo, the viewer opens on the second photo.
+Admin clicks the third photo, the viewer opens on the third photo.
+User can close it and continue normally.
+
+Issue 2: Add a cleaner home priority reminder
+
+On the cleaner home page, show a small reminder if that cleaner has open Priority Clean alerts assigned to them.
+
+This reminder should appear before they start work, so they know there is a client complaint or urgent clean waiting.
+
+Reminder copy:
+Priority Clean Required
+Our client at [Location Name] reported an issue that needs attention.
+
+If there are multiple:
+2 Open Priority Clean Alerts
+
+Show:
+
+count of open alerts
+location name
+short priority title
+small preview thumbnails if available
+assigned cleaner name optional
+created time optional
+
+When cleaner taps the reminder:
+If cleaner is not clocked in:
+Show a clean message:
+Please clock in first to start this priority clean. Once your work session starts, you’ll be able to review the issue photos and complete the priority work.
+
+If cleaner is already clocked in:
+Take them to the Active Session / Work Log screen where the Priority Clean card appears.
+
+Allow dismiss/collapse:
+Cleaner can close the reminder for the current app session, but do not mark the priority alert completed.
+It should still exist until completed through Work Log.
+
+Important visibility rule:
+Only show alerts assigned to the signed-in cleaner.
+Do not show alerts assigned to other employees.
+Only show open or active alerts.
+Do not show completed/resolved priority alerts.
+
+Issue 3: Priority alert location wording
+
+Make sure the reminder uses the selected location from the admin priority alert.
+
+Example:
+Our client at Karrich Industries Inc reported an issue that needs attention.
+
+If location has both client name and address, use the clean display name already used in the app.
+Do not expose the wrong location.
+Do not hardcode location text.
+
+Data rules:
+Use assignedEmployeeId to filter cleaner alerts.
+Use locationId/locationName from the priority alert.
+Use priorityStatus open/acknowledged/in_progress to show reminder.
+Hide completed/resolved alerts.
+
+Do not change:
+
+Priority clean creation flow
+Normal work log add area flow
+Submit work logic
+Public link layout
+Existing active session design except making photos clickable
+Any unrelated photo upload logic
+
+Testing checklist:
+
+Admin creates Priority Clean with 3 photos for Cleaner A at Location X.
+Cleaner A opens app and sees reminder on home.
+Cleaner B does not see it.
+Cleaner A taps reminder while not clocked in and sees clock-in message.
+Cleaner A starts work session and sees Priority Clean card.
+Cleaner taps any photo and full image viewer opens on that photo.
+Admin opens Work Log Priority Clean alert and clicks any photo.
+Admin image viewer opens properly.
+Completed priority clean no longer shows as open reminder.
+No unrelated app pages are changed.
+
+Final reminder:
+Do not break or affect anything else.
+Only fix Priority Clean photo preview/viewer and add the cleaner home priority reminder.

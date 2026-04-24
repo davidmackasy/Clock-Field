@@ -6050,6 +6050,24 @@ FINAL RULES:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // GET /api/employee/priority-alerts — open priority clean alerts assigned to this employee
+  app.get("/api/employee/priority-alerts", requireAuth, requireRole("employee"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const alerts = await storage.getOpenPriorityCleanAlertsByEmployee(user.id, user.companyId);
+      const result = await Promise.all(alerts.map(async (a) => {
+        const photos = await storage.getPriorityCleanPhotosByAlertId(a.id);
+        const loc = a.locationId ? await storage.getLocation(a.locationId) : null;
+        return {
+          ...a,
+          locationName: loc?.name || a.locationId || null,
+          photos: photos.map(p => ({ id: p.id })),
+        };
+      }));
+      res.json(result);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   return httpServer;
 }
 

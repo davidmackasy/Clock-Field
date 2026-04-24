@@ -233,6 +233,7 @@ export interface IStorage {
   getPriorityCleanAlert(id: string): Promise<PriorityCleanAlert | undefined>;
   getPriorityCleanAlertsByCompany(companyId: string): Promise<PriorityCleanAlert[]>;
   getOpenPriorityCleanAlertsByLocation(locationId: string, companyId: string, employeeId?: string): Promise<PriorityCleanAlert[]>;
+  getOpenPriorityCleanAlertsByEmployee(employeeId: string, companyId: string): Promise<PriorityCleanAlert[]>;
   updatePriorityCleanAlert(id: string, data: Partial<InsertPriorityCleanAlert>): Promise<PriorityCleanAlert | undefined>;
   deletePriorityCleanAlert(id: string): Promise<void>;
   resolveAlertsForLocation(locationId: string, companyId: string, submissionId: string): Promise<void>;
@@ -1276,6 +1277,16 @@ export class DatabaseStorage implements IStorage {
   async getPriorityCleanAlertsByCompany(companyId: string): Promise<PriorityCleanAlert[]> {
     return db.select().from(priorityCleanAlerts)
       .where(eq(priorityCleanAlerts.companyId, companyId))
+      .orderBy(desc(priorityCleanAlerts.createdAt));
+  }
+
+  async getOpenPriorityCleanAlertsByEmployee(employeeId: string, companyId: string): Promise<PriorityCleanAlert[]> {
+    return db.select().from(priorityCleanAlerts)
+      .where(and(
+        eq(priorityCleanAlerts.companyId, companyId),
+        eq(priorityCleanAlerts.status, "open"),
+        eq(priorityCleanAlerts.assignedEmployeeId, employeeId),
+      ))
       .orderBy(desc(priorityCleanAlerts.createdAt));
   }
 
