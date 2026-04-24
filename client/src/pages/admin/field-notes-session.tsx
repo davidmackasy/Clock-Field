@@ -1125,7 +1125,7 @@ export default function AdminFieldNotesSession() {
               entries={entries}
               sessionId={session.id}
               onPhotoClick={(url, entry) => setLightboxPhoto({ url, entry })}
-              onStartAfterWalkthrough={() => navigate(`/admin/field-notes/capture?sessionId=${session.id}&phase=after&return=/admin/field-notes`)}
+              onStartAfterWalkthrough={() => navigate(`${backPath}/capture?sessionId=${session.id}&phase=after&return=${backPath}`)}
             />
           </TabsContent>
 

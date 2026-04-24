@@ -1040,41 +1040,6 @@ function SubmissionDetail({ subId }: { subId: string }) {
           </div>
         ))
       )}
-
-      {/* Priority Clean Photo Lightbox */}
-      {paLightbox && (
-        <div
-          className="fixed inset-0 z-[300] bg-black/90 flex items-center justify-center"
-          onClick={() => setPaLightbox(null)}
-        >
-          <button className="absolute top-4 right-4 text-white/60 hover:text-white p-2" onClick={() => setPaLightbox(null)}>
-            <XIcon className="w-6 h-6" />
-          </button>
-          <button
-            className="absolute left-2 top-1/2 -translate-y-1/2 text-white/50 hover:text-white p-2 disabled:opacity-20"
-            disabled={paLightbox.idx === 0}
-            onClick={e => { e.stopPropagation(); setPaLightbox(prev => prev ? { ...prev, idx: prev.idx - 1 } : null); }}
-          >
-            <ChevronLeftIcon className="w-8 h-8" />
-          </button>
-          <img
-            src={`/api/priority-alert-photos/${paLightbox.photoIds[paLightbox.idx]}/image`}
-            alt=""
-            className="max-h-[85vh] max-w-[90vw] object-contain rounded-xl"
-            onClick={e => e.stopPropagation()}
-          />
-          <button
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-white/50 hover:text-white p-2 disabled:opacity-20"
-            disabled={paLightbox.idx === paLightbox.photoIds.length - 1}
-            onClick={e => { e.stopPropagation(); setPaLightbox(prev => prev ? { ...prev, idx: prev.idx + 1 } : null); }}
-          >
-            <ChevronRightIcon className="w-8 h-8" />
-          </button>
-          {paLightbox.photoIds.length > 1 && (
-            <p className="absolute bottom-6 text-white/60 text-sm">{paLightbox.idx + 1} / {paLightbox.photoIds.length}</p>
-          )}
-        </div>
-      )}
     </div>
   );
 }

@@ -1,0 +1,120 @@
+DEV NOTE: FIX CLEANER APP WORK SUBMISSION WHITE SCREEN AND FIELD NOTE AFTER WALKTHROUGH ROUTING WITHOUT AFFECTING ANYTHING ELSE
+
+Important:
+Do not touch anything else.
+Do not refactor unrelated employee pages.
+Do not change admin-side flows if they are already working.
+Do not affect Priority Clean creation, Work Log submission saving, Field Notes admin view, payroll, attendance, schedule, reports, supplies, auth, or public links.
+Only fix these two cleaner app issues.
+
+ISSUE 1: CLEANER WORK SUBMISSION OPENS TO WHITE SCREEN
+
+Problem:
+On the cleaner app, after a cleaner submits a Work Log, the submission appears in history.
+But when the cleaner taps the submitted item, the preview/details screen opens blank white.
+
+This happens for:
+normal work submissions
+priority clean submissions
+
+Expected behavior:
+Cleaner should be able to tap any submitted Work Log and view the submission details like before.
+
+Fix requirements:
+
+1. Check the employee Work Log submission detail route.
+2. Check if the modal/detail component is crashing after recent Priority Clean changes.
+3. Add safe handling for both normal and priority submissions.
+4. Make sure missing optional priority fields do not crash the render.
+5. Make sure submitted items still pass the correct submissionId/sessionId.
+6. Make sure the employee route fetches the correct data.
+7. Make sure loading/error/empty states display properly instead of white screen.
+
+Likely areas to inspect:
+employee work log history card click handler
+submission detail modal/page
+priority clean section rendering
+before/after photo arrays
+public/report preview component reused inside cleaner app
+route params after clicking a submitted item
+null checks for priority data
+image viewer state
+recent changes to priority submissions
+
+Required fallback:
+If data is loading, show loading state.
+If no submission is found, show:
+Submission not found.
+If render fails due to missing optional data, hide that section instead of crashing.
+
+Acceptance:
+Cleaner taps normal submitted work log, details open.
+Cleaner taps priority submitted work log, details open.
+No white screen.
+Cleaner can review submitted photos, notes, location, date, and status.
+No admin-side behavior changes.
+
+ISSUE 2: CLEANER FIELD NOTE “START AFTER” SENDS USER BACK HOME
+
+Problem:
+On cleaner side, inside Field Notes, when cleaner taps Start After / Add After Walkthrough, it sends them back to the homepage instead of starting the after-walkthrough capture flow.
+
+Admin side may already work. Do not break it.
+
+Expected behavior:
+Cleaner opens a Field Note.
+Cleaner taps Start After.
+The app starts the after-walkthrough flow for that same Field Note.
+Cleaner can capture after photos and voice notes.
+After content saves under the same Field Note.
+
+Fix requirements:
+
+1. Check employee-side Start After button handler.
+2. Make sure it routes to the correct after-walkthrough capture route.
+3. Make sure it passes the correct fieldNoteId.
+4. Make sure employee permissions allow starting after walkthrough for assigned/accessible notes.
+5. Do not redirect to home unless there is a real auth/access failure.
+6. If access fails, show a clear message instead of silent redirect.
+
+Expected route behavior:
+Start After should open:
+after walkthrough capture screen
+or the same walkthrough capture component in after mode
+
+Suggested route params:
+fieldNoteId
+mode=after
+
+Data must save into after fields:
+afterPhotos
+afterTranscript
+afterSummary
+afterStatus
+
+Do not overwrite before photos or before transcript.
+
+Acceptance:
+Cleaner taps Start After.
+After walkthrough starts.
+Cleaner can take after photos and record voice.
+After data saves under the same Field Note.
+Cleaner returns to Field Note details and sees after photos.
+No redirect to homepage.
+
+FINAL TEST CHECKLIST
+
+1. Cleaner submits a normal Work Log.
+2. Cleaner opens it from history.
+3. Details show properly.
+4. Cleaner submits a Priority Clean Work Log.
+5. Cleaner opens it from history.
+6. Details show properly.
+7. Cleaner opens Field Note.
+8. Cleaner taps Start After.
+9. After walkthrough capture opens.
+10. After photos and voice notes save correctly.
+
+Final reminder:
+Do not break or affect anything else.
+Only fix the cleaner app Work Log detail white screen and cleaner Field Note Start After routing/capture flow.
