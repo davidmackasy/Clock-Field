@@ -1,0 +1,406 @@
+DEV NOTE: ADD NEW SEO PUBLICATION PAGE MODULE WITHOUT AFFECTING FIELD NOTES OR ANYTHING ELSE
+
+Important:
+Do not touch Field Notes.
+Do not change Create New Page inside Field Notes.
+Do not change Walkthrough Notes.
+Do not change Work Log, Priority Clean, Supplies, Reports, Payroll, Attendance, Schedule, Auth, public links, or any unrelated feature.
+This must be a separate new module.
+Production is active. Do not break or affect anything else.
+
+Goal:
+Create a new standalone module for businesses to publish professional public pages that feel like a blog, but more visual and business-focused.
+
+This is not Field Notes.
+This is not Work Log.
+This is not a walkthrough report.
+This is a new publishing tool for business owners.
+
+Suggested module name:
+Publications
+
+Other good names:
+Client Pages
+Service Articles
+Knowledge Pages
+Business Pages
+Service Guides
+
+Best option:
+Publications
+
+Purpose:
+Allow each business to create SEO-friendly public pages with:
+photos
+descriptions
+paragraphs
+product explanations
+service instructions
+pricing sections
+voice-to-text writing
+AI-assisted descriptions
+public share links
+business contact details
+image popup viewer
+optional usefulness voting
+
+Example use case:
+A cleaning business creates a public page called:
+GLOBE Feminine Dispensers
+
+The page explains:
+what the product is
+how it works
+why the client needs it
+photos of the product
+pricing if needed
+contact info for the business
+public link for sharing with clients
+
+ADMIN SIDE REQUIREMENTS
+
+Add a new admin page:
+Publications
+
+Do not place this under Field Notes.
+Add it as its own page in the admin navigation.
+
+Admin should be able to:
+create publication
+edit publication
+save draft
+publish page
+unpublish page
+copy public link
+preview page
+delete/archive publication
+
+CREATE PUBLICATION FORM
+
+Fields:
+Title
+Subtitle optional
+Business/client category optional
+Cover image optional
+SEO title
+SEO description
+Slug
+Intro paragraph
+Sections
+Pricing optional
+Contact CTA optional
+Publish status
+
+SECTION BUILDER
+
+Each publication should support multiple content sections.
+
+Each section can include:
+section heading
+paragraph text
+one or more images
+image captions
+optional pricing block
+optional checklist or bullet points
+optional callout box
+optional voice-to-text note
+optional AI rewrite button
+
+Example section types:
+Text + Image
+Image Gallery
+Pricing
+Product Details
+Step-by-Step Instructions
+FAQ
+Callout / Important Note
+Before and After
+CTA / Contact Section
+
+VOICE TO TEXT
+
+Add voice-to-text inside each section.
+
+Flow:
+admin clicks Record
+admin speaks
+system transcribes voice to text
+text appears in the section editor
+admin can edit spelling and wording
+admin can save
+
+Keep this lightweight.
+Do not turn this into Field Notes.
+This is only to help write publication content faster.
+
+AI WRITING SUPPORT
+
+Add simple AI actions:
+Improve wording
+Make it professional
+Summarize this
+Create SEO description
+Generate image caption
+Generate intro paragraph
+
+Use existing AI infrastructure if available.
+Do not add risky new AI systems if not needed.
+
+IMAGE BEHAVIOR
+
+Admin can upload images per section.
+Images should preserve aspect ratio.
+Captions should be editable.
+On public page, clicking any image should open a popup/lightbox.
+Viewer must support:
+next image
+previous image
+close button
+mobile swipe if available
+portrait and landscape images
+no ugly cropping
+
+PUBLIC PAGE REQUIREMENTS
+
+Each publication must generate a public link.
+
+Suggested URL pattern:
+clockfield.com/public/publications/[slug]
+or
+clockfield.com/p/[slug]
+
+Public page should include:
+business logo
+business name
+publication title
+subtitle
+published date
+cover image if available
+main article content
+section images and captions
+pricing section if added
+business contact details
+CTA button
+small Clockfield powered-by footer
+
+The page should look like a premium visual article, not a normal report.
+
+Do not use “General Overview” as the default section.
+This is not a Field Note layout.
+Use a blog/article structure.
+
+Suggested public layout:
+Header with business logo and title
+Intro paragraph
+Content sections
+Image galleries
+Pricing block if included
+FAQ or notes if included
+Contact business CTA
+Powered by Clockfield footer
+
+SEO REQUIREMENTS
+
+Each published page needs:
+meta title
+meta description
+Open Graph title
+Open Graph description
+Open Graph image
+canonical URL
+slug
+structured content where possible
+
+If the business adds a cover image, use it as the OG image.
+If not, use the first uploaded image.
+If no image exists, use business logo or fallback.
+
+CONTACT / BUSINESS INFO
+
+The public page must show contact details for the actual business, not Clockfield.
+
+Use existing business profile settings:
+business name
+logo
+phone
+email
+website
+address
+
+Add CTA button:
+Contact [Business Name]
+
+Do not expose private admin or employee info.
+
+OPTIONAL VOTING
+
+Add lightweight feedback at the bottom:
+Was this helpful?
+Yes
+No
+
+Store:
+publicationId
+vote type
+createdAt
+optional anonymous session id
+
+Do not require login.
+Do not make this complicated.
+
+PRICING SECTION
+
+Pricing should be optional.
+
+Admin can add:
+item name
+description
+price
+unit
+notes
+
+Examples:
+Supply installation: $__
+Monthly refill service: $__
+Inspection service: $__
+
+If no pricing is added, hide pricing section completely.
+
+DRAFT AND PUBLISH STATUS
+
+Statuses:
+draft
+published
+unpublished
+archived
+
+Draft pages should not be publicly indexed.
+Published pages should be accessible by public link.
+Unpublished pages should not show publicly.
+
+MOBILE REQUIREMENTS
+
+Admin side must work on mobile and desktop.
+Public page must look great on mobile.
+
+Mobile admin:
+large tap targets
+easy image upload
+easy voice recording
+section cards stacked cleanly
+no broken modals
+no tiny tables
+
+Public mobile:
+single-column reading layout
+images full width
+captions readable
+CTA easy to tap
+image popup works properly
+
+DO NOT USE WORDPRESS
+
+Do not build this in WordPress.
+Keep it inside Clockfield as a native module.
+This keeps business data, public links, styling, permissions, and SEO easier to control.
+
+DATA MODEL
+
+Create new tables/models safely:
+
+Publication:
+id
+businessId
+title
+subtitle
+slug
+status
+coverImageUrl
+seoTitle
+seoDescription
+ogImageUrl
+introText
+createdBy
+createdAt
+updatedAt
+publishedAt
+
+PublicationSection:
+id
+publicationId
+type
+title
+body
+sortOrder
+settingsJson
+createdAt
+updatedAt
+
+PublicationMedia:
+id
+publicationId
+sectionId
+imageUrl
+caption
+sortOrder
+createdAt
+
+PublicationPricing:
+id
+publicationId
+title
+description
+price
+unit
+sortOrder
+
+PublicationVote:
+id
+publicationId
+vote
+createdAt
+
+PERMISSIONS
+
+Admin:
+create, edit, publish, unpublish, delete/archive
+
+Employee:
+no access unless already allowed by future permission settings
+
+Public:
+view only published pages
+vote helpful/not helpful if enabled
+
+Do not expose private data.
+
+NAVIGATION
+
+Admin sidebar:
+Add Publications as a separate item.
+
+Do not replace Field Notes.
+Do not rename Field Notes.
+Do not move existing pages.
+
+ACCEPTANCE RESULT
+
+Admin can create a publication.
+Admin can add images, paragraphs, pricing, and captions.
+Admin can use voice-to-text to write section content.
+Admin can generate SEO title and description.
+Admin can publish and copy a public link.
+Public page opens like a premium article.
+Images open in a popup when clicked.
+Business contact info appears.
+Clockfield powered-by footer appears.
+Field Notes remain unchanged.
+Nothing else is affected.
+
+FINAL REMINDER
+
+Do not break or affect anything else.
+Do not touch Field Notes.
+Do not modify the current Create New Page flow.
+Build Publications as a new standalone module only.
+Keep it mobile-friendly, SEO-ready, professional, and safe for production.

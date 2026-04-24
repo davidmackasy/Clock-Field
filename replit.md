@@ -21,6 +21,7 @@ The application is built as a full-stack JavaScript application.
 - **Timesheets**: Generation of pay-period timesheets for employees, with submission and approval workflows.
 - **Client & Request Management**: Tools for managing client information and tracking service requests.
 - **Work Log**: A system for employees to document service work, including priority clean alerts, photo uploads, and public report generation.
+- **Publications**: A standalone content module allowing business admins to create SEO-friendly public pages (articles, product explanations, service guides). Features include a rich section builder, cover image upload, pricing tables, AI-assisted writing (gpt-4o-mini), voice-to-text (Web Speech API), helpful voting, and public URLs at `/p/:slug`. DB tables: `publications`, `publication_sections`, `publication_media`, `publication_pricing`, `publication_votes`. Admin pages at `/admin/publications` and `/admin/publications/:id`; public page at `/p/:slug` (no auth required).
 - **SaaS Layer**: Includes a subscription management system with different plans (legacy, starter, growth, pro), Stripe integration for billing, and a Super Admin dashboard for platform-wide management and feature gating.
 
 ## External Dependencies
@@ -32,3 +33,5 @@ The application is built as a full-stack JavaScript application.
 - **shadcn/ui**: UI component library.
 - **Vite**: Frontend build tool.
 - **Drizzle ORM**: TypeScript ORM for PostgreSQL.
+- **OpenAI (gpt-4o-mini)**: Used for AI-assisted writing in the Publications module (improve, summarize, SEO description, professional tone, captions, intros). Key: `OPENAI_API_KEY`.
+- **Web Speech API**: Browser-native voice-to-text used in the Publications section editor (no extra package).

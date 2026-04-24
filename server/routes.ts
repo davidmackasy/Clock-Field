@@ -6068,6 +6068,346 @@ FINAL RULES:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ── Publications (Admin) ──────────────────────────────────────────────────
+
+  function slugify(text: string): string {
+    return text
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .trim()
+      .slice(0, 80);
+  }
+
+  app.get("/api/publications", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const pubs = await storage.getPublicationsByCompany(user.companyId);
+      res.json(pubs);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/publications", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { title, subtitle, slug: rawSlug, category, introText, seoTitle, seoDescription, coverImageData, helpfulVotingEnabled, contactCtaEnabled } = req.body;
+      if (!title) return res.status(400).json({ message: "Title is required" });
+
+      let slug = rawSlug ? slugify(rawSlug) : slugify(title);
+      if (!slug) slug = "publication-" + Date.now();
+
+      let finalSlug = slug;
+      let suffix = 0;
+      while (await storage.isSlugTaken(finalSlug)) {
+        suffix++;
+        finalSlug = `${slug}-${suffix}`;
+      }
+
+      const now = new Date().toISOString();
+      const pub = await storage.createPublication({
+        companyId: user.companyId,
+        title,
+        subtitle: subtitle || null,
+        slug: finalSlug,
+        status: "draft",
+        coverImageData: coverImageData || null,
+        seoTitle: seoTitle || null,
+        seoDescription: seoDescription || null,
+        introText: introText || null,
+        category: category || null,
+        helpfulVotingEnabled: helpfulVotingEnabled !== false,
+        contactCtaEnabled: contactCtaEnabled !== false,
+        createdBy: user.id,
+        publishedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+      res.status(201).json(pub);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/publications/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const pub = await storage.getPublication(req.params.id);
+      if (!pub || pub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const [sections, allMedia, pricing] = await Promise.all([
+        storage.getPublicationSections(pub.id),
+        storage.getPublicationMedia(pub.id),
+        storage.getPublicationPricing(pub.id),
+      ]);
+      const sectionsWithMedia = sections.map(s => ({
+        ...s,
+        media: allMedia.filter(m => m.sectionId === s.id).sort((a, b) => a.sortOrder - b.sortOrder),
+      }));
+      res.json({ ...pub, sections: sectionsWithMedia, pricing });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/publications/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const pub = await storage.getPublication(req.params.id);
+      if (!pub || pub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+
+      const updates: Record<string, any> = { ...req.body, updatedAt: new Date().toISOString() };
+
+      if (updates.slug) {
+        updates.slug = slugify(updates.slug);
+        if (await storage.isSlugTaken(updates.slug, pub.id)) {
+          return res.status(400).json({ message: "This URL slug is already taken. Please choose a different one." });
+        }
+      }
+
+      if (updates.status === "published" && !pub.publishedAt) {
+        updates.publishedAt = new Date().toISOString();
+      }
+
+      const updated = await storage.updatePublication(pub.id, updates);
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/publications/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const pub = await storage.getPublication(req.params.id);
+      if (!pub || pub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      await storage.deletePublication(pub.id);
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Publication Sections ──────────────────────────────────────────────────
+  app.post("/api/publications/:id/sections", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const pub = await storage.getPublication(req.params.id);
+      if (!pub || pub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const now = new Date().toISOString();
+      const existing = await storage.getPublicationSections(pub.id);
+      const section = await storage.createPublicationSection({
+        publicationId: pub.id,
+        sectionType: req.body.sectionType || "text",
+        title: req.body.title || null,
+        body: req.body.body || null,
+        sortOrder: existing.length,
+        createdAt: now,
+        updatedAt: now,
+      });
+      res.status(201).json({ ...section, media: [] });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/publications/:id/sections/:sectionId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const pub = await storage.getPublication(req.params.id);
+      if (!pub || pub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const updates = { ...req.body, updatedAt: new Date().toISOString() };
+      const section = await storage.updatePublicationSection(req.params.sectionId, updates);
+      if (!section) return res.status(404).json({ message: "Section not found" });
+      const media = await storage.getPublicationMediaBySection(section.id);
+      res.json({ ...section, media });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/publications/:id/sections/:sectionId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const pub = await storage.getPublication(req.params.id);
+      if (!pub || pub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      await storage.deletePublicationSection(req.params.sectionId);
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/publications/:id/sections/reorder", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const pub = await storage.getPublication(req.params.id);
+      if (!pub || pub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const { order } = req.body as { order: string[] };
+      const now = new Date().toISOString();
+      await Promise.all(order.map((sectionId, idx) =>
+        storage.updatePublicationSection(sectionId, { sortOrder: idx, updatedAt: now })
+      ));
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Publication Media ──────────────────────────────────────────────────────
+  app.post("/api/publications/:id/sections/:sectionId/media", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const pub = await storage.getPublication(req.params.id);
+      if (!pub || pub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const { imageData, caption } = req.body;
+      if (!imageData) return res.status(400).json({ message: "imageData required" });
+      const existing = await storage.getPublicationMediaBySection(req.params.sectionId);
+      const now = new Date().toISOString();
+      const media = await storage.createPublicationMedia({
+        publicationId: pub.id,
+        sectionId: req.params.sectionId,
+        imageData,
+        caption: caption || null,
+        sortOrder: existing.length,
+        createdAt: now,
+      });
+      res.status(201).json(media);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/publications/:id/media/:mediaId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const pub = await storage.getPublication(req.params.id);
+      if (!pub || pub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const updated = await storage.updatePublicationMedia(req.params.mediaId, req.body);
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/publications/:id/media/:mediaId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const pub = await storage.getPublication(req.params.id);
+      if (!pub || pub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      await storage.deletePublicationMedia(req.params.mediaId);
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Publication Pricing ───────────────────────────────────────────────────
+  app.post("/api/publications/:id/pricing", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const pub = await storage.getPublication(req.params.id);
+      if (!pub || pub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const existing = await storage.getPublicationPricing(pub.id);
+      const now = new Date().toISOString();
+      const item = await storage.createPublicationPricing({
+        publicationId: pub.id,
+        itemName: req.body.itemName || "Service Item",
+        description: req.body.description || null,
+        price: req.body.price || null,
+        unit: req.body.unit || null,
+        notes: req.body.notes || null,
+        sortOrder: existing.length,
+        createdAt: now,
+      });
+      res.status(201).json(item);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/publications/:id/pricing/:itemId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const pub = await storage.getPublication(req.params.id);
+      if (!pub || pub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const updated = await storage.updatePublicationPricing(req.params.itemId, req.body);
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/publications/:id/pricing/:itemId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const pub = await storage.getPublication(req.params.id);
+      if (!pub || pub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      await storage.deletePublicationPricing(req.params.itemId);
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Publication AI Assist ─────────────────────────────────────────────────
+  app.post("/api/publications/ai-assist", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const { text, action, context } = req.body;
+      if (!text) return res.status(400).json({ message: "text required" });
+
+      const systemPrompts: Record<string, string> = {
+        improve: "You are a professional business writer. Improve the following text to be clear, professional, and engaging. Return only the improved text, no preamble.",
+        professional: "You are an expert copywriter. Rewrite the following text in a professional, polished business tone. Return only the rewritten text.",
+        summarize: "Summarize the following text concisely in 2-3 sentences. Return only the summary.",
+        seo_description: "Write a compelling SEO meta description (max 155 characters) for a business publication about the following topic. Return only the description.",
+        caption: "Write a short, professional image caption (1-2 sentences) for an image in a business publication. Context: " + (context || "general business photo") + ". Based on: ",
+        intro: "Write a professional, engaging intro paragraph for a business publication about the following topic. Return only the paragraph.",
+      };
+
+      const systemPrompt = systemPrompts[action] || systemPrompts.improve;
+
+      const { default: OpenAI } = await import("openai");
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: text },
+        ],
+        max_tokens: 400,
+      });
+
+      const result = completion.choices[0]?.message?.content?.trim() || "";
+      res.json({ result });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Publications (Public) ──────────────────────────────────────────────────
+  app.get("/api/public/publications/:slug", async (req, res) => {
+    try {
+      const pub = await storage.getPublicationBySlug(req.params.slug);
+      if (!pub || pub.status !== "published") return res.status(404).json({ message: "Publication not found" });
+
+      const company = await storage.getCompany(pub.companyId);
+      const [sections, allMedia, pricing, votes] = await Promise.all([
+        storage.getPublicationSections(pub.id),
+        storage.getPublicationMedia(pub.id),
+        storage.getPublicationPricing(pub.id),
+        storage.getPublicationVoteCounts(pub.id),
+      ]);
+
+      const sectionsWithMedia = sections.map(s => ({
+        ...s,
+        media: allMedia.filter(m => m.sectionId === s.id).sort((a, b) => a.sortOrder - b.sortOrder),
+      }));
+
+      res.json({
+        ...pub,
+        sections: sectionsWithMedia,
+        pricing,
+        votes,
+        company: company ? {
+          name: company.name,
+          logoUrl: company.companyLogoUrl,
+          phone: company.companyPhone,
+          email: company.companyEmail,
+          address: company.address,
+        } : null,
+      });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/public/publications/:slug/vote", async (req, res) => {
+    try {
+      const pub = await storage.getPublicationBySlug(req.params.slug);
+      if (!pub || pub.status !== "published" || !pub.helpfulVotingEnabled) {
+        return res.status(404).json({ message: "Not found" });
+      }
+      const { vote, sessionId } = req.body;
+      if (!["yes", "no"].includes(vote)) return res.status(400).json({ message: "vote must be yes or no" });
+      await storage.createPublicationVote({
+        publicationId: pub.id,
+        vote,
+        sessionId: sessionId || null,
+        createdAt: new Date().toISOString(),
+      });
+      const counts = await storage.getPublicationVoteCounts(pub.id);
+      res.json(counts);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   return httpServer;
 }
 

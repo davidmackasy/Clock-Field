@@ -51,6 +51,9 @@ import EmployeePayStubs from "@/pages/employee/pay-stubs";
 import EmployeeSupplies from "@/pages/employee/supplies";
 import SetPasswordPage from "@/pages/employee/set-password";
 import AdminSupplies from "@/pages/admin/supplies";
+import AdminPublications from "@/pages/admin/publications";
+import AdminPublicationEditor from "@/pages/admin/publication-editor";
+import PublicPublication from "@/pages/public/publication";
 import ClientDashboard from "@/pages/client/dashboard";
 import ClientRequestsPage from "@/pages/client/requests";
 import ClientProfile from "@/pages/client/profile";
@@ -111,6 +114,8 @@ function AdminLayout() {
               <Route path="/admin/field-notes"><Redirect to="/admin/work-log?tab=field-notes" /></Route>
               <Route path="/admin/requests"><Redirect to="/admin/work-log?tab=requests" /></Route>
               <Route path="/admin/supplies" component={AdminSupplies} />
+              <Route path="/admin/publications/:id" component={AdminPublicationEditor} />
+              <Route path="/admin/publications" component={AdminPublications} />
               <Route path="/admin/settings" component={AdminSettings} />
               <Route path="/admin/subscription" component={AdminSubscription} />
               <Route path="/admin/platform-messages" component={AdminPlatformMessages} />
@@ -267,6 +272,14 @@ function AppRouter() {
     return (
       <Switch>
         <Route path="/r/:token" component={PublicWorkReport} />
+      </Switch>
+    );
+  }
+
+  if (location.startsWith("/p/")) {
+    return (
+      <Switch>
+        <Route path="/p/:slug" component={PublicPublication} />
       </Switch>
     );
   }

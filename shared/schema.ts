@@ -898,3 +898,82 @@ export type Supply = typeof supplies.$inferSelect;
 export type InsertSupply = z.infer<typeof insertSupplySchema>;
 export type SupplyUpdate = typeof supplyUpdates.$inferSelect;
 export type InsertSupplyUpdate = z.infer<typeof insertSupplyUpdateSchema>;
+
+// ── Publications ──────────────────────────────────────────────────────────────
+export const publications = pgTable("publications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  title: text("title").notNull(),
+  subtitle: text("subtitle"),
+  slug: text("slug").notNull(),
+  status: text("status").notNull().default("draft"),
+  coverImageData: text("cover_image_data"),
+  seoTitle: text("seo_title"),
+  seoDescription: text("seo_description"),
+  introText: text("intro_text"),
+  category: text("category"),
+  helpfulVotingEnabled: boolean("helpful_voting_enabled").notNull().default(true),
+  contactCtaEnabled: boolean("contact_cta_enabled").notNull().default(true),
+  createdBy: varchar("created_by").notNull(),
+  publishedAt: text("published_at"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const publicationSections = pgTable("publication_sections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  publicationId: varchar("publication_id").notNull(),
+  sectionType: text("section_type").notNull().default("text"),
+  title: text("title"),
+  body: text("body"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const publicationMedia = pgTable("publication_media", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  publicationId: varchar("publication_id").notNull(),
+  sectionId: varchar("section_id"),
+  imageData: text("image_data").notNull(),
+  caption: text("caption"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
+export const publicationPricing = pgTable("publication_pricing", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  publicationId: varchar("publication_id").notNull(),
+  itemName: text("item_name").notNull(),
+  description: text("description"),
+  price: text("price"),
+  unit: text("unit"),
+  notes: text("notes"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
+export const publicationVotes = pgTable("publication_votes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  publicationId: varchar("publication_id").notNull(),
+  vote: text("vote").notNull(),
+  sessionId: text("session_id"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertPublicationSchema = createInsertSchema(publications).omit({ id: true });
+export const insertPublicationSectionSchema = createInsertSchema(publicationSections).omit({ id: true });
+export const insertPublicationMediaSchema = createInsertSchema(publicationMedia).omit({ id: true });
+export const insertPublicationPricingSchema = createInsertSchema(publicationPricing).omit({ id: true });
+export const insertPublicationVoteSchema = createInsertSchema(publicationVotes).omit({ id: true });
+
+export type Publication = typeof publications.$inferSelect;
+export type InsertPublication = z.infer<typeof insertPublicationSchema>;
+export type PublicationSection = typeof publicationSections.$inferSelect;
+export type InsertPublicationSection = z.infer<typeof insertPublicationSectionSchema>;
+export type PublicationMedia = typeof publicationMedia.$inferSelect;
+export type InsertPublicationMedia = z.infer<typeof insertPublicationMediaSchema>;
+export type PublicationPricing = typeof publicationPricing.$inferSelect;
+export type InsertPublicationPricing = z.infer<typeof insertPublicationPricingSchema>;
+export type PublicationVote = typeof publicationVotes.$inferSelect;
+export type InsertPublicationVote = z.infer<typeof insertPublicationVoteSchema>;

@@ -48,6 +48,12 @@ import {
   type AttendanceAdjustment, type InsertAttendanceAdjustment,
   type PriorityCleanAlert, type InsertPriorityCleanAlert,
   type PriorityCleanPhoto, type InsertPriorityCleanPhoto,
+  publications, publicationSections, publicationMedia, publicationPricing, publicationVotes,
+  type Publication, type InsertPublication,
+  type PublicationSection, type InsertPublicationSection,
+  type PublicationMedia, type InsertPublicationMedia,
+  type PublicationPricing, type InsertPublicationPricing,
+  type PublicationVote, type InsertPublicationVote,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -265,6 +271,38 @@ export interface IStorage {
   getReportAccessTokenByHash(tokenHash: string): Promise<ReportAccessToken | undefined>;
   updateReportAccessToken(id: string, data: Partial<ReportAccessToken>): Promise<ReportAccessToken | undefined>;
   revokeReportAccessTokensByReport(reportId: string): Promise<void>;
+
+  // Publications
+  createPublication(data: InsertPublication): Promise<Publication>;
+  getPublication(id: string): Promise<Publication | undefined>;
+  getPublicationBySlug(slug: string): Promise<Publication | undefined>;
+  getPublicationsByCompany(companyId: string): Promise<Publication[]>;
+  updatePublication(id: string, data: Partial<InsertPublication>): Promise<Publication | undefined>;
+  deletePublication(id: string): Promise<void>;
+  isSlugTaken(slug: string, excludeId?: string): Promise<boolean>;
+
+  createPublicationSection(data: InsertPublicationSection): Promise<PublicationSection>;
+  getPublicationSections(publicationId: string): Promise<PublicationSection[]>;
+  updatePublicationSection(id: string, data: Partial<InsertPublicationSection>): Promise<PublicationSection | undefined>;
+  deletePublicationSection(id: string): Promise<void>;
+  deletePublicationSectionsByPublication(publicationId: string): Promise<void>;
+
+  createPublicationMedia(data: InsertPublicationMedia): Promise<PublicationMedia>;
+  getPublicationMedia(publicationId: string): Promise<PublicationMedia[]>;
+  getPublicationMediaBySection(sectionId: string): Promise<PublicationMedia[]>;
+  updatePublicationMedia(id: string, data: Partial<InsertPublicationMedia>): Promise<PublicationMedia | undefined>;
+  deletePublicationMedia(id: string): Promise<void>;
+  deletePublicationMediaBySection(sectionId: string): Promise<void>;
+  deletePublicationMediaByPublication(publicationId: string): Promise<void>;
+
+  createPublicationPricing(data: InsertPublicationPricing): Promise<PublicationPricing>;
+  getPublicationPricing(publicationId: string): Promise<PublicationPricing[]>;
+  updatePublicationPricing(id: string, data: Partial<InsertPublicationPricing>): Promise<PublicationPricing | undefined>;
+  deletePublicationPricing(id: string): Promise<void>;
+  deletePublicationPricingByPublication(publicationId: string): Promise<void>;
+
+  createPublicationVote(data: InsertPublicationVote): Promise<PublicationVote>;
+  getPublicationVoteCounts(publicationId: string): Promise<{ yes: number; no: number }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1350,6 +1388,142 @@ export class DatabaseStorage implements IStorage {
     const [row] = await db.select().from(priorityCleanAlerts)
       .where(eq(priorityCleanAlerts.submissionId, submissionId));
     return row;
+  }
+
+  // ── Publications ──────────────────────────────────────────────────────────
+  async createPublication(data: InsertPublication): Promise<Publication> {
+    const [row] = await db.insert(publications).values(data as any).returning();
+    return row;
+  }
+
+  async getPublication(id: string): Promise<Publication | undefined> {
+    const [row] = await db.select().from(publications).where(eq(publications.id, id));
+    return row;
+  }
+
+  async getPublicationBySlug(slug: string): Promise<Publication | undefined> {
+    const [row] = await db.select().from(publications).where(eq(publications.slug, slug));
+    return row;
+  }
+
+  async getPublicationsByCompany(companyId: string): Promise<Publication[]> {
+    return db.select().from(publications)
+      .where(eq(publications.companyId, companyId))
+      .orderBy(desc(publications.createdAt));
+  }
+
+  async updatePublication(id: string, data: Partial<InsertPublication>): Promise<Publication | undefined> {
+    const [row] = await db.update(publications).set(data as any).where(eq(publications.id, id)).returning();
+    return row;
+  }
+
+  async deletePublication(id: string): Promise<void> {
+    await db.delete(publicationVotes).where(eq(publicationVotes.publicationId, id));
+    await db.delete(publicationPricing).where(eq(publicationPricing.publicationId, id));
+    await db.delete(publicationMedia).where(eq(publicationMedia.publicationId, id));
+    await db.delete(publicationSections).where(eq(publicationSections.publicationId, id));
+    await db.delete(publications).where(eq(publications.id, id));
+  }
+
+  async isSlugTaken(slug: string, excludeId?: string): Promise<boolean> {
+    const rows = await db.select({ id: publications.id }).from(publications).where(eq(publications.slug, slug));
+    if (excludeId) return rows.some(r => r.id !== excludeId);
+    return rows.length > 0;
+  }
+
+  async createPublicationSection(data: InsertPublicationSection): Promise<PublicationSection> {
+    const [row] = await db.insert(publicationSections).values(data as any).returning();
+    return row;
+  }
+
+  async getPublicationSections(publicationId: string): Promise<PublicationSection[]> {
+    return db.select().from(publicationSections)
+      .where(eq(publicationSections.publicationId, publicationId))
+      .orderBy(asc(publicationSections.sortOrder));
+  }
+
+  async updatePublicationSection(id: string, data: Partial<InsertPublicationSection>): Promise<PublicationSection | undefined> {
+    const [row] = await db.update(publicationSections).set(data as any).where(eq(publicationSections.id, id)).returning();
+    return row;
+  }
+
+  async deletePublicationSection(id: string): Promise<void> {
+    await db.delete(publicationMedia).where(eq(publicationMedia.sectionId, id));
+    await db.delete(publicationSections).where(eq(publicationSections.id, id));
+  }
+
+  async deletePublicationSectionsByPublication(publicationId: string): Promise<void> {
+    await db.delete(publicationSections).where(eq(publicationSections.publicationId, publicationId));
+  }
+
+  async createPublicationMedia(data: InsertPublicationMedia): Promise<PublicationMedia> {
+    const [row] = await db.insert(publicationMedia).values(data as any).returning();
+    return row;
+  }
+
+  async getPublicationMedia(publicationId: string): Promise<PublicationMedia[]> {
+    return db.select().from(publicationMedia)
+      .where(eq(publicationMedia.publicationId, publicationId))
+      .orderBy(asc(publicationMedia.sortOrder));
+  }
+
+  async getPublicationMediaBySection(sectionId: string): Promise<PublicationMedia[]> {
+    return db.select().from(publicationMedia)
+      .where(eq(publicationMedia.sectionId, sectionId))
+      .orderBy(asc(publicationMedia.sortOrder));
+  }
+
+  async updatePublicationMedia(id: string, data: Partial<InsertPublicationMedia>): Promise<PublicationMedia | undefined> {
+    const [row] = await db.update(publicationMedia).set(data as any).where(eq(publicationMedia.id, id)).returning();
+    return row;
+  }
+
+  async deletePublicationMedia(id: string): Promise<void> {
+    await db.delete(publicationMedia).where(eq(publicationMedia.id, id));
+  }
+
+  async deletePublicationMediaBySection(sectionId: string): Promise<void> {
+    await db.delete(publicationMedia).where(eq(publicationMedia.sectionId, sectionId));
+  }
+
+  async deletePublicationMediaByPublication(publicationId: string): Promise<void> {
+    await db.delete(publicationMedia).where(eq(publicationMedia.publicationId, publicationId));
+  }
+
+  async createPublicationPricing(data: InsertPublicationPricing): Promise<PublicationPricing> {
+    const [row] = await db.insert(publicationPricing).values(data as any).returning();
+    return row;
+  }
+
+  async getPublicationPricing(publicationId: string): Promise<PublicationPricing[]> {
+    return db.select().from(publicationPricing)
+      .where(eq(publicationPricing.publicationId, publicationId))
+      .orderBy(asc(publicationPricing.sortOrder));
+  }
+
+  async updatePublicationPricing(id: string, data: Partial<InsertPublicationPricing>): Promise<PublicationPricing | undefined> {
+    const [row] = await db.update(publicationPricing).set(data as any).where(eq(publicationPricing.id, id)).returning();
+    return row;
+  }
+
+  async deletePublicationPricing(id: string): Promise<void> {
+    await db.delete(publicationPricing).where(eq(publicationPricing.id, id));
+  }
+
+  async deletePublicationPricingByPublication(publicationId: string): Promise<void> {
+    await db.delete(publicationPricing).where(eq(publicationPricing.publicationId, publicationId));
+  }
+
+  async createPublicationVote(data: InsertPublicationVote): Promise<PublicationVote> {
+    const [row] = await db.insert(publicationVotes).values(data as any).returning();
+    return row;
+  }
+
+  async getPublicationVoteCounts(publicationId: string): Promise<{ yes: number; no: number }> {
+    const rows = await db.select().from(publicationVotes).where(eq(publicationVotes.publicationId, publicationId));
+    const yes = rows.filter(r => r.vote === "yes").length;
+    const no = rows.filter(r => r.vote === "no").length;
+    return { yes, no };
   }
 }
 
