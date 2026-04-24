@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   NotebookPen, Plus, Search, Camera, Clock, MapPin,
   ChevronRight, Loader2, User, FileCheck, FileClock, AlertCircle,
-  FileText, Mic, X,
+  FileText,
 } from "lucide-react";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -118,7 +118,7 @@ function SessionCard({ s, onClick }: { s: Session; onClick: () => void }) {
   );
 }
 
-type CreateMode = null | "choose" | "walkthrough" | "page";
+type CreateMode = null | "walkthrough";
 
 export default function AdminFieldNotes() {
   const [, navigate] = useLocation();
@@ -142,15 +142,6 @@ export default function AdminFieldNotes() {
     onError: () => toast({ title: "Failed to start session", variant: "destructive" }),
   });
 
-  const createPageMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/field-notes/sessions", data).then(r => r.json()),
-    onSuccess: async (session) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/field-notes"] });
-      setCreateMode(null);
-      navigate(`/admin/field-notes/page/${session.id}`);
-    },
-    onError: () => toast({ title: "Failed to create page", variant: "destructive" }),
-  });
 
   const filtered = sessions.filter(s => {
     const q = search.toLowerCase();
@@ -179,17 +170,6 @@ export default function AdminFieldNotes() {
     }
   };
 
-  const startPage = () => {
-    createPageMutation.mutate({
-      sessionType: newSession.sessionType,
-      locationId: newSession.locationId || null,
-      title: newSession.title || null,
-      sessionSubtype: "manual_page",
-      status: "ready",
-      aiStatus: "done",
-    });
-  };
-
   const startWalkthrough = () => {
     startWalkthroughMutation.mutate({
       sessionType: newSession.sessionType,
@@ -207,10 +187,10 @@ export default function AdminFieldNotes() {
           <NotebookPen className="w-5 h-5 text-primary" />
           <div>
             <h1 className="text-base font-semibold leading-none">Field Notes</h1>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Walkthroughs · Pages · Documents</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Walkthroughs · Documents</p>
           </div>
         </div>
-        <Button data-testid="button-new-field-note" onClick={() => setCreateMode("choose")} size="sm" className="gap-1.5">
+        <Button data-testid="button-new-field-note" onClick={() => setCreateMode("walkthrough")} size="sm" className="gap-1.5">
           <Plus className="w-4 h-4" /> New
         </Button>
       </div>
@@ -250,8 +230,8 @@ export default function AdminFieldNotes() {
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <NotebookPen className="w-12 h-12 text-muted-foreground/40 mb-3" />
             <p className="font-medium text-muted-foreground">No field notes yet</p>
-            <p className="text-sm text-muted-foreground/70 mt-1">Start a walkthrough or create a new page</p>
-            <Button className="mt-4 gap-1.5" onClick={() => setCreateMode("choose")}><Plus className="w-4 h-4" /> Create First Note</Button>
+            <p className="text-sm text-muted-foreground/70 mt-1">Start a walkthrough to capture notes</p>
+            <Button className="mt-4 gap-1.5" onClick={() => setCreateMode("walkthrough")}><Plus className="w-4 h-4" /> Create First Note</Button>
           </div>
         ) : (
           Object.entries(byProject).map(([project, dateGroups]) => (
@@ -279,47 +259,7 @@ export default function AdminFieldNotes() {
         )}
       </div>
 
-      {/* ── Step 1: Choose creation mode ─────────────────────────────────────── */}
-      <Dialog open={createMode === "choose"} onOpenChange={v => !v && setCreateMode(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><Plus className="w-4 h-4" /> Create Field Note</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-1">
-            <button
-              data-testid="button-start-walkthrough"
-              className="w-full rounded-xl border-2 border-border hover:border-primary/40 hover:bg-muted/30 transition-all p-4 text-left group"
-              onClick={() => setCreateMode("walkthrough")}
-            >
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full bg-red-50 border border-red-200 flex items-center justify-center flex-shrink-0">
-                  <Mic className="w-5 h-5 text-red-600" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">Start Walkthrough Note</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">Walk and talk — camera + voice + AI automatically organizes your notes</p>
-                </div>
-              </div>
-            </button>
-
-            <button
-              data-testid="button-create-new-page"
-              className="w-full rounded-xl border-2 border-border hover:border-purple-300 hover:bg-purple-50/30 transition-all p-4 text-left group"
-              onClick={() => setCreateMode("page")}
-            >
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full bg-purple-50 border border-purple-200 flex items-center justify-center flex-shrink-0">
-                  <FileText className="w-5 h-5 text-purple-600" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">Create New Page</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">Upload photos, add descriptions and to-dos, share or export as PDF</p>
-                </div>
-              </div>
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Step 2a: Walkthrough setup ────────────────────────────────────────── */}
+      {/* ── Walkthrough setup ────────────────────────────────────────────────── */}
       <Dialog open={createMode === "walkthrough"} onOpenChange={v => !v && setCreateMode(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -351,7 +291,7 @@ export default function AdminFieldNotes() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={() => setCreateMode("choose")}>Back</Button>
+            <Button variant="outline" className="flex-1" onClick={() => setCreateMode(null)}>Cancel</Button>
             <Button
               data-testid="button-start-session"
               disabled={startWalkthroughMutation.isPending}
@@ -359,51 +299,6 @@ export default function AdminFieldNotes() {
               className="flex-1 gap-1.5"
             >
               {startWalkthroughMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />} Start Capture
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Step 2b: Create New Page setup ────────────────────────────────────── */}
-      <Dialog open={createMode === "page"} onOpenChange={v => !v && setCreateMode(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="w-4 h-4 text-purple-600" /> Create New Page
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <Label className="text-xs font-medium mb-1.5 block">Page Type</Label>
-              <Select value={newSession.sessionType} onValueChange={v => setNewSession(s => ({ ...s, sessionType: v }))}>
-                <SelectTrigger data-testid="select-page-type"><SelectValue /></SelectTrigger>
-                <SelectContent>{SESSION_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs font-medium mb-1.5 block">Project / Location</Label>
-              <Select value={newSession.locationId || "none"} onValueChange={v => setNewSession(s => ({ ...s, locationId: v === "none" ? "" : v }))}>
-                <SelectTrigger data-testid="select-page-location"><SelectValue placeholder="Select project…" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No specific project</SelectItem>
-                  {locations.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs font-medium mb-1.5 block">Page Title (optional)</Label>
-              <Input data-testid="input-page-title" placeholder="e.g. Post-clean site visit" value={newSession.title} onChange={e => setNewSession(s => ({ ...s, title: e.target.value }))} />
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={() => setCreateMode("choose")}>Back</Button>
-            <Button
-              data-testid="button-create-page"
-              disabled={createPageMutation.isPending}
-              onClick={startPage}
-              className="flex-1 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white"
-            >
-              {createPageMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />} Create Page
             </Button>
           </div>
         </DialogContent>
