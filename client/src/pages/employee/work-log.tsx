@@ -469,7 +469,7 @@ export default function EmployeeWorkLog() {
                         <button
                           key={p.id}
                           type="button"
-                          onClick={() => setPaLightbox({ alertId: alert.id, photoIds: alert.photos.map((x: any) => x.id), idx: i })}
+                          onClick={e => { e.stopPropagation(); setPaLightbox({ alertId: alert.id, photoIds: alert.photos.map((x: any) => x.id), idx: i }); }}
                           className="relative w-16 h-16 rounded-md overflow-hidden border-2 border-red-300 focus:outline-none focus:ring-2 focus:ring-red-400 cursor-pointer group active:scale-95 transition-transform"
                           data-testid={`pa-photo-thumb-${p.id}`}
                         >
@@ -1044,7 +1044,7 @@ function SubmissionDetail({ subId }: { subId: string }) {
       {/* Priority Clean Photo Lightbox */}
       {paLightbox && (
         <div
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
+          className="fixed inset-0 z-[300] bg-black/90 flex items-center justify-center"
           onClick={() => setPaLightbox(null)}
         >
           <button className="absolute top-4 right-4 text-white/60 hover:text-white p-2" onClick={() => setPaLightbox(null)}>
