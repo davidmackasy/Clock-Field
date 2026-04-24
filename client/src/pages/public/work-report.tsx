@@ -608,12 +608,39 @@ export default function PublicWorkReport() {
         brandColor={brandColor}
       />
 
+      {/* ── Clockfield Promo ───────────────────────────────────────────── */}
+      <div className="max-w-4xl mx-auto px-4 mt-6 mb-2 print:hidden">
+        <div className="rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center shrink-0">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-white">
+                <circle cx="12" cy="12" r="9" stroke="white" strokeWidth="2"/>
+                <polyline points="12 7 12 12 15 15" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider leading-none mb-0.5">Powered by Clockfield</p>
+              <p className="text-[12px] text-gray-600 leading-snug">Track employee clock-ins, service photos, and client-ready reports — all in one place.</p>
+            </div>
+          </div>
+          <a
+            href="https://clockfield.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 inline-flex items-center justify-center rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[12px] font-semibold px-4 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 whitespace-nowrap"
+            data-testid="link-clockfield-promo"
+          >
+            Visit Clockfield
+          </a>
+        </div>
+      </div>
+
       {/* ── Footer ────────────────────────────────────────────────────── */}
       <div className="border-t border-gray-200 bg-white mt-4">
         <div className="max-w-4xl mx-auto px-4 py-6 text-center space-y-1">
           <p className="text-sm font-semibold text-gray-700">Prepared by {data.companyName}</p>
           {data.companyAddress && <p className="text-xs text-gray-400">{data.companyAddress}</p>}
-          <p className="text-xs text-gray-400">Service documentation report · Powered by ClockField</p>
+          <p className="text-xs text-gray-400">Service documentation report</p>
         </div>
       </div>
     </div>
