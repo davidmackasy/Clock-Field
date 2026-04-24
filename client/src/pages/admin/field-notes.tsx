@@ -147,7 +147,7 @@ export default function AdminFieldNotes() {
     const q = search.toLowerCase();
     const matchSearch = !q || (s.title ?? "").toLowerCase().includes(q) || (s.locationName ?? "").toLowerCase().includes(q)
       || s.createdByName.toLowerCase().includes(q) || (s.aiSummary ?? "").toLowerCase().includes(q);
-    return matchSearch && (filterStatus === "all" || s.status === filterStatus) && (filterType === "all" || s.sessionType === filterType);
+    return s.sessionSubtype !== "manual_page" && matchSearch && (filterStatus === "all" || s.status === filterStatus) && (filterType === "all" || s.sessionType === filterType);
   });
 
   type DateGroup = Record<string, Session[]>;
