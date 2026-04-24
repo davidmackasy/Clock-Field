@@ -1215,7 +1215,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getFieldNotesSessions(companyId: string, filters?: { locationId?: string; userId?: string; status?: string }): Promise<FieldNotesSession[]> {
-    const conditions = [eq(fieldNotesSessions.companyId, companyId)];
+    const conditions = [
+      eq(fieldNotesSessions.companyId, companyId),
+      isNull(fieldNotesSessions.deletedAt),
+    ];
     if (filters?.locationId) conditions.push(eq(fieldNotesSessions.locationId, filters.locationId));
     if (filters?.userId) conditions.push(eq(fieldNotesSessions.createdByUserId, filters.userId));
     if (filters?.status) conditions.push(eq(fieldNotesSessions.status, filters.status));

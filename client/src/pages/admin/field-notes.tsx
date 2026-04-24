@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   NotebookPen, Plus, Search, Camera, Clock, MapPin,
   ChevronRight, Loader2, User, FileCheck, FileClock, AlertCircle,
-  FileText,
+  FileText, Trash2,
 } from "lucide-react";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -59,7 +59,7 @@ function DocStatusIcon({ aiStatus, status, sessionSubtype }: { aiStatus: string;
   return <span className="text-[10px] text-muted-foreground">—</span>;
 }
 
-function SessionCard({ s, onClick }: { s: Session; onClick: () => void }) {
+function SessionCard({ s, onClick, onDelete }: { s: Session; onClick: () => void; onDelete: (e: React.MouseEvent) => void }) {
   const label = SESSION_TYPES.find(t => t.value === s.sessionType)?.label ?? s.sessionType;
   const cfg = STATUS_CONFIG[s.status] ?? STATUS_CONFIG.failed;
   const isPage = s.sessionSubtype === "manual_page";
@@ -68,20 +68,30 @@ function SessionCard({ s, onClick }: { s: Session; onClick: () => void }) {
     <div
       data-testid={`card-field-note-${s.id}`}
       className={cn(
-        "group rounded-xl border bg-card cursor-pointer hover:shadow-md hover:border-primary/20 transition-all duration-150 flex flex-col overflow-hidden",
+        "group rounded-xl border bg-card cursor-pointer hover:shadow-md hover:border-primary/20 transition-all duration-150 flex flex-col overflow-hidden relative",
         isPage && "border-purple-100 hover:border-purple-300"
       )}
       onClick={onClick}
     >
       <div className={cn("h-1 w-full", isPage ? "bg-purple-400" : s.status === "ready" ? "bg-green-400" : s.status === "processing" ? "bg-blue-400" : s.status === "recording" ? "bg-red-400" : "bg-gray-200")} />
 
+      {/* Trash button — shown on hover */}
+      <button
+        data-testid={`button-delete-card-${s.id}`}
+        className="absolute top-2.5 right-2.5 w-6 h-6 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10 z-10"
+        onClick={onDelete}
+        title="Delete"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+
       <div className="p-3.5 flex flex-col gap-2 flex-1">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm truncate leading-tight">{s.title || label}</p>
+            <p className="font-semibold text-sm truncate leading-tight pr-5">{s.title || label}</p>
             <p className="text-[11px] text-muted-foreground mt-0.5">{label}</p>
           </div>
-          <div className={cn("w-2 h-2 rounded-full flex-shrink-0 mt-1", isPage ? "bg-purple-400" : cfg.dot)} />
+          <div className={cn("w-2 h-2 rounded-full flex-shrink-0 mt-1 invisible", isPage ? "bg-purple-400" : cfg.dot)} />
         </div>
 
         <div className="flex flex-col gap-1 text-[11px] text-muted-foreground">
@@ -128,6 +138,7 @@ export default function AdminFieldNotes() {
   const [filterType, setFilterType] = useState("all");
   const [createMode, setCreateMode] = useState<CreateMode>(null);
   const [newSession, setNewSession] = useState({ sessionType: "site_visit", locationId: "", title: "" });
+  const [deleteTarget, setDeleteTarget] = useState<Session | null>(null);
 
   const { data: sessions = [], isLoading } = useQuery<Session[]>({ queryKey: ["/api/field-notes"] });
   const { data: locations = [] } = useQuery<any[]>({ queryKey: ["/api/locations"] });
@@ -142,6 +153,15 @@ export default function AdminFieldNotes() {
     onError: () => toast({ title: "Failed to start session", variant: "destructive" }),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/field-notes/sessions/${id}`).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/field-notes"] });
+      toast({ title: "Field Note deleted." });
+      setDeleteTarget(null);
+    },
+    onError: () => toast({ title: "Failed to delete", variant: "destructive" }),
+  });
 
   const filtered = sessions.filter(s => {
     const q = search.toLowerCase();
@@ -249,7 +269,12 @@ export default function AdminFieldNotes() {
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2 pl-1">{date}</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                     {list.map(s => (
-                      <SessionCard key={s.id} s={s} onClick={() => handleCardClick(s)} />
+                      <SessionCard
+                        key={s.id}
+                        s={s}
+                        onClick={() => handleCardClick(s)}
+                        onDelete={(e) => { e.stopPropagation(); setDeleteTarget(s); }}
+                      />
                     ))}
                   </div>
                 </div>
@@ -299,6 +324,32 @@ export default function AdminFieldNotes() {
               className="flex-1 gap-1.5"
             >
               {startWalkthroughMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />} Start Capture
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="w-4 h-4" /> Delete Field Note?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This will remove this walkthrough from your Field Notes list. This action cannot be undone.
+          </p>
+          <div className="flex gap-2 justify-end mt-2">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button
+              data-testid="button-confirm-delete"
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+            >
+              {deleteMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : null}
+              Delete
             </Button>
           </div>
         </DialogContent>

@@ -5122,7 +5122,7 @@ Return a JSON object with these exact fields:
       const session = await storage.getFieldNotesSession(req.params.sessionId);
       if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       if (user.role === "employee" && session.createdByUserId !== user.id) return res.status(403).json({ message: "Forbidden" });
-      const { rawText, chunkIndex, startedAt, endedAt } = req.body;
+      const { rawText, chunkIndex, startedAt, endedAt, phase } = req.body;
       if (!rawText) return res.status(400).json({ message: "rawText required" });
       const now = new Date().toISOString();
       const chunk = await storage.addFieldNotesTranscriptChunk({
@@ -5131,6 +5131,7 @@ Return a JSON object with these exact fields:
         startedAt: startedAt || now,
         endedAt: endedAt || null,
         rawText,
+        phase: phase || "before",
         createdAt: now,
       } as any);
       res.json(chunk);
@@ -5155,6 +5156,55 @@ Return a JSON object with these exact fields:
         storage.updateFieldNotesSession(session.id, { aiStatus: "failed", status: "ready" });
       });
       res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // POST /api/field-notes/sessions/:sessionId/stop-after — finish after-walkthrough
+  app.post("/api/field-notes/sessions/:sessionId/stop-after", fnAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const session = await storage.getFieldNotesSession(req.params.sessionId);
+      if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (user.role === "employee" && session.createdByUserId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      const now = new Date().toISOString();
+      await storage.updateFieldNotesSession(session.id, { afterStatus: "processing" } as any);
+      // Asynchronously generate afterSummary from after transcript chunks
+      (async () => {
+        try {
+          const allChunks = await storage.getFieldNotesTranscriptChunks(session.id);
+          const afterChunks = allChunks.filter((c: any) => c.phase === "after");
+          const afterText = afterChunks.map((c: any) => c.rawText).join(" ").trim();
+          let afterSummary = "";
+          if (afterText && process.env.OPENAI_API_KEY) {
+            const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+            const result = await openaiClient.chat.completions.create({
+              model: "gpt-4o-mini",
+              max_tokens: 300,
+              messages: [{
+                role: "user",
+                content: `You are summarizing after-service walkthrough notes for a cleaning/maintenance company. Write a concise 2-3 sentence professional summary of what was observed or completed during the after walkthrough. Be factual and specific. Transcript: "${afterText}"`,
+              }],
+            });
+            afterSummary = result.choices[0]?.message?.content?.trim() ?? "";
+          }
+          await storage.updateFieldNotesSession(session.id, { afterStatus: "ready", afterSummary: afterSummary || null } as any);
+        } catch (err: any) {
+          console.error("[FieldNotes] after-walkthrough AI error:", err.message);
+          await storage.updateFieldNotesSession(session.id, { afterStatus: "ready" } as any);
+        }
+      })();
+      res.json({ ok: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // DELETE /api/field-notes/sessions/:sessionId — soft-delete a session
+  app.delete("/api/field-notes/sessions/:sessionId", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const session = await storage.getFieldNotesSession(req.params.sessionId);
+      if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      await storage.updateFieldNotesSession(session.id, { deletedAt: new Date().toISOString() } as any);
+      res.json({ ok: true });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

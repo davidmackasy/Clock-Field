@@ -1,0 +1,193 @@
+DEV NOTE: ADD FIELD NOTE DELETE BUTTON AND AFTER-WALKTHROUGH FLOW WITHOUT BREAKING ANYTHING ELSE
+
+Important:
+Do not touch anything else.
+Do not change Publications.
+Do not bring back the removed “Create New Page” flow.
+Do not affect Work Log, Priority Clean, Supplies, Reports, Attendance, Payroll, Schedule, Auth, public links outside Field Notes, or any unrelated feature.
+Only update walkthrough Field Notes.
+
+Goal:
+Add two improvements:
+
+Admin can delete generated walkthrough field notes.
+“Add After Photos” should start an after-walkthrough flow, not just open a normal upload picker.
+
+PART 1: ADD DELETE BUTTON FOR FIELD NOTE WALKTHROUGHS
+
+Add a delete action to each generated walkthrough document.
+
+Where:
+Field Notes list card
+Field Note detail page
+
+Suggested UI:
+Small trash icon on each card
+Delete button in detail page top actions or overflow menu
+
+Behavior:
+When admin clicks delete:
+Show confirmation modal.
+
+Copy:
+Delete Field Note?
+This will remove this walkthrough from your Field Notes list. This action cannot be undone.
+
+Buttons:
+Cancel
+Delete
+
+Delete rules:
+Prefer soft delete if possible.
+Do not hard delete media files unless the app already has a safe cleanup system.
+Do not delete unrelated records.
+Do not delete Work Log or Publication data.
+
+After delete:
+Remove the item from Field Notes list.
+If user deleted from detail page, redirect back to Field Notes list.
+Show success toast:
+Field Note deleted.
+
+Why needed:
+Some walkthroughs get stuck as recording / in progress and need to be removed.
+
+PART 2: CHANGE “ADD AFTER PHOTOS” INTO AN AFTER-WALKTHROUGH FLOW
+
+Current issue:
+Inside a generated walkthrough Field Note, the Photos tab has “Add After Photos.”
+Right now it behaves like a regular upload/gallery picker.
+
+Required change:
+Clicking “Add After Photos” should start a guided after-walkthrough, similar to the original before walkthrough.
+
+The user should be able to:
+take after photos
+record voice while walking through
+transcribe the voice
+save after photo notes/captions
+finish after walkthrough
+
+This should not just upload photos one by one from gallery.
+
+Expected flow:
+Admin or cleaner opens a walkthrough Field Note.
+They go to Photos.
+They click Add After Photos.
+The app opens an “After Walkthrough” capture flow.
+They capture after photos and speak notes.
+The app saves after photos and after transcript/notes under the same Field Note.
+The Field Note now has before content and after content.
+
+Use labels:
+Start After Walkthrough
+After Photos
+After Notes
+After Transcript
+
+Do not replace the original before photos.
+Do not overwrite existing before transcript.
+Store after content separately.
+
+DATA STRUCTURE
+
+Extend walkthrough Field Note safely with after-walkthrough data.
+
+Suggested fields:
+afterPhotos: array
+afterTranscript: string
+afterSummary: string
+afterStatus: none | recording | processing | ready
+afterCreatedAt
+afterUpdatedAt
+afterCreatedBy
+
+For each after photo:
+imageUrl
+caption
+timestamp
+voiceNoteText optional
+sortOrder
+
+Keep before photos exactly as they are.
+
+PUBLIC LINK BEHAVIOR
+
+When the public Field Note link is generated, show before and after together.
+
+Expected public layout:
+Field Note header
+Intro/summary
+Before Photos / Before Walkthrough
+After Photos / After Walkthrough if available
+
+If before and after photos can be matched by order, show them as paired cards:
+Before
+After
+
+If they cannot be matched, show:
+Before Photos section
+After Photos section
+
+Do not force bad pairing if counts do not match.
+
+Public link should make it clear:
+what was observed before
+what was completed after
+
+Do not break existing public links.
+If a Field Note has no after photos, public link should look the same as before.
+
+EMPLOYEE/CLEANER ACCESS
+
+If cleaners can access assigned Field Notes:
+They should also see Add After Photos / Start After Walkthrough when allowed.
+Keep it mobile-friendly.
+Large button.
+Easy camera access.
+Voice-to-text should work like the original walkthrough if already available.
+
+Do not expose Field Notes to cleaners who should not see them.
+
+PHOTO VIEWER
+
+Before and after images should remain clickable.
+Use existing image popup viewer if available.
+Do not break current photo viewing.
+
+EDGE CASES
+
+Handle:
+stuck recording notes can be deleted
+Field Note with no photos
+Field Note with before photos only
+Field Note with after photos only
+Field Note with mismatched before/after counts
+after walkthrough recording interrupted
+after transcription fails
+old Field Notes without after fields
+
+Do not crash on missing after fields.
+
+ACCEPTANCE
+
+Delete:
+Admin sees delete option on Field Note cards/details.
+Admin deletes stuck recording field note.
+It disappears from list.
+Other Field Notes still work.
+
+After walkthrough:
+Admin opens a Field Note.
+Clicks Add After Photos.
+After-walkthrough capture starts.
+Admin captures after photos and voice notes.
+After photos save under same Field Note.
+Public link shows before and after content.
+Existing before walkthrough stays unchanged.
+
+Final reminder:
+Do not break or affect anything else.
+Do not touch Publications.
+Do not bring back Create New Page.
+Only add delete support and after-walkthrough support to walkthrough Field Notes.

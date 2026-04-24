@@ -17,8 +17,9 @@ import {
   Sparkles, NotebookPen, Share2, Copy, Link as LinkIcon,
   EyeOff, User, Printer, ChevronDown, ChevronUp,
   FileCheck, DollarSign, Building, LayoutList, Wand2,
-  CheckCircle2, XCircle, Plus, SplitSquareHorizontal,
+  CheckCircle2, XCircle, Plus, SplitSquareHorizontal, Trash2,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format, parseISO, differenceInMinutes } from "date-fns";
 
 const SESSION_TYPE_LABELS: Record<string, string> = {
@@ -524,50 +525,16 @@ function QuoteSection({ sessionId, quoteData, onSave }: {
 
 // ── Photos tab content with Before/After support ──────────────────────────────
 function PhotosTabContent({
-  assets, entries, sessionId, onPhotoClick, onAssetsAdded
+  assets, entries, sessionId, onPhotoClick, onStartAfterWalkthrough
 }: {
   assets: any[];
   entries: any[];
   sessionId: string;
   onPhotoClick: (url: string, entry: any) => void;
-  onAssetsAdded: () => void;
+  onStartAfterWalkthrough: () => void;
 }) {
-  const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-
   const beforeAssets = assets.filter(a => !a.phase || a.phase === "before");
   const afterAssets = assets.filter(a => a.phase === "after");
-
-  const handleAddAfterPhotos = async (files: FileList) => {
-    if (!files.length) return;
-    setUploading(true);
-    try {
-      const now = new Date().toISOString();
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const reader = new FileReader();
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          reader.onload = e => resolve(e.target?.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-        const res = await apiRequest("POST", `/api/field-notes/sessions/${sessionId}/photo`, {
-          fileUrl: dataUrl,
-          phase: "after",
-          capturedAt: now,
-        });
-        if (!res.ok) throw new Error("Upload failed");
-      }
-      toast({ title: `${files.length} after photo${files.length > 1 ? "s" : ""} added` });
-      onAssetsAdded();
-    } catch (e: any) {
-      toast({ title: "Upload failed", description: e.message, variant: "destructive" });
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  };
 
   function PhotoGrid({ items, startIndex }: { items: any[]; startIndex: number }) {
     return (
@@ -614,15 +581,6 @@ function PhotosTabContent({
 
   return (
     <div className="space-y-6">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        onChange={e => e.target.files && handleAddAfterPhotos(e.target.files)}
-      />
-
       {/* Before Photos */}
       {beforeAssets.length > 0 && (
         <div>
@@ -647,40 +605,38 @@ function PhotosTabContent({
         </div>
       )}
 
-      {/* Add After Photos */}
+      {/* After walkthrough CTA */}
       {isAllBefore && (
         <div className="border border-dashed rounded-xl p-4 flex items-center justify-between gap-3">
           <div>
             <p className="text-sm font-medium flex items-center gap-2">
               <SplitSquareHorizontal className="w-4 h-4 text-muted-foreground" />
-              Add After Photos
+              Add After Walkthrough
             </p>
-            <p className="text-xs text-muted-foreground mt-0.5">Upload after-service photos to compare before &amp; after</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Record after-service photos &amp; voice notes to compare before &amp; after</p>
           </div>
           <Button
             size="sm"
             variant="outline"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
+            onClick={onStartAfterWalkthrough}
             data-testid="button-add-after-photos"
           >
-            {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Plus className="w-3.5 h-3.5 mr-1" />}
-            {uploading ? "Uploading..." : "Add After Photos"}
+            <Camera className="w-3.5 h-3.5 mr-1" />
+            Start After
           </Button>
         </div>
       )}
       {afterAssets.length > 0 && (
         <div className="border border-dashed rounded-xl p-3 flex items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">Add more after photos</p>
+          <p className="text-xs text-muted-foreground">Capture more after-walkthrough content</p>
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
+            onClick={onStartAfterWalkthrough}
             data-testid="button-add-more-after-photos"
           >
-            {uploading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Plus className="w-3 h-3 mr-1" />}
-            {uploading ? "Uploading..." : "Add More"}
+            <Plus className="w-3 h-3 mr-1" />
+            Add More
           </Button>
         </div>
       )}
@@ -691,35 +647,31 @@ function PhotosTabContent({
 // ── Transcript view ────────────────────────────────────────────────────────────
 function TranscriptView({ chunks, assets }: { chunks: any[]; assets: any[] }) {
   const [lightbox, setLightbox] = useState<string | null>(null);
-  type Event = { ms: number; type: "chunk" | "photo"; data: any };
-  const events: Event[] = [
-    ...chunks.map(c => ({ ms: c.startedAt ? new Date(c.startedAt).getTime() : 0, type: "chunk" as const, data: c })),
-    ...assets.map(a => ({ ms: a.capturedAt ? new Date(a.capturedAt).getTime() : 0, type: "photo" as const, data: a })),
-  ].sort((a, b) => a.ms - b.ms);
-  const sessionStart = events[0]?.ms ?? 0;
-  const fmtElapsed = (ms: number) => {
-    const diff = Math.max(0, ms - sessionStart);
-    const s = Math.floor(diff / 1000);
-    return `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
-  };
+  type Event = { ms: number; type: "chunk" | "photo"; phase: string; data: any };
 
-  if (events.length === 0) return (
-    <div className="text-center py-16 text-muted-foreground">
-      <Mic className="w-10 h-10 mx-auto mb-3 opacity-30" />
-      <p className="font-medium">No voice recording</p>
-      <p className="text-xs mt-1">Voice notes appear here when recorded during a session.</p>
-    </div>
-  );
+  const beforeChunks = chunks.filter(c => !c.phase || c.phase === "before");
+  const afterChunks = chunks.filter(c => c.phase === "after");
+  const beforeAssets = assets.filter(a => !a.phase || a.phase === "before");
+  const afterAssets = assets.filter(a => a.phase === "after");
+  const hasAfter = afterChunks.length > 0 || afterAssets.length > 0;
 
-  return (
-    <div className="max-w-2xl mx-auto">
-      <div className="mb-5 pb-4 border-b">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Source Transcript</p>
-        <p className="text-xs text-muted-foreground">
-          Raw voice-to-text in capture sequence. Times are relative to session start. This is the source record — the Document tab shows the cleaned version.
-        </p>
-      </div>
+  function PhaseEvents({ pChunks, pAssets, label }: { pChunks: any[]; pAssets: any[]; label?: string }) {
+    const events: Event[] = [
+      ...pChunks.map(c => ({ ms: c.startedAt ? new Date(c.startedAt).getTime() : 0, type: "chunk" as const, phase: c.phase || "before", data: c })),
+      ...pAssets.map(a => ({ ms: a.capturedAt ? new Date(a.capturedAt).getTime() : 0, type: "photo" as const, phase: a.phase || "before", data: a })),
+    ].sort((a, b) => a.ms - b.ms);
+    const sessionStart = events[0]?.ms ?? 0;
+    const fmtElapsed = (ms: number) => {
+      const diff = Math.max(0, ms - sessionStart);
+      const s = Math.floor(diff / 1000);
+      return `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
+    };
+    if (events.length === 0) return null;
+    return (
       <div className="space-y-2">
+        {label && (
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">{label}</p>
+        )}
         {events.map((ev, i) => ev.type === "photo" ? (
           <div key={i} className="flex items-center gap-3 py-1">
             <code className="text-[10px] text-muted-foreground font-mono w-10 shrink-0">{fmtElapsed(ev.ms)}</code>
@@ -746,6 +698,38 @@ function TranscriptView({ chunks, assets }: { chunks: any[]; assets: any[] }) {
           </div>
         ))}
       </div>
+    );
+  }
+
+  if (chunks.length === 0 && assets.length === 0) return (
+    <div className="text-center py-16 text-muted-foreground">
+      <Mic className="w-10 h-10 mx-auto mb-3 opacity-30" />
+      <p className="font-medium">No voice recording</p>
+      <p className="text-xs mt-1">Voice notes appear here when recorded during a session.</p>
+    </div>
+  );
+
+  return (
+    <div className="max-w-2xl mx-auto">
+      <div className="mb-5 pb-4 border-b">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Source Transcript</p>
+        <p className="text-xs text-muted-foreground">
+          Raw voice-to-text in capture sequence. Times are relative to session start. This is the source record — the Document tab shows the cleaned version.
+        </p>
+      </div>
+      <div className="space-y-6">
+        <PhaseEvents pChunks={beforeChunks} pAssets={beforeAssets} label={hasAfter ? "Before Walkthrough" : undefined} />
+        {hasAfter && (
+          <>
+            <div className="flex items-center gap-3 py-1">
+              <div className="flex-1 h-px bg-blue-200 dark:bg-blue-800" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-blue-500">After Walkthrough</span>
+              <div className="flex-1 h-px bg-blue-200 dark:bg-blue-800" />
+            </div>
+            <PhaseEvents pChunks={afterChunks} pAssets={afterAssets} />
+          </>
+        )}
+      </div>
       {lightbox && (
         <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={() => setLightbox(null)}>
           <img src={lightbox} className="max-w-full max-h-full rounded-lg" alt="" />
@@ -770,12 +754,13 @@ export default function AdminFieldNotesSession() {
   const [editTitle, setEditTitle] = useState("");
   const [lightboxPhoto, setLightboxPhoto] = useState<{ url: string; entry?: any } | null>(null);
   const [showShare, setShowShare] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const { data: session, isLoading } = useQuery<any>({
     queryKey: ["/api/field-notes/sessions", sessionId],
     queryFn: () => apiRequest("GET", `/api/field-notes/sessions/${sessionId}`).then(r => r.json()),
     enabled: !!sessionId,
-    refetchInterval: (data: any) => (data?.status === "processing" || data?.status === "uploading") ? 3000 : false,
+    refetchInterval: (data: any) => (data?.status === "processing" || data?.status === "uploading" || data?.afterStatus === "processing") ? 3000 : false,
   });
 
   const updateMutation = useMutation({
@@ -797,6 +782,16 @@ export default function AdminFieldNotesSession() {
       toast({ title: "Quote details saved" });
     },
     onError: () => toast({ title: "Failed to save quote", variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => apiRequest("DELETE", `/api/field-notes/sessions/${sessionId}`).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/field-notes"] });
+      toast({ title: "Field Note deleted." });
+      navigate(backPath);
+    },
+    onError: () => toast({ title: "Failed to delete", variant: "destructive" }),
   });
 
   if (isLoading || !session) {
@@ -955,6 +950,15 @@ export default function AdminFieldNotesSession() {
                 {processMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} Process AI
               </Button>
             )}
+            <Button
+              data-testid="button-delete-session"
+              size="sm"
+              variant="outline"
+              className="gap-1 text-xs h-7 text-destructive hover:text-destructive border-destructive/30 hover:border-destructive/60"
+              onClick={() => setShowDeleteConfirm(true)}
+            >
+              <Trash2 className="w-3 h-3" /> Delete
+            </Button>
           </div>
         </div>
       </div>
@@ -1015,6 +1019,23 @@ export default function AdminFieldNotesSession() {
                   <div className="mb-8">
                     <p className="text-sm text-foreground/80 leading-relaxed">{session.aiSummary}</p>
                     <div className="h-px bg-border mt-6" />
+                  </div>
+                )}
+
+                {/* After walkthrough summary */}
+                {session.afterStatus === "processing" && (
+                  <div className="mb-6 flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    Generating after-walkthrough summary…
+                  </div>
+                )}
+                {session.afterStatus === "ready" && session.afterSummary && (
+                  <div className="mb-8 rounded-xl border bg-blue-50 dark:bg-blue-950/20 px-5 py-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />
+                      <p className="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400">After Walkthrough</p>
+                    </div>
+                    <p className="text-sm text-foreground/80 leading-relaxed">{session.afterSummary}</p>
                   </div>
                 )}
 
@@ -1104,7 +1125,7 @@ export default function AdminFieldNotesSession() {
               entries={entries}
               sessionId={session.id}
               onPhotoClick={(url, entry) => setLightboxPhoto({ url, entry })}
-              onAssetsAdded={() => queryClient.invalidateQueries({ queryKey: ["/api/field-notes/sessions", session.id] })}
+              onStartAfterWalkthrough={() => navigate(`/admin/field-notes/capture?sessionId=${session.id}&phase=after&return=/admin/field-notes`)}
             />
           </TabsContent>
 
@@ -1135,6 +1156,32 @@ export default function AdminFieldNotesSession() {
           </button>
         </div>
       )}
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="w-4 h-4" /> Delete Field Note?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This will remove this walkthrough from your Field Notes list. This action cannot be undone.
+          </p>
+          <div className="flex gap-2 justify-end mt-2">
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
+            <Button
+              data-testid="button-confirm-delete-session"
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate()}
+            >
+              {deleteMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : null}
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -33,6 +33,8 @@ export default function FieldNotesCapture() {
   const params = new URLSearchParams(window.location.search);
   const sessionId = params.get("sessionId");
   const returnPath = params.get("return") ?? "/admin/field-notes";
+  const capturePhase = params.get("phase") ?? "before";
+  const isAfterPhase = capturePhase === "after";
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -57,19 +59,21 @@ export default function FieldNotesCapture() {
   const photoMutation = useMutation({
     mutationFn: ({ fileUrl, capturedAt }: { fileUrl: string; capturedAt: string }) =>
       apiRequest("POST", `/api/field-notes/sessions/${sessionId}/photo`, {
-        fileUrl, capturedAt, sequenceIndex: photoCountRef.current,
+        fileUrl, capturedAt, sequenceIndex: photoCountRef.current, phase: capturePhase,
       }).then(r => r.json()),
   });
 
   const transcriptMutation = useMutation({
     mutationFn: ({ rawText, startedAt, endedAt, chunkIndex }: any) =>
       apiRequest("POST", `/api/field-notes/sessions/${sessionId}/transcript`, {
-        rawText, startedAt, endedAt, chunkIndex,
+        rawText, startedAt, endedAt, chunkIndex, phase: capturePhase,
       }).then(r => r.json()),
   });
 
   const stopMutation = useMutation({
-    mutationFn: () => apiRequest("POST", `/api/field-notes/sessions/${sessionId}/stop`).then(r => r.json()),
+    mutationFn: () => isAfterPhase
+      ? apiRequest("POST", `/api/field-notes/sessions/${sessionId}/stop-after`).then(r => r.json())
+      : apiRequest("POST", `/api/field-notes/sessions/${sessionId}/stop`).then(r => r.json()),
     onSuccess: () => navigate(`${returnPath}/session/${sessionId}`),
     onError: () => toast({ title: "Failed to stop session", variant: "destructive" }),
   });
@@ -187,8 +191,11 @@ export default function FieldNotesCapture() {
           <ChevronLeft className="w-4 h-4" /> Back
         </button>
         <div className="flex items-center gap-2">
-          <span className={cn("w-2 h-2 rounded-full", stopping ? "bg-yellow-500" : "bg-red-500 animate-pulse")} />
-          <span className="font-mono text-sm font-semibold">{mm}:{ss}</span>
+          <span className={cn("w-2 h-2 rounded-full", stopping ? "bg-yellow-500" : isAfterPhase ? "bg-blue-500 animate-pulse" : "bg-red-500 animate-pulse")} />
+          {isAfterPhase
+            ? <span className="text-xs font-semibold text-blue-400">After Walkthrough</span>
+            : <span className="font-mono text-sm font-semibold">{mm}:{ss}</span>
+          }
         </div>
         <div className="flex items-center gap-1 text-xs text-white/60">
           <Images className="w-3.5 h-3.5" />
@@ -282,7 +289,7 @@ export default function FieldNotesCapture() {
         </div>
 
         <p className="text-center text-[11px] text-white/30 mt-2">
-          {micActive ? "Mic on — speaking..." : "Tap mic to record voice"} · Tap circle to take photo · Tap square to stop
+          {isAfterPhase ? "After walkthrough — " : ""}{micActive ? "Mic on — speaking..." : "Tap mic to record voice"} · Tap circle to take photo · Tap square to finish
         </p>
       </div>
     </div>

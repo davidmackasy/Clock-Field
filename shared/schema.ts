@@ -706,6 +706,9 @@ export const fieldNotesSessions = pgTable("field_notes_sessions", {
   documentMode: text("document_mode").default("standard"),
   visitType: text("visit_type"),
   quoteData: text("quote_data"),
+  afterStatus: text("after_status").default("none"),
+  afterSummary: text("after_summary"),
+  deletedAt: text("deleted_at"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
@@ -732,6 +735,7 @@ export const fieldNotesTranscriptChunks = pgTable("field_notes_transcript_chunks
   startedAt: text("started_at"),
   endedAt: text("ended_at"),
   rawText: text("raw_text").notNull(),
+  phase: text("phase").default("before"),
   createdAt: text("created_at").notNull(),
 });
 
