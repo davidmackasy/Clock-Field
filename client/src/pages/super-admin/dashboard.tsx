@@ -21,7 +21,8 @@ import {
   Building2, Users, DollarSign, TrendingUp, AlertTriangle, Clock,
   Eye, Ban, CheckCircle, ShieldAlert, MessageSquare, ChevronRight,
   ArrowLeft, Send, Globe, RefreshCw, ShieldCheck, ShieldOff, CalendarClock,
-  X, Timer, Activity, UserCheck, Bell, Inbox, UserPlus, BarChart2
+  X, Timer, Activity, UserCheck, Bell, Inbox, UserPlus, BarChart2,
+  FlaskConical, Plus, Mail, StopCircle, CalendarPlus
 } from "lucide-react";
 
 type Business = {
@@ -45,6 +46,13 @@ type Business = {
   manualAccessReason: string | null;
   createdAt?: string | null;
   activatedAt?: string | null;
+  // Trial fields
+  isTrialAccess?: boolean;
+  trialStartDate?: string | null;
+  trialEndDate?: string | null;
+  trialDays?: number | null;
+  createdBySuperAdmin?: boolean;
+  trialStatus?: string | null;
 };
 
 type Stats = {
@@ -167,6 +175,22 @@ export default function SuperAdminDashboard() {
   const [accessReason, setAccessReason] = useState("");
   const [recentSort, setRecentSort] = useState<"created" | "activated">("created");
 
+  // Create Trial Company modal state
+  const [trialModalOpen, setTrialModalOpen] = useState(false);
+  const [trialCompanyName, setTrialCompanyName] = useState("");
+  const [trialFirstName, setTrialFirstName] = useState("");
+  const [trialLastName, setTrialLastName] = useState("");
+  const [trialEmail, setTrialEmail] = useState("");
+  const [trialPhone, setTrialPhone] = useState("");
+  const [trialDays, setTrialDays] = useState("7");
+  const [trialPlan, setTrialPlan] = useState("starter");
+  const [trialNotes, setTrialNotes] = useState("");
+
+  // Extend trial / end trial confirmation
+  const [extendTrialOpen, setExtendTrialOpen] = useState(false);
+  const [extendDays, setExtendDays] = useState("7");
+  const [endTrialConfirmOpen, setEndTrialConfirmOpen] = useState(false);
+
   if (!isSuperAdmin) {
     return (
       <div className="flex items-center justify-center h-full min-h-[60vh]">
@@ -240,6 +264,69 @@ export default function SuperAdminDashboard() {
       setMsgBody("");
     },
     onError: (e: any) => toast({ title: "Failed to send", description: e.message, variant: "destructive" }),
+  });
+
+  const createTrialCompany = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/super-admin/trial-companies/create", data);
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed to create trial company");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/businesses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/recent-businesses"] });
+      toast({ title: "Trial company created", description: "Password setup email has been sent to the admin." });
+      setTrialModalOpen(false);
+      setTrialCompanyName(""); setTrialFirstName(""); setTrialLastName("");
+      setTrialEmail(""); setTrialPhone(""); setTrialDays("7");
+      setTrialPlan("starter"); setTrialNotes("");
+    },
+    onError: (e: any) => toast({ title: "Failed to create trial company", description: e.message, variant: "destructive" }),
+  });
+
+  const extendTrial = useMutation({
+    mutationFn: async ({ id, days }: { id: string; days: number }) => {
+      const res = await apiRequest("POST", `/api/super-admin/businesses/${id}/extend-trial`, { days });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/businesses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/businesses", selectedBusiness?.id] });
+      toast({ title: "Trial extended successfully" });
+      setExtendTrialOpen(false);
+      setExtendDays("7");
+    },
+    onError: (e: any) => toast({ title: "Failed to extend trial", description: e.message, variant: "destructive" }),
+  });
+
+  const endTrial = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/super-admin/businesses/${id}/end-trial`, {});
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/businesses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/businesses", selectedBusiness?.id] });
+      toast({ title: "Trial ended" });
+      setEndTrialConfirmOpen(false);
+    },
+    onError: (e: any) => toast({ title: "Failed to end trial", description: e.message, variant: "destructive" }),
+  });
+
+  const resendInvite = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/super-admin/businesses/${id}/resend-invite`, {});
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message); }
+      return res.json();
+    },
+    onSuccess: () => toast({ title: "Setup email resent" }),
+    onError: (e: any) => toast({ title: "Failed to resend", description: e.message, variant: "destructive" }),
   });
 
   const filteredBusinesses = businesses.filter(b =>
@@ -324,7 +411,16 @@ export default function SuperAdminDashboard() {
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">Manage all businesses and subscriptions</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            size="sm"
+            className="bg-teal-600 hover:bg-teal-700 text-white"
+            onClick={() => setTrialModalOpen(true)}
+            data-testid="button-create-trial-company"
+          >
+            <FlaskConical className="w-4 h-4 mr-1.5" />
+            Create Trial Company
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -519,11 +615,35 @@ export default function SuperAdminDashboard() {
                                 </Badge>
                               </div>
                             )}
-                            {isManualAccessActive(b) && (
+                            {b.isTrialAccess && b.trialEndDate ? (
+                              new Date() < new Date(b.trialEndDate) ? (
+                                <div className="mt-1">
+                                  <Badge className="bg-teal-100 text-teal-800 border-0 text-[10px] flex items-center gap-0.5 w-fit" data-testid={`badge-trial-active-${b.id}`}>
+                                    <FlaskConical className="w-2.5 h-2.5" />
+                                    Trial · {daysRemaining(b.trialEndDate)}d left
+                                  </Badge>
+                                </div>
+                              ) : (
+                                <div className="mt-1">
+                                  <Badge className="bg-orange-100 text-orange-800 border-0 text-[10px] flex items-center gap-0.5 w-fit" data-testid={`badge-trial-expired-${b.id}`}>
+                                    <StopCircle className="w-2.5 h-2.5" />
+                                    Trial Expired
+                                  </Badge>
+                                </div>
+                              )
+                            ) : isManualAccessActive(b) && (
                               <div className="mt-1">
                                 <Badge className="bg-amber-100 text-amber-800 border-0 text-[10px] flex items-center gap-0.5 w-fit" data-testid={`badge-temp-access-${b.id}`}>
                                   <Timer className="w-2.5 h-2.5" />
                                   temp access · {daysRemaining(b.manualAccessExpiresAt!)}d left
+                                </Badge>
+                              </div>
+                            )}
+                            {b.createdBySuperAdmin && (
+                              <div className="mt-1">
+                                <Badge className="bg-slate-100 text-slate-600 border-0 text-[10px] flex items-center gap-0.5 w-fit">
+                                  <ShieldAlert className="w-2.5 h-2.5" />
+                                  super admin
                                 </Badge>
                               </div>
                             )}
@@ -643,12 +763,17 @@ export default function SuperAdminDashboard() {
                           <p className="text-[10px] text-muted-foreground">{formatDateShort(recentSort === "activated" ? b.activatedAt : b.createdAt)}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 mt-1.5">
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                         <Badge className={`${accountStatusColors[b.accountStatus] || "bg-gray-100"} border-0 text-[10px]`}>
                           {b.accountStatus.replace("_", " ")}
                         </Badge>
                         {b.internalBypass && (
                           <Badge className="bg-purple-100 text-purple-800 border-0 text-[10px]">bypass</Badge>
+                        )}
+                        {b.isTrialAccess && b.trialEndDate && (
+                          new Date() < new Date(b.trialEndDate)
+                            ? <Badge className="bg-teal-100 text-teal-800 border-0 text-[10px] flex items-center gap-0.5"><FlaskConical className="w-2.5 h-2.5" />Trial</Badge>
+                            : <Badge className="bg-orange-100 text-orange-800 border-0 text-[10px]">Trial Expired</Badge>
                         )}
                       </div>
                     </button>
@@ -790,6 +915,94 @@ export default function SuperAdminDashboard() {
               )}
 
               <Separator />
+
+              {/* Trial Access Section — only for trial companies */}
+              {detailData.isTrialAccess && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <FlaskConical className="w-4 h-4 text-teal-600" />
+                    <p className="text-sm font-semibold">Trial Access</p>
+                    {detailData.trialStatus === "converted" && (
+                      <Badge className="bg-green-100 text-green-800 border-0 text-xs">Converted</Badge>
+                    )}
+                    {detailData.createdBySuperAdmin && (
+                      <Badge className="bg-slate-100 text-slate-600 border-0 text-xs">Super Admin Created</Badge>
+                    )}
+                  </div>
+
+                  {detailData.trialEndDate && new Date() < new Date(detailData.trialEndDate) ? (
+                    <div className="rounded-lg border border-teal-200 bg-teal-50 p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <FlaskConical className="w-4 h-4 text-teal-600" />
+                          <span className="text-sm font-medium text-teal-800">Trial Active</span>
+                        </div>
+                        <Badge className="bg-teal-100 text-teal-800 border-0 text-xs" data-testid="badge-detail-trial-active">
+                          Active
+                        </Badge>
+                      </div>
+                      <div className="text-xs text-teal-700 space-y-0.5">
+                        {detailData.trialStartDate && (
+                          <p>Started: <span className="font-medium">{new Date(detailData.trialStartDate).toLocaleDateString()}</span></p>
+                        )}
+                        <p>Ends: <span className="font-medium">{new Date(detailData.trialEndDate).toLocaleDateString()}</span></p>
+                        <p>Days remaining: <span className="font-medium">{daysRemaining(detailData.trialEndDate)}</span></p>
+                        {detailData.trialDays && (
+                          <p>Trial length: <span className="font-medium">{detailData.trialDays} days</span></p>
+                        )}
+                      </div>
+                    </div>
+                  ) : detailData.trialEndDate ? (
+                    <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <StopCircle className="w-4 h-4 text-orange-600" />
+                        <span className="text-sm font-medium text-orange-800">Trial Expired</span>
+                        <Badge className="bg-orange-100 text-orange-800 border-0 text-xs">Expired</Badge>
+                      </div>
+                      <p className="text-xs text-orange-700">
+                        Expired: <span className="font-medium">{new Date(detailData.trialEndDate).toLocaleDateString()}</span>
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs text-teal-700 border-teal-300 hover:bg-teal-50"
+                      onClick={() => setExtendTrialOpen(true)}
+                      data-testid="button-extend-trial"
+                    >
+                      <CalendarPlus className="w-3.5 h-3.5 mr-1.5" />
+                      Extend Trial
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs text-red-700 border-red-300 hover:bg-red-50"
+                      onClick={() => setEndTrialConfirmOpen(true)}
+                      disabled={!detailData.trialEndDate || new Date() > new Date(detailData.trialEndDate)}
+                      data-testid="button-end-trial-now"
+                    >
+                      <StopCircle className="w-3.5 h-3.5 mr-1.5" />
+                      End Trial Now
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={() => resendInvite.mutate(detailData.id)}
+                      disabled={resendInvite.isPending}
+                      data-testid="button-resend-invite"
+                    >
+                      <Mail className="w-3.5 h-3.5 mr-1.5" />
+                      {resendInvite.isPending ? "Sending..." : "Resend Setup Email"}
+                    </Button>
+                  </div>
+
+                  <Separator />
+                </div>
+              )}
 
               {/* Temporary Access Section */}
               <div className="space-y-3">
@@ -1003,6 +1216,231 @@ export default function SuperAdminDashboard() {
             <Button variant="outline" onClick={() => setChangePlanOpen(false)}>Cancel</Button>
             <Button onClick={handlePlanChange} disabled={!newPlanCode} data-testid="button-confirm-plan-change">
               Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Trial Company Dialog */}
+      <Dialog open={trialModalOpen} onOpenChange={setTrialModalOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FlaskConical className="w-4 h-4 text-teal-600" />
+              Create Trial Company
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {/* Company Info */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Company Information</p>
+              <div className="space-y-2">
+                <div className="space-y-1">
+                  <Label htmlFor="trial-company-name">Company Name <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="trial-company-name"
+                    value={trialCompanyName}
+                    onChange={e => setTrialCompanyName(e.target.value)}
+                    placeholder="e.g. Acme Cleaning Co."
+                    data-testid="input-trial-company-name"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Admin Account */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Admin Account</p>
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="trial-first-name">First Name <span className="text-red-500">*</span></Label>
+                    <Input
+                      id="trial-first-name"
+                      value={trialFirstName}
+                      onChange={e => setTrialFirstName(e.target.value)}
+                      placeholder="Jane"
+                      data-testid="input-trial-first-name"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="trial-last-name">Last Name <span className="text-red-500">*</span></Label>
+                    <Input
+                      id="trial-last-name"
+                      value={trialLastName}
+                      onChange={e => setTrialLastName(e.target.value)}
+                      placeholder="Smith"
+                      data-testid="input-trial-last-name"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="trial-email">Email Address <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="trial-email"
+                    type="email"
+                    value={trialEmail}
+                    onChange={e => setTrialEmail(e.target.value)}
+                    placeholder="jane@acmecleaning.com"
+                    data-testid="input-trial-email"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="trial-phone">Phone Number <span className="text-xs text-muted-foreground">(optional)</span></Label>
+                  <Input
+                    id="trial-phone"
+                    value={trialPhone}
+                    onChange={e => setTrialPhone(e.target.value)}
+                    placeholder="(204) 555-0100"
+                    data-testid="input-trial-phone"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Trial Settings */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Trial Settings</p>
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="trial-days">Trial Length (days)</Label>
+                    <Input
+                      id="trial-days"
+                      type="number"
+                      min={1}
+                      max={365}
+                      value={trialDays}
+                      onChange={e => setTrialDays(e.target.value)}
+                      data-testid="input-trial-days"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Plan</Label>
+                    <Select value={trialPlan} onValueChange={setTrialPlan}>
+                      <SelectTrigger data-testid="select-trial-plan">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="starter">Starter</SelectItem>
+                        <SelectItem value="growth">Growth</SelectItem>
+                        <SelectItem value="pro">Pro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="p-2.5 bg-teal-50 border border-teal-200 rounded-lg text-xs text-teal-700">
+                  <p className="font-medium mb-0.5">What happens after creation:</p>
+                  <ul className="space-y-0.5 text-teal-600">
+                    <li>• The admin receives a password setup email</li>
+                    <li>• Trial access is granted via temporary access override</li>
+                    <li>• After the trial ends, the account locks until they subscribe</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Internal Notes */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Internal Notes</p>
+              <Textarea
+                value={trialNotes}
+                onChange={e => setTrialNotes(e.target.value)}
+                placeholder="e.g. Referred by Partner X, onboarding call scheduled..."
+                rows={3}
+                data-testid="textarea-trial-notes"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTrialModalOpen(false)}>Cancel</Button>
+            <Button
+              className="bg-teal-600 hover:bg-teal-700 text-white"
+              onClick={() => createTrialCompany.mutate({
+                companyName: trialCompanyName,
+                adminFirstName: trialFirstName,
+                adminLastName: trialLastName,
+                adminEmail: trialEmail,
+                phoneNumber: trialPhone,
+                trialDays: parseInt(trialDays, 10) || 7,
+                planCode: trialPlan,
+                notes: trialNotes,
+              })}
+              disabled={createTrialCompany.isPending || !trialCompanyName.trim() || !trialFirstName.trim() || !trialLastName.trim() || !trialEmail.trim()}
+              data-testid="button-confirm-create-trial"
+            >
+              <FlaskConical className="w-3.5 h-3.5 mr-1.5" />
+              {createTrialCompany.isPending ? "Creating..." : "Create Trial Company"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Extend Trial Dialog */}
+      <Dialog open={extendTrialOpen} onOpenChange={setExtendTrialOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarPlus className="w-4 h-4 text-teal-600" />
+              Extend Trial
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              Add days to the current trial end date for <strong>{selectedBusiness?.name}</strong>.
+            </p>
+            <div className="space-y-1">
+              <Label>Additional Days</Label>
+              <Input
+                type="number"
+                min={1}
+                max={365}
+                value={extendDays}
+                onChange={e => setExtendDays(e.target.value)}
+                data-testid="input-extend-trial-days"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExtendTrialOpen(false)}>Cancel</Button>
+            <Button
+              className="bg-teal-600 hover:bg-teal-700 text-white"
+              onClick={() => selectedBusiness && extendTrial.mutate({ id: selectedBusiness.id, days: parseInt(extendDays, 10) || 7 })}
+              disabled={extendTrial.isPending}
+              data-testid="button-confirm-extend-trial"
+            >
+              <CalendarPlus className="w-3.5 h-3.5 mr-1.5" />
+              {extendTrial.isPending ? "Extending..." : "Extend Trial"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* End Trial Confirmation Dialog */}
+      <Dialog open={endTrialConfirmOpen} onOpenChange={setEndTrialConfirmOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-700">
+              <StopCircle className="w-4 h-4" />
+              End Trial Now
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              This will immediately expire the trial for <strong>{selectedBusiness?.name}</strong>. The admin will lose access until they subscribe.
+            </p>
+            <p className="text-sm font-medium text-red-700">No data will be deleted.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEndTrialConfirmOpen(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => selectedBusiness && endTrial.mutate(selectedBusiness.id)}
+              disabled={endTrial.isPending}
+              data-testid="button-confirm-end-trial"
+            >
+              <StopCircle className="w-3.5 h-3.5 mr-1.5" />
+              {endTrial.isPending ? "Ending..." : "End Trial Now"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -753,3 +753,57 @@ ${opts.replyPreview ? `Reply preview:\n${opts.replyPreview}\n\n` : ""}Log in to 
     html,
   });
 }
+
+export async function sendTrialAccountEmail(opts: {
+  to: string;
+  firstName: string;
+  companyName: string;
+  trialEndDate: string;
+  setupUrl: string;
+  appUrl: string;
+}) {
+  const { client, domain } = getClient();
+  const from = process.env.MAIL_FROM || "Clockfield <noreply@clockfield.ca>";
+  const trialEnd = new Date(opts.trialEndDate).toLocaleDateString("en-US", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+
+  const textBody = `Hi ${opts.firstName},
+
+Your ClockField trial account for ${opts.companyName} is ready.
+
+Set up your password and log in using the link below:
+${opts.setupUrl}
+
+Your trial runs until ${trialEnd}. After that, you'll need to choose a plan to continue using ClockField — your data will always be kept safe.
+
+If you have any questions, reply to this email or contact our support team.
+
+– The ClockField Team`;
+
+  const bodyHtml = `
+<p style="margin:0 0 14px;color:#374151;">Hi <strong>${opts.firstName}</strong>,</p>
+<p style="margin:0 0 14px;color:#374151;">Your ClockField trial account for <strong>${opts.companyName}</strong> has been created and is ready to use.</p>
+<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:16px 20px;margin:0 0 20px;">
+  <p style="margin:0 0 6px;font-size:12px;color:#0369a1;font-weight:600;text-transform:uppercase;">Trial Details</p>
+  <p style="margin:0 0 4px;font-size:14px;color:#374151;"><strong>Company:</strong> ${opts.companyName}</p>
+  <p style="margin:0;font-size:14px;color:#374151;"><strong>Trial ends:</strong> ${trialEnd}</p>
+</div>
+<p style="margin:0 0 14px;color:#6b7280;font-size:14px;">After your trial ends, you'll need to choose a plan to continue — all your data will be kept safe.</p>`;
+
+  const html = buildEmailHtml({
+    title: `Your ClockField trial account is ready`,
+    bodyHtml,
+    ctaLabel: "Set Up Your Password",
+    ctaUrl: opts.setupUrl,
+    footerNote: `You received this because a ClockField trial account was created for ${opts.companyName}.`,
+  });
+
+  await client.messages.create(domain, {
+    from,
+    to: [opts.to],
+    subject: `Your ClockField trial account is ready — ${opts.companyName}`,
+    text: textBody,
+    html,
+  });
+}

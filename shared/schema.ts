@@ -49,6 +49,13 @@ export const companies = pgTable("companies", {
   manualAccessExpiresAt: text("manual_access_expires_at"),
   manualAccessGrantedBy: text("manual_access_granted_by"),
   manualAccessReason: text("manual_access_reason"),
+  // Super Admin trial access fields
+  isTrialAccess: boolean("is_trial_access").notNull().default(false),
+  trialStartDate: text("trial_start_date"),
+  trialEndDate: text("trial_end_date"),
+  trialDays: integer("trial_days"),
+  createdBySuperAdmin: boolean("created_by_super_admin").notNull().default(false),
+  trialStatus: text("trial_status"),
   // Company contact / address (for pay stubs)
   address: text("address"),
   city: text("city"),

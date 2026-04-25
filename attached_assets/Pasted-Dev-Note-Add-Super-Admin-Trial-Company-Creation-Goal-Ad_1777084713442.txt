@@ -1,0 +1,278 @@
+Dev Note: Add Super Admin Trial Company Creation
+
+Goal
+Add a secret super admin-only feature that allows the platform admin to manually create a company, create its business admin account, grant temporary trial access, and force subscription after the trial ends.
+
+Do not break or affect anything else.
+Do not change existing business signup flow.
+Do not change existing Stripe subscription flow.
+Do not change current business admin dashboard logic unless required for trial access checks.
+Do not remove or rewrite existing auth logic.
+Only add this feature safely on top of the current platform admin system.
+
+Core Feature
+
+Add a new super admin action:
+
+Create Trial Company
+
+This should allow the super admin to enter:
+
+Company name
+Admin full name
+Admin email
+Phone number optional
+Trial length: 7 days default
+Plan type: Starter default
+Access status: Trial Active
+Optional notes for internal use
+
+When submitted:
+
+Create the business/company record
+Create the business admin user record
+Assign the user as business owner/admin
+Mark the business as trial access
+Set trial_start_date
+Set trial_end_date
+Set subscription_status = trialing
+Set created_by_super_admin = true
+Send the admin a password setup/reset email
+Allow the admin to log in and use the product during the trial
+
+Suggested Database Fields
+
+Add these fields to the businesses table if they do not exist:
+
+trial_start_date timestamp nullable
+trial_end_date timestamp nullable
+trial_days integer default 7
+is_trial_access boolean default false
+created_by_super_admin boolean default false
+trial_status text default null
+
+Allowed trial_status values:
+
+active
+expired
+converted
+cancelled
+
+Keep existing subscription fields untouched.
+
+Access Logic
+
+When a business admin logs in:
+
+If business has active paid subscription, allow access.
+
+If business has is_trial_access = true and trial_end_date is still in the future, allow access.
+
+If trial_end_date has passed and there is no active Stripe subscription:
+
+Block access to main dashboard
+Redirect to subscription/payment page
+Show message:
+
+Your free trial has ended. Please choose a plan to continue using ClockField.
+
+Do not delete their data.
+Do not delete employees.
+Do not delete reports.
+Do not remove access permanently.
+Only lock usage until payment is completed.
+
+After Payment
+
+When Stripe confirms subscription:
+
+Set subscription_status = active
+Set trial_status = converted
+Set is_trial_access = false if needed
+Keep business data intact
+Allow dashboard access again
+
+Super Admin UI
+
+On Platform Admin Dashboard:
+
+Add a button near Broadcast Message:
+
+Create Trial Company
+
+Click opens a modal or dedicated page.
+
+Modal sections:
+
+Company Information
+Admin Account
+Trial Settings
+Internal Notes
+
+After creation, show success state:
+
+Trial company created successfully. Password setup email sent to admin.
+
+Add trial businesses to existing All Businesses table.
+
+Display badges:
+
+Trial Active
+Trial Expired
+Created by Super Admin
+Pending Subscription
+Converted
+
+Recent Businesses section should also show manually created companies.
+
+Email Flow
+
+After super admin creates the company:
+
+Send an email to the business admin:
+
+Subject: Your ClockField trial account is ready
+
+Body should include:
+
+Company name
+Login link
+Password setup/reset link
+Trial end date
+Short note that payment is required after trial ends
+
+Use existing email provider and existing reset password system if available.
+
+Do not create a custom password manually unless the app already supports it.
+
+Security Rules
+
+Only super admin can create trial companies.
+
+Business admins must never see this feature.
+
+Normal admins must never see this feature.
+
+Protect backend route with super admin authorization.
+
+Do not rely only on frontend hiding.
+
+Backend API Suggested Routes
+
+POST /api/platform/trial-companies/create
+
+Required checks:
+
+User is authenticated
+User role is super_admin
+Validate email is not already used
+Validate company name is present
+Validate trial days
+Create business
+Create admin user
+Link admin user to business
+Send password reset/setup email
+Return success response
+
+Optional routes:
+
+POST /api/platform/trial-companies/:businessId/extend-trial
+POST /api/platform/trial-companies/:businessId/end-trial
+POST /api/platform/trial-companies/:businessId/resend-invite
+
+Trial Expiry Logic
+
+Add trial checking in two places:
+
+1. On login/session validation
+2. On dashboard/API access middleware
+
+If trial expired and unpaid:
+
+Allow access only to:
+Subscription page
+Billing page
+Logout
+Support/contact page if available
+
+Block:
+Employees
+Reports
+Scheduling
+Attendance
+Field Notes
+Worklogs
+Payroll
+Settings
+Any business data actions
+
+Do not delete anything.
+
+Super Admin Controls
+
+From the business detail popup, add actions:
+
+Extend Trial
+End Trial Now
+Resend Setup Email
+Mark as Converted only if Stripe/subscription is active
+View Trial End Date
+
+Do not allow accidental deletion.
+
+Add confirmation dialog for End Trial Now.
+
+UI Copy
+
+Trial active badge:
+
+Trial Active · Ends Apr 30, 2026
+
+Expired message:
+
+Your trial has ended. Subscribe to continue using ClockField.
+
+Super admin table status:
+
+Trial Active
+Trial Expired
+Converted
+Suspended
+Active
+
+Important Rules
+
+Do not break current Stripe subscriptions.
+Do not break current business signup.
+Do not change current user roles.
+Do not delete or migrate production data without backup.
+Do not change the current business admin experience for paying customers.
+Do not touch employee clock-in, attendance, worklogs, field notes, payroll, reports, or public links.
+Do not rename existing routes.
+Do not change existing database fields unless required.
+Only add new fields safely with nullable/default values.
+
+Testing Checklist
+
+Test super admin can create a company.
+Test admin receives setup email.
+Test admin can set password.
+Test admin can log in during trial.
+Test admin can add employees during trial.
+Test trial business appears in All Businesses.
+Test trial business appears in Recent Businesses.
+Test trial expires after selected date.
+Test expired admin is redirected to subscription page.
+Test payment unlocks account.
+Test existing paid businesses still work.
+Test normal signup still works.
+Test suspended businesses still stay suspended.
+Test no existing data is deleted.
+
+Expected Result
+
+Super admin can secretly create trial companies from the platform dashboard.
+The company gets temporary full access.
+The admin sets their password by email.
+After the trial ends, the account is locked behind subscription.
+If they subscribe, everything continues with no data loss.

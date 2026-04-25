@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { db, pool } from "./db";
 import { setupAuth, hashPassword, comparePasswords, requireAuth, requireRole } from "./auth";
 import OpenAI from "openai";
-import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail, sendAdminRequestReplyEmail } from "./mail";
+import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail, sendAdminRequestReplyEmail, sendTrialAccountEmail } from "./mail";
 import { createHash } from "crypto";
 import passport from "passport";
 import { randomBytes } from "crypto";
@@ -3620,6 +3620,169 @@ Welcome again, and thank you for choosing ClockField.
       if (!updated) return res.status(404).json({ message: "Not found" });
       const { password: _, tempPin: __, ...safe } = updated;
       res.json(safe);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ── Trial Company Creation ──────────────────────────────────────────────────
+
+  app.post("/api/super-admin/trial-companies/create", requireSuperAdmin, async (req, res) => {
+    try {
+      const { companyName, adminFirstName, adminLastName, adminEmail, phoneNumber, trialDays, planCode, notes } = req.body;
+      if (!companyName?.trim()) return res.status(400).json({ message: "Company name is required" });
+      if (!adminFirstName?.trim()) return res.status(400).json({ message: "Admin first name is required" });
+      if (!adminLastName?.trim()) return res.status(400).json({ message: "Admin last name is required" });
+      const email = (adminEmail || "").trim().toLowerCase();
+      if (!email) return res.status(400).json({ message: "Admin email is required" });
+
+      const existing = await storage.getUserByEmail(email);
+      if (existing) return res.status(409).json({ message: "An account with that email already exists" });
+
+      const days = Math.max(1, Math.min(365, Number(trialDays) || 7));
+      const plan = planCode || "starter";
+      const now = new Date();
+      const trialEndDate = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+
+      const company = await storage.createCompany({
+        name: companyName.trim(),
+        accountStatus: "active",
+        subscriptionStatus: "pending_subscription",
+        planCode: plan,
+        billingCycle: "monthly",
+        createdAt: now.toISOString(),
+        // Trial access via manual access override
+        manualAccessEnabled: true,
+        manualAccessExpiresAt: trialEndDate.toISOString(),
+        manualAccessGrantedBy: "super_admin",
+        manualAccessReason: notes?.trim() || "Trial access",
+        // Trial-specific fields
+        isTrialAccess: true,
+        trialStartDate: now.toISOString(),
+        trialEndDate: trialEndDate.toISOString(),
+        trialDays: days,
+        createdBySuperAdmin: true,
+        trialStatus: "active",
+      } as any);
+
+      const tempPasswordHash = await hashPassword(randomBytes(32).toString("hex"));
+      const adminUser = await storage.createUser({
+        companyId: company.id,
+        email,
+        password: tempPasswordHash,
+        role: "admin",
+        firstName: adminFirstName.trim(),
+        lastName: adminLastName.trim(),
+        loginEnabled: true,
+        accountStatus: "active",
+      });
+
+      // Create welcome platform message
+      try {
+        await storage.createPlatformMessage({
+          companyId: company.id,
+          senderUserId: "system",
+          senderRole: "super_admin",
+          subject: "Welcome to ClockField",
+          body: `Welcome to ClockField, ${adminFirstName}!\n\nYour trial account for ${companyName.trim()} is now active. You have ${days} days to explore the platform.\n\nIf you have any questions, feel free to reach out.`,
+          messageType: "standard",
+          isBroadcast: false,
+        });
+      } catch (_) {}
+
+      // Send password setup email
+      const rawToken = randomBytes(32).toString("hex");
+      const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+      const tokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days to set up
+      await storage.createPasswordResetToken({
+        userId: adminUser.id,
+        email,
+        tokenHash,
+        expiresAt: tokenExpiry,
+      });
+      const baseUrl = process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
+      const setupUrl = `${baseUrl}/reset-password?token=${rawToken}`;
+
+      try {
+        await sendTrialAccountEmail({
+          to: email,
+          firstName: adminFirstName.trim(),
+          companyName: companyName.trim(),
+          trialEndDate: trialEndDate.toISOString(),
+          setupUrl,
+          appUrl: baseUrl,
+        });
+      } catch (mailErr: any) {
+        console.error("[trial-create] email error:", mailErr.message);
+      }
+
+      res.json({ success: true, companyId: company.id, adminUserId: adminUser.id, trialEndDate: trialEndDate.toISOString() });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/super-admin/businesses/:id/extend-trial", requireSuperAdmin, async (req, res) => {
+    try {
+      const company = await storage.getCompany(req.params.id);
+      if (!company) return res.status(404).json({ message: "Not found" });
+      const { days } = req.body;
+      const extraDays = Math.max(1, Math.min(365, Number(days) || 7));
+      const base = company.trialEndDate
+        ? new Date(Math.max(Date.now(), new Date(company.trialEndDate).getTime()))
+        : new Date();
+      const newEnd = new Date(base.getTime() + extraDays * 24 * 60 * 60 * 1000);
+      await storage.updateCompany(req.params.id, {
+        trialEndDate: newEnd.toISOString(),
+        trialStatus: "active",
+        manualAccessExpiresAt: newEnd.toISOString(),
+        manualAccessEnabled: true,
+      } as any);
+      res.json({ success: true, trialEndDate: newEnd.toISOString() });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/super-admin/businesses/:id/end-trial", requireSuperAdmin, async (req, res) => {
+    try {
+      const company = await storage.getCompany(req.params.id);
+      if (!company) return res.status(404).json({ message: "Not found" });
+      const now = new Date().toISOString();
+      await storage.updateCompany(req.params.id, {
+        trialEndDate: now,
+        trialStatus: "expired",
+        manualAccessExpiresAt: now,
+      } as any);
+      res.json({ success: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/super-admin/businesses/:id/resend-invite", requireSuperAdmin, async (req, res) => {
+    try {
+      const company = await storage.getCompany(req.params.id);
+      if (!company) return res.status(404).json({ message: "Not found" });
+      const admins = await storage.getAdminsByCompany(req.params.id);
+      const admin = admins[0];
+      if (!admin || !admin.email) return res.status(400).json({ message: "No admin found for this company" });
+
+      const rawToken = randomBytes(32).toString("hex");
+      const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+      const tokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      await storage.invalidatePasswordResetTokensForUser(admin.id);
+      await storage.createPasswordResetToken({
+        userId: admin.id,
+        email: admin.email,
+        tokenHash,
+        expiresAt: tokenExpiry,
+      });
+      const baseUrl = process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
+      const setupUrl = `${baseUrl}/reset-password?token=${rawToken}`;
+
+      await sendTrialAccountEmail({
+        to: admin.email,
+        firstName: admin.firstName,
+        companyName: company.name,
+        trialEndDate: company.trialEndDate || new Date().toISOString(),
+        setupUrl,
+        appUrl: baseUrl,
+      });
+
+      res.json({ success: true });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
