@@ -12,7 +12,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { isNotNull, eq, and, isNull, inArray, desc } from "drizzle-orm";
-import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments, supplies, supplyUpdates } from "@shared/schema";
+import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments, supplies, supplyUpdates, inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses } from "@shared/schema";
 import { getPlan } from "./plans";
 import { generateReviewOgImage } from "./og-image";
 
@@ -6203,6 +6203,285 @@ FINAL RULES:
         createdAt: now,
       });
       res.status(201).json(row);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Inventory Management ─────────────────────────────────────────────────────
+
+  // GET /api/supplies/inventory-overview — stats for admin overview tab
+  app.get("/api/supplies/inventory-overview", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const cid = user.companyId;
+      const items = await db.select().from(inventoryItems).where(eq(inventoryItems.companyId, cid));
+      const purchases = await db.select().from(inventoryPurchases).where(eq(inventoryPurchases.companyId, cid));
+      const expenses = await db.select().from(locationSupplyExpenses).where(eq(locationSupplyExpenses.companyId, cid));
+      const requests = await db.select().from(supplies).where(and(eq(supplies.companyId, cid), eq(supplies.isActive, true)));
+      const totalItems = items.length;
+      const outOfStock = items.filter(i => i.status === "out_of_stock").length;
+      const runningLow = items.filter(i => i.status === "running_low").length;
+      const totalInventoryValue = items.reduce((acc, i) => acc + (parseFloat(i.unitPrice) || 0) * i.currentQuantity, 0);
+      const totalSpent = expenses.reduce((acc, e) => acc + (parseFloat(e.totalExpense) || 0), 0);
+      const pendingRequests = requests.filter(r => r.status === "in_stock" || r.status === "running_low" || r.status === "out_of_stock").length;
+      const recentPurchases = [...purchases].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
+      const recentExpenses = [...expenses].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
+      // Location expense summary
+      const locationMap: Record<string, { locationId: string; locationName: string | null; total: number; count: number }> = {};
+      for (const e of expenses) {
+        if (!locationMap[e.locationId]) locationMap[e.locationId] = { locationId: e.locationId, locationName: e.locationName, total: 0, count: 0 };
+        locationMap[e.locationId].total += parseFloat(e.totalExpense) || 0;
+        locationMap[e.locationId].count += 1;
+      }
+      const locationExpenseSummary = Object.values(locationMap).sort((a, b) => b.total - a.total).slice(0, 5);
+      res.json({ totalItems, outOfStock, runningLow, totalInventoryValue, totalSpent, pendingRequests, recentPurchases, recentExpenses, locationExpenseSummary, items });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // GET /api/supplies/inventory — list inventory items
+  app.get("/api/supplies/inventory", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const items = await db.select().from(inventoryItems)
+        .where(eq(inventoryItems.companyId, user.companyId))
+        .orderBy(desc(inventoryItems.updatedAt));
+      res.json(items);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/supplies/inventory — create inventory item
+  app.post("/api/supplies/inventory", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const now = new Date().toISOString();
+      const { name, category, unitPrice, currentQuantity, lowStockThreshold, supplierName, notes, imageData } = req.body;
+      if (!name || !category) return res.status(400).json({ message: "name and category required" });
+      const qty = parseInt(currentQuantity) || 0;
+      const price = unitPrice || "0";
+      const threshold = parseInt(lowStockThreshold) || 2;
+      let status = "in_stock";
+      if (qty === 0) status = "out_of_stock";
+      else if (qty <= threshold) status = "running_low";
+      const [item] = await db.insert(inventoryItems).values({
+        companyId: user.companyId, name, category,
+        unitPrice: price, currentQuantity: qty, lowStockThreshold: threshold,
+        status, supplierName: supplierName || null, notes: notes || null,
+        imageData: imageData || null, createdByAdminId: user.id,
+        createdAt: now, updatedAt: now,
+      }).returning();
+      // Record initial stock as purchase if qty > 0
+      if (qty > 0) {
+        const total = (parseFloat(price) * qty).toFixed(2);
+        await db.insert(inventoryPurchases).values({
+          companyId: user.companyId, inventoryItemId: item.id, inventoryItemName: name,
+          quantityAdded: qty, unitPrice: price, totalCost: total,
+          supplierName: supplierName || null, purchaseDate: now.split("T")[0],
+          notes: "Initial stock on item creation",
+          createdByAdminId: user.id, createdByAdminName: `${user.firstName} ${user.lastName}`,
+          createdAt: now,
+        });
+        await db.insert(inventoryMovements).values({
+          companyId: user.companyId, inventoryItemId: item.id, inventoryItemName: name,
+          movementType: "purchase", quantity: qty,
+          unitPriceAtTime: price, totalValue: total,
+          notes: "Initial stock", createdByAdminId: user.id, createdAt: now,
+        });
+      }
+      res.status(201).json(item);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // PATCH /api/supplies/inventory/:id — update inventory item details
+  app.patch("/api/supplies/inventory/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.id, req.params.id));
+      if (!item || item.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const now = new Date().toISOString();
+      const { name, category, unitPrice, lowStockThreshold, supplierName, notes, imageData } = req.body;
+      const threshold = lowStockThreshold !== undefined ? parseInt(lowStockThreshold) : item.lowStockThreshold;
+      const currentQty = item.currentQuantity;
+      let status = "in_stock";
+      if (currentQty === 0) status = "out_of_stock";
+      else if (currentQty <= threshold) status = "running_low";
+      const [updated] = await db.update(inventoryItems).set({
+        ...(name !== undefined && { name }),
+        ...(category !== undefined && { category }),
+        ...(unitPrice !== undefined && { unitPrice }),
+        ...(lowStockThreshold !== undefined && { lowStockThreshold: threshold }),
+        ...(supplierName !== undefined && { supplierName }),
+        ...(notes !== undefined && { notes }),
+        ...(imageData !== undefined && { imageData }),
+        status, updatedAt: now,
+      }).where(eq(inventoryItems.id, req.params.id)).returning();
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/supplies/inventory/:id/restock — add more stock
+  app.post("/api/supplies/inventory/:id/restock", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.id, req.params.id));
+      if (!item || item.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const now = new Date().toISOString();
+      const { quantityAdded, unitPrice, supplierName, purchaseDate, notes } = req.body;
+      const qty = parseInt(quantityAdded);
+      if (!qty || qty <= 0) return res.status(400).json({ message: "quantityAdded must be positive" });
+      const price = unitPrice || item.unitPrice;
+      const total = (parseFloat(price) * qty).toFixed(2);
+      const newQty = item.currentQuantity + qty;
+      const threshold = item.lowStockThreshold;
+      let status = "in_stock";
+      if (newQty === 0) status = "out_of_stock";
+      else if (newQty <= threshold) status = "running_low";
+      await db.update(inventoryItems).set({ currentQuantity: newQty, unitPrice: price, status, updatedAt: now }).where(eq(inventoryItems.id, item.id));
+      const [purchase] = await db.insert(inventoryPurchases).values({
+        companyId: user.companyId, inventoryItemId: item.id, inventoryItemName: item.name,
+        quantityAdded: qty, unitPrice: price, totalCost: total,
+        supplierName: supplierName || item.supplierName || null,
+        purchaseDate: purchaseDate || now.split("T")[0],
+        notes: notes || null, createdByAdminId: user.id,
+        createdByAdminName: `${user.firstName} ${user.lastName}`, createdAt: now,
+      }).returning();
+      await db.insert(inventoryMovements).values({
+        companyId: user.companyId, inventoryItemId: item.id, inventoryItemName: item.name,
+        movementType: "purchase", quantity: qty,
+        unitPriceAtTime: price, totalValue: total,
+        notes: notes || null, createdByAdminId: user.id, createdAt: now,
+      });
+      res.json({ purchase, newQuantity: newQty, status });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/supplies/inventory/:id/assign-location — assign inventory to a location
+  app.post("/api/supplies/inventory/:id/assign-location", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.id, req.params.id));
+      if (!item || item.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const { locationId, locationName, quantity, supplyRequestId, notes } = req.body;
+      if (!locationId || !quantity) return res.status(400).json({ message: "locationId and quantity required" });
+      const qty = parseInt(quantity);
+      if (qty <= 0) return res.status(400).json({ message: "quantity must be positive" });
+      if (item.currentQuantity < qty) return res.status(400).json({ message: `Insufficient stock. Available: ${item.currentQuantity}` });
+      const now = new Date().toISOString();
+      const price = item.unitPrice;
+      const total = (parseFloat(price) * qty).toFixed(2);
+      const newQty = item.currentQuantity - qty;
+      const threshold = item.lowStockThreshold;
+      let status = "in_stock";
+      if (newQty === 0) status = "out_of_stock";
+      else if (newQty <= threshold) status = "running_low";
+      await db.update(inventoryItems).set({ currentQuantity: newQty, status, updatedAt: now }).where(eq(inventoryItems.id, item.id));
+      const [expense] = await db.insert(locationSupplyExpenses).values({
+        companyId: user.companyId, locationId, locationName: locationName || null,
+        inventoryItemId: item.id, inventoryItemName: item.name,
+        category: item.category, supplyRequestId: supplyRequestId || null,
+        quantity: qty, unitPriceAtTime: price, totalExpense: total,
+        assignedDate: now.split("T")[0],
+        assignedByAdminId: user.id, assignedByAdminName: `${user.firstName} ${user.lastName}`,
+        notes: notes || null, createdAt: now,
+      }).returning();
+      await db.insert(inventoryMovements).values({
+        companyId: user.companyId, inventoryItemId: item.id, inventoryItemName: item.name,
+        movementType: "assigned_to_location", quantity: -qty,
+        unitPriceAtTime: price, totalValue: total,
+        locationId, locationName: locationName || null,
+        supplyRequestId: supplyRequestId || null,
+        notes: notes || null, createdByAdminId: user.id, createdAt: now,
+      });
+      // If linked to a supply request, update it
+      if (supplyRequestId) {
+        const [req2] = await db.select().from(supplies).where(eq(supplies.id, supplyRequestId));
+        if (req2 && req2.companyId === user.companyId) {
+          const newFulfilled = (req2.fulfilledQuantity || 0) + qty;
+          const requested = req2.requestedQuantity || 0;
+          const newStatus = requested > 0 && newFulfilled >= requested ? "fulfilled" : requested > 0 ? "partially_fulfilled" : req2.status;
+          await db.update(supplies).set({
+            fulfilledQuantity: newFulfilled, linkedExpenseId: expense.id,
+            inventoryItemId: item.id, status: newStatus, updatedAt: now,
+          }).where(eq(supplies.id, supplyRequestId));
+          await db.insert(supplyUpdates).values({
+            supplyId: supplyRequestId, companyId: user.companyId,
+            locationId: locationId, updatedByRole: "admin",
+            updateType: "status_changed",
+            note: `Fulfilled ${qty} unit(s) from inventory (${item.name})`,
+            previousStatus: req2.status, newStatus: newStatus, createdAt: now,
+          });
+        }
+      }
+      res.json({ expense, newQuantity: newQty, status });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // GET /api/supplies/location-expenses — list all expenses grouped by location
+  app.get("/api/supplies/location-expenses", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const expenses = await db.select().from(locationSupplyExpenses)
+        .where(eq(locationSupplyExpenses.companyId, user.companyId))
+        .orderBy(desc(locationSupplyExpenses.createdAt));
+      const locationMap: Record<string, { locationId: string; locationName: string | null; totalExpense: number; itemCount: number; lastActivity: string; entries: any[] }> = {};
+      for (const e of expenses) {
+        if (!locationMap[e.locationId]) locationMap[e.locationId] = { locationId: e.locationId, locationName: e.locationName, totalExpense: 0, itemCount: 0, lastActivity: e.createdAt, entries: [] };
+        locationMap[e.locationId].totalExpense += parseFloat(e.totalExpense) || 0;
+        locationMap[e.locationId].itemCount += 1;
+        if (e.createdAt > locationMap[e.locationId].lastActivity) locationMap[e.locationId].lastActivity = e.createdAt;
+        locationMap[e.locationId].entries.push(e);
+      }
+      res.json(Object.values(locationMap).sort((a, b) => b.totalExpense - a.totalExpense));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // GET /api/supplies/location-expenses/:locationId — detail for one location
+  app.get("/api/supplies/location-expenses/:locationId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const expenses = await db.select().from(locationSupplyExpenses)
+        .where(and(
+          eq(locationSupplyExpenses.companyId, user.companyId),
+          eq(locationSupplyExpenses.locationId, req.params.locationId)
+        ))
+        .orderBy(desc(locationSupplyExpenses.createdAt));
+      const total = expenses.reduce((acc, e) => acc + (parseFloat(e.totalExpense) || 0), 0);
+      res.json({ locationId: req.params.locationId, total, expenses });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // GET /api/supplies/purchase-history — all inventory purchases
+  app.get("/api/supplies/purchase-history", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const purchases = await db.select().from(inventoryPurchases)
+        .where(eq(inventoryPurchases.companyId, user.companyId))
+        .orderBy(desc(inventoryPurchases.createdAt));
+      res.json(purchases);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // PATCH /api/supplies/requests/:id/status — update supply request status (admin)
+  app.patch("/api/supplies/requests/:id/status", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const [existing] = await db.select().from(supplies).where(eq(supplies.id, req.params.id));
+      if (!existing || existing.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const now = new Date().toISOString();
+      const { status, note, urgency, requestedQuantity } = req.body;
+      const [updated] = await db.update(supplies).set({
+        ...(status !== undefined && { status }),
+        ...(urgency !== undefined && { urgency }),
+        ...(requestedQuantity !== undefined && { requestedQuantity: parseInt(requestedQuantity) }),
+        updatedAt: now,
+      }).where(eq(supplies.id, req.params.id)).returning();
+      if (status && status !== existing.status) {
+        await db.insert(supplyUpdates).values({
+          supplyId: existing.id, companyId: user.companyId,
+          locationId: existing.locationId, updatedByRole: "admin",
+          updateType: "status_changed", note: note || null,
+          previousStatus: existing.status, newStatus: status, createdAt: now,
+        });
+      }
+      res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 

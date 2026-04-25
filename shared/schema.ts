@@ -888,6 +888,12 @@ export const supplies = pgTable("supplies", {
   createdByUserId: varchar("created_by_user_id").notNull(),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
+  // Inventory integration fields (additive)
+  inventoryItemId: varchar("inventory_item_id"),
+  requestedQuantity: integer("requested_quantity"),
+  fulfilledQuantity: integer("fulfilled_quantity").notNull().default(0),
+  linkedExpenseId: varchar("linked_expense_id"),
+  urgency: text("urgency").default("normal"), // normal, urgent, critical
 });
 
 export const supplyUpdates = pgTable("supply_updates", {
@@ -908,13 +914,98 @@ export const supplyUpdates = pgTable("supply_updates", {
   resolvedBy: text("resolved_by"),
 });
 
+// ── Inventory Items ──────────────────────────────────────────────────────────
+export const inventoryItems = pgTable("inventory_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  name: text("name").notNull(),
+  category: text("category").notNull(),
+  imageData: text("image_data"),
+  currentQuantity: integer("current_quantity").notNull().default(0),
+  unitPrice: text("unit_price").notNull().default("0"),
+  lowStockThreshold: integer("low_stock_threshold").notNull().default(2),
+  status: text("status").notNull().default("in_stock"), // in_stock, running_low, out_of_stock
+  supplierName: text("supplier_name"),
+  notes: text("notes"),
+  createdByAdminId: varchar("created_by_admin_id").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+// ── Inventory Purchases ───────────────────────────────────────────────────────
+export const inventoryPurchases = pgTable("inventory_purchases", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  inventoryItemId: varchar("inventory_item_id").notNull(),
+  inventoryItemName: text("inventory_item_name"),
+  quantityAdded: integer("quantity_added").notNull(),
+  unitPrice: text("unit_price").notNull(),
+  totalCost: text("total_cost").notNull(),
+  supplierName: text("supplier_name"),
+  purchaseDate: text("purchase_date").notNull(),
+  notes: text("notes"),
+  createdByAdminId: varchar("created_by_admin_id").notNull(),
+  createdByAdminName: text("created_by_admin_name"),
+  createdAt: text("created_at").notNull(),
+});
+
+// ── Inventory Movements ───────────────────────────────────────────────────────
+export const inventoryMovements = pgTable("inventory_movements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  inventoryItemId: varchar("inventory_item_id").notNull(),
+  inventoryItemName: text("inventory_item_name"),
+  movementType: text("movement_type").notNull(), // purchase, assigned_to_location, manual_adjustment, returned_to_inventory, damaged, missing
+  quantity: integer("quantity").notNull(),
+  unitPriceAtTime: text("unit_price_at_time").notNull(),
+  totalValue: text("total_value").notNull(),
+  locationId: varchar("location_id"),
+  locationName: text("location_name"),
+  supplyRequestId: varchar("supply_request_id"),
+  notes: text("notes"),
+  createdByAdminId: varchar("created_by_admin_id").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+// ── Location Supply Expenses ──────────────────────────────────────────────────
+export const locationSupplyExpenses = pgTable("location_supply_expenses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  locationId: varchar("location_id").notNull(),
+  locationName: text("location_name"),
+  inventoryItemId: varchar("inventory_item_id").notNull(),
+  inventoryItemName: text("inventory_item_name"),
+  category: text("category").notNull(),
+  supplyRequestId: varchar("supply_request_id"),
+  quantity: integer("quantity").notNull(),
+  unitPriceAtTime: text("unit_price_at_time").notNull(),
+  totalExpense: text("total_expense").notNull(),
+  assignedDate: text("assigned_date").notNull(),
+  assignedByAdminId: varchar("assigned_by_admin_id").notNull(),
+  assignedByAdminName: text("assigned_by_admin_name"),
+  notes: text("notes"),
+  createdAt: text("created_at").notNull(),
+});
+
 export const insertSupplySchema = createInsertSchema(supplies).omit({ id: true });
 export const insertSupplyUpdateSchema = createInsertSchema(supplyUpdates).omit({ id: true });
+export const insertInventoryItemSchema = createInsertSchema(inventoryItems).omit({ id: true });
+export const insertInventoryPurchaseSchema = createInsertSchema(inventoryPurchases).omit({ id: true });
+export const insertInventoryMovementSchema = createInsertSchema(inventoryMovements).omit({ id: true });
+export const insertLocationSupplyExpenseSchema = createInsertSchema(locationSupplyExpenses).omit({ id: true });
 
 export type Supply = typeof supplies.$inferSelect;
 export type InsertSupply = z.infer<typeof insertSupplySchema>;
 export type SupplyUpdate = typeof supplyUpdates.$inferSelect;
 export type InsertSupplyUpdate = z.infer<typeof insertSupplyUpdateSchema>;
+export type InventoryItem = typeof inventoryItems.$inferSelect;
+export type InsertInventoryItem = z.infer<typeof insertInventoryItemSchema>;
+export type InventoryPurchase = typeof inventoryPurchases.$inferSelect;
+export type InsertInventoryPurchase = z.infer<typeof insertInventoryPurchaseSchema>;
+export type InventoryMovement = typeof inventoryMovements.$inferSelect;
+export type InsertInventoryMovement = z.infer<typeof insertInventoryMovementSchema>;
+export type LocationSupplyExpense = typeof locationSupplyExpenses.$inferSelect;
+export type InsertLocationSupplyExpense = z.infer<typeof insertLocationSupplyExpenseSchema>;
 
 // ── Publications ──────────────────────────────────────────────────────────────
 export const publications = pgTable("publications", {

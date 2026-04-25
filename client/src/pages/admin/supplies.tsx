@@ -16,9 +16,12 @@ import { Separator } from "@/components/ui/separator";
 import {
   Package, Plus, Filter, X, Camera, MapPin, Tag, Clock,
   CheckCircle, AlertTriangle, XCircle, Wrench, RefreshCw,
-  ChevronRight, Pencil, Archive, Image as ImageIcon
+  ChevronRight, Pencil, Archive, Image as ImageIcon,
+  ShoppingCart, DollarSign, TrendingUp, Layers, RotateCcw,
+  Building2, ArrowRight, History, BoxSelect, PackageCheck, Truck
 } from "lucide-react";
 
+// ─── Constants ────────────────────────────────────────────────────────────────
 const CATEGORIES = [
   "Chemicals", "Paper Products", "PPE", "Tools", "Equipment",
   "Linens / Rags", "Washroom Supplies", "Floor Supplies", "Waste Supplies", "Other"
@@ -31,11 +34,24 @@ const STATUSES = [
   { value: "damaged", label: "Damaged", color: "bg-orange-100 text-orange-700 border-orange-200" },
   { value: "needs_replacement", label: "Needs Replacement", color: "bg-purple-100 text-purple-700 border-purple-200" },
   { value: "refilled", label: "Refilled", color: "bg-blue-100 text-blue-700 border-blue-200" },
+  { value: "fulfilled", label: "Fulfilled", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  { value: "partially_fulfilled", label: "Partially Fulfilled", color: "bg-sky-100 text-sky-700 border-sky-200" },
+  { value: "ordered", label: "Ordered", color: "bg-violet-100 text-violet-700 border-violet-200" },
+  { value: "not_needed", label: "Not Needed", color: "bg-gray-100 text-gray-500 border-gray-200" },
 ];
+
+const INV_STATUS_MAP: Record<string, { label: string; color: string }> = {
+  in_stock: { label: "In Stock", color: "bg-green-100 text-green-700 border-green-200" },
+  running_low: { label: "Running Low", color: "bg-yellow-100 text-yellow-700 border-yellow-200" },
+  out_of_stock: { label: "Out of Stock", color: "bg-red-100 text-red-700 border-red-200" },
+};
 
 const MAX_DIM = 1800;
 const JPEG_Q = 0.80;
 
+type TabKey = "overview" | "inventory" | "location-expenses" | "requests" | "purchase-history";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function statusInfo(value: string) {
   return STATUSES.find(s => s.value === value) || { label: value, color: "bg-gray-100 text-gray-600 border-gray-200" };
 }
@@ -43,6 +59,19 @@ function statusInfo(value: string) {
 function StatusBadge({ status }: { status: string }) {
   const info = statusInfo(status);
   return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${info.color}`}>{info.label}</span>;
+}
+
+function InvStatusBadge({ status }: { status: string }) {
+  const info = INV_STATUS_MAP[status] || { label: status, color: "bg-gray-100 text-gray-600 border-gray-200" };
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${info.color}`}>{info.label}</span>;
+}
+
+function fmtCurrency(v: number) {
+  return v.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 2 });
+}
+
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" });
 }
 
 async function compressImage(file: File): Promise<string> {
@@ -87,80 +116,844 @@ function ActivityIcon({ type }: { type: string }) {
   return <Clock className="w-3.5 h-3.5 text-muted-foreground" />;
 }
 
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function AdminSupplies() {
+  const [tab, setTab] = useState<TabKey>("overview");
+  const [showAddSupply, setShowAddSupply] = useState(false);
+  const [showAddInventory, setShowAddInventory] = useState(false);
+
+  const { data: locations = [] } = useQuery<any[]>({ queryKey: ["/api/locations"] });
+
+  const tabs: { key: TabKey; label: string; icon: any }[] = [
+    { key: "overview", label: "Overview", icon: TrendingUp },
+    { key: "inventory", label: "Inventory", icon: Layers },
+    { key: "location-expenses", label: "Location Expenses", icon: Building2 },
+    { key: "requests", label: "Requests", icon: Package },
+    { key: "purchase-history", label: "Purchase History", icon: History },
+  ];
+
+  return (
+    <div className="p-4 md:p-6 pb-24 md:pb-6 max-w-5xl mx-auto space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold" data-testid="text-supplies-title">Supply Management</h1>
+          <p className="text-sm text-muted-foreground">Inventory tracking and location expense management</p>
+        </div>
+        {tab === "requests" && (
+          <Button size="sm" onClick={() => setShowAddSupply(true)} data-testid="button-add-supply">
+            <Plus className="w-4 h-4 mr-1.5" />Add Request
+          </Button>
+        )}
+        {tab === "inventory" && (
+          <Button size="sm" onClick={() => setShowAddInventory(true)} data-testid="button-add-inventory-item">
+            <Plus className="w-4 h-4 mr-1.5" />Add Item
+          </Button>
+        )}
+      </div>
+
+      {/* Tab Bar */}
+      <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
+        {tabs.map(t => {
+          const Icon = t.icon;
+          return (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              data-testid={`tab-${t.key}`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
+                tab === t.key
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tab Content */}
+      {tab === "overview" && <OverviewTab locations={locations} />}
+      {tab === "inventory" && (
+        <InventoryTab
+          locations={locations}
+          showAdd={showAddInventory}
+          onCloseAdd={() => setShowAddInventory(false)}
+        />
+      )}
+      {tab === "location-expenses" && <LocationExpensesTab locations={locations} />}
+      {tab === "requests" && (
+        <RequestsTab
+          locations={locations}
+          showAdd={showAddSupply}
+          onCloseAdd={() => setShowAddSupply(false)}
+        />
+      )}
+      {tab === "purchase-history" && <PurchaseHistoryTab />}
+    </div>
+  );
+}
+
+// ─── Overview Tab ─────────────────────────────────────────────────────────────
+function OverviewTab({ locations }: { locations: any[] }) {
+  const { data: ov, isLoading } = useQuery<any>({ queryKey: ["/api/supplies/inventory-overview"] });
+
+  if (isLoading) return <div className="space-y-3">{[1,2,3,4].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>;
+  if (!ov) return null;
+
+  const locationName = (id: string) => locations.find(l => l.id === id)?.name || id;
+
+  return (
+    <div className="space-y-5">
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Total Items</p>
+              <Layers className="w-4 h-4 text-muted-foreground/50" />
+            </div>
+            <p className="text-2xl font-bold" data-testid="stat-total-items">{ov.totalItems}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm bg-red-50 dark:bg-red-950/20">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs text-red-700 dark:text-red-400 font-medium uppercase tracking-wide">Out of Stock</p>
+              <XCircle className="w-4 h-4 text-red-400" />
+            </div>
+            <p className="text-2xl font-bold text-red-700 dark:text-red-400" data-testid="stat-out-of-stock">{ov.outOfStock}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm bg-yellow-50 dark:bg-yellow-950/20">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs text-yellow-700 dark:text-yellow-400 font-medium uppercase tracking-wide">Running Low</p>
+              <AlertTriangle className="w-4 h-4 text-yellow-400" />
+            </div>
+            <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">{ov.runningLow}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm bg-blue-50 dark:bg-blue-950/20">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs text-blue-700 dark:text-blue-400 font-medium uppercase tracking-wide">Inventory Value</p>
+              <DollarSign className="w-4 h-4 text-blue-400" />
+            </div>
+            <p className="text-xl font-bold text-blue-700 dark:text-blue-400">{fmtCurrency(ov.totalInventoryValue)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm bg-emerald-50 dark:bg-emerald-950/20">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium uppercase tracking-wide">Total Spent</p>
+              <TrendingUp className="w-4 h-4 text-emerald-400" />
+            </div>
+            <p className="text-xl font-bold text-emerald-700 dark:text-emerald-400">{fmtCurrency(ov.totalSpent)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm bg-orange-50 dark:bg-orange-950/20">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs text-orange-700 dark:text-orange-400 font-medium uppercase tracking-wide">Open Requests</p>
+              <Package className="w-4 h-4 text-orange-400" />
+            </div>
+            <p className="text-2xl font-bold text-orange-700 dark:text-orange-400">{ov.pendingRequests}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Top Location Expenses + Recent Purchases side by side */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Top Locations */}
+        <Card className="border shadow-sm">
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-muted-foreground" />Top Locations by Spend
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 space-y-2">
+            {ov.locationExpenseSummary?.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">No location expenses yet</p>
+            ) : ov.locationExpenseSummary?.map((l: any) => (
+              <div key={l.locationId} className="flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <MapPin className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                  <span className="text-sm truncate">{locationName(l.locationId)}</span>
+                  <span className="text-[11px] text-muted-foreground flex-shrink-0">{l.count} item{l.count !== 1 ? "s" : ""}</span>
+                </div>
+                <span className="text-sm font-semibold text-emerald-700">{fmtCurrency(l.total)}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        {/* Recent Purchases */}
+        <Card className="border shadow-sm">
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <ShoppingCart className="w-4 h-4 text-muted-foreground" />Recent Purchases
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 space-y-2">
+            {ov.recentPurchases?.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">No purchases yet</p>
+            ) : ov.recentPurchases?.map((p: any) => (
+              <div key={p.id} className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{p.inventoryItemName}</p>
+                  <p className="text-[11px] text-muted-foreground">{p.quantityAdded} units · {fmtDate(p.purchaseDate)}</p>
+                </div>
+                <span className="text-sm font-semibold text-blue-700 flex-shrink-0">{fmtCurrency(parseFloat(p.totalCost))}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Inventory Status Snapshot */}
+      {ov.items?.length > 0 && (
+        <Card className="border shadow-sm">
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Layers className="w-4 h-4 text-muted-foreground" />Inventory Snapshot
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <div className="space-y-2">
+              {ov.items.filter((i: any) => i.status !== "in_stock").map((item: any) => (
+                <div key={item.id} className="flex items-center gap-3 p-2 rounded-lg bg-muted/40">
+                  <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    {item.imageData ? <img src={item.imageData} alt="" className="w-full h-full object-cover" /> : <Package className="w-4 h-4 text-muted-foreground/50" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{item.name}</p>
+                    <p className="text-[11px] text-muted-foreground">{item.currentQuantity} in stock</p>
+                  </div>
+                  <InvStatusBadge status={item.status} />
+                </div>
+              ))}
+              {ov.items.filter((i: any) => i.status !== "in_stock").length === 0 && (
+                <div className="flex items-center gap-2 text-emerald-700 py-2">
+                  <CheckCircle className="w-4 h-4" />
+                  <p className="text-sm font-medium">All items are in stock</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ─── Inventory Tab ────────────────────────────────────────────────────────────
+function InventoryTab({ locations, showAdd, onCloseAdd }: { locations: any[]; showAdd: boolean; onCloseAdd: () => void }) {
+  const [restockItem, setRestockItem] = useState<any | null>(null);
+  const [assignItem, setAssignItem] = useState<any | null>(null);
+  const [editItem, setEditItem] = useState<any | null>(null);
+  const [filterCat, setFilterCat] = useState("__all__");
+  const [filterStatus, setFilterStatus] = useState("__all__");
+
+  const { data: items = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/supplies/inventory"] });
+
+  const filtered = items.filter(i => {
+    if (filterCat !== "__all__" && i.category !== filterCat) return false;
+    if (filterStatus !== "__all__" && i.status !== filterStatus) return false;
+    return true;
+  });
+
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <Select value={filterCat} onValueChange={setFilterCat}>
+          <SelectTrigger className="w-40 h-8 text-xs" data-testid="select-inv-filter-category">
+            <Tag className="w-3 h-3 mr-1 text-muted-foreground" />
+            <SelectValue placeholder="All Categories" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">All Categories</SelectItem>
+            {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger className="w-36 h-8 text-xs" data-testid="select-inv-filter-status">
+            <Filter className="w-3 h-3 mr-1 text-muted-foreground" />
+            <SelectValue placeholder="All Statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">All Statuses</SelectItem>
+            <SelectItem value="in_stock">In Stock</SelectItem>
+            <SelectItem value="running_low">Running Low</SelectItem>
+            <SelectItem value="out_of_stock">Out of Stock</SelectItem>
+          </SelectContent>
+        </Select>
+        {(filterCat !== "__all__" || filterStatus !== "__all__") && (
+          <Button variant="ghost" size="sm" className="h-8 text-xs px-2" onClick={() => { setFilterCat("__all__"); setFilterStatus("__all__"); }}>
+            <X className="w-3 h-3 mr-1" />Clear
+          </Button>
+        )}
+      </div>
+
+      {/* Items Grid */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{[1,2,3,4].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}</div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Layers className="w-10 h-10 text-muted-foreground/30 mb-3" />
+          <p className="text-sm font-medium text-muted-foreground">No inventory items found</p>
+          <p className="text-xs text-muted-foreground mt-1">Add your first item to start tracking inventory</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {filtered.map((item: any) => (
+            <div
+              key={item.id}
+              className="rounded-xl border bg-background shadow-sm hover:shadow-md transition-shadow"
+              data-testid={`card-inventory-${item.id}`}
+            >
+              <div className="flex gap-3 p-3">
+                <div className="w-14 h-14 rounded-lg bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
+                  {item.imageData ? (
+                    <img src={item.imageData} alt={item.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <Package className="w-5 h-5 text-muted-foreground/50" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-semibold truncate">{item.name}</p>
+                    <InvStatusBadge status={item.status} />
+                  </div>
+                  <p className="text-xs text-muted-foreground">{item.category}</p>
+                  <div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground">
+                    <span className="font-medium text-foreground">{item.currentQuantity} in stock</span>
+                    <span>·</span>
+                    <span>{fmtCurrency(parseFloat(item.unitPrice))} / unit</span>
+                    {item.supplierName && <><span>·</span><span>{item.supplierName}</span></>}
+                  </div>
+                </div>
+              </div>
+              <div className="flex border-t divide-x">
+                <button
+                  className="flex-1 py-2 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-colors flex items-center justify-center gap-1 rounded-bl-xl"
+                  onClick={() => setEditItem(item)}
+                  data-testid={`button-edit-inventory-${item.id}`}
+                >
+                  <Pencil className="w-3 h-3" />Edit
+                </button>
+                <button
+                  className="flex-1 py-2 text-xs font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors flex items-center justify-center gap-1"
+                  onClick={() => setRestockItem(item)}
+                  data-testid={`button-restock-${item.id}`}
+                >
+                  <PackageCheck className="w-3 h-3" />Restock
+                </button>
+                <button
+                  className="flex-1 py-2 text-xs font-medium text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors flex items-center justify-center gap-1 rounded-br-xl"
+                  onClick={() => setAssignItem(item)}
+                  data-testid={`button-assign-${item.id}`}
+                >
+                  <ArrowRight className="w-3 h-3" />Assign
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Dialogs */}
+      <AddInventoryItemDialog open={showAdd} onClose={onCloseAdd} />
+      {restockItem && <RestockDialog item={restockItem} onClose={() => setRestockItem(null)} />}
+      {assignItem && <AssignToLocationDialog item={assignItem} locations={locations} onClose={() => setAssignItem(null)} />}
+      {editItem && <EditInventoryItemDialog item={editItem} onClose={() => setEditItem(null)} />}
+    </div>
+  );
+}
+
+// ─── Add Inventory Item Dialog ────────────────────────────────────────────────
+function AddInventoryItemDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { toast } = useToast();
+  const imgRef = useRef<HTMLInputElement>(null);
+  const [form, setForm] = useState({
+    name: "", category: "", unitPrice: "", currentQuantity: "0",
+    lowStockThreshold: "2", supplierName: "", notes: "",
+  });
+  const [imgData, setImgData] = useState<string | null>(null);
+
+  const mut = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/supplies/inventory", { ...form, imageData: imgData });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/inventory-overview"] });
+      toast({ title: "Inventory item added" });
+      setForm({ name: "", category: "", unitPrice: "", currentQuantity: "0", lowStockThreshold: "2", supplierName: "", notes: "" });
+      setImgData(null);
+      onClose();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const handleImg = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try { setImgData(await compressImage(file)); }
+    catch { toast({ title: "Photo upload failed", variant: "destructive" }); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Add Inventory Item</DialogTitle>
+          <DialogDescription>Track a new supply item in your inventory.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 pt-1">
+          <div className="flex flex-col items-center gap-2">
+            <div
+              className="w-20 h-20 rounded-xl border-2 border-dashed border-border bg-muted flex items-center justify-center overflow-hidden cursor-pointer hover:border-primary/50 transition-colors"
+              onClick={() => imgRef.current?.click()}
+            >
+              {imgData ? <img src={imgData} alt="" className="w-full h-full object-cover" /> : <Camera className="w-6 h-6 text-muted-foreground/50" />}
+            </div>
+            <Button variant="outline" size="sm" onClick={() => imgRef.current?.click()} data-testid="button-upload-inv-photo">
+              <Camera className="w-3.5 h-3.5 mr-1.5" />{imgData ? "Change Photo" : "Add Photo"}
+            </Button>
+            <input ref={imgRef} type="file" accept="image/*" className="hidden" onChange={handleImg} />
+          </div>
+
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Name *</Label>
+            <Input className="mt-1" placeholder="e.g. All-Purpose Cleaner" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} data-testid="input-inv-name" />
+          </div>
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Category *</Label>
+            <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
+              <SelectTrigger className="mt-1" data-testid="select-inv-category"><SelectValue placeholder="Select category" /></SelectTrigger>
+              <SelectContent>{CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground">Unit Price ($)</Label>
+              <Input className="mt-1" type="number" min="0" step="0.01" placeholder="0.00" value={form.unitPrice} onChange={e => setForm(f => ({ ...f, unitPrice: e.target.value }))} data-testid="input-inv-price" />
+            </div>
+            <div>
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground">Initial Qty</Label>
+              <Input className="mt-1" type="number" min="0" placeholder="0" value={form.currentQuantity} onChange={e => setForm(f => ({ ...f, currentQuantity: e.target.value }))} data-testid="input-inv-qty" />
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Low Stock Threshold</Label>
+            <Input className="mt-1" type="number" min="1" placeholder="2" value={form.lowStockThreshold} onChange={e => setForm(f => ({ ...f, lowStockThreshold: e.target.value }))} data-testid="input-inv-threshold" />
+          </div>
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Supplier (optional)</Label>
+            <Input className="mt-1" placeholder="Supplier name" value={form.supplierName} onChange={e => setForm(f => ({ ...f, supplierName: e.target.value }))} />
+          </div>
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Notes (optional)</Label>
+            <Textarea className="mt-1 resize-none text-sm" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button className="flex-1" disabled={!form.name || !form.category || mut.isPending} onClick={() => mut.mutate()} data-testid="button-save-inv-item">
+              {mut.isPending ? "Saving…" : "Add Item"}
+            </Button>
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Edit Inventory Item Dialog ───────────────────────────────────────────────
+function EditInventoryItemDialog({ item, onClose }: { item: any; onClose: () => void }) {
+  const { toast } = useToast();
+  const imgRef = useRef<HTMLInputElement>(null);
+  const [form, setForm] = useState({
+    name: item.name, category: item.category, unitPrice: item.unitPrice,
+    lowStockThreshold: String(item.lowStockThreshold), supplierName: item.supplierName || "", notes: item.notes || "",
+  });
+  const [imgData, setImgData] = useState<string | null>(null);
+
+  const mut = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PATCH", `/api/supplies/inventory/${item.id}`, {
+        ...form, ...(imgData !== null && { imageData: imgData }),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/inventory-overview"] });
+      toast({ title: "Item updated" });
+      onClose();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const handleImg = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try { setImgData(await compressImage(file)); }
+    catch { toast({ title: "Photo upload failed", variant: "destructive" }); }
+  };
+
+  return (
+    <Dialog open onOpenChange={v => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Inventory Item</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 pt-1">
+          <div className="flex flex-col items-center gap-2">
+            <div
+              className="w-20 h-20 rounded-xl border-2 border-dashed border-border bg-muted flex items-center justify-center overflow-hidden cursor-pointer hover:border-primary/50 transition-colors"
+              onClick={() => imgRef.current?.click()}
+            >
+              {(imgData || item.imageData) ? <img src={imgData || item.imageData} alt="" className="w-full h-full object-cover" /> : <Camera className="w-6 h-6 text-muted-foreground/50" />}
+            </div>
+            <Button variant="outline" size="sm" onClick={() => imgRef.current?.click()}>
+              <Camera className="w-3.5 h-3.5 mr-1.5" />Update Photo
+            </Button>
+            <input ref={imgRef} type="file" accept="image/*" className="hidden" onChange={handleImg} />
+          </div>
+
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Name *</Label>
+            <Input className="mt-1" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+          </div>
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Category *</Label>
+            <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>{CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground">Unit Price ($)</Label>
+              <Input className="mt-1" type="number" min="0" step="0.01" value={form.unitPrice} onChange={e => setForm(f => ({ ...f, unitPrice: e.target.value }))} />
+            </div>
+            <div>
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground">Low Stock Threshold</Label>
+              <Input className="mt-1" type="number" min="1" value={form.lowStockThreshold} onChange={e => setForm(f => ({ ...f, lowStockThreshold: e.target.value }))} />
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Supplier</Label>
+            <Input className="mt-1" value={form.supplierName} onChange={e => setForm(f => ({ ...f, supplierName: e.target.value }))} />
+          </div>
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Notes</Label>
+            <Textarea className="mt-1 resize-none text-sm" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button className="flex-1" disabled={!form.name || !form.category || mut.isPending} onClick={() => mut.mutate()}>
+              {mut.isPending ? "Saving…" : "Save Changes"}
+            </Button>
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Restock Dialog ───────────────────────────────────────────────────────────
+function RestockDialog({ item, onClose }: { item: any; onClose: () => void }) {
+  const { toast } = useToast();
+  const [form, setForm] = useState({
+    quantityAdded: "", unitPrice: item.unitPrice, supplierName: item.supplierName || "", purchaseDate: new Date().toISOString().split("T")[0], notes: "",
+  });
+
+  const mut = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/supplies/inventory/${item.id}/restock`, form);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/inventory-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/purchase-history"] });
+      toast({ title: "Stock added", description: `New quantity: ${data.newQuantity}` });
+      onClose();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const totalCost = form.quantityAdded && form.unitPrice
+    ? (parseFloat(form.quantityAdded) * parseFloat(form.unitPrice)).toFixed(2)
+    : null;
+
+  return (
+    <Dialog open onOpenChange={v => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-sm mx-auto">
+        <DialogHeader>
+          <DialogTitle>Restock — {item.name}</DialogTitle>
+          <DialogDescription>Current stock: {item.currentQuantity} units</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 pt-1">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground">Quantity to Add *</Label>
+              <Input className="mt-1" type="number" min="1" placeholder="e.g. 10" value={form.quantityAdded} onChange={e => setForm(f => ({ ...f, quantityAdded: e.target.value }))} data-testid="input-restock-qty" />
+            </div>
+            <div>
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground">Unit Price ($)</Label>
+              <Input className="mt-1" type="number" min="0" step="0.01" value={form.unitPrice} onChange={e => setForm(f => ({ ...f, unitPrice: e.target.value }))} data-testid="input-restock-price" />
+            </div>
+          </div>
+          {totalCost && (
+            <div className="bg-muted/50 rounded-lg p-2.5 flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Total Cost</span>
+              <span className="text-sm font-bold">{fmtCurrency(parseFloat(totalCost))}</span>
+            </div>
+          )}
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Supplier</Label>
+            <Input className="mt-1" placeholder="Supplier name" value={form.supplierName} onChange={e => setForm(f => ({ ...f, supplierName: e.target.value }))} />
+          </div>
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Purchase Date</Label>
+            <Input className="mt-1" type="date" value={form.purchaseDate} onChange={e => setForm(f => ({ ...f, purchaseDate: e.target.value }))} />
+          </div>
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Notes (optional)</Label>
+            <Textarea className="mt-1 resize-none text-sm" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button className="flex-1" disabled={!form.quantityAdded || parseInt(form.quantityAdded) <= 0 || mut.isPending} onClick={() => mut.mutate()} data-testid="button-confirm-restock">
+              {mut.isPending ? "Saving…" : "Add Stock"}
+            </Button>
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Assign to Location Dialog ────────────────────────────────────────────────
+function AssignToLocationDialog({ item, locations, onClose }: { item: any; locations: any[]; onClose: () => void }) {
+  const { toast } = useToast();
+  const [form, setForm] = useState({ locationId: "", quantity: "1", notes: "" });
+
+  const locationName = locations.find(l => l.id === form.locationId)?.name || "";
+  const totalCost = form.quantity && item.unitPrice
+    ? (parseFloat(form.quantity) * parseFloat(item.unitPrice)).toFixed(2)
+    : null;
+
+  const mut = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/supplies/inventory/${item.id}/assign-location`, {
+        locationId: form.locationId, locationName, quantity: form.quantity, notes: form.notes,
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/inventory-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/location-expenses"] });
+      toast({ title: "Assigned to location", description: `Remaining stock: ${data.newQuantity}` });
+      onClose();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <Dialog open onOpenChange={v => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-sm mx-auto">
+        <DialogHeader>
+          <DialogTitle>Assign to Location — {item.name}</DialogTitle>
+          <DialogDescription>Available: {item.currentQuantity} units · {fmtCurrency(parseFloat(item.unitPrice))} / unit</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 pt-1">
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Location *</Label>
+            <Select value={form.locationId} onValueChange={v => setForm(f => ({ ...f, locationId: v }))}>
+              <SelectTrigger className="mt-1" data-testid="select-assign-location"><SelectValue placeholder="Select location" /></SelectTrigger>
+              <SelectContent>
+                {locations.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Quantity *</Label>
+            <Input className="mt-1" type="number" min="1" max={item.currentQuantity} value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} data-testid="input-assign-qty" />
+          </div>
+          {totalCost && (
+            <div className="bg-muted/50 rounded-lg p-2.5 flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Expense to Location</span>
+              <span className="text-sm font-bold text-emerald-700">{fmtCurrency(parseFloat(totalCost))}</span>
+            </div>
+          )}
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Notes (optional)</Label>
+            <Textarea className="mt-1 resize-none text-sm" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button
+              className="flex-1"
+              disabled={!form.locationId || !form.quantity || parseInt(form.quantity) <= 0 || mut.isPending}
+              onClick={() => mut.mutate()}
+              data-testid="button-confirm-assign"
+            >
+              {mut.isPending ? "Assigning…" : "Assign to Location"}
+            </Button>
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Location Expenses Tab ────────────────────────────────────────────────────
+function LocationExpensesTab({ locations }: { locations: any[] }) {
+  const [selectedLocation, setSelectedLocation] = useState<any | null>(null);
+  const { data: locationGroups = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/supplies/location-expenses"] });
+
+  const locationName = (id: string) => locations.find(l => l.id === id)?.name || id;
+  const grandTotal = locationGroups.reduce((acc, l) => acc + l.totalExpense, 0);
+
+  return (
+    <div className="space-y-4">
+      {/* Grand total banner */}
+      {locationGroups.length > 0 && (
+        <div className="bg-gradient-to-r from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-900/20 rounded-xl p-4 flex items-center justify-between border border-emerald-200/50">
+          <div>
+            <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium uppercase tracking-wide">Total Supply Spend (All Locations)</p>
+            <p className="text-2xl font-bold text-emerald-800 dark:text-emerald-300 mt-0.5">{fmtCurrency(grandTotal)}</p>
+          </div>
+          <DollarSign className="w-8 h-8 text-emerald-400" />
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
+      ) : locationGroups.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Building2 className="w-10 h-10 text-muted-foreground/30 mb-3" />
+          <p className="text-sm font-medium text-muted-foreground">No location expenses yet</p>
+          <p className="text-xs text-muted-foreground mt-1">Assign inventory items to locations to track expenses</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {locationGroups.map((group: any) => (
+            <button
+              key={group.locationId}
+              className="w-full text-left rounded-xl border bg-background hover:shadow-md transition-shadow p-4"
+              onClick={() => setSelectedLocation(group)}
+              data-testid={`card-location-expense-${group.locationId}`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-full bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center flex-shrink-0">
+                    <Building2 className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold truncate">{locationName(group.locationId)}</p>
+                    <p className="text-[11px] text-muted-foreground">{group.itemCount} assignment{group.itemCount !== 1 ? "s" : ""} · Last: {fmtDate(group.lastActivity)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="text-base font-bold text-emerald-700">{fmtCurrency(group.totalExpense)}</span>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {selectedLocation && (
+        <LocationBreakdownSheet
+          group={selectedLocation}
+          locationName={locationName(selectedLocation.locationId)}
+          onClose={() => setSelectedLocation(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Location Breakdown Sheet ─────────────────────────────────────────────────
+function LocationBreakdownSheet({ group, locationName, onClose }: { group: any; locationName: string; onClose: () => void }) {
+  return (
+    <Sheet open onOpenChange={v => { if (!v) onClose(); }}>
+      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto pb-8">
+        <SheetHeader className="pb-3">
+          <SheetTitle>{locationName}</SheetTitle>
+        </SheetHeader>
+        <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-xl p-4 mb-5">
+          <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium uppercase tracking-wide">Total Supply Expense</p>
+          <p className="text-2xl font-bold text-emerald-800 dark:text-emerald-300 mt-0.5">{fmtCurrency(group.totalExpense)}</p>
+          <p className="text-[11px] text-emerald-600 mt-1">{group.itemCount} item assignment{group.itemCount !== 1 ? "s" : ""}</p>
+        </div>
+
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Expense History</p>
+        <div className="space-y-3">
+          {group.entries.map((e: any) => (
+            <div key={e.id} className="rounded-xl border p-3 space-y-1">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{e.inventoryItemName}</p>
+                  <p className="text-[11px] text-muted-foreground">{e.category}</p>
+                </div>
+                <span className="text-sm font-bold text-emerald-700 flex-shrink-0">{fmtCurrency(parseFloat(e.totalExpense))}</span>
+              </div>
+              <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                <span>{e.quantity} unit{e.quantity !== 1 ? "s" : ""}</span>
+                <span>·</span>
+                <span>{fmtCurrency(parseFloat(e.unitPriceAtTime))} / unit</span>
+                <span>·</span>
+                <span>{fmtDate(e.assignedDate)}</span>
+              </div>
+              {e.assignedByAdminName && (
+                <p className="text-[11px] text-muted-foreground">By {e.assignedByAdminName}</p>
+              )}
+              {e.notes && <p className="text-[11px] text-muted-foreground italic">{e.notes}</p>}
+            </div>
+          ))}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ─── Requests Tab (existing supply management) ────────────────────────────────
+function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; showAdd: boolean; onCloseAdd: () => void }) {
   const [filterLocation, setFilterLocation] = useState("__all__");
   const [filterCategory, setFilterCategory] = useState("__all__");
   const [filterStatus, setFilterStatus] = useState("__all__");
-  const [showAdd, setShowAdd] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
 
-  const { data: locations = [] } = useQuery<any[]>({ queryKey: ["/api/locations"] });
   const { data: allSupplies = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/supplies"] });
   const { data: detail, isLoading: detailLoading } = useQuery<any>({
     queryKey: ["/api/supplies", detailId],
     enabled: !!detailId,
   });
 
-  const supplies: any[] = allSupplies.filter((s: any) => {
+  const filtered = allSupplies.filter((s: any) => {
     if (filterLocation !== "__all__" && s.locationId !== filterLocation) return false;
     if (filterCategory !== "__all__" && s.category !== filterCategory) return false;
     if (filterStatus !== "__all__" && s.status !== filterStatus) return false;
     return true;
   });
 
-  const stats = {
-    total: allSupplies.filter((s: any) => s.isActive).length,
-    low: allSupplies.filter((s: any) => s.status === "running_low").length,
-    out: allSupplies.filter((s: any) => s.status === "out_of_stock").length,
-    damaged: allSupplies.filter((s: any) => s.status === "damaged" || s.status === "needs_replacement").length,
-  };
-  const needsAttention = stats.low + stats.out + stats.damaged;
-
   const hasFilters = filterLocation !== "__all__" || filterCategory !== "__all__" || filterStatus !== "__all__";
 
   return (
-    <div className="p-4 md:p-6 pb-24 md:pb-6 max-w-5xl mx-auto space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold" data-testid="text-supplies-title">Supplies</h1>
-          <p className="text-sm text-muted-foreground">Track and manage supplies by location</p>
-        </div>
-        <Button size="sm" onClick={() => setShowAdd(true)} data-testid="button-add-supply">
-          <Plus className="w-4 h-4 mr-1.5" />Add Supply
-        </Button>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card className="border-0 shadow-sm bg-gradient-to-br from-background to-muted/30">
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Total</p>
-            <p className="text-2xl font-bold mt-1" data-testid="stat-total">{stats.total}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm bg-yellow-50 dark:bg-yellow-950/20">
-          <CardContent className="p-4">
-            <p className="text-xs text-yellow-700 dark:text-yellow-400 font-medium uppercase tracking-wide">Running Low</p>
-            <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-400 mt-1">{stats.low}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm bg-red-50 dark:bg-red-950/20">
-          <CardContent className="p-4">
-            <p className="text-xs text-red-700 dark:text-red-400 font-medium uppercase tracking-wide">Out of Stock</p>
-            <p className="text-2xl font-bold text-red-700 dark:text-red-400 mt-1">{stats.out}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm bg-orange-50 dark:bg-orange-950/20">
-          <CardContent className="p-4">
-            <p className="text-xs text-orange-700 dark:text-orange-400 font-medium uppercase tracking-wide">Needs Attention</p>
-            <p className="text-2xl font-bold text-orange-700 dark:text-orange-400 mt-1">{needsAttention}</p>
-          </CardContent>
-        </Card>
-      </div>
-
+    <div className="space-y-4">
       {/* Filters */}
       <div className="flex flex-wrap gap-2 items-center">
         <Select value={filterLocation} onValueChange={setFilterLocation}>
@@ -203,15 +996,15 @@ export default function AdminSupplies() {
       {/* Supply list */}
       {isLoading ? (
         <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}</div>
-      ) : supplies.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Package className="w-10 h-10 text-muted-foreground/30 mb-3" />
           <p className="text-sm font-medium text-muted-foreground">No supplies found</p>
-          <p className="text-xs text-muted-foreground mt-1">{hasFilters ? "Try removing filters" : "Add your first supply to get started"}</p>
+          <p className="text-xs text-muted-foreground mt-1">{hasFilters ? "Try removing filters" : "Add a supply request to get started"}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {supplies.map((s: any) => (
+          {filtered.map((s: any) => (
             <button
               key={s.id}
               className="text-left w-full rounded-xl border bg-background hover:shadow-md transition-shadow active:scale-[0.99] p-0 overflow-hidden"
@@ -245,10 +1038,8 @@ export default function AdminSupplies() {
         </div>
       )}
 
-      {/* Add supply dialog */}
-      <AddSupplyDialog open={showAdd} onClose={() => setShowAdd(false)} locations={locations} />
-
-      {/* Detail sheet */}
+      {/* Dialogs */}
+      <AddSupplyDialog open={showAdd} onClose={onCloseAdd} locations={locations} />
       {detailId && (
         <SupplyDetailSheet
           supplyId={detailId}
@@ -264,7 +1055,79 @@ export default function AdminSupplies() {
   );
 }
 
-// ─── Add Supply Dialog ────────────────────────────────────────────────────────
+// ─── Purchase History Tab ─────────────────────────────────────────────────────
+function PurchaseHistoryTab() {
+  const { data: purchases = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/supplies/purchase-history"] });
+  const [filterItem, setFilterItem] = useState("");
+
+  const filtered = purchases.filter((p: any) =>
+    !filterItem || p.inventoryItemName?.toLowerCase().includes(filterItem.toLowerCase())
+  );
+
+  const totalSpent = filtered.reduce((acc, p) => acc + (parseFloat(p.totalCost) || 0), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2 items-center">
+        <Input
+          placeholder="Search by item name…"
+          className="h-8 text-xs max-w-xs"
+          value={filterItem}
+          onChange={e => setFilterItem(e.target.value)}
+          data-testid="input-filter-purchases"
+        />
+        {filterItem && (
+          <Button variant="ghost" size="sm" className="h-8 text-xs px-2" onClick={() => setFilterItem("")}>
+            <X className="w-3 h-3 mr-1" />Clear
+          </Button>
+        )}
+      </div>
+
+      {filtered.length > 0 && (
+        <div className="bg-blue-50 dark:bg-blue-950/30 rounded-xl px-4 py-3 flex items-center justify-between border border-blue-100">
+          <p className="text-xs text-blue-700 dark:text-blue-400 font-medium">{filtered.length} purchase{filtered.length !== 1 ? "s" : ""}</p>
+          <p className="text-sm font-bold text-blue-800 dark:text-blue-300">{fmtCurrency(totalSpent)} total</p>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="space-y-2">{[1,2,3,4].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <History className="w-10 h-10 text-muted-foreground/30 mb-3" />
+          <p className="text-sm font-medium text-muted-foreground">No purchase history</p>
+          <p className="text-xs text-muted-foreground mt-1">Restock inventory items to see purchase records here</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((p: any) => (
+            <div key={p.id} className="rounded-xl border bg-background p-3" data-testid={`card-purchase-${p.id}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate">{p.inventoryItemName}</p>
+                  <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground flex-wrap">
+                    <span className="flex items-center gap-0.5"><PackageCheck className="w-3 h-3" />{p.quantityAdded} units added</span>
+                    <span>·</span>
+                    <span>{fmtCurrency(parseFloat(p.unitPrice))} / unit</span>
+                    {p.supplierName && <><span>·</span><span className="flex items-center gap-0.5"><Truck className="w-3 h-3" />{p.supplierName}</span></>}
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
+                    <span>{fmtDate(p.purchaseDate)}</span>
+                    {p.createdByAdminName && <><span>·</span><span>by {p.createdByAdminName}</span></>}
+                  </div>
+                  {p.notes && <p className="text-[11px] text-muted-foreground italic mt-0.5">{p.notes}</p>}
+                </div>
+                <span className="text-base font-bold text-blue-700 flex-shrink-0">{fmtCurrency(parseFloat(p.totalCost))}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Add Supply Dialog (unchanged) ────────────────────────────────────────────
 function AddSupplyDialog({ open, onClose, locations }: { open: boolean; onClose: () => void; locations: any[] }) {
   const { toast } = useToast();
   const imgRef = useRef<HTMLInputElement>(null);
@@ -303,11 +1166,10 @@ function AddSupplyDialog({ open, onClose, locations }: { open: boolean; onClose:
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
       <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add Supply</DialogTitle>
+          <DialogTitle>Add Supply Request</DialogTitle>
           <DialogDescription>Create a new supply item for a location.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 pt-1">
-          {/* Photo */}
           <div className="flex flex-col items-center gap-2">
             <div
               className="w-20 h-20 rounded-xl border-2 border-dashed border-border bg-muted flex items-center justify-center overflow-hidden cursor-pointer hover:border-primary/50 transition-colors"
@@ -351,7 +1213,7 @@ function AddSupplyDialog({ open, onClose, locations }: { open: boolean; onClose:
           </div>
           <div>
             <Label className="text-xs uppercase tracking-wide text-muted-foreground">Description (optional)</Label>
-            <Textarea className="mt-1 resize-none text-sm" rows={2} placeholder="Any notes about this supply..." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+            <Textarea className="mt-1 resize-none text-sm" rows={2} placeholder="Any notes about this supply…" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
           </div>
           <div>
             <Label className="text-xs uppercase tracking-wide text-muted-foreground">Quantity Label (optional)</Label>
@@ -369,7 +1231,7 @@ function AddSupplyDialog({ open, onClose, locations }: { open: boolean; onClose:
   );
 }
 
-// ─── Supply Detail Sheet ──────────────────────────────────────────────────────
+// ─── Supply Detail Sheet (unchanged) ─────────────────────────────────────────
 function SupplyDetailSheet({ supplyId, detail, loading, locations, editMode, onEditMode, onClose }: {
   supplyId: string; detail: any; loading: boolean; locations: any[];
   editMode: boolean; onEditMode: (v: boolean) => void; onClose: () => void;
@@ -382,8 +1244,6 @@ function SupplyDetailSheet({ supplyId, detail, loading, locations, editMode, onE
   const [actionStatus, setActionStatus] = useState("");
   const [actionPhoto, setActionPhoto] = useState<string | null>(null);
   const actionImgRef = useRef<HTMLInputElement>(null);
-
-  // Edit state
   const [editForm, setEditForm] = useState<any>(null);
   const [editImg, setEditImg] = useState<string | null>(null);
 
@@ -410,11 +1270,7 @@ function SupplyDetailSheet({ supplyId, detail, loading, locations, editMode, onE
       queryClient.invalidateQueries({ queryKey: ["/api/supplies"] });
       queryClient.invalidateQueries({ queryKey: ["/api/supplies", supplyId] });
       toast({ title: "Update recorded" });
-      setActionOpen(false);
-      setActionNote("");
-      setActionStatus("");
-      setActionPhoto(null);
-      setActionType(null);
+      setActionOpen(false); setActionNote(""); setActionStatus(""); setActionPhoto(null); setActionType(null);
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -431,11 +1287,8 @@ function SupplyDetailSheet({ supplyId, detail, loading, locations, editMode, onE
   const handleActionImg = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    try {
-      setActionPhoto(await compressImage(file));
-    } catch {
-      toast({ title: "Photo upload failed", description: "Please try a different image.", variant: "destructive" });
-    }
+    try { setActionPhoto(await compressImage(file)); }
+    catch { toast({ title: "Photo upload failed", variant: "destructive" }); }
   };
 
   const startEdit = () => {
@@ -454,11 +1307,8 @@ function SupplyDetailSheet({ supplyId, detail, loading, locations, editMode, onE
   const handleEditImg = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    try {
-      setEditImg(await compressImage(file));
-    } catch {
-      toast({ title: "Photo upload failed", description: "Please try a different image.", variant: "destructive" });
-    }
+    try { setEditImg(await compressImage(file)); }
+    catch { toast({ title: "Photo upload failed", variant: "destructive" }); }
   };
 
   const archiveMut = useMutation({
@@ -497,7 +1347,6 @@ function SupplyDetailSheet({ supplyId, detail, loading, locations, editMode, onE
               </SheetTitle>
             </SheetHeader>
 
-            {/* Image */}
             <div className="w-full aspect-video rounded-xl bg-muted overflow-hidden flex items-center justify-center mb-4">
               {imageToShow ? (
                 <img src={imageToShow} alt={detail.name} className="w-full h-full object-cover" />
@@ -553,7 +1402,6 @@ function SupplyDetailSheet({ supplyId, detail, loading, locations, editMode, onE
               </div>
             ) : (
               <>
-                {/* Info */}
                 <div className="space-y-2 mb-4">
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">Status</span>
@@ -580,7 +1428,6 @@ function SupplyDetailSheet({ supplyId, detail, loading, locations, editMode, onE
                   )}
                 </div>
 
-                {/* Actions */}
                 <div className="grid grid-cols-2 gap-2 mb-5">
                   <Button size="sm" variant="outline" className="text-blue-600 border-blue-200 hover:bg-blue-50" onClick={() => { setActionType("refill"); setActionOpen(true); }} data-testid="button-action-refill">
                     <RefreshCw className="w-3.5 h-3.5 mr-1.5" />Mark Refilled
@@ -598,7 +1445,6 @@ function SupplyDetailSheet({ supplyId, detail, loading, locations, editMode, onE
 
                 <Separator className="mb-4" />
 
-                {/* Activity history */}
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Activity History</p>
                 {(!detail.updates || detail.updates.length === 0) ? (
                   <p className="text-xs text-muted-foreground text-center py-4">No activity yet</p>
@@ -635,7 +1481,6 @@ function SupplyDetailSheet({ supplyId, detail, loading, locations, editMode, onE
               </>
             )}
 
-            {/* Action sheet */}
             {actionOpen && (
               <div className="fixed inset-0 z-50 bg-black/40 flex items-end" onClick={() => setActionOpen(false)}>
                 <div className="bg-background w-full rounded-t-2xl p-5 space-y-4 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>

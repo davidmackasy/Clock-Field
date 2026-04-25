@@ -54,6 +54,14 @@ import {
   type PublicationMedia, type InsertPublicationMedia,
   type PublicationPricing, type InsertPublicationPricing,
   type PublicationVote, type InsertPublicationVote,
+  supplies, supplyUpdates,
+  inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses,
+  type Supply, type InsertSupply,
+  type SupplyUpdate, type InsertSupplyUpdate,
+  type InventoryItem, type InsertInventoryItem,
+  type InventoryPurchase, type InsertInventoryPurchase,
+  type InventoryMovement, type InsertInventoryMovement,
+  type LocationSupplyExpense, type InsertLocationSupplyExpense,
 } from "@shared/schema";
 
 export interface IStorage {
