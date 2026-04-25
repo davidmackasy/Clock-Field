@@ -1,0 +1,743 @@
+DEV NOTE: Repair Supplies Request Page Into Proper “Assign Supply + Cleaner Request” Flow
+
+Project: ClockField
+Area: Admin Panel > Supplies > Requests tab
+Connected area: Employee/Cleaner Supply page
+Priority: Urgent
+
+Critical instruction:
+Do not break or affect anything else in ClockField.
+Do not touch Dashboard, Employees, Schedule, Attendance, Payroll, Payroll Estimator, Clients, Management, Work Log, Field Notes, Publications, Settings, Subscription, Messages, Super Admin, auth, Stripe, or existing company data.
+Do not delete existing supply records.
+Do not delete inventory records.
+Do not delete cleaner request records.
+Only fix the Supplies > Requests tab and the direct employee/cleaner supply connection.
+
+Current problems
+
+The Requests tab is wrong right now.
+
+Issues shown:
+
+1. Admin cannot add supply to a location from this page.
+2. Admin cannot assign supply to a cleaner/employee location properly.
+3. The old “Add Supply” concept was removed.
+4. Buttons like Ordered, Resolve, and Not Needed were added, but they do not match the workflow.
+5. Fulfill from Inventory is returning this error:
+
+400: {"message":"locationId and quantity required"}
+
+6. The Fulfill modal does not include Location.
+7. The Fulfill modal does not include Cleaner/Employee.
+8. The page is treating an admin-added supply like a cleaner request.
+9. Request actions are causing 404 or confusing status changes.
+10. The cleaner cannot properly receive assigned supplies for their location.
+
+Correct concept
+
+This tab must support two separate things:
+
+1. Admin Added Supplies
+   Admin adds supply from inventory to a location and assigns it to the cleaner/employee at that location.
+
+2. Cleaner Requests
+   Cleaner reports that an existing assigned supply is out, low, missing, or needs replacement.
+   Cleaner can also request a brand-new supply that is not already listed.
+
+The admin page needs to show both, but they must not be mixed together.
+
+Recommended tab rename
+
+Rename the current top tab from:
+
+Requests
+
+To:
+
+Location Supplies
+
+Inside that tab, create two internal sections:
+
+Assigned Supplies
+Cleaner Requests
+
+If you do not want to rename the tab yet, keep the top tab as Requests, but inside the page the structure must still be:
+
+Assigned Supplies
+Cleaner Requests
+
+Main required button
+
+Add this button back at the top of the page:
+
+* Add Supply to Location
+
+This button is required.
+
+Place it near the top right on desktop.
+Place it full-width or easy-to-tap on mobile.
+
+This is how admin adds a product from inventory to a site/location.
+
+Add Supply to Location modal
+
+When admin clicks + Add Supply to Location, open a modal.
+
+Modal title:
+Add Supply to Location
+
+Fields:
+
+Select Inventory Item
+Required.
+This must pull from the Inventory tab.
+
+Example:
+Pinky
+All Pink
+Neutral
+Orange Solv
+Mop
+Rug
+
+Do not allow admin to retype a product that already exists in inventory.
+Admin must select from inventory.
+
+Quantity
+Required.
+Default: 1.
+
+Show available stock:
+Available: X units
+
+Show unit price:
+Unit Price: $X
+
+Show total expense:
+Total: quantity × unit price
+
+Select Location
+Required.
+
+Select Cleaner/Employee
+Required if possible.
+This connects the supply to the cleaner who works at that location.
+
+Photo
+Optional.
+Admin can upload or take a picture of the actual product being placed at the location.
+
+Admin Note
+Optional.
+Example:
+Placed under the sink.
+Left in janitor closet.
+Dropped off 1 bottle today.
+
+Submit button:
+Add Supply
+
+What Add Supply must do
+
+When admin submits:
+
+1. Validate inventory item exists.
+2. Validate locationId exists.
+3. Validate quantity exists and is greater than 0.
+4. Validate inventory has enough stock.
+5. Deduct quantity from inventory.
+6. Create assigned supply record for that location.
+7. Link assigned supply to selected cleaner/employee.
+8. Create location expense record.
+9. Save admin photo if uploaded.
+10. Save admin note if added.
+11. Show the product in Assigned Supplies.
+12. Show the product on the employee/cleaner supply page.
+13. Update Location Expenses tab.
+14. Update Overview tab totals.
+15. Do not create a cleaner request from this action.
+
+Example:
+
+Inventory:
+Pinky
+Quantity: 5
+Unit price: $29
+
+Admin adds:
+Pinky
+Quantity: 1
+Location: OakBank Arena
+Cleaner: David Maluti
+Photo: optional
+Note: Placed under sink
+
+Expected:
+
+Inventory becomes 4.
+OakBank Arena expense increases by $29.
+Assigned Supplies shows Pinky at OakBank Arena.
+David Maluti sees Pinky in his employee supply page.
+Location Expenses shows OakBank Arena spent $29.
+
+Important:
+This is not a cleaner request.
+This is admin assigning supply to a location.
+
+Fix the 400 error
+
+Current error:
+400: {"message":"locationId and quantity required"}
+
+Cause:
+Fulfill from Inventory is being submitted without locationId.
+
+Fix:
+Every inventory fulfillment or add supply action must include:
+
+locationId
+quantity
+inventoryItemId
+employeeId if selected
+
+If the modal is opened from a cleaner request, prefill locationId and employeeId from the request.
+
+If the request does not have locationId, show a required Location dropdown.
+
+Do not submit the API call without locationId.
+
+Frontend fix:
+
+Before calling backend, validate:
+
+if (!inventoryItemId) show “Select an inventory item.”
+if (!locationId) show “Select a location.”
+if (!quantity || quantity < 1) show “Enter a valid quantity.”
+if (quantity > availableStock) show “Only X units available.”
+
+Backend fix:
+
+Return clear validation messages.
+
+Do not throw generic errors.
+
+Assigned Supplies section
+
+This section should list supplies admin has added to locations.
+
+Card fields:
+
+Product image
+Product name
+Category
+Location
+Cleaner/Employee assigned
+Quantity at location
+Unit price
+Total assigned cost
+Status
+Last updated
+Admin note if available
+
+Card actions:
+
+View
+Restock / Add More
+Edit Assignment
+Remove from Location if needed later
+
+Do not show these as main actions:
+
+Ordered
+Not Needed
+Resolve
+
+Those are not for assigned supplies.
+
+Cleaner Requests section
+
+This section should only show requests coming from cleaner/employee accounts.
+
+Cleaner request types:
+
+Out of Stock
+Almost Finished
+Missing
+Needs Replacement
+New Supply Request
+
+Cleaner Request card fields:
+
+Cleaner name
+Location
+Product name if existing assigned supply
+Requested supply name if new supply
+Photo from cleaner
+Cleaner note
+Request type
+Status
+Date requested
+
+Cleaner Request actions:
+
+View Details
+Restock From Inventory
+Reply to Cleaner
+Mark Resolved
+
+Remove or hide these current buttons:
+
+Ordered
+Not Needed
+
+Only keep them if they are inside a dropdown called More Actions and fully working.
+Do not show any button that causes 404.
+
+Restock From Inventory flow
+
+This is used only when cleaner reports an assigned product is out, low, missing, or needs replacement.
+
+When admin clicks Restock From Inventory:
+
+Open modal.
+
+Fields should be prefilled:
+
+Inventory Item
+Location
+Cleaner/Employee
+Request ID
+
+Fields admin controls:
+
+Quantity
+Admin restock photo optional
+Admin note optional
+
+Required:
+locationId
+quantity
+inventoryItemId
+
+Submit button:
+Restock Supply
+
+After submit:
+
+1. Deduct quantity from inventory.
+2. Increase quantity for that location supply.
+3. Create location expense record.
+4. Save admin restock photo.
+5. Save admin note.
+6. Mark cleaner request as Restocked or Resolved.
+7. Show note/photo to cleaner.
+8. Update Location Expenses.
+9. Update Overview.
+10. No 404.
+
+Example:
+
+Cleaner reports:
+Pinky is empty at OakBank Arena.
+
+Admin restocks:
+Pinky
+Quantity: 1
+Note: Dropped off under sink.
+Photo: uploaded
+
+Expected:
+
+Inventory decreases by 1.
+OakBank expense increases by $29.
+Request status becomes Restocked.
+Cleaner sees the restock note and photo.
+
+Cleaner/employee side
+
+Cleaner means employee account.
+
+Employee supply page must show only supplies assigned to:
+
+Their selected location
+Their employee account
+
+Cleaner should not see products from other locations.
+
+Each supply card should show:
+
+Product image
+Product name
+Quantity available at location
+Location name
+Admin note
+Last restocked photo if available
+Status
+
+Cleaner can click a supply and report:
+
+Out of Stock
+Almost Finished
+Missing
+Needs Replacement
+
+Cleaner report form:
+
+Photo
+Note
+Request type
+
+Submit sends to admin Cleaner Requests.
+
+Cleaner Request New Supply button
+
+Employee side should also have:
+
+Request New Supply
+
+Use this only when the cleaner needs a product that is not already in their assigned supply list.
+
+Fields:
+
+Supply name
+Photo optional
+Reason/note
+Where it can be found optional
+
+This appears in admin under Cleaner Requests.
+
+It should not automatically create inventory.
+Admin decides later if they want to add it to inventory.
+
+Admin response visible to cleaner
+
+When admin restocks or replies, cleaner must see:
+
+Admin note
+Admin restock photo if uploaded
+Status update
+Date updated
+
+Example shown to cleaner:
+
+Admin response:
+Dropped off 1 bottle today. It is under the sink.
+
+Photo:
+[restock photo]
+
+Status:
+Restocked
+
+Fix current wrong buttons
+
+Current card shows:
+
+Fulfill
+Ordered
+Resolve
+Not Needed
+
+Change to this:
+
+For Assigned Supplies:
+View
+Restock / Add More
+
+For Cleaner Requests:
+View Details
+Restock From Inventory
+Reply
+Mark Resolved
+
+Do not leave Ordered or Not Needed as visible main buttons.
+Do not leave any action that calls missing backend routes.
+Do not leave any button that causes 404.
+
+If backend route is not ready, hide the button until it works.
+
+Data rules
+
+Inventory is company stock.
+
+Location Supplies are items assigned to a location from inventory.
+
+Cleaner Requests are messages/reports from employees.
+
+Location Expenses are cost records created when inventory is assigned or restocked to a location.
+
+Purchase History is what company bought.
+
+Do not mix these records.
+
+Required data fields for assignment
+
+When creating a location supply assignment, save:
+
+company_id
+inventory_item_id
+location_id
+employee_id
+quantity
+unit_price_at_time
+total_expense
+admin_photo_url optional
+admin_note optional
+created_by_admin_id
+created_at
+updated_at
+
+Required data fields for cleaner request
+
+When cleaner submits request, save:
+
+company_id
+location_supply_id optional
+inventory_item_id optional
+location_id
+employee_id
+request_type
+requested_supply_name optional
+photo_url optional
+cleaner_note optional
+admin_note optional
+admin_restock_photo_url optional
+status
+created_at
+updated_at
+resolved_at optional
+
+Required data fields for location expense
+
+When supply is added or restocked, save:
+
+company_id
+location_id
+inventory_item_id
+employee_id optional
+quantity
+unit_price_at_time
+total_expense
+source
+
+Source values:
+admin_added_supply
+restock_from_cleaner_request
+
+created_at
+
+Inventory deduction rule
+
+When assigning or restocking:
+
+new_inventory_quantity = current_inventory_quantity - assigned_quantity
+
+Never allow negative inventory.
+
+If current stock is 1 and admin enters 2:
+
+Show:
+Only 1 unit is available in inventory.
+
+Do not submit.
+
+Location expense rule
+
+total_expense = quantity × unit_price_at_time
+
+Example:
+1 Pinky × $29 = $29
+
+This should appear under Location Expenses.
+
+Use unit_price_at_time.
+Do not change old expense records if inventory price changes later.
+
+API endpoints to fix or add
+
+Fix the frontend to call real backend endpoints only.
+
+Required endpoints:
+
+GET /api/supplies/location-supplies
+
+POST /api/supplies/location-supplies
+
+Purpose:
+Admin adds supply from inventory to location.
+
+Required body:
+inventoryItemId
+locationId
+employeeId optional or required depending on UI
+quantity
+adminNote optional
+adminPhotoUrl optional
+
+GET /api/supplies/cleaner-requests
+
+POST /api/supplies/cleaner-requests
+
+Purpose:
+Employee creates request.
+
+POST /api/supplies/cleaner-requests/:id/restock
+
+Purpose:
+Admin restocks from inventory based on cleaner request.
+
+Required body:
+inventoryItemId
+locationId
+quantity
+employeeId optional
+adminNote optional
+adminRestockPhotoUrl optional
+
+PATCH /api/supplies/cleaner-requests/:id/reply
+
+Purpose:
+Admin replies without restocking.
+
+PATCH /api/supplies/cleaner-requests/:id/resolve
+
+Purpose:
+Admin marks request resolved.
+
+Do not use route names that do not exist.
+Do not call old broken endpoints.
+No action button should return 404.
+
+UI requirements
+
+Keep the existing ClockField style.
+
+Desktop:
+
+Top tabs stay clean.
+Add Supply to Location button visible.
+Assigned Supplies and Cleaner Requests separated clearly.
+Cards should not feel confusing.
+
+Mobile:
+
+No horizontal page scroll.
+Buttons must fit.
+Cards must stack.
+Modals must fit screen.
+Dropdowns must be easy to use.
+
+Do not change the rest of the app shell.
+
+Testing checklist
+
+Test 1: Add Supply button exists
+
+Open Supplies > Requests or Location Supplies.
+
+Expected:
+
+* Add Supply to Location button is visible.
+  Button opens modal.
+
+Test 2: Add supply from inventory
+
+Inventory:
+Pinky, quantity 1, unit price $29
+
+Admin selects:
+Pinky
+Quantity 1
+Location
+Cleaner
+Optional photo
+Optional note
+
+Expected:
+Submit works.
+No 400.
+Inventory becomes 0.
+Assigned Supplies shows Pinky.
+Cleaner sees Pinky.
+Location Expenses increases by $29.
+
+Test 3: Missing location validation
+
+Try submitting without location.
+
+Expected:
+Frontend blocks submit and says:
+Select a location.
+
+No backend 400 toast.
+
+Test 4: Cleaner report existing product
+
+Cleaner opens assigned Pinky.
+Reports Out of Stock.
+Uploads photo and note.
+
+Expected:
+Admin sees request under Cleaner Requests.
+Request includes cleaner, location, photo, note, and product.
+
+Test 5: Admin restocks from request
+
+Admin clicks Restock From Inventory.
+
+Expected:
+Modal has inventory item, location, cleaner, quantity.
+Submit works.
+No 400.
+No 404.
+Inventory deducts.
+Location Expenses updates.
+Cleaner sees admin note/photo.
+
+Test 6: Request New Supply
+
+Cleaner clicks Request New Supply.
+Submits item not already listed.
+
+Expected:
+Admin sees it under Cleaner Requests.
+It does not automatically create inventory.
+Admin can reply or resolve.
+
+Test 7: Bad buttons removed
+
+Expected:
+No Ordered button as main action.
+No Not Needed button as main action.
+No action causes 404.
+
+Test 8: Other modules unaffected
+
+Confirm no changes or errors in:
+
+Dashboard
+Employees
+Schedule
+Attendance
+Payroll
+Clients
+Management
+Work Log
+Field Notes
+Publications
+Settings
+Subscription
+Messages
+Super Admin
+
+Final required outcome
+
+The Supplies module must work like this:
+
+Inventory = products company bought
+Location Supplies = admin adds inventory products to locations and cleaners
+Cleaner Requests = cleaner reports low/out/missing or requests new supply
+Location Expenses = cost tracking from assigned/restocked supplies
+Purchase History = company buying history
+
+Fix only the Supplies request/location supply flow. Do not change or break anything else.

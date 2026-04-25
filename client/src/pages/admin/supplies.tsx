@@ -143,7 +143,7 @@ export default function AdminSupplies() {
           <p className="text-sm text-muted-foreground">Inventory tracking and location expense management</p>
         </div>
         <div className="flex-shrink-0">
-          {tab === "location-expenses" && (
+          {(tab === "location-expenses" || tab === "requests") && (
             <Button size="sm" onClick={() => setShowAddSupplyToLocation(true)} data-testid="button-add-supply-to-location">
               <Plus className="w-4 h-4 mr-1.5" />Add Supply to Location
             </Button>
@@ -198,8 +198,8 @@ export default function AdminSupplies() {
       {tab === "requests" && (
         <RequestsTab
           locations={locations}
-          showAdd={showAddSupply}
-          onCloseAdd={() => setShowAddSupply(false)}
+          showAdd={showAddSupplyToLocation}
+          onCloseAdd={() => setShowAddSupplyToLocation(false)}
         />
       )}
       {tab === "purchase-history" && <PurchaseHistoryTab />}
@@ -952,14 +952,15 @@ function LocationBreakdownSheet({ group, locationName, onClose }: { group: any; 
   );
 }
 
-// ─── Requests Tab (cleaner-submitted supply requests) ─────────────────────────
+// ─── Requests Tab — two sections: Assigned Supplies + Cleaner Requests ────────
 function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; showAdd: boolean; onCloseAdd: () => void }) {
   const { toast } = useToast();
   const [filterLocation, setFilterLocation] = useState("__all__");
-  const [filterStatus, setFilterStatus] = useState("__all__");
   const [detailId, setDetailId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
-  const [fulfillId, setFulfillId] = useState<string | null>(null);
+  const [restockId, setRestockId] = useState<string | null>(null);  // for assigned supply restock
+  const [fulfillId, setFulfillId] = useState<string | null>(null);  // for cleaner request fulfillment
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const { data: allSupplies = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/supplies"] });
   const { data: detail, isLoading: detailLoading } = useQuery<any>({
@@ -967,51 +968,49 @@ function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sho
     enabled: !!detailId,
   });
 
-  // Requests = supplies that are NOT in-stock inventory-assigned items
-  // i.e., either created by employee, or have a concerning status, or no inventoryItemId
-  const requests = allSupplies.filter((s: any) => {
-    const isInventoryAssigned = s.inventoryItemId && s.status === "in_stock";
-    return !isInventoryAssigned;
-  });
+  // Split into two groups:
+  // Assigned Supplies = admin-assigned from inventory (inventoryItemId set)
+  // Cleaner Requests  = employee-submitted new supply requests (no inventoryItemId)
+  const assigned = allSupplies.filter((s: any) => !!s.inventoryItemId);
+  const cleanerReqs = allSupplies.filter((s: any) => !s.inventoryItemId);
 
-  const filtered = requests.filter((s: any) => {
-    if (filterLocation !== "__all__" && s.locationId !== filterLocation) return false;
-    if (filterStatus !== "__all__" && s.status !== filterStatus) return false;
-    return true;
-  });
+  // Apply location filter to both
+  const applyLocFilter = (list: any[]) =>
+    filterLocation === "__all__" ? list : list.filter((s: any) => s.locationId === filterLocation);
 
-  const hasFilters = filterLocation !== "__all__" || filterStatus !== "__all__";
-  const openCount = requests.filter((s: any) => !["fulfilled", "not_needed", "resolved"].includes(s.status)).length;
+  const filteredAssigned = applyLocFilter(assigned);
+  const filteredReqs = applyLocFilter(cleanerReqs);
+
+  const openReqCount = cleanerReqs.filter((s: any) => !["fulfilled", "not_needed", "resolved"].includes(s.status)).length;
 
   const statusMut = useMutation({
     mutationFn: async ({ id, status, note }: { id: string; status: string; note?: string }) => {
       const res = await apiRequest("PATCH", `/api/supplies/requests/${id}/status`, { status, note });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed to update status");
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/supplies"] });
       queryClient.invalidateQueries({ queryKey: ["/api/supplies/inventory-overview"] });
-      toast({ title: "Request updated" });
+      toast({ title: "Updated" });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const fulfillSupply = fulfillId ? requests.find((s: any) => s.id === fulfillId) : null;
+  const restockSupply = restockId ? assigned.find((s: any) => s.id === restockId) : null;
+  const fulfillSupply = fulfillId ? cleanerReqs.find((s: any) => s.id === fulfillId) : null;
+
+  const CONCERNING = ["running_low", "out_of_stock", "damaged", "needs_replacement"];
 
   return (
-    <div className="space-y-4">
-      {/* Open requests count */}
-      {openCount > 0 && (
-        <div className="bg-orange-50 dark:bg-orange-950/20 border border-orange-200/50 rounded-xl px-4 py-3 flex items-center gap-3">
-          <Package className="w-5 h-5 text-orange-500 shrink-0" />
-          <p className="text-sm font-medium text-orange-800 dark:text-orange-300">{openCount} open request{openCount !== 1 ? "s" : ""} need attention</p>
-        </div>
-      )}
-
-      {/* Filters */}
+    <div className="space-y-5">
+      {/* Location filter */}
       <div className="flex flex-wrap gap-2 items-center">
         <Select value={filterLocation} onValueChange={setFilterLocation}>
-          <SelectTrigger className="flex-1 min-w-[110px] max-w-[180px] h-8 text-xs" data-testid="select-filter-location">
+          <SelectTrigger className="flex-1 min-w-[120px] max-w-[200px] h-8 text-xs" data-testid="select-filter-location">
             <MapPin className="w-3 h-3 mr-1 text-muted-foreground shrink-0" />
             <SelectValue placeholder="All Locations" />
           </SelectTrigger>
@@ -1020,120 +1019,192 @@ function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sho
             {locations.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="flex-1 min-w-[110px] max-w-[160px] h-8 text-xs" data-testid="select-filter-status">
-            <Filter className="w-3 h-3 mr-1 text-muted-foreground shrink-0" />
-            <SelectValue placeholder="All Statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">All Statuses</SelectItem>
-            {STATUSES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        {hasFilters && (
-          <Button variant="ghost" size="sm" className="h-8 text-xs px-2 shrink-0" onClick={() => { setFilterLocation("__all__"); setFilterStatus("__all__"); }}>
+        {filterLocation !== "__all__" && (
+          <Button variant="ghost" size="sm" className="h-8 text-xs px-2" onClick={() => setFilterLocation("__all__")}>
             <X className="w-3 h-3 mr-1" />Clear
           </Button>
         )}
       </div>
 
-      {/* Supply list */}
-      {isLoading ? (
-        <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}</div>
-      ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Package className="w-10 h-10 text-muted-foreground/30 mb-3" />
-          <p className="text-sm font-medium text-muted-foreground">No requests found</p>
-          <p className="text-xs text-muted-foreground mt-1">{hasFilters ? "Try removing filters" : "Cleaner requests will appear here"}</p>
+      {/* ── Section 1: Assigned Supplies ── */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <PackageCheck className="w-4 h-4 text-emerald-600" />
+            <h3 className="text-sm font-semibold">Assigned Supplies</h3>
+            <span className="text-[11px] bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5 font-medium">{filteredAssigned.length}</span>
+          </div>
         </div>
-      ) : (
-        <div className="space-y-2">
-          {filtered.map((s: any) => {
-            const isDone = ["fulfilled", "not_needed"].includes(s.status);
-            return (
-              <div
-                key={s.id}
-                className={`rounded-xl border bg-background shadow-sm overflow-hidden ${isDone ? "opacity-60" : ""}`}
-                data-testid={`card-supply-${s.id}`}
-              >
-                {/* Card header - clickable for details */}
-                <button
-                  className="w-full text-left p-3 hover:bg-muted/30 transition-colors"
-                  onClick={() => { setDetailId(s.id); setEditMode(false); }}
-                >
-                  <div className="flex gap-3">
-                    <div className="w-12 h-12 rounded-lg bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
-                      {s.imageData ? (
-                        <img src={s.imageData} alt={s.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <Package className="w-4 h-4 text-muted-foreground/50" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm font-semibold truncate">{s.name}</p>
-                        <StatusBadge status={s.status} />
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">{s.category}</p>
-                      <div className="flex flex-wrap items-center gap-2 mt-1">
-                        {s.locationName && (
-                          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                            <MapPin className="w-3 h-3" />{s.locationName}
-                          </span>
-                        )}
-                        {s.createdByUserName && s.createdByUserRole === "employee" && (
-                          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                            <User className="w-3 h-3" />{s.createdByUserName}
-                          </span>
-                        )}
-                        {s.urgency && s.urgency !== "normal" && (
-                          <span className={`text-[11px] font-semibold ${s.urgency === "urgent" ? "text-red-600" : "text-orange-500"}`}>
-                            {s.urgency === "urgent" ? "⚠ Urgent" : "High Priority"}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </button>
 
-                {/* Action buttons */}
-                {!isDone && (
-                  <div className="flex border-t divide-x overflow-x-auto scrollbar-none">
+        {isLoading ? (
+          <div className="space-y-2">{[1,2].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
+        ) : filteredAssigned.length === 0 ? (
+          <div className="rounded-xl border border-dashed bg-muted/20 p-6 text-center">
+            <p className="text-xs text-muted-foreground">No supplies assigned yet.</p>
+            <Button size="sm" variant="outline" className="mt-3" onClick={() => setShowAddModal(true)} data-testid="button-add-supply-empty-assigned">
+              <Plus className="w-3.5 h-3.5 mr-1.5" />Add Supply to Location
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredAssigned.map((s: any) => {
+              const needsAttention = CONCERNING.includes(s.status);
+              return (
+                <div
+                  key={s.id}
+                  className={`rounded-xl border bg-background shadow-sm overflow-hidden ${needsAttention ? "border-orange-200 dark:border-orange-900" : ""}`}
+                  data-testid={`card-assigned-${s.id}`}
+                >
+                  <button
+                    className="w-full text-left p-3 hover:bg-muted/30 transition-colors"
+                    onClick={() => { setDetailId(s.id); setEditMode(false); }}
+                  >
+                    <div className="flex gap-3">
+                      <div className="w-12 h-12 rounded-lg bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
+                        {s.imageData ? (
+                          <img src={s.imageData} alt={s.name} className="w-full h-full object-cover" />
+                        ) : <Package className="w-4 h-4 text-muted-foreground/50" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-semibold truncate">{s.name}</p>
+                          <StatusBadge status={s.status} />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">{s.category}</p>
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                          {s.locationName && (
+                            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                              <MapPin className="w-3 h-3" />{s.locationName}
+                            </span>
+                          )}
+                          {s.assignedEmployeeName && (
+                            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                              <User className="w-3 h-3" />{s.assignedEmployeeName}
+                            </span>
+                          )}
+                          {needsAttention && (
+                            <span className="text-[11px] font-semibold text-orange-600 flex items-center gap-0.5">
+                              <AlertTriangle className="w-3 h-3" />Needs Attention
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                  <div className="flex border-t divide-x">
                     <button
-                      className="flex-1 min-w-[80px] py-2 text-[11px] font-medium text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors flex items-center justify-center gap-1 whitespace-nowrap px-2"
-                      onClick={() => setFulfillId(s.id)}
-                      data-testid={`button-fulfill-${s.id}`}
+                      className="flex-1 py-2 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors flex items-center justify-center gap-1"
+                      onClick={() => setRestockId(s.id)}
+                      data-testid={`button-restock-${s.id}`}
                     >
-                      <PackageSearch className="w-3 h-3" />Fulfill
+                      <RotateCcw className="w-3 h-3" />Restock / Add More
                     </button>
                     <button
-                      className="flex-1 min-w-[80px] py-2 text-[11px] font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-colors flex items-center justify-center gap-1 whitespace-nowrap px-2"
-                      onClick={() => statusMut.mutate({ id: s.id, status: "ordered", note: "Marked as ordered" })}
-                      data-testid={`button-ordered-${s.id}`}
+                      className="flex-1 py-2 text-[11px] font-medium text-muted-foreground hover:bg-muted/50 transition-colors flex items-center justify-center gap-1"
+                      onClick={() => { setDetailId(s.id); setEditMode(false); }}
+                      data-testid={`button-view-assigned-${s.id}`}
                     >
-                      <ShoppingCart className="w-3 h-3" />Ordered
-                    </button>
-                    <button
-                      className="flex-1 min-w-[80px] py-2 text-[11px] font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors flex items-center justify-center gap-1 whitespace-nowrap px-2"
-                      onClick={() => statusMut.mutate({ id: s.id, status: "fulfilled", note: "Resolved by admin" })}
-                      data-testid={`button-resolve-${s.id}`}
-                    >
-                      <ClipboardCheck className="w-3 h-3" />Resolve
-                    </button>
-                    <button
-                      className="flex-1 min-w-[80px] py-2 text-[11px] font-medium text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-950/20 transition-colors flex items-center justify-center gap-1 whitespace-nowrap px-2"
-                      onClick={() => statusMut.mutate({ id: s.id, status: "not_needed" })}
-                      data-testid={`button-not-needed-${s.id}`}
-                    >
-                      <Ban className="w-3 h-3" />Not Needed
+                      <ChevronRight className="w-3 h-3" />View
                     </button>
                   </div>
-                )}
-              </div>
-            );
-          })}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <Separator />
+
+      {/* ── Section 2: Cleaner Requests ── */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Package className="w-4 h-4 text-orange-500" />
+          <h3 className="text-sm font-semibold">Cleaner Requests</h3>
+          {openReqCount > 0 && (
+            <span className="text-[11px] bg-orange-100 text-orange-700 rounded-full px-2 py-0.5 font-medium">{openReqCount} open</span>
+          )}
         </div>
-      )}
+
+        {isLoading ? (
+          <div className="space-y-2">{[1,2].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
+        ) : filteredReqs.length === 0 ? (
+          <div className="rounded-xl border border-dashed bg-muted/20 p-6 text-center">
+            <p className="text-xs text-muted-foreground">No cleaner requests yet.</p>
+            <p className="text-xs text-muted-foreground mt-1">Cleaners can request new supplies from their employee page.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredReqs.map((s: any) => {
+              const isDone = ["fulfilled", "not_needed", "resolved"].includes(s.status);
+              return (
+                <div
+                  key={s.id}
+                  className={`rounded-xl border bg-background shadow-sm overflow-hidden ${isDone ? "opacity-60" : ""}`}
+                  data-testid={`card-request-${s.id}`}
+                >
+                  <button
+                    className="w-full text-left p-3 hover:bg-muted/30 transition-colors"
+                    onClick={() => { setDetailId(s.id); setEditMode(false); }}
+                  >
+                    <div className="flex gap-3">
+                      <div className="w-12 h-12 rounded-lg bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
+                        {s.imageData ? (
+                          <img src={s.imageData} alt={s.name} className="w-full h-full object-cover" />
+                        ) : <Package className="w-4 h-4 text-muted-foreground/50" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-semibold truncate">{s.name}</p>
+                          <StatusBadge status={s.status} />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">{s.category || "No category"}</p>
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                          {s.locationName && (
+                            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                              <MapPin className="w-3 h-3" />{s.locationName}
+                            </span>
+                          )}
+                          {s.createdByUserName && (
+                            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                              <User className="w-3 h-3" />{s.createdByUserName}
+                            </span>
+                          )}
+                          {s.urgency && s.urgency !== "normal" && (
+                            <span className={`text-[11px] font-semibold ${s.urgency === "urgent" ? "text-red-600" : "text-orange-500"}`}>
+                              {s.urgency === "urgent" ? "⚠ Urgent" : "High Priority"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+
+                  {!isDone && (
+                    <div className="flex border-t divide-x overflow-x-auto scrollbar-none">
+                      <button
+                        className="flex-1 min-w-[90px] py-2 text-[11px] font-medium text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors flex items-center justify-center gap-1 whitespace-nowrap px-2"
+                        onClick={() => setFulfillId(s.id)}
+                        data-testid={`button-restock-from-inv-${s.id}`}
+                      >
+                        <PackageSearch className="w-3 h-3" />Restock from Inventory
+                      </button>
+                      <button
+                        className="flex-1 min-w-[80px] py-2 text-[11px] font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors flex items-center justify-center gap-1 whitespace-nowrap px-2"
+                        onClick={() => statusMut.mutate({ id: s.id, status: "fulfilled", note: "Resolved by admin" })}
+                        data-testid={`button-resolve-req-${s.id}`}
+                        disabled={statusMut.isPending}
+                      >
+                        <ClipboardCheck className="w-3 h-3" />Mark Resolved
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Detail sheet */}
       {detailId && (
@@ -1145,11 +1216,20 @@ function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sho
           editMode={editMode}
           onEditMode={setEditMode}
           onClose={() => { setDetailId(null); setEditMode(false); }}
-          onFulfill={() => { setFulfillId(detailId); setDetailId(null); }}
+          onFulfill={fulfillId === null && !assigned.find((s: any) => s.id === detailId) ? () => { setFulfillId(detailId!); setDetailId(null); } : undefined}
         />
       )}
 
-      {/* Fulfill from inventory dialog */}
+      {/* Restock dialog for assigned supplies */}
+      {restockId && restockSupply && (
+        <RestockAssignedSupplyDialog
+          supply={restockSupply}
+          locations={locations}
+          onClose={() => setRestockId(null)}
+        />
+      )}
+
+      {/* Fulfill/restock dialog for cleaner requests */}
       {fulfillId && fulfillSupply && (
         <FulfillFromInventoryDialog
           supply={fulfillSupply}
@@ -1157,6 +1237,13 @@ function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sho
           onClose={() => setFulfillId(null)}
         />
       )}
+
+      {/* Add Supply to Location modal — triggered from header button OR empty state */}
+      <AddSupplyToLocationModal
+        open={showAdd || showAddModal}
+        onClose={() => { onCloseAdd(); setShowAddModal(false); }}
+        locations={locations}
+      />
     </div>
   );
 }
@@ -1818,23 +1905,170 @@ function AddSupplyToLocationModal({ open, onClose, locations }: { open: boolean;
   );
 }
 
-// ─── Fulfill from Inventory Dialog ────────────────────────────────────────────
+// ─── Restock Assigned Supply Dialog ───────────────────────────────────────────
+// Used when admin wants to add more of an already-assigned supply to its location
+function RestockAssignedSupplyDialog({ supply, locations, onClose }: { supply: any; locations: any[]; onClose: () => void }) {
+  const { toast } = useToast();
+  const [form, setForm] = useState({
+    inventoryItemId: supply.inventoryItemId || "",
+    locationId: supply.locationId || "",
+    quantity: "1",
+    notes: "",
+  });
+
+  const { data: inventoryItems = [] } = useQuery<any[]>({ queryKey: ["/api/supplies/inventory"] });
+  const selectedItem = inventoryItems.find((i: any) => i.id === form.inventoryItemId);
+  const selectedLocation = locations.find(l => l.id === form.locationId);
+  const qty = parseInt(form.quantity) || 0;
+  const overStock = selectedItem && qty > selectedItem.currentQuantity;
+
+  const mut = useMutation({
+    mutationFn: async () => {
+      if (!form.locationId) throw new Error("Select a location.");
+      if (!form.inventoryItemId) throw new Error("Select an inventory item.");
+      if (qty < 1) throw new Error("Enter a valid quantity.");
+      if (overStock) throw new Error(`Only ${selectedItem.currentQuantity} units available.`);
+      const res = await apiRequest("POST", `/api/supplies/inventory/${form.inventoryItemId}/assign-location`, {
+        locationId: form.locationId,
+        locationName: selectedLocation?.name || supply.locationName || null,
+        quantity: form.quantity,
+        notes: form.notes || `Restocked ${supply.name}`,
+        assignedEmployeeId: supply.assignedEmployeeId || null,
+        assignedEmployeeName: supply.assignedEmployeeName || null,
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Restock failed");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/inventory-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/location-expenses"] });
+      toast({ title: "Supply restocked", description: `Remaining stock: ${data.newQuantity}` });
+      onClose();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const canSubmit = form.inventoryItemId && form.locationId && qty > 0 && !overStock && !mut.isPending;
+
+  return (
+    <Dialog open onOpenChange={v => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Restock Supply</DialogTitle>
+          <DialogDescription>Add more of this item to the location from inventory.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 pt-1">
+          {/* Context */}
+          <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-xl p-3 space-y-1">
+            <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">Assigned Supply</p>
+            <p className="text-xs text-emerald-700 dark:text-emerald-400">{supply.name} · <StatusBadge status={supply.status} /></p>
+            {supply.locationName && <p className="text-xs text-emerald-600 dark:text-emerald-500">{supply.locationName}</p>}
+          </div>
+
+          {/* Inventory item */}
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Inventory Item *</Label>
+            <Select value={form.inventoryItemId} onValueChange={v => setForm(f => ({ ...f, inventoryItemId: v }))}>
+              <SelectTrigger className="mt-1" data-testid="select-restock-item">
+                <SelectValue placeholder="Select inventory item" />
+              </SelectTrigger>
+              <SelectContent>
+                {inventoryItems.filter((i: any) => i.currentQuantity > 0).map((i: any) => (
+                  <SelectItem key={i.id} value={i.id}>{i.name} ({i.currentQuantity} left)</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {selectedItem && (
+            <div className="bg-muted/50 rounded-lg p-2.5 text-xs flex gap-4">
+              <div><span className="text-muted-foreground">Available: </span><span className="font-medium">{selectedItem.currentQuantity}</span></div>
+              <div><span className="text-muted-foreground">Unit Price: </span><span className="font-medium">{fmtCurrency(parseFloat(selectedItem.unitPrice))}</span></div>
+            </div>
+          )}
+
+          {/* Location */}
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Location *</Label>
+            <Select value={form.locationId} onValueChange={v => setForm(f => ({ ...f, locationId: v }))}>
+              <SelectTrigger className="mt-1" data-testid="select-restock-location">
+                <SelectValue placeholder="Select location" />
+              </SelectTrigger>
+              <SelectContent>
+                {locations.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {!form.locationId && <p className="text-xs text-red-500 mt-1">Location is required.</p>}
+          </div>
+
+          {/* Quantity */}
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Quantity *</Label>
+            <Input
+              className={`mt-1 ${overStock ? "border-red-400" : ""}`}
+              type="number" min="1"
+              value={form.quantity}
+              onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))}
+              data-testid="input-restock-qty"
+            />
+            {overStock && <p className="text-xs text-red-600 mt-1">Only {selectedItem.currentQuantity} units available.</p>}
+          </div>
+
+          {/* Note */}
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Admin Note (optional)</Label>
+            <Textarea
+              className="mt-1 resize-none text-sm"
+              rows={2}
+              placeholder="e.g. Dropped off 1 bottle. Check the storage closet."
+              value={form.notes}
+              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+            />
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <Button className="flex-1" disabled={!canSubmit} onClick={() => mut.mutate()} data-testid="button-confirm-restock">
+              {mut.isPending ? "Restocking…" : "Restock Supply"}
+            </Button>
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Fulfill from Inventory Dialog (for cleaner requests) ─────────────────────
 function FulfillFromInventoryDialog({ supply, locations, onClose }: { supply: any; locations: any[]; onClose: () => void }) {
   const { toast } = useToast();
-  const [form, setForm] = useState({ inventoryItemId: "", quantity: String(supply.requestedQuantity || 1), notes: "" });
+  const [form, setForm] = useState({
+    inventoryItemId: supply.inventoryItemId || "",
+    locationId: supply.locationId || "",
+    quantity: String(supply.requestedQuantity || 1),
+    notes: "",
+  });
 
   const { data: inventoryItems = [] } = useQuery<any[]>({ queryKey: ["/api/supplies/inventory"] });
 
   const selectedItem = inventoryItems.find((i: any) => i.id === form.inventoryItemId);
+  const selectedLocation = locations.find(l => l.id === form.locationId);
   const qty = parseInt(form.quantity) || 0;
   const overStock = selectedItem && qty > selectedItem.currentQuantity;
-  const locationName = locations.find(l => l.id === supply.locationId)?.name || supply.locationName || "";
 
   const mut = useMutation({
     mutationFn: async () => {
+      if (!form.locationId) throw new Error("Select a location.");
+      if (!form.inventoryItemId) throw new Error("Select an inventory item.");
+      if (qty < 1) throw new Error("Enter a valid quantity.");
+      if (overStock) throw new Error(`Only ${selectedItem.currentQuantity} units available.`);
       const res = await apiRequest("POST", `/api/supplies/inventory/${form.inventoryItemId}/assign-location`, {
-        locationId: supply.locationId,
-        locationName,
+        locationId: form.locationId,
+        locationName: selectedLocation?.name || supply.locationName || null,
         quantity: form.quantity,
         supplyRequestId: supply.id,
         notes: form.notes || `Fulfilled cleaner request for ${supply.name}`,
@@ -1850,44 +2084,41 @@ function FulfillFromInventoryDialog({ supply, locations, onClose }: { supply: an
       queryClient.invalidateQueries({ queryKey: ["/api/supplies/inventory"] });
       queryClient.invalidateQueries({ queryKey: ["/api/supplies/inventory-overview"] });
       queryClient.invalidateQueries({ queryKey: ["/api/supplies/location-expenses"] });
-      toast({ title: "Request fulfilled", description: "Inventory deducted and location expense updated." });
+      toast({ title: "Request fulfilled", description: "Inventory deducted and expense recorded." });
       onClose();
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const canSubmit = form.inventoryItemId && qty > 0 && !overStock && !mut.isPending;
+  const canSubmit = form.inventoryItemId && form.locationId && qty > 0 && !overStock && !mut.isPending;
 
   return (
     <Dialog open onOpenChange={v => { if (!v) onClose(); }}>
       <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Fulfill from Inventory</DialogTitle>
-          <DialogDescription>
-            Request: {supply.name}
-            {supply.locationName && ` · ${supply.locationName}`}
-          </DialogDescription>
+          <DialogTitle>Restock from Inventory</DialogTitle>
+          <DialogDescription>Fulfill the cleaner's request using inventory stock.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 pt-1">
           {/* Request context */}
           <div className="bg-orange-50 dark:bg-orange-950/20 rounded-xl p-3 space-y-1">
-            <p className="text-xs font-semibold text-orange-800 dark:text-orange-300">Cleaner Request Details</p>
+            <p className="text-xs font-semibold text-orange-800 dark:text-orange-300">Cleaner Request</p>
             <p className="text-xs text-orange-700 dark:text-orange-400">{supply.name} · <StatusBadge status={supply.status} /></p>
             {supply.locationName && <p className="text-xs text-orange-600 dark:text-orange-500">{supply.locationName}</p>}
             {supply.createdByUserName && <p className="text-xs text-orange-600 dark:text-orange-500">Requested by: {supply.createdByUserName}</p>}
           </div>
 
-          {/* Inventory item selector */}
+          {/* Inventory item */}
           <div>
             <Label className="text-xs uppercase tracking-wide text-muted-foreground">Select Inventory Item *</Label>
             <Select value={form.inventoryItemId} onValueChange={v => setForm(f => ({ ...f, inventoryItemId: v }))}>
               <SelectTrigger className="mt-1" data-testid="select-fulfill-item">
-                <SelectValue placeholder="Choose item to use from inventory" />
+                <SelectValue placeholder="Choose item from inventory" />
               </SelectTrigger>
               <SelectContent>
                 {inventoryItems.filter((i: any) => i.currentQuantity > 0).map((i: any) => (
                   <SelectItem key={i.id} value={i.id}>
-                    {i.name} <span className="text-muted-foreground text-[11px]">({i.currentQuantity} left)</span>
+                    {i.name} ({i.currentQuantity} left)
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1895,17 +2126,25 @@ function FulfillFromInventoryDialog({ supply, locations, onClose }: { supply: an
           </div>
 
           {selectedItem && (
-            <div className="bg-muted/50 rounded-lg p-2.5 text-xs space-y-0.5">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Available</span>
-                <span className="font-medium">{selectedItem.currentQuantity} units</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Unit Price</span>
-                <span className="font-medium">{fmtCurrency(parseFloat(selectedItem.unitPrice))}</span>
-              </div>
+            <div className="bg-muted/50 rounded-lg p-2.5 text-xs flex gap-4">
+              <div><span className="text-muted-foreground">Available: </span><span className="font-medium">{selectedItem.currentQuantity}</span></div>
+              <div><span className="text-muted-foreground">Unit Price: </span><span className="font-medium">{fmtCurrency(parseFloat(selectedItem.unitPrice))}</span></div>
             </div>
           )}
+
+          {/* Location — required, pre-filled if known */}
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Location *</Label>
+            <Select value={form.locationId} onValueChange={v => setForm(f => ({ ...f, locationId: v }))}>
+              <SelectTrigger className="mt-1" data-testid="select-fulfill-location">
+                <SelectValue placeholder="Select location" />
+              </SelectTrigger>
+              <SelectContent>
+                {locations.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {!form.locationId && <p className="text-xs text-red-500 mt-1">Location is required.</p>}
+          </div>
 
           {/* Quantity */}
           <div>
@@ -1918,16 +2157,16 @@ function FulfillFromInventoryDialog({ supply, locations, onClose }: { supply: an
               onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))}
               data-testid="input-fulfill-qty"
             />
-            {overStock && <p className="text-xs text-red-600 mt-1">Only {selectedItem.currentQuantity} units available</p>}
+            {overStock && <p className="text-xs text-red-600 mt-1">Only {selectedItem.currentQuantity} units available.</p>}
           </div>
 
-          {/* Notes */}
+          {/* Note */}
           <div>
             <Label className="text-xs uppercase tracking-wide text-muted-foreground">Admin Note (optional)</Label>
             <Textarea
               className="mt-1 resize-none text-sm"
               rows={2}
-              placeholder="e.g. Dropped off 2 units today. Check the storage closet."
+              placeholder="e.g. Dropped off 2 units. Check under the sink."
               value={form.notes}
               onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
             />
