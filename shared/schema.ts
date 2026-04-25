@@ -983,6 +983,8 @@ export const locationSupplyExpenses = pgTable("location_supply_expenses", {
   assignedDate: text("assigned_date").notNull(),
   assignedByAdminId: varchar("assigned_by_admin_id").notNull(),
   assignedByAdminName: text("assigned_by_admin_name"),
+  assignedEmployeeId: varchar("assigned_employee_id"),
+  assignedEmployeeName: text("assigned_employee_name"),
   notes: text("notes"),
   createdAt: text("created_at").notNull(),
 });

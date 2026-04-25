@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -18,7 +18,8 @@ import {
   CheckCircle, AlertTriangle, XCircle, Wrench, RefreshCw,
   ChevronRight, Pencil, Archive, Image as ImageIcon,
   ShoppingCart, DollarSign, TrendingUp, Layers, RotateCcw,
-  Building2, ArrowRight, History, BoxSelect, PackageCheck, Truck
+  Building2, ArrowRight, History, BoxSelect, PackageCheck, Truck,
+  User, Ban, ClipboardCheck, PackageSearch
 } from "lucide-react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -121,6 +122,7 @@ export default function AdminSupplies() {
   const [tab, setTab] = useState<TabKey>("overview");
   const [showAddSupply, setShowAddSupply] = useState(false);
   const [showAddInventory, setShowAddInventory] = useState(false);
+  const [showAddSupplyToLocation, setShowAddSupplyToLocation] = useState(false);
 
   const { data: locations = [] } = useQuery<any[]>({ queryKey: ["/api/locations"] });
 
@@ -133,27 +135,29 @@ export default function AdminSupplies() {
   ];
 
   return (
-    <div className="p-4 md:p-6 pb-24 md:pb-6 max-w-5xl mx-auto space-y-4">
+    <div className="w-full max-w-5xl mx-auto px-3 sm:px-4 md:px-6 pt-4 pb-24 md:pb-6 overflow-x-hidden space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
           <h1 className="text-xl font-bold" data-testid="text-supplies-title">Supply Management</h1>
           <p className="text-sm text-muted-foreground">Inventory tracking and location expense management</p>
         </div>
-        {tab === "requests" && (
-          <Button size="sm" onClick={() => setShowAddSupply(true)} data-testid="button-add-supply">
-            <Plus className="w-4 h-4 mr-1.5" />Add Request
-          </Button>
-        )}
-        {tab === "inventory" && (
-          <Button size="sm" onClick={() => setShowAddInventory(true)} data-testid="button-add-inventory-item">
-            <Plus className="w-4 h-4 mr-1.5" />Add Item
-          </Button>
-        )}
+        <div className="flex-shrink-0">
+          {tab === "location-expenses" && (
+            <Button size="sm" onClick={() => setShowAddSupplyToLocation(true)} data-testid="button-add-supply-to-location">
+              <Plus className="w-4 h-4 mr-1.5" />Add Supply to Location
+            </Button>
+          )}
+          {tab === "inventory" && (
+            <Button size="sm" onClick={() => setShowAddInventory(true)} data-testid="button-add-inventory-item">
+              <Plus className="w-4 h-4 mr-1.5" />Add Item
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Tab Bar */}
-      <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
+      <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
         {tabs.map(t => {
           const Icon = t.icon;
           return (
@@ -175,7 +179,7 @@ export default function AdminSupplies() {
       </div>
 
       {/* Tab Content */}
-      {tab === "overview" && <OverviewTab locations={locations} />}
+      {tab === "overview" && <OverviewTab locations={locations} onAddSupplyToLocation={() => setShowAddSupplyToLocation(true)} />}
       {tab === "inventory" && (
         <InventoryTab
           locations={locations}
@@ -183,7 +187,14 @@ export default function AdminSupplies() {
           onCloseAdd={() => setShowAddInventory(false)}
         />
       )}
-      {tab === "location-expenses" && <LocationExpensesTab locations={locations} />}
+      {tab === "location-expenses" && (
+        <LocationExpensesTab
+          locations={locations}
+          showAdd={showAddSupplyToLocation}
+          onCloseAdd={() => setShowAddSupplyToLocation(false)}
+          onAdd={() => setShowAddSupplyToLocation(true)}
+        />
+      )}
       {tab === "requests" && (
         <RequestsTab
           locations={locations}
@@ -197,7 +208,7 @@ export default function AdminSupplies() {
 }
 
 // ─── Overview Tab ─────────────────────────────────────────────────────────────
-function OverviewTab({ locations }: { locations: any[] }) {
+function OverviewTab({ locations, onAddSupplyToLocation }: { locations: any[]; onAddSupplyToLocation: () => void }) {
   const { data: ov, isLoading } = useQuery<any>({ queryKey: ["/api/supplies/inventory-overview"] });
 
   if (isLoading) return <div className="space-y-3">{[1,2,3,4].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>;
@@ -370,8 +381,8 @@ function InventoryTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sh
       {/* Filters */}
       <div className="flex flex-wrap gap-2 items-center">
         <Select value={filterCat} onValueChange={setFilterCat}>
-          <SelectTrigger className="w-40 h-8 text-xs" data-testid="select-inv-filter-category">
-            <Tag className="w-3 h-3 mr-1 text-muted-foreground" />
+          <SelectTrigger className="flex-1 min-w-[110px] max-w-[180px] h-8 text-xs" data-testid="select-inv-filter-category">
+            <Tag className="w-3 h-3 mr-1 text-muted-foreground shrink-0" />
             <SelectValue placeholder="All Categories" />
           </SelectTrigger>
           <SelectContent>
@@ -380,8 +391,8 @@ function InventoryTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sh
           </SelectContent>
         </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-36 h-8 text-xs" data-testid="select-inv-filter-status">
-            <Filter className="w-3 h-3 mr-1 text-muted-foreground" />
+          <SelectTrigger className="flex-1 min-w-[110px] max-w-[160px] h-8 text-xs" data-testid="select-inv-filter-status">
+            <Filter className="w-3 h-3 mr-1 text-muted-foreground shrink-0" />
             <SelectValue placeholder="All Statuses" />
           </SelectTrigger>
           <SelectContent>
@@ -392,7 +403,7 @@ function InventoryTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sh
           </SelectContent>
         </Select>
         {(filterCat !== "__all__" || filterStatus !== "__all__") && (
-          <Button variant="ghost" size="sm" className="h-8 text-xs px-2" onClick={() => { setFilterCat("__all__"); setFilterStatus("__all__"); }}>
+          <Button variant="ghost" size="sm" className="h-8 text-xs px-2 shrink-0" onClick={() => { setFilterCat("__all__"); setFilterStatus("__all__"); }}>
             <X className="w-3 h-3 mr-1" />Clear
           </Button>
         )}
@@ -429,11 +440,13 @@ function InventoryTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sh
                     <InvStatusBadge status={item.status} />
                   </div>
                   <p className="text-xs text-muted-foreground">{item.category}</p>
-                  <div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground">
+                  <div className="flex items-center gap-2 mt-1.5 text-[11px] text-muted-foreground flex-wrap">
                     <span className="font-medium text-foreground">{item.currentQuantity} in stock</span>
                     <span>·</span>
                     <span>{fmtCurrency(parseFloat(item.unitPrice))} / unit</span>
-                    {item.supplierName && <><span>·</span><span>{item.supplierName}</span></>}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">
+                    Value: {fmtCurrency(parseFloat(item.unitPrice) * item.currentQuantity)}
                   </div>
                 </div>
               </div>
@@ -817,7 +830,7 @@ function AssignToLocationDialog({ item, locations, onClose }: { item: any; locat
 }
 
 // ─── Location Expenses Tab ────────────────────────────────────────────────────
-function LocationExpensesTab({ locations }: { locations: any[] }) {
+function LocationExpensesTab({ locations, showAdd, onCloseAdd, onAdd }: { locations: any[]; showAdd: boolean; onCloseAdd: () => void; onAdd: () => void }) {
   const [selectedLocation, setSelectedLocation] = useState<any | null>(null);
   const { data: locationGroups = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/supplies/location-expenses"] });
 
@@ -843,7 +856,10 @@ function LocationExpensesTab({ locations }: { locations: any[] }) {
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Building2 className="w-10 h-10 text-muted-foreground/30 mb-3" />
           <p className="text-sm font-medium text-muted-foreground">No location expenses yet</p>
-          <p className="text-xs text-muted-foreground mt-1">Assign inventory items to locations to track expenses</p>
+          <p className="text-xs text-muted-foreground mt-1 mb-4">Assign inventory items to locations to start tracking supply expenses</p>
+          <Button size="sm" onClick={onAdd} data-testid="button-add-supply-to-location-empty">
+            <Plus className="w-4 h-4 mr-1.5" />Add Supply to Location
+          </Button>
         </div>
       ) : (
         <div className="space-y-2">
@@ -881,6 +897,12 @@ function LocationExpensesTab({ locations }: { locations: any[] }) {
           onClose={() => setSelectedLocation(null)}
         />
       )}
+
+      <AddSupplyToLocationModal
+        open={showAdd}
+        onClose={onCloseAdd}
+        locations={locations}
+      />
     </div>
   );
 }
@@ -892,6 +914,7 @@ function LocationBreakdownSheet({ group, locationName, onClose }: { group: any; 
       <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto pb-8">
         <SheetHeader className="pb-3">
           <SheetTitle>{locationName}</SheetTitle>
+          <SheetDescription>Supply expense breakdown for this location</SheetDescription>
         </SheetHeader>
         <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-xl p-4 mb-5">
           <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium uppercase tracking-wide">Total Supply Expense</p>
@@ -929,13 +952,14 @@ function LocationBreakdownSheet({ group, locationName, onClose }: { group: any; 
   );
 }
 
-// ─── Requests Tab (existing supply management) ────────────────────────────────
+// ─── Requests Tab (cleaner-submitted supply requests) ─────────────────────────
 function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; showAdd: boolean; onCloseAdd: () => void }) {
+  const { toast } = useToast();
   const [filterLocation, setFilterLocation] = useState("__all__");
-  const [filterCategory, setFilterCategory] = useState("__all__");
   const [filterStatus, setFilterStatus] = useState("__all__");
   const [detailId, setDetailId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
+  const [fulfillId, setFulfillId] = useState<string | null>(null);
 
   const { data: allSupplies = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/supplies"] });
   const { data: detail, isLoading: detailLoading } = useQuery<any>({
@@ -943,22 +967,52 @@ function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sho
     enabled: !!detailId,
   });
 
-  const filtered = allSupplies.filter((s: any) => {
+  // Requests = supplies that are NOT in-stock inventory-assigned items
+  // i.e., either created by employee, or have a concerning status, or no inventoryItemId
+  const requests = allSupplies.filter((s: any) => {
+    const isInventoryAssigned = s.inventoryItemId && s.status === "in_stock";
+    return !isInventoryAssigned;
+  });
+
+  const filtered = requests.filter((s: any) => {
     if (filterLocation !== "__all__" && s.locationId !== filterLocation) return false;
-    if (filterCategory !== "__all__" && s.category !== filterCategory) return false;
     if (filterStatus !== "__all__" && s.status !== filterStatus) return false;
     return true;
   });
 
-  const hasFilters = filterLocation !== "__all__" || filterCategory !== "__all__" || filterStatus !== "__all__";
+  const hasFilters = filterLocation !== "__all__" || filterStatus !== "__all__";
+  const openCount = requests.filter((s: any) => !["fulfilled", "not_needed", "resolved"].includes(s.status)).length;
+
+  const statusMut = useMutation({
+    mutationFn: async ({ id, status, note }: { id: string; status: string; note?: string }) => {
+      const res = await apiRequest("PATCH", `/api/supplies/requests/${id}/status`, { status, note });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/inventory-overview"] });
+      toast({ title: "Request updated" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const fulfillSupply = fulfillId ? requests.find((s: any) => s.id === fulfillId) : null;
 
   return (
     <div className="space-y-4">
+      {/* Open requests count */}
+      {openCount > 0 && (
+        <div className="bg-orange-50 dark:bg-orange-950/20 border border-orange-200/50 rounded-xl px-4 py-3 flex items-center gap-3">
+          <Package className="w-5 h-5 text-orange-500 shrink-0" />
+          <p className="text-sm font-medium text-orange-800 dark:text-orange-300">{openCount} open request{openCount !== 1 ? "s" : ""} need attention</p>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex flex-wrap gap-2 items-center">
         <Select value={filterLocation} onValueChange={setFilterLocation}>
-          <SelectTrigger className="w-40 h-8 text-xs" data-testid="select-filter-location">
-            <MapPin className="w-3 h-3 mr-1 text-muted-foreground" />
+          <SelectTrigger className="flex-1 min-w-[110px] max-w-[180px] h-8 text-xs" data-testid="select-filter-location">
+            <MapPin className="w-3 h-3 mr-1 text-muted-foreground shrink-0" />
             <SelectValue placeholder="All Locations" />
           </SelectTrigger>
           <SelectContent>
@@ -966,19 +1020,9 @@ function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sho
             {locations.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Select value={filterCategory} onValueChange={setFilterCategory}>
-          <SelectTrigger className="w-40 h-8 text-xs" data-testid="select-filter-category">
-            <Tag className="w-3 h-3 mr-1 text-muted-foreground" />
-            <SelectValue placeholder="All Categories" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">All Categories</SelectItem>
-            {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-          </SelectContent>
-        </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-36 h-8 text-xs" data-testid="select-filter-status">
-            <Filter className="w-3 h-3 mr-1 text-muted-foreground" />
+          <SelectTrigger className="flex-1 min-w-[110px] max-w-[160px] h-8 text-xs" data-testid="select-filter-status">
+            <Filter className="w-3 h-3 mr-1 text-muted-foreground shrink-0" />
             <SelectValue placeholder="All Statuses" />
           </SelectTrigger>
           <SelectContent>
@@ -987,7 +1031,7 @@ function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sho
           </SelectContent>
         </Select>
         {hasFilters && (
-          <Button variant="ghost" size="sm" className="h-8 text-xs px-2" onClick={() => { setFilterLocation("__all__"); setFilterCategory("__all__"); setFilterStatus("__all__"); }}>
+          <Button variant="ghost" size="sm" className="h-8 text-xs px-2 shrink-0" onClick={() => { setFilterLocation("__all__"); setFilterStatus("__all__"); }}>
             <X className="w-3 h-3 mr-1" />Clear
           </Button>
         )}
@@ -999,47 +1043,99 @@ function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sho
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Package className="w-10 h-10 text-muted-foreground/30 mb-3" />
-          <p className="text-sm font-medium text-muted-foreground">No supplies found</p>
-          <p className="text-xs text-muted-foreground mt-1">{hasFilters ? "Try removing filters" : "Add a supply request to get started"}</p>
+          <p className="text-sm font-medium text-muted-foreground">No requests found</p>
+          <p className="text-xs text-muted-foreground mt-1">{hasFilters ? "Try removing filters" : "Cleaner requests will appear here"}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {filtered.map((s: any) => (
-            <button
-              key={s.id}
-              className="text-left w-full rounded-xl border bg-background hover:shadow-md transition-shadow active:scale-[0.99] p-0 overflow-hidden"
-              onClick={() => { setDetailId(s.id); setEditMode(false); }}
-              data-testid={`card-supply-${s.id}`}
-            >
-              <div className="flex gap-3 p-3">
-                <div className="w-14 h-14 rounded-lg bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
-                  {s.imageData ? (
-                    <img src={s.imageData} alt={s.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <Package className="w-5 h-5 text-muted-foreground/50" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-semibold truncate">{s.name}</p>
-                    <StatusBadge status={s.status} />
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{s.category}</p>
-                  {s.locationName && (
-                    <div className="flex items-center gap-1 mt-1">
-                      <MapPin className="w-3 h-3 text-muted-foreground" />
-                      <p className="text-[11px] text-muted-foreground truncate">{s.locationName}</p>
+        <div className="space-y-2">
+          {filtered.map((s: any) => {
+            const isDone = ["fulfilled", "not_needed"].includes(s.status);
+            return (
+              <div
+                key={s.id}
+                className={`rounded-xl border bg-background shadow-sm overflow-hidden ${isDone ? "opacity-60" : ""}`}
+                data-testid={`card-supply-${s.id}`}
+              >
+                {/* Card header - clickable for details */}
+                <button
+                  className="w-full text-left p-3 hover:bg-muted/30 transition-colors"
+                  onClick={() => { setDetailId(s.id); setEditMode(false); }}
+                >
+                  <div className="flex gap-3">
+                    <div className="w-12 h-12 rounded-lg bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
+                      {s.imageData ? (
+                        <img src={s.imageData} alt={s.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <Package className="w-4 h-4 text-muted-foreground/50" />
+                      )}
                     </div>
-                  )}
-                </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-semibold truncate">{s.name}</p>
+                        <StatusBadge status={s.status} />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">{s.category}</p>
+                      <div className="flex flex-wrap items-center gap-2 mt-1">
+                        {s.locationName && (
+                          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                            <MapPin className="w-3 h-3" />{s.locationName}
+                          </span>
+                        )}
+                        {s.createdByUserName && s.createdByUserRole === "employee" && (
+                          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                            <User className="w-3 h-3" />{s.createdByUserName}
+                          </span>
+                        )}
+                        {s.urgency && s.urgency !== "normal" && (
+                          <span className={`text-[11px] font-semibold ${s.urgency === "urgent" ? "text-red-600" : "text-orange-500"}`}>
+                            {s.urgency === "urgent" ? "⚠ Urgent" : "High Priority"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Action buttons */}
+                {!isDone && (
+                  <div className="flex border-t divide-x overflow-x-auto scrollbar-none">
+                    <button
+                      className="flex-1 min-w-[80px] py-2 text-[11px] font-medium text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors flex items-center justify-center gap-1 whitespace-nowrap px-2"
+                      onClick={() => setFulfillId(s.id)}
+                      data-testid={`button-fulfill-${s.id}`}
+                    >
+                      <PackageSearch className="w-3 h-3" />Fulfill
+                    </button>
+                    <button
+                      className="flex-1 min-w-[80px] py-2 text-[11px] font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-colors flex items-center justify-center gap-1 whitespace-nowrap px-2"
+                      onClick={() => statusMut.mutate({ id: s.id, status: "ordered", note: "Marked as ordered" })}
+                      data-testid={`button-ordered-${s.id}`}
+                    >
+                      <ShoppingCart className="w-3 h-3" />Ordered
+                    </button>
+                    <button
+                      className="flex-1 min-w-[80px] py-2 text-[11px] font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors flex items-center justify-center gap-1 whitespace-nowrap px-2"
+                      onClick={() => statusMut.mutate({ id: s.id, status: "fulfilled", note: "Resolved by admin" })}
+                      data-testid={`button-resolve-${s.id}`}
+                    >
+                      <ClipboardCheck className="w-3 h-3" />Resolve
+                    </button>
+                    <button
+                      className="flex-1 min-w-[80px] py-2 text-[11px] font-medium text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-950/20 transition-colors flex items-center justify-center gap-1 whitespace-nowrap px-2"
+                      onClick={() => statusMut.mutate({ id: s.id, status: "not_needed" })}
+                      data-testid={`button-not-needed-${s.id}`}
+                    >
+                      <Ban className="w-3 h-3" />Not Needed
+                    </button>
+                  </div>
+                )}
               </div>
-            </button>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      {/* Dialogs */}
-      <AddSupplyDialog open={showAdd} onClose={onCloseAdd} locations={locations} />
+      {/* Detail sheet */}
       {detailId && (
         <SupplyDetailSheet
           supplyId={detailId}
@@ -1049,6 +1145,16 @@ function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sho
           editMode={editMode}
           onEditMode={setEditMode}
           onClose={() => { setDetailId(null); setEditMode(false); }}
+          onFulfill={() => { setFulfillId(detailId); setDetailId(null); }}
+        />
+      )}
+
+      {/* Fulfill from inventory dialog */}
+      {fulfillId && fulfillSupply && (
+        <FulfillFromInventoryDialog
+          supply={fulfillSupply}
+          locations={locations}
+          onClose={() => setFulfillId(null)}
         />
       )}
     </div>
@@ -1091,7 +1197,7 @@ function PurchaseHistoryTab() {
       )}
 
       {isLoading ? (
-        <div className="space-y-2">{[1,2,3,4].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">{[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}</div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <History className="w-10 h-10 text-muted-foreground/30 mb-3" />
@@ -1099,26 +1205,25 @@ function PurchaseHistoryTab() {
           <p className="text-xs text-muted-foreground mt-1">Restock inventory items to see purchase records here</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           {filtered.map((p: any) => (
-            <div key={p.id} className="rounded-xl border bg-background p-3" data-testid={`card-purchase-${p.id}`}>
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold truncate">{p.inventoryItemName}</p>
-                  <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground flex-wrap">
-                    <span className="flex items-center gap-0.5"><PackageCheck className="w-3 h-3" />{p.quantityAdded} units added</span>
-                    <span>·</span>
-                    <span>{fmtCurrency(parseFloat(p.unitPrice))} / unit</span>
-                    {p.supplierName && <><span>·</span><span className="flex items-center gap-0.5"><Truck className="w-3 h-3" />{p.supplierName}</span></>}
-                  </div>
-                  <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
-                    <span>{fmtDate(p.purchaseDate)}</span>
-                    {p.createdByAdminName && <><span>·</span><span>by {p.createdByAdminName}</span></>}
-                  </div>
-                  {p.notes && <p className="text-[11px] text-muted-foreground italic mt-0.5">{p.notes}</p>}
+            <div key={p.id} className="rounded-xl border bg-background p-3 min-w-0" data-testid={`card-purchase-${p.id}`}>
+              <p className="text-xs font-semibold truncate leading-tight">{p.inventoryItemName}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{p.category}</p>
+              <div className="mt-2 space-y-0.5">
+                <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <PackageCheck className="w-3 h-3 shrink-0" />
+                  <span>{p.quantityAdded} units · {fmtCurrency(parseFloat(p.unitPrice))} ea</span>
                 </div>
-                <span className="text-base font-bold text-blue-700 flex-shrink-0">{fmtCurrency(parseFloat(p.totalCost))}</span>
+                {p.supplierName && (
+                  <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <Truck className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{p.supplierName}</span>
+                  </div>
+                )}
+                <p className="text-[11px] text-muted-foreground">{fmtDate(p.purchaseDate)}</p>
               </div>
+              <p className="text-sm font-bold text-blue-700 dark:text-blue-400 mt-2">{fmtCurrency(parseFloat(p.totalCost))}</p>
             </div>
           ))}
         </div>
@@ -1231,10 +1336,11 @@ function AddSupplyDialog({ open, onClose, locations }: { open: boolean; onClose:
   );
 }
 
-// ─── Supply Detail Sheet (unchanged) ─────────────────────────────────────────
-function SupplyDetailSheet({ supplyId, detail, loading, locations, editMode, onEditMode, onClose }: {
+// ─── Supply Detail Sheet ──────────────────────────────────────────────────────
+function SupplyDetailSheet({ supplyId, detail, loading, locations, editMode, onEditMode, onClose, onFulfill }: {
   supplyId: string; detail: any; loading: boolean; locations: any[];
   editMode: boolean; onEditMode: (v: boolean) => void; onClose: () => void;
+  onFulfill?: () => void;
 }) {
   const { toast } = useToast();
   const imgRef = useRef<HTMLInputElement>(null);
@@ -1429,6 +1535,11 @@ function SupplyDetailSheet({ supplyId, detail, loading, locations, editMode, onE
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 mb-5">
+                  {onFulfill && (
+                    <Button size="sm" variant="outline" className="col-span-2 text-purple-600 border-purple-200 hover:bg-purple-50" onClick={() => { onClose(); setTimeout(onFulfill, 100); }} data-testid="button-action-fulfill">
+                      <PackageSearch className="w-3.5 h-3.5 mr-1.5" />Fulfill from Inventory
+                    </Button>
+                  )}
                   <Button size="sm" variant="outline" className="text-blue-600 border-blue-200 hover:bg-blue-50" onClick={() => { setActionType("refill"); setActionOpen(true); }} data-testid="button-action-refill">
                     <RefreshCw className="w-3.5 h-3.5 mr-1.5" />Mark Refilled
                   </Button>
@@ -1520,5 +1631,316 @@ function SupplyDetailSheet({ supplyId, detail, loading, locations, editMode, onE
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+// ─── Add Supply to Location Modal ─────────────────────────────────────────────
+function AddSupplyToLocationModal({ open, onClose, locations }: { open: boolean; onClose: () => void; locations: any[] }) {
+  const { toast } = useToast();
+  const [form, setForm] = useState({ inventoryItemId: "", locationId: "", employeeId: "", quantity: "1", notes: "" });
+
+  const { data: inventoryItems = [] } = useQuery<any[]>({ queryKey: ["/api/supplies/inventory"], enabled: open });
+  const { data: employees = [] } = useQuery<any[]>({ queryKey: ["/api/supplies/company-employees"], enabled: open });
+
+  const selectedItem = inventoryItems.find((i: any) => i.id === form.inventoryItemId);
+  const selectedLocation = locations.find(l => l.id === form.locationId);
+  const selectedEmployee = employees.find((e: any) => e.id === form.employeeId);
+  const qty = parseInt(form.quantity) || 0;
+  const unitPrice = selectedItem ? parseFloat(selectedItem.unitPrice) : 0;
+  const totalExpense = qty > 0 && unitPrice > 0 ? (qty * unitPrice).toFixed(2) : null;
+  const overStock = selectedItem && qty > selectedItem.currentQuantity;
+
+  const mut = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/supplies/inventory/${form.inventoryItemId}/assign-location`, {
+        locationId: form.locationId,
+        locationName: selectedLocation?.name || null,
+        quantity: form.quantity,
+        assignedEmployeeId: (form.employeeId && form.employeeId !== "__none__") ? form.employeeId : null,
+        assignedEmployeeName: selectedEmployee && form.employeeId !== "__none__" ? `${selectedEmployee.firstName} ${selectedEmployee.lastName}` : null,
+        notes: form.notes || null,
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed to assign supply");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/inventory-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/location-expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies"] });
+      toast({ title: "Supply added to location", description: `Remaining stock: ${data.newQuantity}` });
+      setForm({ inventoryItemId: "", locationId: "", employeeId: "", quantity: "1", notes: "" });
+      onClose();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const canSubmit = form.inventoryItemId && form.locationId && qty > 0 && !overStock && !mut.isPending;
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Add Supply to Location</DialogTitle>
+          <DialogDescription>Select an inventory item and assign it to a location.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 pt-1">
+          {/* Inventory item selector */}
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Inventory Item *</Label>
+            <Select value={form.inventoryItemId} onValueChange={v => setForm(f => ({ ...f, inventoryItemId: v, quantity: "1" }))}>
+              <SelectTrigger className="mt-1" data-testid="select-add-supply-item">
+                <SelectValue placeholder="Select inventory item" />
+              </SelectTrigger>
+              <SelectContent>
+                {inventoryItems.filter((i: any) => i.currentQuantity > 0).map((i: any) => (
+                  <SelectItem key={i.id} value={i.id}>
+                    <span className="flex items-center gap-2">
+                      {i.name}
+                      <span className="text-[11px] text-muted-foreground">({i.currentQuantity} in stock)</span>
+                    </span>
+                  </SelectItem>
+                ))}
+                {inventoryItems.filter((i: any) => i.currentQuantity === 0).map((i: any) => (
+                  <SelectItem key={i.id} value={i.id} disabled>
+                    {i.name} <span className="text-red-500 text-[11px]">(Out of stock)</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Item details after selection */}
+          {selectedItem && (
+            <div className="bg-muted/50 rounded-xl p-3 space-y-1.5">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Category</span>
+                <span className="font-medium">{selectedItem.category}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">In Stock</span>
+                <span className="font-medium">{selectedItem.currentQuantity} units</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Unit Price</span>
+                <span className="font-semibold">{fmtCurrency(unitPrice)}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Stock Value</span>
+                <span className="text-emerald-700 font-semibold">{fmtCurrency(unitPrice * selectedItem.currentQuantity)}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Location selector */}
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Location *</Label>
+            <Select value={form.locationId} onValueChange={v => setForm(f => ({ ...f, locationId: v }))}>
+              <SelectTrigger className="mt-1" data-testid="select-add-supply-location">
+                <SelectValue placeholder="Select location" />
+              </SelectTrigger>
+              <SelectContent>
+                {locations.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Employee selector (optional) */}
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Assign to Employee (optional)</Label>
+            <Select value={form.employeeId} onValueChange={v => setForm(f => ({ ...f, employeeId: v }))}>
+              <SelectTrigger className="mt-1" data-testid="select-add-supply-employee">
+                <SelectValue placeholder="No specific employee" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">No specific employee</SelectItem>
+                {employees.map((e: any) => (
+                  <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Quantity */}
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Quantity *</Label>
+            <Input
+              className={`mt-1 ${overStock ? "border-red-400" : ""}`}
+              type="number" min="1"
+              max={selectedItem?.currentQuantity || 999}
+              value={form.quantity}
+              onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))}
+              data-testid="input-add-supply-qty"
+            />
+            {overStock && (
+              <p className="text-xs text-red-600 mt-1">Only {selectedItem.currentQuantity} unit{selectedItem.currentQuantity !== 1 ? "s" : ""} available</p>
+            )}
+          </div>
+
+          {/* Unit price (read-only) + total */}
+          {selectedItem && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Unit Price</Label>
+                <Input className="mt-1 bg-muted" value={fmtCurrency(unitPrice)} readOnly />
+              </div>
+              <div>
+                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Total Expense</Label>
+                <Input className="mt-1 bg-muted font-semibold text-emerald-700" value={totalExpense ? fmtCurrency(parseFloat(totalExpense)) : "—"} readOnly />
+              </div>
+            </div>
+          )}
+
+          {/* Notes */}
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Note (optional)</Label>
+            <Textarea
+              className="mt-1 resize-none text-sm"
+              rows={2}
+              placeholder="e.g. Dropped off for restroom area"
+              value={form.notes}
+              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+            />
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <Button className="flex-1" disabled={!canSubmit} onClick={() => mut.mutate()} data-testid="button-confirm-add-supply">
+              {mut.isPending ? "Adding…" : "Add Supply"}
+            </Button>
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Fulfill from Inventory Dialog ────────────────────────────────────────────
+function FulfillFromInventoryDialog({ supply, locations, onClose }: { supply: any; locations: any[]; onClose: () => void }) {
+  const { toast } = useToast();
+  const [form, setForm] = useState({ inventoryItemId: "", quantity: String(supply.requestedQuantity || 1), notes: "" });
+
+  const { data: inventoryItems = [] } = useQuery<any[]>({ queryKey: ["/api/supplies/inventory"] });
+
+  const selectedItem = inventoryItems.find((i: any) => i.id === form.inventoryItemId);
+  const qty = parseInt(form.quantity) || 0;
+  const overStock = selectedItem && qty > selectedItem.currentQuantity;
+  const locationName = locations.find(l => l.id === supply.locationId)?.name || supply.locationName || "";
+
+  const mut = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/supplies/inventory/${form.inventoryItemId}/assign-location`, {
+        locationId: supply.locationId,
+        locationName,
+        quantity: form.quantity,
+        supplyRequestId: supply.id,
+        notes: form.notes || `Fulfilled cleaner request for ${supply.name}`,
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed to fulfill request");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/inventory-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/location-expenses"] });
+      toast({ title: "Request fulfilled", description: "Inventory deducted and location expense updated." });
+      onClose();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const canSubmit = form.inventoryItemId && qty > 0 && !overStock && !mut.isPending;
+
+  return (
+    <Dialog open onOpenChange={v => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Fulfill from Inventory</DialogTitle>
+          <DialogDescription>
+            Request: {supply.name}
+            {supply.locationName && ` · ${supply.locationName}`}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 pt-1">
+          {/* Request context */}
+          <div className="bg-orange-50 dark:bg-orange-950/20 rounded-xl p-3 space-y-1">
+            <p className="text-xs font-semibold text-orange-800 dark:text-orange-300">Cleaner Request Details</p>
+            <p className="text-xs text-orange-700 dark:text-orange-400">{supply.name} · <StatusBadge status={supply.status} /></p>
+            {supply.locationName && <p className="text-xs text-orange-600 dark:text-orange-500">{supply.locationName}</p>}
+            {supply.createdByUserName && <p className="text-xs text-orange-600 dark:text-orange-500">Requested by: {supply.createdByUserName}</p>}
+          </div>
+
+          {/* Inventory item selector */}
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Select Inventory Item *</Label>
+            <Select value={form.inventoryItemId} onValueChange={v => setForm(f => ({ ...f, inventoryItemId: v }))}>
+              <SelectTrigger className="mt-1" data-testid="select-fulfill-item">
+                <SelectValue placeholder="Choose item to use from inventory" />
+              </SelectTrigger>
+              <SelectContent>
+                {inventoryItems.filter((i: any) => i.currentQuantity > 0).map((i: any) => (
+                  <SelectItem key={i.id} value={i.id}>
+                    {i.name} <span className="text-muted-foreground text-[11px]">({i.currentQuantity} left)</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {selectedItem && (
+            <div className="bg-muted/50 rounded-lg p-2.5 text-xs space-y-0.5">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Available</span>
+                <span className="font-medium">{selectedItem.currentQuantity} units</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Unit Price</span>
+                <span className="font-medium">{fmtCurrency(parseFloat(selectedItem.unitPrice))}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Quantity */}
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Quantity *</Label>
+            <Input
+              className={`mt-1 ${overStock ? "border-red-400" : ""}`}
+              type="number" min="1"
+              max={selectedItem?.currentQuantity || 999}
+              value={form.quantity}
+              onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))}
+              data-testid="input-fulfill-qty"
+            />
+            {overStock && <p className="text-xs text-red-600 mt-1">Only {selectedItem.currentQuantity} units available</p>}
+          </div>
+
+          {/* Notes */}
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Admin Note (optional)</Label>
+            <Textarea
+              className="mt-1 resize-none text-sm"
+              rows={2}
+              placeholder="e.g. Dropped off 2 units today. Check the storage closet."
+              value={form.notes}
+              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+            />
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <Button className="flex-1" disabled={!canSubmit} onClick={() => mut.mutate()} data-testid="button-confirm-fulfill">
+              {mut.isPending ? "Fulfilling…" : "Fulfill Request"}
+            </Button>
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -11,7 +11,7 @@ import { randomBytes } from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { isNotNull, eq, and, isNull, inArray, desc } from "drizzle-orm";
+import { isNotNull, eq, and, isNull, inArray, desc, sql } from "drizzle-orm";
 import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments, supplies, supplyUpdates, inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses } from "@shared/schema";
 import { getPlan } from "./plans";
 import { generateReviewOgImage } from "./og-image";
@@ -6157,17 +6157,29 @@ FINAL RULES:
 
   // ── SUPPLIES MODULE ────────────────────────────────────────────────────────
 
-  // GET /api/supplies — list all for company, filterable by locationId/category/status
+  // GET /api/supplies — list all active for company, filterable by locationId/category/status
   app.get("/api/supplies", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
       const { locationId, category, status } = req.query as Record<string, string>;
-      let rows = await db.select().from(supplies)
-        .where(eq(supplies.companyId, user.companyId))
+      let rows = await db.select({
+        id: supplies.id, companyId: supplies.companyId, locationId: supplies.locationId,
+        locationName: supplies.locationName, name: supplies.name, category: supplies.category,
+        description: supplies.description, imageData: supplies.imageData, status: supplies.status,
+        quantityLabel: supplies.quantityLabel, isActive: supplies.isActive,
+        createdByUserId: supplies.createdByUserId, inventoryItemId: supplies.inventoryItemId,
+        requestedQuantity: supplies.requestedQuantity, fulfilledQuantity: supplies.fulfilledQuantity,
+        linkedExpenseId: supplies.linkedExpenseId, urgency: supplies.urgency,
+        createdAt: supplies.createdAt, updatedAt: supplies.updatedAt,
+        createdByUserName: sql<string | null>`concat(${users.firstName}, ' ', ${users.lastName})`,
+        createdByUserRole: users.role,
+      }).from(supplies)
+        .leftJoin(users, eq(supplies.createdByUserId, users.id))
+        .where(and(eq(supplies.companyId, user.companyId), eq(supplies.isActive, true)))
         .orderBy(desc(supplies.updatedAt));
-      if (locationId) rows = rows.filter(s => s.locationId === locationId);
-      if (category) rows = rows.filter(s => s.category === category);
-      if (status) rows = rows.filter(s => s.status === status);
+      if (locationId) rows = rows.filter((s: any) => s.locationId === locationId);
+      if (category) rows = rows.filter((s: any) => s.category === category);
+      if (status) rows = rows.filter((s: any) => s.status === status);
       res.json(rows);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -6359,20 +6371,20 @@ FINAL RULES:
       const user = req.user as any;
       const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.id, req.params.id));
       if (!item || item.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      const { locationId, locationName, quantity, supplyRequestId, notes } = req.body;
+      const { locationId, locationName, quantity, supplyRequestId, notes, assignedEmployeeId, assignedEmployeeName } = req.body;
       if (!locationId || !quantity) return res.status(400).json({ message: "locationId and quantity required" });
       const qty = parseInt(quantity);
       if (qty <= 0) return res.status(400).json({ message: "quantity must be positive" });
-      if (item.currentQuantity < qty) return res.status(400).json({ message: `Insufficient stock. Available: ${item.currentQuantity}` });
+      if (item.currentQuantity < qty) return res.status(400).json({ message: `Only ${item.currentQuantity} unit${item.currentQuantity !== 1 ? "s" : ""} available` });
       const now = new Date().toISOString();
       const price = item.unitPrice;
       const total = (parseFloat(price) * qty).toFixed(2);
       const newQty = item.currentQuantity - qty;
       const threshold = item.lowStockThreshold;
-      let status = "in_stock";
-      if (newQty === 0) status = "out_of_stock";
-      else if (newQty <= threshold) status = "running_low";
-      await db.update(inventoryItems).set({ currentQuantity: newQty, status, updatedAt: now }).where(eq(inventoryItems.id, item.id));
+      let invStatus = "in_stock";
+      if (newQty === 0) invStatus = "out_of_stock";
+      else if (newQty <= threshold) invStatus = "running_low";
+      await db.update(inventoryItems).set({ currentQuantity: newQty, status: invStatus, updatedAt: now }).where(eq(inventoryItems.id, item.id));
       const [expense] = await db.insert(locationSupplyExpenses).values({
         companyId: user.companyId, locationId, locationName: locationName || null,
         inventoryItemId: item.id, inventoryItemName: item.name,
@@ -6380,6 +6392,8 @@ FINAL RULES:
         quantity: qty, unitPriceAtTime: price, totalExpense: total,
         assignedDate: now.split("T")[0],
         assignedByAdminId: user.id, assignedByAdminName: `${user.firstName} ${user.lastName}`,
+        assignedEmployeeId: assignedEmployeeId || null,
+        assignedEmployeeName: assignedEmployeeName || null,
         notes: notes || null, createdAt: now,
       }).returning();
       await db.insert(inventoryMovements).values({
@@ -6390,13 +6404,39 @@ FINAL RULES:
         supplyRequestId: supplyRequestId || null,
         notes: notes || null, createdByAdminId: user.id, createdAt: now,
       });
+      // Upsert supply record so employee can see it
+      const existingSupplies = await db.select().from(supplies).where(and(
+        eq(supplies.inventoryItemId, item.id),
+        eq(supplies.locationId, locationId),
+        eq(supplies.companyId, user.companyId),
+        eq(supplies.isActive, true)
+      ));
+      if (existingSupplies.length === 0) {
+        await db.insert(supplies).values({
+          companyId: user.companyId, locationId, locationName: locationName || null,
+          name: item.name, category: item.category,
+          imageData: item.imageData || null, status: "in_stock",
+          quantityLabel: `${qty} unit${qty !== 1 ? "s" : ""} assigned`,
+          isActive: true, createdByUserId: user.id,
+          inventoryItemId: item.id, fulfilledQuantity: qty,
+          createdAt: now, updatedAt: now,
+        });
+      } else {
+        const existing = existingSupplies[0];
+        const newTotal = (existing.fulfilledQuantity || 0) + qty;
+        await db.update(supplies).set({
+          status: "in_stock",
+          quantityLabel: `${newTotal} unit${newTotal !== 1 ? "s" : ""} assigned`,
+          fulfilledQuantity: newTotal, updatedAt: now,
+        }).where(eq(supplies.id, existing.id));
+      }
       // If linked to a supply request, update it
       if (supplyRequestId) {
         const [req2] = await db.select().from(supplies).where(eq(supplies.id, supplyRequestId));
         if (req2 && req2.companyId === user.companyId) {
           const newFulfilled = (req2.fulfilledQuantity || 0) + qty;
           const requested = req2.requestedQuantity || 0;
-          const newStatus = requested > 0 && newFulfilled >= requested ? "fulfilled" : requested > 0 ? "partially_fulfilled" : req2.status;
+          const newStatus = requested > 0 && newFulfilled >= requested ? "fulfilled" : requested > 0 ? "partially_fulfilled" : "fulfilled";
           await db.update(supplies).set({
             fulfilledQuantity: newFulfilled, linkedExpenseId: expense.id,
             inventoryItemId: item.id, status: newStatus, updatedAt: now,
@@ -6405,12 +6445,23 @@ FINAL RULES:
             supplyId: supplyRequestId, companyId: user.companyId,
             locationId: locationId, updatedByRole: "admin",
             updateType: "status_changed",
-            note: `Fulfilled ${qty} unit(s) from inventory (${item.name})`,
+            note: notes ? `Fulfilled ${qty} unit(s) of ${item.name}. Note: ${notes}` : `Fulfilled ${qty} unit(s) from inventory (${item.name})`,
             previousStatus: req2.status, newStatus: newStatus, createdAt: now,
           });
         }
       }
-      res.json({ expense, newQuantity: newQty, status });
+      res.json({ expense, newQuantity: newQty, invStatus });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // GET /api/supplies/company-employees — list active employees for selector
+  app.get("/api/supplies/company-employees", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const employees = await db.select({
+        id: users.id, firstName: users.firstName, lastName: users.lastName,
+      }).from(users).where(and(eq(users.companyId, user.companyId), eq(users.role, "employee"), eq(users.isActive, true)));
+      res.json(employees);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
@@ -6610,6 +6661,45 @@ FINAL RULES:
         byLocation[key].items.push(s);
       }
       res.json({ locationIds, locations: Object.values(byLocation), allSupplies: rows });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // GET /api/employee/supplies/:id — single supply with updates for cleaner detail view
+  app.get("/api/employee/supplies/:id", requireAuth, requireRole("employee"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const [supply] = await db.select().from(supplies).where(and(eq(supplies.id, req.params.id), eq(supplies.companyId, user.companyId)));
+      if (!supply) return res.status(404).json({ message: "Not found" });
+      const updates = await db.select().from(supplyUpdates).where(eq(supplyUpdates.supplyId, supply.id)).orderBy(desc(supplyUpdates.createdAt));
+      res.json({ ...supply, updates });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/employee/supply-requests — cleaner requests a new supply
+  app.post("/api/employee/supply-requests", requireAuth, requireRole("employee"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { name, category, note, urgency, locationId, locationName, imageData } = req.body;
+      if (!name) return res.status(400).json({ message: "Supply name is required" });
+      const now = new Date().toISOString();
+      const [supply] = await db.insert(supplies).values({
+        companyId: user.companyId, locationId: locationId || null, locationName: locationName || null,
+        name, category: category || "Other", status: "out_of_stock",
+        quantityLabel: "Requested", isActive: true,
+        createdByUserId: user.id, imageData: imageData || null,
+        urgency: urgency || "normal", requestedQuantity: 1,
+        createdAt: now, updatedAt: now,
+      }).returning();
+      await db.insert(supplyUpdates).values({
+        supplyId: supply.id, companyId: user.companyId,
+        locationId: locationId || null, updatedByRole: "employee",
+        updatedByUserId: user.id,
+        updatedByName: `${user.firstName} ${user.lastName}`,
+        updateType: "reported_out",
+        note: note || "New supply requested",
+        newStatus: "out_of_stock", createdAt: now,
+      });
+      res.json(supply);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 

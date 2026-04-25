@@ -1,0 +1,905 @@
+DEV NOTE: Fix Supply Management Mobile UI + Add Proper Inventory Assignment + Location Expenses + Cleaner Supply View
+
+Project: ClockField
+Area: Admin Panel > Supply Management
+Related areas: Employee/Cleaner Supply page only
+Priority: High
+Goal: Fix the Supply Management page so it works properly as an inventory, supply assignment, location expense, and cleaner request system.
+
+Critical instruction:
+Do not break or affect anything else in ClockField.
+Do not touch payroll, attendance, schedule, clients, work log, field notes, publications, messages, subscription, super admin, or auth.
+Do not remove the existing supply request/photo concept.
+Do not delete existing supply data.
+Do not change unrelated layouts.
+Only fix and improve the Supply Management module and the cleaner supply view connected to it.
+
+Current problems to fix
+
+Problem 1: Admin Supply page is not mobile friendly
+
+On mobile, the Supply Management page is wider than the screen.
+The user has to scroll left and right.
+Tabs, cards, filters, and buttons are overflowing.
+The page does not fit small phones properly.
+
+Problem 2: Location Expenses has no way to add expenses
+
+The Location Expenses tab only shows empty data.
+There is no action to assign inventory to a location.
+There is no way to create a location expense from inventory.
+
+Problem 3: “Requests” is being used wrong
+
+The current “Requests” tab is being used like “Add Supply.”
+This is confusing.
+
+Admin should have:
+
+Inventory: Products the company owns.
+Add Supply / Assign Supply: Move product from inventory to a location.
+Location Expenses: Shows what each location has received and how much it cost.
+Requests: Only for cleaner requests.
+
+Cleaner requests should only happen when:
+
+Cleaner needs something not already listed.
+Cleaner wants to request a new supply.
+Cleaner reports that an existing supply is out, low, missing, or needs replacement.
+
+Main concept
+
+Inventory is the company’s stock.
+
+Example:
+
+All Pink
+Quantity purchased: 5
+Unit price: $29
+Total inventory value: $145
+
+When admin assigns 1 All Pink to Olympic Building Centre:
+
+Inventory goes from 5 to 4.
+Olympic Building Centre gets 1 All Pink.
+Olympic Building Centre supply expense increases by $29.
+The employee assigned to that location can now see that product on their supply page.
+
+Do not let admin retype the product again if it already exists in inventory.
+
+When adding supply to a location, admin must select from existing inventory.
+
+Admin Add Supply flow
+
+Rename or add the main action clearly:
+
+Button label:
+Add Supply to Location
+
+Do not call this “Request.”
+
+When admin clicks Add Supply to Location, open a modal.
+
+Modal fields:
+
+Select Inventory Item
+Required.
+Dropdown should show products already added in Inventory.
+
+Example:
+All Pink
+Neutral
+Orange Solv
+Mop
+Rug
+Toilet Bowl Cleaner
+
+Show item details after selection:
+
+Current stock
+Unit price
+Category
+Total inventory value
+
+Select Location
+Required.
+
+Select Employee
+Optional, but recommended.
+Only show employees assigned to that location if this data exists.
+If location assignment does not exist yet, show all employees from the company.
+
+Quantity
+Required.
+Default: 1.
+
+Unit price
+Auto-filled from inventory.
+Read-only.
+Do not allow admin to change it here.
+
+Total expense
+Auto-calculated.
+
+Formula:
+quantity × unit price
+
+Optional note
+Example:
+Dropped off for restroom area.
+Replacement after cleaner request.
+Needed for weekly cleaning.
+
+Submit button:
+Add Supply
+
+Validation:
+
+If selected quantity is more than current stock, block it.
+
+Example error:
+Only 4 units are available in inventory.
+
+After submit:
+
+Deduct quantity from inventory.
+Create location expense record.
+Create assigned supply record for that location.
+If employee was selected, make that supply visible to that employee.
+Show the item on the admin supply list.
+Show the item under Location Expenses.
+Update inventory totals.
+Update overview totals.
+
+Inventory value logic
+
+Inventory page must show:
+
+Total Inventory Value
+Total Units in Stock
+Running Low
+Out of Stock
+
+Formula:
+
+Total Inventory Value = sum of current_quantity × unit_price
+
+Example:
+
+All Pink
+5 units
+$29 each
+
+Total value:
+$145
+
+If admin assigns 1 to a location:
+
+Inventory remaining:
+4 units
+
+Inventory value:
+$116
+
+Location expense:
+$29
+
+Location Expenses logic
+
+Location Expenses tab must show real location spending.
+
+Add top button:
+
+Add Supply to Location
+
+This opens the same Add Supply modal.
+
+Location Expenses should show location cards or rows.
+
+Each location card should show:
+
+Location name
+Address if available
+Total supply expense
+Number of assigned supplies
+Last supply added
+Most recent product
+View Breakdown button
+
+Example:
+
+Olympic Building Centre
+123 Main Street
+Total supply expense: $87
+Assigned supplies: 3
+Last supply added: All Pink
+View Breakdown
+
+When clicking View Breakdown:
+
+Show all products assigned to that location.
+
+Fields:
+
+Product image
+Product name
+Category
+Quantity assigned
+Unit price
+Total cost
+Date assigned
+Assigned employee
+Admin note
+
+Example:
+
+All Pink
+Quantity: 1
+Unit price: $29
+Total: $29
+Assigned to: John
+Date: Apr 24, 2026
+Note: Dropped off for restroom area
+
+Location Expenses empty state
+
+Current empty state is okay, but add an action button.
+
+Text:
+
+No location expenses yet
+Assign inventory items to locations to start tracking supply expenses.
+
+Button:
+Add Supply to Location
+
+Mobile UI requirements
+
+Fix the entire Supply Management page on mobile.
+
+Current issue:
+The page is overflowing horizontally.
+Tabs and content are cut off.
+User must move left and right.
+
+Required fix:
+
+No horizontal page scroll.
+Main container must be width: 100%.
+Use max-width properly.
+Use overflow-x: hidden on page wrapper only if needed.
+Do not hide important content.
+Tabs must scroll horizontally inside their own tab row only.
+Cards must fit the screen.
+Buttons must wrap or stack.
+Filters must stack.
+Modal must fit small phones.
+
+Mobile tab behavior:
+
+Tabs should be horizontally scrollable inside the tab row.
+The whole page should not scroll sideways.
+
+Example:
+
+Overview | Inventory | Location Expenses | Requests | Purchase History
+
+The tab row can scroll left/right, but the page content must stay fixed to screen width.
+
+Mobile overview cards
+
+The overview stat cards should use a 2-column grid on mobile.
+
+Example:
+
+Total Items | Out of Stock
+Running Low | Inventory Value
+Total Spent | Open Requests
+
+Do not make cards too wide.
+Do not let cards overflow.
+
+Product grid requirements
+
+Admin Inventory page:
+
+Mobile:
+Show products in a 3-column compact grid if screen can support it.
+Each card should be small and clean.
+
+If screen is very small:
+Use 2-column grid instead of breaking layout.
+Do not force 3 columns if text becomes unreadable.
+
+Desktop:
+Show 3-column grid.
+
+Each inventory product card should show:
+
+Product image
+Product name
+Current stock
+Unit price
+Status badge
+
+Clicking the product opens details modal.
+
+Do not show too much text inside the grid card.
+
+Product detail modal should show:
+
+Product name
+Image
+Category
+Current stock
+Unit price
+Total value
+Supplier/store
+Purchase date
+Low stock threshold
+Locations assigned to
+Purchase history
+Actions:
+Add Stock
+Assign to Location
+Edit
+
+Overview product display
+
+On Overview, where products are shown, use a compact grid.
+
+Mobile:
+2 or 3 per row depending on screen width.
+
+Desktop:
+3 per row.
+
+Click product to open details modal.
+
+Do not show long one-by-one cards only.
+
+Purchase History UI
+
+Purchase History should not be one long vertical list.
+
+Desktop:
+Use 4-column compact grid or clean table.
+
+Mobile:
+Use 2-column compact cards if possible.
+If very small, use 1-column only when needed.
+
+Each purchase card should show:
+
+Product name
+Category
+Quantity bought
+Unit price
+Total cost
+Supplier/store
+Purchase date
+
+Example:
+
+All Pink
+5 units
+$29 each
+Total: $145
+Supplier: Superstore
+Purchased: Apr 24, 2026
+
+Purchase history data should be auto-filled from inventory entry.
+
+When admin adds inventory, save:
+
+Product name
+Category
+Quantity purchased
+Unit price
+Total cost
+Supplier/store
+Purchase date
+
+Do not add receipt upload right now.
+Keep this out of scope.
+
+Inventory entry requirements
+
+When admin adds inventory, fields should be:
+
+Product name
+Category
+Quantity purchased
+Unit price
+Supplier/store
+Purchase date
+Low stock threshold
+Image optional
+Notes optional
+
+Each product must be added one by one.
+
+Example:
+
+Neutral
+Category: Chemicals
+Quantity: 5
+Unit price: $25.99
+Supplier/store: Superstore
+Purchase date: Apr 24, 2026
+
+After saving:
+
+Inventory shows Neutral.
+Purchase History shows Neutral purchase.
+Overview total inventory value updates.
+
+Requests tab cleanup
+
+Admin Requests tab should only show cleaner requests.
+
+Do not use Requests as Add Supply.
+
+Requests should include:
+
+Cleaner requested a new product.
+Cleaner reported existing product is out.
+Cleaner reported item is low.
+Cleaner reported item is missing.
+Cleaner uploaded picture.
+Cleaner left note.
+
+Requests tab should have:
+
+Open Requests count
+Pending requests
+Resolved requests
+Partially fulfilled requests
+
+Request card should show:
+
+Cleaner name
+Location
+Product name or requested item
+Photo
+Note
+Status
+Date
+Action buttons
+
+Actions:
+
+Fulfill from Inventory
+Mark Ordered
+Mark Not Needed
+Add Admin Note
+Resolve
+
+Fulfill from Inventory should use the same Add Supply to Location logic.
+
+If request matches inventory product:
+
+Admin selects inventory item.
+Admin selects quantity.
+System deducts from inventory.
+System adds expense to location.
+System updates cleaner request status.
+System shows admin note to cleaner.
+
+Cleaner side supply page
+
+Fix the cleaner/employee supply view.
+
+Cleaner should not see supplies for all locations.
+
+Cleaner should only see:
+
+The location they are assigned to
+The supplies assigned to that location
+The products they are expected to use or monitor
+
+Top of cleaner supply page should show location card:
+
+Location name
+Address
+Client name if available
+Assigned employee name
+Optional schedule/site info if available
+
+Example:
+
+Olympic Building Centre
+123 Main Street
+Assigned Location
+Supplies available below
+
+Below that, show assigned supplies.
+
+Cleaner supply grid:
+
+Mobile:
+Show 2 or 3 products per row depending on phone width.
+
+Desktop/tablet:
+Show 3 or 4 products per row.
+
+Supply card should show:
+
+Product image
+Product name
+Quantity at this location
+Status
+Last restocked date
+
+Cleaner can click a product.
+
+Product detail modal for cleaner:
+
+Product name
+Image
+Quantity assigned
+Status
+Location
+Admin note
+Restock note if available
+Button:
+Report Low / Out of Stock
+
+When cleaner reports low/out of stock:
+
+Cleaner can upload photo.
+Cleaner can add note.
+System sends request to admin.
+Admin sees it under Requests.
+
+Cleaner request new product
+
+Add button on cleaner supply page:
+
+Request New Supply
+
+Use this when the cleaner needs something that is not already listed.
+
+Fields:
+
+Supply name
+Category optional
+Photo optional
+Reason/note
+Where it can be found optional
+Urgency optional
+
+Example:
+Need a new mop head.
+Can be found at Walmart.
+Current one is damaged.
+
+After submit:
+
+Admin receives it in Requests.
+Overview open requests count increases.
+Request status is Pending.
+
+Admin note visibility
+
+When admin restocks or resolves a request, the admin should be able to write a note.
+
+That note should be visible to the cleaner on the related product/request page.
+
+Example admin note:
+
+Dropped off 2 units today. Please check the storage closet.
+
+Cleaner should see:
+
+Admin response:
+Dropped off 2 units today. Please check the storage closet.
+
+This should appear in the product detail or request detail, not only on the admin page.
+
+Statuses needed
+
+Inventory statuses:
+
+In Stock
+Running Low
+Out of Stock
+
+Location supply statuses:
+
+Available
+Low
+Out
+Needs Replacement
+Missing
+
+Request statuses:
+
+Pending
+In Review
+Fulfilled
+Partially Fulfilled
+Ordered
+Not Needed
+Resolved
+
+Overview updates
+
+Overview should show:
+
+Total Items
+Total Inventory Value
+Total Units in Stock
+Running Low
+Out of Stock
+Total Location Spend
+Open Requests
+Top Locations by Spend
+Recent Purchases
+Inventory Snapshot
+
+Top Locations by Spend should show real data after supplies are assigned.
+
+Example:
+
+Olympic Building Centre: $87
+OakBank Arena: $58
+Anchor Construction: $29
+
+If no data, show clean empty state and Add Supply to Location button.
+
+Backend/data logic
+
+Make sure assignment creates these records:
+
+Inventory deduction
+Location expense
+Location supply assignment
+Optional employee assignment
+Optional request fulfillment update
+
+Required logic:
+
+When adding inventory:
+Increase inventory quantity.
+Create purchase history.
+Update inventory value.
+
+When assigning supply:
+Decrease inventory quantity.
+Create location expense.
+Create location supply record.
+Show product under assigned location.
+If employee selected, show on employee side.
+Update overview.
+
+When request is fulfilled:
+Use inventory item.
+Deduct inventory.
+Add location expense.
+Mark request fulfilled or partially fulfilled.
+Save admin note.
+Show note to cleaner.
+
+Do not allow negative stock
+
+Inventory quantity should never go below 0.
+
+If admin tries to assign more than available, block the action.
+
+Example:
+
+Available stock: 2
+Trying to assign: 3
+
+Show:
+Only 2 units are available.
+
+No database update should happen.
+
+Data safety
+
+Use company_id everywhere.
+Admin should only see their own company inventory, locations, employees, expenses, and requests.
+
+Cleaner should only see supplies assigned to their location or assigned to them.
+
+Do not expose supplies from other locations to cleaners.
+
+UI layout fixes from screenshots
+
+Fix these exact issues:
+
+Header text is cut off on mobile.
+Tabs overflow and push content off screen.
+Add button is half cut off.
+Filters are wider than the screen.
+Request card content is invisible or off-screen.
+Bottom navigation and horizontal scroll conflict.
+Location Expenses page is empty with no action.
+Page uses horizontal scrolling instead of responsive stacking.
+
+Mobile CSS rules to apply
+
+Use these principles:
+
+Page wrapper:
+width: 100%;
+max-width: 100vw;
+overflow-x: hidden;
+
+Content container:
+width: 100%;
+padding: 12px or 16px on mobile;
+
+Tabs:
+display flex;
+overflow-x auto;
+white-space nowrap;
+max-width: 100%;
+
+Cards:
+min-width: 0;
+width: 100%;
+
+Grids:
+Use responsive grid.
+
+Example:
+
+Mobile:
+grid-template-columns: repeat(2, minmax(0, 1fr));
+
+For wider mobile:
+grid-template-columns: repeat(3, minmax(0, 1fr));
+
+Desktop:
+grid-template-columns: repeat(3, minmax(0, 1fr));
+
+Purchase grid desktop:
+grid-template-columns: repeat(4, minmax(0, 1fr));
+
+Buttons:
+Allow wrapping.
+Do not use fixed widths that exceed mobile screen.
+
+Modals:
+max-width: calc(100vw - 24px);
+max-height: calc(100vh - 80px);
+overflow-y: auto;
+
+Testing checklist
+
+Test 1: Mobile page fit
+
+Open Supply Management on iPhone 12 Pro size.
+
+Expected:
+No full-page horizontal scroll.
+Tabs fit inside scrollable tab row.
+Cards fit screen.
+Bottom navigation is not broken.
+Add button is visible.
+
+Test 2: Add inventory
+
+Add:
+
+All Pink
+Quantity: 5
+Unit price: $29
+Supplier: Superstore
+Purchase date: Apr 24, 2026
+
+Expected:
+Inventory shows 5 units.
+Total inventory value shows $145.
+Purchase History shows the purchase.
+Overview updates.
+
+Test 3: Assign supply to location
+
+Click Add Supply to Location.
+
+Select:
+All Pink
+Location: Olympic Building Centre
+Employee: assigned cleaner
+Quantity: 1
+
+Expected:
+Inventory decreases from 5 to 4.
+Location expense increases by $29.
+Product shows under Olympic Building Centre.
+Employee can see product on their supply page.
+
+Test 4: Location Expenses
+
+Open Location Expenses.
+
+Expected:
+Olympic Building Centre appears.
+Total supply expense shows $29.
+View Breakdown shows All Pink, quantity 1, unit price $29, total $29.
+
+Test 5: Prevent over-assigning
+
+Try assigning 10 All Pink when only 4 are left.
+
+Expected:
+System blocks it.
+Inventory stays 4.
+No expense is created.
+
+Test 6: Cleaner supply page
+
+Login as employee assigned to Olympic Building Centre.
+
+Expected:
+Cleaner sees location name and address.
+Cleaner sees assigned supplies only for that location.
+Cleaner does not see supplies from other locations.
+
+Test 7: Cleaner reports existing product out of stock
+
+Cleaner opens All Pink.
+Clicks Report Low / Out of Stock.
+Uploads photo.
+Adds note.
+Submits.
+
+Expected:
+Admin sees it in Requests.
+Overview Open Requests count increases.
+Product status updates if needed.
+
+Test 8: Cleaner requests new supply
+
+Cleaner clicks Request New Supply.
+Adds product name, note, and optional photo.
+
+Expected:
+Admin receives it in Requests.
+It does not automatically become inventory.
+Admin can later add inventory or fulfill from existing inventory.
+
+Test 9: Admin fulfills request
+
+Admin clicks Fulfill from Inventory.
+Selects inventory item.
+Quantity 1.
+Adds note.
+
+Expected:
+Inventory decreases.
+Location expense increases.
+Request status becomes Fulfilled.
+Cleaner sees admin note.
+
+Test 10: Purchase History layout
+
+Open Purchase History.
+
+Expected:
+Desktop shows compact grid/table.
+Mobile does not overflow.
+Each purchase shows product, quantity, unit price, total, supplier, and purchase date.
+
+Final required outcome
+
+After this update:
+
+Admin can add inventory.
+Admin can see total inventory value.
+Admin can assign inventory to a location.
+Inventory deducts automatically.
+Location expense increases automatically.
+Location Expenses tab shows real spending.
+Cleaner sees only their assigned location supplies.
+Cleaner can report existing supplies as low/out.
+Cleaner can request new supplies.
+Admin can fulfill requests from inventory.
+Mobile UI works without sideways scrolling.
+Existing cleaner photo/request concept still works.
+
+Do not break or affect anything else in ClockField.
