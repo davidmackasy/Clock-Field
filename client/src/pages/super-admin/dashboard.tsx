@@ -17,12 +17,13 @@ import { useToast } from "@/hooks/use-toast";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell
 } from "recharts";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Building2, Users, DollarSign, TrendingUp, AlertTriangle, Clock,
   Eye, Ban, CheckCircle, ShieldAlert, MessageSquare, ChevronRight,
   ArrowLeft, Send, Globe, RefreshCw, ShieldCheck, ShieldOff, CalendarClock,
   X, Timer, Activity, UserCheck, Bell, Inbox, UserPlus, BarChart2,
-  FlaskConical, Plus, Mail, StopCircle, CalendarPlus
+  FlaskConical, Plus, Mail, StopCircle, CalendarPlus, KeyRound, Copy, Check
 } from "lucide-react";
 
 type Business = {
@@ -191,6 +192,19 @@ export default function SuperAdminDashboard() {
   const [extendDays, setExtendDays] = useState("7");
   const [endTrialConfirmOpen, setEndTrialConfirmOpen] = useState(false);
 
+  // Temp password flow
+  const [trialGenPassword, setTrialGenPassword] = useState(true);
+  const [revealDialogOpen, setRevealDialogOpen] = useState(false);
+  const [revealedPassword, setRevealedPassword] = useState<{ tempPassword: string; adminEmail: string; adminName: string; expiresAt?: string } | null>(null);
+  const [copiedField, setCopiedField] = useState<"password" | "email" | null>(null);
+
+  const copyToClipboard = (text: string, field: "password" | "email") => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 2000);
+    });
+  };
+
   if (!isSuperAdmin) {
     return (
       <div className="flex items-center justify-center h-full min-h-[60vh]">
@@ -275,15 +289,20 @@ export default function SuperAdminDashboard() {
       }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/super-admin/businesses"] });
       queryClient.invalidateQueries({ queryKey: ["/api/super-admin/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/super-admin/recent-businesses"] });
-      toast({ title: "Trial company created", description: "Password setup email has been sent to the admin." });
       setTrialModalOpen(false);
       setTrialCompanyName(""); setTrialFirstName(""); setTrialLastName("");
       setTrialEmail(""); setTrialPhone(""); setTrialDays("7");
-      setTrialPlan("starter"); setTrialNotes("");
+      setTrialPlan("starter"); setTrialNotes(""); setTrialGenPassword(true);
+      if (data.tempPassword) {
+        setRevealedPassword({ tempPassword: data.tempPassword, adminEmail: data.adminEmail, adminName: data.adminName });
+        setRevealDialogOpen(true);
+      } else {
+        toast({ title: "Trial company created", description: "Setup email has been sent to the admin." });
+      }
     },
     onError: (e: any) => toast({ title: "Failed to create trial company", description: e.message, variant: "destructive" }),
   });
@@ -325,8 +344,30 @@ export default function SuperAdminDashboard() {
       if (!res.ok) { const err = await res.json(); throw new Error(err.message); }
       return res.json();
     },
-    onSuccess: () => toast({ title: "Setup email resent" }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/businesses", selectedBusiness?.id] });
+      if (data.tempPassword) {
+        setRevealedPassword({ tempPassword: data.tempPassword, adminEmail: data.adminEmail, adminName: data.adminName || "" });
+        setRevealDialogOpen(true);
+      } else {
+        toast({ title: "Setup email resent" });
+      }
+    },
     onError: (e: any) => toast({ title: "Failed to resend", description: e.message, variant: "destructive" }),
+  });
+
+  const generateTempPasswordMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/super-admin/businesses/${id}/generate-temporary-password`, {});
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message); }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/businesses", selectedBusiness?.id] });
+      setRevealedPassword({ tempPassword: data.tempPassword, adminEmail: data.adminEmail, adminName: data.adminName, expiresAt: data.expiresAt });
+      setRevealDialogOpen(true);
+    },
+    onError: (e: any) => toast({ title: "Failed to generate temporary password", description: e.message, variant: "destructive" }),
   });
 
   const filteredBusinesses = businesses.filter(b =>
@@ -987,17 +1028,80 @@ export default function SuperAdminDashboard() {
                       <StopCircle className="w-3.5 h-3.5 mr-1.5" />
                       End Trial Now
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-xs"
-                      onClick={() => resendInvite.mutate(detailData.id)}
-                      disabled={resendInvite.isPending}
-                      data-testid="button-resend-invite"
-                    >
-                      <Mail className="w-3.5 h-3.5 mr-1.5" />
-                      {resendInvite.isPending ? "Sending..." : "Resend Setup Email"}
-                    </Button>
+                  </div>
+
+                  {/* Login Setup Section */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <KeyRound className="w-3.5 h-3.5 text-violet-600" />
+                      <p className="text-xs font-semibold text-violet-700">Login Setup</p>
+                    </div>
+                    {(() => {
+                      const adminUser = detailData.admins?.[0];
+                      const tempRequired = adminUser?.temporaryPasswordRequired;
+                      const mustChange = adminUser?.mustChangePassword;
+                      const expiresAt = adminUser?.temporaryPasswordExpiresAt;
+                      const lastSent = adminUser?.temporaryPasswordLastSentAt;
+                      const isExpired = expiresAt && new Date() > new Date(expiresAt);
+                      const isCompleted = !mustChange && !tempRequired;
+                      return (
+                        <>
+                          {isCompleted ? (
+                            <div className="rounded-md border border-green-200 bg-green-50 p-2.5 flex items-center gap-2 text-xs text-green-700">
+                              <CheckCircle className="w-3.5 h-3.5 shrink-0 text-green-600" />
+                              <span>Admin has set their own password — account setup complete.</span>
+                            </div>
+                          ) : tempRequired && isExpired ? (
+                            <div className="rounded-md border border-orange-200 bg-orange-50 p-2.5 space-y-1 text-xs text-orange-700">
+                              <div className="flex items-center gap-2">
+                                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                                <span className="font-medium">Temporary password expired</span>
+                              </div>
+                              {lastSent && <p className="text-orange-600">Last sent: {new Date(lastSent).toLocaleString()}</p>}
+                              <p className="text-orange-600">Generate a new one to restore access.</p>
+                            </div>
+                          ) : tempRequired ? (
+                            <div className="rounded-md border border-violet-200 bg-violet-50 p-2.5 space-y-1 text-xs text-violet-700" data-testid="badge-temp-password-active">
+                              <div className="flex items-center gap-2">
+                                <KeyRound className="w-3.5 h-3.5 shrink-0" />
+                                <span className="font-medium">Temporary password active — awaiting first login</span>
+                              </div>
+                              {expiresAt && <p>Expires: <span className="font-medium">{new Date(expiresAt).toLocaleString()}</span></p>}
+                              {lastSent && <p>Last sent: <span className="font-medium">{new Date(lastSent).toLocaleString()}</span></p>}
+                            </div>
+                          ) : (
+                            <div className="rounded-md border border-gray-200 bg-gray-50 p-2.5 flex items-center gap-2 text-xs text-muted-foreground">
+                              <KeyRound className="w-3.5 h-3.5 shrink-0" />
+                              <span>No temporary password set. Generate one to allow easy first login.</span>
+                            </div>
+                          )}
+                          <div className="flex flex-wrap gap-2 pt-0.5">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs text-violet-700 border-violet-300 hover:bg-violet-50"
+                              onClick={() => generateTempPasswordMutation.mutate(detailData.id)}
+                              disabled={generateTempPasswordMutation.isPending}
+                              data-testid="button-generate-temp-password"
+                            >
+                              <KeyRound className="w-3.5 h-3.5 mr-1.5" />
+                              {generateTempPasswordMutation.isPending ? "Generating..." : (tempRequired ? "Regenerate Password" : "Generate Temp Password")}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={() => resendInvite.mutate(detailData.id)}
+                              disabled={resendInvite.isPending}
+                              data-testid="button-resend-invite"
+                            >
+                              <Mail className="w-3.5 h-3.5 mr-1.5" />
+                              {resendInvite.isPending ? "Sending..." : "Resend Setup Email"}
+                            </Button>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
 
                   <Separator />
@@ -1329,10 +1433,24 @@ export default function SuperAdminDashboard() {
                     </Select>
                   </div>
                 </div>
+                <div className="flex items-start gap-2.5 p-2.5 rounded-lg border border-violet-200 bg-violet-50">
+                  <Checkbox
+                    id="trial-gen-password"
+                    checked={trialGenPassword}
+                    onCheckedChange={(v) => setTrialGenPassword(!!v)}
+                    data-testid="checkbox-gen-temp-password"
+                    className="mt-0.5"
+                  />
+                  <label htmlFor="trial-gen-password" className="text-xs text-violet-800 cursor-pointer leading-relaxed">
+                    <span className="font-semibold">Generate temporary password (CF-XXXX-XXXX)</span>
+                    <br />
+                    <span className="text-violet-600">A readable one-time password will be generated and emailed to the admin. They will be required to create their own password on first login.</span>
+                  </label>
+                </div>
                 <div className="p-2.5 bg-teal-50 border border-teal-200 rounded-lg text-xs text-teal-700">
                   <p className="font-medium mb-0.5">What happens after creation:</p>
                   <ul className="space-y-0.5 text-teal-600">
-                    <li>• The admin receives a password setup email</li>
+                    <li>• The admin receives a login credentials email</li>
                     <li>• Trial access is granted via temporary access override</li>
                     <li>• After the trial ends, the account locks until they subscribe</li>
                   </ul>
@@ -1365,6 +1483,7 @@ export default function SuperAdminDashboard() {
                 trialDays: parseInt(trialDays, 10) || 7,
                 planCode: trialPlan,
                 notes: trialNotes,
+                generatePassword: trialGenPassword,
               })}
               disabled={createTrialCompany.isPending || !trialCompanyName.trim() || !trialFirstName.trim() || !trialLastName.trim() || !trialEmail.trim()}
               data-testid="button-confirm-create-trial"
@@ -1441,6 +1560,90 @@ export default function SuperAdminDashboard() {
             >
               <StopCircle className="w-3.5 h-3.5 mr-1.5" />
               {endTrial.isPending ? "Ending..." : "End Trial Now"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Temp Password Reveal Dialog */}
+      <Dialog open={revealDialogOpen} onOpenChange={(open) => { if (!open) { setRevealDialogOpen(false); setRevealedPassword(null); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-violet-600" />
+              Temporary Password Generated
+            </DialogTitle>
+          </DialogHeader>
+          {revealedPassword && (
+            <div className="space-y-4 py-1">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-start gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>This password is shown <strong>only once</strong>. Save it or share it with the admin directly. An email has also been sent automatically.</span>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Admin</p>
+                  <p className="text-sm font-medium">{revealedPassword.adminName}</p>
+                  <p className="text-xs text-muted-foreground">{revealedPassword.adminEmail}</p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1.5">Temporary Password</p>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-violet-50 border border-violet-200 rounded-md px-3 py-2">
+                      <p className="font-mono text-lg font-bold tracking-widest text-violet-800 text-center" data-testid="text-temp-password">
+                        {revealedPassword.tempPassword}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-10 px-3"
+                      onClick={() => copyToClipboard(revealedPassword.tempPassword, "password")}
+                      data-testid="button-copy-temp-password"
+                    >
+                      {copiedField === "password" ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1.5">Login Email</p>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-gray-50 border rounded-md px-3 py-2">
+                      <p className="text-sm font-mono text-gray-700 truncate" data-testid="text-reveal-email">
+                        {revealedPassword.adminEmail}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-10 px-3"
+                      onClick={() => copyToClipboard(revealedPassword.adminEmail, "email")}
+                      data-testid="button-copy-email"
+                    >
+                      {copiedField === "email" ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                </div>
+
+                {revealedPassword.expiresAt && (
+                  <p className="text-xs text-muted-foreground">
+                    Expires: <span className="font-medium">{new Date(revealedPassword.expiresAt).toLocaleString()}</span>
+                  </p>
+                )}
+              </div>
+
+              <div className="p-2.5 bg-green-50 border border-green-200 rounded-lg text-xs text-green-700 flex items-center gap-2">
+                <Mail className="w-3.5 h-3.5 shrink-0" />
+                Setup email with these credentials has been sent to {revealedPassword.adminEmail}.
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => { setRevealDialogOpen(false); setRevealedPassword(null); }} data-testid="button-close-reveal-dialog">
+              Done
             </Button>
           </DialogFooter>
         </DialogContent>

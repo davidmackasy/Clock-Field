@@ -107,6 +107,12 @@ export const users = pgTable("users", {
   inviteSentAt: text("invite_sent_at"),
   inviteAcceptedAt: text("invite_accepted_at"),
   inviteStatus: text("invite_status").default("not_sent"),
+  // Temporary password (super-admin-created accounts)
+  temporaryPasswordRequired: boolean("temporary_password_required").notNull().default(false),
+  temporaryPasswordCreatedAt: text("temporary_password_created_at"),
+  temporaryPasswordExpiresAt: text("temporary_password_expires_at"),
+  temporaryPasswordLastSentAt: text("temporary_password_last_sent_at"),
+  createdBySuperAdmin: boolean("created_by_super_admin").notNull().default(false),
 });
 
 export const clients = pgTable("clients", {

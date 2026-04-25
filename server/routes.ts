@@ -3625,9 +3625,16 @@ Welcome again, and thank you for choosing ClockField.
 
   // ── Trial Company Creation ──────────────────────────────────────────────────
 
+  /** Generate a readable temporary password in CF-XXXX-XXXX format */
+  function generateTempPassword(): string {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no ambiguous I/O/0/1
+    const segment = (len: number) => Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+    return `CF-${segment(4)}-${segment(4)}`;
+  }
+
   app.post("/api/super-admin/trial-companies/create", requireSuperAdmin, async (req, res) => {
     try {
-      const { companyName, adminFirstName, adminLastName, adminEmail, phoneNumber, trialDays, planCode, notes } = req.body;
+      const { companyName, adminFirstName, adminLastName, adminEmail, phoneNumber, trialDays, planCode, notes, generatePassword } = req.body;
       if (!companyName?.trim()) return res.status(400).json({ message: "Company name is required" });
       if (!adminFirstName?.trim()) return res.status(400).json({ message: "Admin first name is required" });
       if (!adminLastName?.trim()) return res.status(400).json({ message: "Admin last name is required" });
@@ -3649,12 +3656,10 @@ Welcome again, and thank you for choosing ClockField.
         planCode: plan,
         billingCycle: "monthly",
         createdAt: now.toISOString(),
-        // Trial access via manual access override
         manualAccessEnabled: true,
         manualAccessExpiresAt: trialEndDate.toISOString(),
         manualAccessGrantedBy: "super_admin",
         manualAccessReason: notes?.trim() || "Trial access",
-        // Trial-specific fields
         isTrialAccess: true,
         trialStartDate: now.toISOString(),
         trialEndDate: trialEndDate.toISOString(),
@@ -3663,17 +3668,31 @@ Welcome again, and thank you for choosing ClockField.
         trialStatus: "active",
       } as any);
 
-      const tempPasswordHash = await hashPassword(randomBytes(32).toString("hex"));
+      // Generate temp password if requested (default: true)
+      const useTempPassword = generatePassword !== false;
+      const plainTempPassword = useTempPassword ? generateTempPassword() : null;
+      const passwordToHash = plainTempPassword ?? randomBytes(32).toString("hex");
+      const hashedPassword = await hashPassword(passwordToHash);
+      const tempExpiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
       const adminUser = await storage.createUser({
         companyId: company.id,
         email,
-        password: tempPasswordHash,
+        password: hashedPassword,
         role: "admin",
         firstName: adminFirstName.trim(),
         lastName: adminLastName.trim(),
         loginEnabled: true,
         accountStatus: "active",
-      });
+        mustChangePassword: useTempPassword,
+        ...(useTempPassword ? {
+          temporaryPasswordRequired: true,
+          temporaryPasswordCreatedAt: now.toISOString(),
+          temporaryPasswordExpiresAt: tempExpiresAt.toISOString(),
+          temporaryPasswordLastSentAt: now.toISOString(),
+          createdBySuperAdmin: true,
+        } : {}),
+      } as any);
 
       // Create welcome platform message
       try {
@@ -3688,33 +3707,82 @@ Welcome again, and thank you for choosing ClockField.
         });
       } catch (_) {}
 
-      // Send password setup email
-      const rawToken = randomBytes(32).toString("hex");
-      const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-      const tokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days to set up
-      await storage.createPasswordResetToken({
-        userId: adminUser.id,
-        email,
-        tokenHash,
-        expiresAt: tokenExpiry,
-      });
+      // Send setup email with temp password if generated
       const baseUrl = process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
-      const setupUrl = `${baseUrl}/reset-password?token=${rawToken}`;
-
-      try {
-        await sendTrialAccountEmail({
-          to: email,
-          firstName: adminFirstName.trim(),
-          companyName: companyName.trim(),
-          trialEndDate: trialEndDate.toISOString(),
-          setupUrl,
-          appUrl: baseUrl,
-        });
-      } catch (mailErr: any) {
-        console.error("[trial-create] email error:", mailErr.message);
+      if (useTempPassword && plainTempPassword) {
+        try {
+          await sendTrialAccountEmail({
+            to: email,
+            firstName: adminFirstName.trim(),
+            companyName: companyName.trim(),
+            trialEndDate: trialEndDate.toISOString(),
+            setupUrl: baseUrl,
+            appUrl: baseUrl,
+            tempPassword: plainTempPassword,
+          });
+        } catch (mailErr: any) {
+          console.error("[trial-create] email error:", mailErr.message);
+        }
       }
 
-      res.json({ success: true, companyId: company.id, adminUserId: adminUser.id, trialEndDate: trialEndDate.toISOString() });
+      res.json({
+        success: true,
+        companyId: company.id,
+        adminUserId: adminUser.id,
+        trialEndDate: trialEndDate.toISOString(),
+        tempPassword: plainTempPassword, // returned once for display; null if not generated
+        adminEmail: email,
+        adminName: `${adminFirstName.trim()} ${adminLastName.trim()}`,
+      });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/super-admin/businesses/:id/generate-temporary-password", requireSuperAdmin, async (req, res) => {
+    try {
+      const company = await storage.getCompany(req.params.id);
+      if (!company) return res.status(404).json({ message: "Not found" });
+      const admins = await storage.getAdminsByCompany(req.params.id);
+      const admin = admins[0];
+      if (!admin || !admin.email) return res.status(400).json({ message: "No admin found for this company" });
+
+      const plainTempPassword = generateTempPassword();
+      const hashed = await hashPassword(plainTempPassword);
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+      await storage.updateUser(admin.id, {
+        password: hashed,
+        mustChangePassword: true,
+        temporaryPasswordRequired: true,
+        temporaryPasswordCreatedAt: now.toISOString(),
+        temporaryPasswordExpiresAt: expiresAt.toISOString(),
+        temporaryPasswordLastSentAt: now.toISOString(),
+        createdBySuperAdmin: true,
+      } as any);
+
+      // Send email with the temp password
+      const baseUrl = process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
+      try {
+        await sendTrialAccountEmail({
+          to: admin.email,
+          firstName: admin.firstName,
+          companyName: company.name,
+          trialEndDate: (company as any).trialEndDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          setupUrl: baseUrl,
+          appUrl: baseUrl,
+          tempPassword: plainTempPassword,
+        });
+      } catch (mailErr: any) {
+        console.error("[gen-temp-pass] email error:", mailErr.message);
+      }
+
+      res.json({
+        success: true,
+        tempPassword: plainTempPassword, // returned ONCE
+        adminEmail: admin.email,
+        adminName: `${admin.firstName} ${admin.lastName}`,
+        expiresAt: expiresAt.toISOString(),
+      });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
@@ -3724,8 +3792,8 @@ Welcome again, and thank you for choosing ClockField.
       if (!company) return res.status(404).json({ message: "Not found" });
       const { days } = req.body;
       const extraDays = Math.max(1, Math.min(365, Number(days) || 7));
-      const base = company.trialEndDate
-        ? new Date(Math.max(Date.now(), new Date(company.trialEndDate).getTime()))
+      const base = (company as any).trialEndDate
+        ? new Date(Math.max(Date.now(), new Date((company as any).trialEndDate).getTime()))
         : new Date();
       const newEnd = new Date(base.getTime() + extraDays * 24 * 60 * 60 * 1000);
       await storage.updateCompany(req.params.id, {
@@ -3760,29 +3828,32 @@ Welcome again, and thank you for choosing ClockField.
       const admin = admins[0];
       if (!admin || !admin.email) return res.status(400).json({ message: "No admin found for this company" });
 
-      const rawToken = randomBytes(32).toString("hex");
-      const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-      const tokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      await storage.invalidatePasswordResetTokensForUser(admin.id);
-      await storage.createPasswordResetToken({
-        userId: admin.id,
-        email: admin.email,
-        tokenHash,
-        expiresAt: tokenExpiry,
-      });
-      const baseUrl = process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
-      const setupUrl = `${baseUrl}/reset-password?token=${rawToken}`;
+      // Generate a fresh temp password and send setup email
+      const plainTempPassword = generateTempPassword();
+      const hashed = await hashPassword(plainTempPassword);
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      await storage.updateUser(admin.id, {
+        password: hashed,
+        mustChangePassword: true,
+        temporaryPasswordRequired: true,
+        temporaryPasswordCreatedAt: now.toISOString(),
+        temporaryPasswordExpiresAt: expiresAt.toISOString(),
+        temporaryPasswordLastSentAt: now.toISOString(),
+      } as any);
 
+      const baseUrl = process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
       await sendTrialAccountEmail({
         to: admin.email,
         firstName: admin.firstName,
         companyName: company.name,
-        trialEndDate: company.trialEndDate || new Date().toISOString(),
-        setupUrl,
+        trialEndDate: (company as any).trialEndDate || expiresAt.toISOString(),
+        setupUrl: baseUrl,
         appUrl: baseUrl,
+        tempPassword: plainTempPassword,
       });
 
-      res.json({ success: true });
+      res.json({ success: true, tempPassword: plainTempPassword, adminEmail: admin.email });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

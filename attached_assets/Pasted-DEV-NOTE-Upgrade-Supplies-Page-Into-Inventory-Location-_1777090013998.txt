@@ -1,0 +1,917 @@
+DEV NOTE: Upgrade Supplies Page Into Inventory + Location Expense Management
+
+Project: ClockField
+Page: Admin Panel > Supplies
+Goal: Upgrade the existing Supplies page into a full supply inventory and expense tracking system for service businesses.
+
+Important instruction:
+Do not break, remove, rename, or change any existing working supply request flow.
+Do not affect cleaners, admin login, employee pages, schedules, attendance, payroll, clients, work logs, publications, settings, subscription, messages, or super admin.
+Only work inside the Supplies module and related supply data models/API routes needed for this feature.
+Do not delete existing supply records.
+Do not change the current cleaner request concept.
+Do not change how cleaners take pictures when they need supplies.
+Only extend the system safely.
+
+Main concept
+
+The Supplies page should no longer only show items that locations need.
+
+It should now help an admin answer these questions:
+
+What supplies does the company currently have in inventory?
+How many units were purchased?
+How much did each unit cost?
+How much total inventory value does the company have?
+Which location received which supplies?
+How much money has each location used in supplies?
+Which supplies are running low?
+Which supplies are out of stock?
+Which cleaner requested a restock?
+What was fulfilled from inventory?
+What still needs to be purchased?
+
+Example:
+
+The company buys:
+
+Orange Solv
+Quantity: 7
+Unit price: $29
+Total inventory value: $203
+
+Then the admin sends:
+
+2 units to Anchor Construction
+1 unit to OakBank Arena
+2 units to Karrich Industries Inc
+
+Inventory remaining:
+
+2 units
+
+Expense by location:
+
+Anchor Construction: $58
+OakBank Arena: $29
+Karrich Industries Inc: $58
+
+The inventory should decrease when supplies are assigned to a location.
+
+The location expense should increase based on the product unit price.
+
+This must work for chemicals, rugs, mops, dispensers, garbage bags, paper products, equipment, or any custom supply category.
+
+Step 1 scope
+
+Build the foundation first.
+
+Do not try to build every advanced report in Step 1.
+
+For Step 1, implement:
+
+Inventory tracking
+Unit pricing
+Location supply assignment
+Location expense calculation
+Restock request connection
+Clean admin UI tabs inside the existing Supplies page
+Safe database changes
+No breaking changes to existing supply cards
+
+Recommended Supplies page structure
+
+Keep the current page design style because it already looks good.
+
+Upgrade it into tabs:
+
+Tab 1: Overview
+Tab 2: Inventory
+Tab 3: Location Expenses
+Tab 4: Requests
+Tab 5: Purchase History
+
+Default tab should be Overview.
+
+Do not remove the existing supply card layout.
+Move the current supply list into the Requests or Location Supplies section depending on how the current data is stored.
+
+Overview tab
+
+Show summary cards at the top:
+
+Total Inventory Value
+Example: $1,245.00
+
+Total Units in Stock
+Example: 84
+
+Low Stock Items
+Example: 6
+
+Out of Stock Items
+Example: 2
+
+This Month Supply Spend
+Example: $395.00
+
+Top Spending Location
+Example: Anchor Construction, $148.00
+
+Below the cards, show two sections:
+
+Recent Inventory Activity
+
+Examples:
+Orange Solv assigned to Anchor Construction, 2 units, $58
+Rugs added to inventory, 10 units, $120
+Neutral cleaner assigned to OakBank Arena, 1 unit, $24
+
+Location Spend Snapshot
+
+Show each location with:
+Location name
+Total supply spend this month
+Total supply spend all time
+Number of supplies assigned
+Last supply activity date
+
+Inventory tab
+
+This tab should show all company-owned supplies.
+
+Each inventory item should have:
+
+Product image
+Product name
+Category
+Current stock quantity
+Unit price
+Total value
+Low stock threshold
+Status
+Locations using this item
+Last restocked date
+Actions
+
+Example card:
+
+Orange Solv
+Category: Chemicals
+Current stock: 2
+Unit price: $29.00
+Total value: $58.00
+Low stock alert: 2
+Status: Running Low
+Assigned locations: Anchor Construction, OakBank Arena
+Actions: View, Add Stock, Assign to Location, Edit
+
+Inventory status rules:
+
+If current stock is 0:
+Status = Out of Stock
+
+If current stock is less than or equal to low stock threshold:
+Status = Running Low
+
+If current stock is above low stock threshold:
+Status = In Stock
+
+If cleaner requested it and not fulfilled yet:
+Status can also show Needs Attention
+
+Add Inventory button
+
+When admin clicks Add Inventory, open a modal.
+
+Fields:
+
+Product name
+Category
+Optional product image
+Quantity purchased
+Unit price
+Supplier name
+Purchase date
+Low stock threshold
+Notes
+
+Auto calculate:
+
+Total purchase cost = quantity purchased × unit price
+
+Example:
+
+Quantity: 7
+Unit price: 29
+Total cost: 203
+
+Save this into inventory and purchase history.
+
+Do not require supplier name.
+Do not require image.
+Product name, quantity, unit price, and category should be required.
+
+Add Stock button
+
+Use this when the admin buys more of an existing item.
+
+Fields:
+
+Quantity added
+Unit price
+Supplier name
+Purchase date
+Notes
+
+Important:
+If unit price changes, do not break older expense records.
+For Step 1, use the latest unit price for future assignments only.
+Existing assigned expenses should keep the old price that was used at the time of assignment.
+
+Example:
+
+Old Orange Solv unit price: $29
+New Orange Solv unit price: $32
+
+Past location expenses stay at $29 per unit.
+New assignments use $32 per unit.
+
+Assign to Location button
+
+This is the most important action.
+
+When admin clicks Assign to Location, open a modal.
+
+Fields:
+
+Select inventory item
+Select location/client
+Quantity to assign
+Unit price shown automatically
+Total expense shown automatically
+Assigned date
+Reason
+Optional note
+Optional linked cleaner request
+
+Auto calculate:
+
+Total location expense = quantity assigned × unit price
+
+Example:
+
+Assign 2 Orange Solv to Anchor Construction
+Unit price: $29
+Expense added to Anchor Construction: $58
+Inventory stock decreases by 2
+
+Validation:
+
+Admin cannot assign more quantity than available inventory.
+If stock is 2, admin cannot assign 3.
+Show a clean error message:
+Only 2 units are available in inventory.
+
+After successful assignment:
+
+Subtract assigned quantity from inventory.
+Create a location expense record.
+Create an inventory movement record.
+Update location supply history.
+If linked to a cleaner request, mark request as fulfilled or partially fulfilled.
+
+Location Expenses tab
+
+This tab should help the admin see which location spends the most money on supplies.
+
+Show location cards or a table.
+
+Each location should show:
+
+Location name
+Client name if different
+This month supply expense
+All time supply expense
+Number of supply assignments
+Most used category
+Last assigned supply
+Action: View Breakdown
+
+Example:
+
+Anchor Construction
+This month: $116.00
+All time: $425.00
+Supplies assigned: 12
+Most used category: Chemicals
+Last item: Orange Solv
+
+View Breakdown modal or page
+
+When clicking a location, show:
+
+Total supply spend
+Spend by month
+Spend by category
+Supply assignment history
+
+Assignment history columns:
+
+Date
+Product
+Category
+Quantity
+Unit price
+Total expense
+Assigned by admin
+Request linked or manual
+Notes
+
+Example:
+
+Apr 24, 2026
+Orange Solv
+Chemicals
+2 units
+$29 each
+$58 total
+Assigned by Gift Delvin
+Linked to cleaner restock request
+
+This should make it easy for admins to understand which client/location is using the most supplies.
+
+Requests tab
+
+Keep the existing cleaner request concept.
+
+Do not change the cleaner flow.
+
+Current concept:
+Cleaner sees supplies at a location.
+Cleaner notices something is out, low, missing, damaged, or needs replacement.
+Cleaner takes a picture.
+Cleaner submits a request.
+Admin sees it on the Supplies page.
+
+Upgrade admin handling:
+
+Each request should show:
+
+Requested item name
+Location
+Category
+Cleaner name
+Photo
+Status
+Date requested
+Urgency
+Admin action buttons
+
+Actions:
+
+Fulfill from Inventory
+Mark as Ordered
+Mark as Replaced
+Mark as Not Needed
+Add Note
+
+Fulfill from Inventory
+
+When admin clicks Fulfill from Inventory:
+
+Open assignment modal.
+Pre-fill:
+Location
+Item name if matched
+Cleaner request reference
+
+Admin selects the exact inventory item.
+Admin enters quantity.
+System calculates expense.
+System subtracts from inventory.
+System adds expense to that location.
+System marks request as fulfilled.
+
+Partial fulfillment support:
+
+If cleaner requests 3 units but inventory only has 1:
+Allow admin to assign 1.
+Request status becomes Partially Fulfilled.
+Remaining quantity stays open.
+
+Purchase History tab
+
+Show every time admin adds or restocks inventory.
+
+Columns:
+
+Date
+Item
+Category
+Quantity purchased
+Unit price
+Total cost
+Supplier
+Added by
+Notes
+
+This is for business expense records.
+
+This does not replace location expenses.
+Purchase history means company bought supplies.
+Location expense means supplies were moved from company inventory to a location.
+
+Important difference:
+
+Company purchase:
+Orange Solv, 7 units, $203 total
+
+Location usage:
+Anchor Construction received 2 units, $58 expense
+
+This separation is important.
+
+Database changes
+
+Add or extend models safely.
+
+Do not delete old supply tables.
+Do not rename old fields unless migration is fully backward compatible.
+Use additive migrations only.
+
+Recommended tables:
+
+inventory_items
+
+Fields:
+
+id
+company_id
+name
+category
+image_url
+current_quantity
+unit_price
+low_stock_threshold
+status
+supplier_name optional
+notes optional
+created_by_admin_id
+created_at
+updated_at
+
+inventory_purchases
+
+Fields:
+
+id
+company_id
+inventory_item_id
+quantity_added
+unit_price
+total_cost
+supplier_name optional
+purchase_date
+notes optional
+created_by_admin_id
+created_at
+
+inventory_movements
+
+Fields:
+
+id
+company_id
+inventory_item_id
+movement_type
+
+Allowed movement types:
+purchase
+assigned_to_location
+manual_adjustment
+returned_to_inventory
+damaged
+missing
+
+quantity
+unit_price_at_time
+total_value
+location_id optional
+client_id optional
+supply_request_id optional
+notes optional
+created_by_admin_id
+created_at
+
+location_supply_expenses
+
+Fields:
+
+id
+company_id
+location_id
+client_id optional
+inventory_item_id
+supply_request_id optional
+quantity
+unit_price_at_time
+total_expense
+category
+assigned_date
+assigned_by_admin_id
+notes optional
+created_at
+
+supply_requests
+
+If this already exists, only add missing fields.
+
+Add safely:
+
+inventory_item_id optional
+requested_quantity optional
+fulfilled_quantity default 0
+linked_expense_id optional
+status
+
+Status options:
+
+pending
+needs_attention
+partially_fulfilled
+fulfilled
+ordered
+not_needed
+out_of_stock
+
+Do not break old statuses.
+Map old statuses to new statuses only if needed.
+
+Core logic
+
+Add inventory
+
+Input:
+Product name
+Category
+Quantity
+Unit price
+
+Process:
+Create inventory item.
+Set current quantity.
+Create inventory purchase record.
+Create inventory movement with type purchase.
+
+Formula:
+total_cost = quantity × unit_price
+
+Assign inventory to location
+
+Input:
+inventory_item_id
+location_id
+quantity
+unit_price from inventory item
+optional supply_request_id
+
+Process:
+Check inventory exists.
+Check current_quantity >= quantity.
+Calculate total_expense.
+Decrease inventory current_quantity.
+Create location_supply_expenses record.
+Create inventory_movements record with movement_type assigned_to_location.
+Update inventory item status.
+If linked supply request:
+Update fulfilled quantity.
+Update request status.
+
+Formula:
+total_expense = quantity × unit_price_at_time
+
+Important:
+Use unit_price_at_time for expense records.
+Do not make old records change when admin edits current unit price later.
+
+Restock inventory
+
+Input:
+inventory_item_id
+quantity_added
+unit_price
+supplier
+purchase date
+
+Process:
+Increase inventory current_quantity.
+Update latest unit_price if admin confirms or if Step 1 keeps it simple, update automatically.
+Create inventory purchase record.
+Create inventory movement record.
+Recalculate status.
+
+Location expense calculation
+
+For each location:
+
+This month spend:
+Sum location_supply_expenses.total_expense where assigned_date is inside current month.
+
+All time spend:
+Sum all location_supply_expenses.total_expense for that location.
+
+Category spend:
+Group by category.
+
+Item spend:
+Group by inventory_item_id.
+
+Inventory value calculation
+
+Current inventory value:
+
+For Step 1:
+current_quantity × latest unit_price
+
+Example:
+2 Orange Solv remaining × $29 = $58 inventory value
+
+Later Step 2 can support weighted average cost or FIFO.
+Do not overcomplicate Step 1.
+
+UI requirements
+
+Keep the current clean white card design.
+
+Use the same visual style already shown in the screenshot:
+
+Soft cards
+Rounded corners
+Light shadows or borders
+Small badges
+Blue primary buttons
+Clean spacing
+Responsive grid
+No heavy dashboard clutter
+
+Desktop layout:
+
+Overview cards in a row
+Inventory list in 2-column or table/card hybrid
+Location expense table should be easy to scan
+
+Mobile layout:
+
+Everything must stack properly.
+Tabs should scroll horizontally if needed.
+Cards should be full width.
+Action buttons should not overflow.
+Modals should fit small screens.
+No hidden submit buttons at the bottom.
+No broken layout on iPhone 12 Pro size or smaller.
+
+Filters
+
+Add filters at the top:
+
+Location
+Category
+Status
+Date range
+Search
+
+Search should support:
+
+Product name
+Location name
+Category
+Supplier
+Cleaner name if request-related
+
+Status badges
+
+Use clear statuses:
+
+In Stock
+Running Low
+Out of Stock
+Needs Attention
+Assigned
+Pending Request
+Partially Fulfilled
+Fulfilled
+Ordered
+Missing
+Damaged
+
+Admin actions
+
+Inventory item actions:
+
+View details
+Edit item
+Add stock
+Assign to location
+Mark damaged
+Mark missing
+
+Request actions:
+
+View request
+Fulfill from inventory
+Mark ordered
+Mark not needed
+Add admin note
+
+Location actions:
+
+View supply breakdown
+Export expense history later
+View assigned supplies
+
+Do not add export in Step 1 unless it is very easy and does not affect anything else.
+
+Backend API requirements
+
+Create safe API endpoints:
+
+GET /api/supplies/overview
+GET /api/supplies/inventory
+POST /api/supplies/inventory
+PATCH /api/supplies/inventory/:id
+POST /api/supplies/inventory/:id/restock
+POST /api/supplies/inventory/:id/assign-location
+GET /api/supplies/location-expenses
+GET /api/supplies/location-expenses/:locationId
+GET /api/supplies/purchase-history
+GET /api/supplies/requests
+PATCH /api/supplies/requests/:id/status
+
+Protect all endpoints with current admin auth.
+
+Only company admins should see their company data.
+
+Use company_id filtering everywhere.
+
+Never allow one company to see another company’s supplies, inventory, locations, or expenses.
+
+Cleaner request compatibility
+
+The cleaner side should remain the same.
+
+Do not redesign cleaner submission in Step 1.
+
+Cleaner can still:
+
+Take picture
+Select or type supply needed
+Choose status like out of stock, low, needs replacement
+Submit
+
+Admin side should now use that request to fulfill from inventory.
+
+Example flow:
+
+Cleaner submits:
+Toilet bowl cleaner is out at Karrich Industries Inc.
+
+Admin sees request:
+Status: Needs Attention
+
+Admin clicks Fulfill from Inventory.
+
+Admin selects:
+Toilet Bowl Cleaner
+Quantity: 1
+Unit price: $12
+
+System:
+Subtracts 1 from inventory
+Adds $12 expense to Karrich Industries Inc
+Marks request fulfilled
+
+Safety requirements
+
+Do not touch other app modules.
+Do not rewrite the Supplies page from scratch unless necessary.
+Do not delete current supply request data.
+Do not change existing cleaner photo upload logic.
+Do not change auth.
+Do not change subscription logic.
+Do not change client records except reading client/location names.
+Do not change employee records except reading cleaner name for requests.
+Do not change work log or field notes.
+Do not touch payroll, schedule, attendance, or management.
+
+Use additive database migrations only.
+
+Before changing existing schema, inspect current tables and fields first.
+
+If any current supply request system exists, extend it instead of replacing it.
+
+Testing checklist
+
+Test 1: Add new inventory item
+
+Add Orange Solv
+Quantity: 7
+Unit price: 29
+Category: Chemicals
+
+Expected:
+Inventory shows 7 in stock.
+Total value shows $203.
+Purchase history shows $203.
+Overview inventory value increases by $203.
+
+Test 2: Assign item to location
+
+Assign 2 Orange Solv to Anchor Construction.
+
+Expected:
+Inventory decreases from 7 to 5.
+Anchor Construction expense increases by $58.
+Movement history shows assigned to location.
+Overview updates correctly.
+
+Test 3: Assign more than available
+
+Try assigning 10 Orange Solv when only 5 exist.
+
+Expected:
+System blocks it.
+Show clean error message.
+No inventory changes.
+No expense record created.
+
+Test 4: Restock item
+
+Add 4 more Orange Solv at $29 each.
+
+Expected:
+Inventory increases from 5 to 9.
+Purchase history adds $116.
+Inventory value updates.
+
+Test 5: Cleaner request fulfillment
+
+Cleaner submits request for Neutral Cleaner at OakBank Arena.
+
+Admin fulfills from inventory with 1 unit at $24.
+
+Expected:
+Inventory decreases by 1.
+OakBank Arena expense increases by $24.
+Request status becomes Fulfilled.
+Cleaner request photo still opens properly.
+No white screen.
+
+Test 6: Partial fulfillment
+
+Cleaner requests 3 units.
+Inventory has 1.
+
+Expected:
+Admin can fulfill 1.
+Request status becomes Partially Fulfilled.
+Remaining quantity is still visible.
+
+Test 7: Location expense breakdown
+
+Open Anchor Construction breakdown.
+
+Expected:
+Shows all supply assignments.
+Shows total monthly spend.
+Shows all-time spend.
+Shows item names, quantity, unit price, and total expense.
+
+Test 8: Mobile UI
+
+Open Supplies page on small mobile screen.
+
+Expected:
+Tabs are usable.
+Cards stack cleanly.
+Buttons do not overflow.
+Modals are scrollable.
+Save buttons are always reachable.
+Nothing is cut off.
+
+Step 1 final deliverable
+
+At the end of Step 1, the admin should be able to:
+
+Add company inventory
+Add quantity and unit price
+See total inventory value
+Assign supplies to a client/location
+Automatically reduce inventory
+Automatically add the cost as an expense to that location
+View location supply spend
+View purchase history
+Fulfill cleaner restock requests from inventory
+Keep the existing cleaner request/photo concept working
+
+Do not break or affect anything else in ClockField. This upgrade must only improve the Supplies page and the supply-related backend logic.

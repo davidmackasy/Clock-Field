@@ -761,6 +761,7 @@ export async function sendTrialAccountEmail(opts: {
   trialEndDate: string;
   setupUrl: string;
   appUrl: string;
+  tempPassword?: string;
 }) {
   const { client, domain } = getClient();
   const from = process.env.MAIL_FROM || "Clockfield <noreply@clockfield.ca>";
@@ -768,12 +769,15 @@ export async function sendTrialAccountEmail(opts: {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
 
+  const loginInstructions = opts.tempPassword
+    ? `Login email:\n${opts.to}\n\nTemporary password:\n${opts.tempPassword}\n\nLogin here:\n${opts.appUrl}\n\nAfter you log in, you will be asked to create your own password.`
+    : `Set up your password and log in using the link below:\n${opts.setupUrl}`;
+
   const textBody = `Hi ${opts.firstName},
 
 Your ClockField trial account for ${opts.companyName} is ready.
 
-Set up your password and log in using the link below:
-${opts.setupUrl}
+${loginInstructions}
 
 Your trial runs until ${trialEnd}. After that, you'll need to choose a plan to continue using ClockField — your data will always be kept safe.
 
@@ -781,9 +785,19 @@ If you have any questions, reply to this email or contact our support team.
 
 – The ClockField Team`;
 
+  const loginHtml = opts.tempPassword
+    ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:16px 20px;margin:0 0 20px;">
+  <p style="margin:0 0 8px;font-size:12px;color:#166534;font-weight:600;text-transform:uppercase;">Your Login Credentials</p>
+  <p style="margin:0 0 4px;font-size:14px;color:#374151;"><strong>Email:</strong> ${opts.to}</p>
+  <p style="margin:0 0 12px;font-size:14px;color:#374151;"><strong>Temporary Password:</strong> <span style="font-family:monospace;background:#dcfce7;padding:2px 6px;border-radius:4px;font-size:15px;letter-spacing:1px;">${opts.tempPassword}</span></p>
+  <p style="margin:0;font-size:12px;color:#166534;">After you log in, you will be asked to create your own password.</p>
+</div>`
+    : `<p style="margin:0 0 14px;color:#374151;">Click the button below to set up your password and access your account.</p>`;
+
   const bodyHtml = `
 <p style="margin:0 0 14px;color:#374151;">Hi <strong>${opts.firstName}</strong>,</p>
 <p style="margin:0 0 14px;color:#374151;">Your ClockField trial account for <strong>${opts.companyName}</strong> has been created and is ready to use.</p>
+${loginHtml}
 <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:16px 20px;margin:0 0 20px;">
   <p style="margin:0 0 6px;font-size:12px;color:#0369a1;font-weight:600;text-transform:uppercase;">Trial Details</p>
   <p style="margin:0 0 4px;font-size:14px;color:#374151;"><strong>Company:</strong> ${opts.companyName}</p>
@@ -794,8 +808,8 @@ If you have any questions, reply to this email or contact our support team.
   const html = buildEmailHtml({
     title: `Your ClockField trial account is ready`,
     bodyHtml,
-    ctaLabel: "Set Up Your Password",
-    ctaUrl: opts.setupUrl,
+    ctaLabel: opts.tempPassword ? "Log In to ClockField" : "Set Up Your Password",
+    ctaUrl: opts.tempPassword ? opts.appUrl : opts.setupUrl,
     footerNote: `You received this because a ClockField trial account was created for ${opts.companyName}.`,
   });
 
