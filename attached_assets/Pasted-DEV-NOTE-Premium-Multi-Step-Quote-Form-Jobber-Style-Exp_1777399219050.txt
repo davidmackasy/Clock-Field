@@ -1,0 +1,270 @@
+DEV NOTE: Premium Multi-Step Quote Form (Jobber-Style Experience)
+
+Goal:
+Upgrade the Forms / Quote Requests feature to match a premium multi-step experience similar to Jobber.
+
+Do not break or affect anything currently working.
+Do not modify existing modules outside this feature.
+
+PUBLIC FORM EXPERIENCE (CRITICAL)
+
+This is the most important part.
+
+The form must feel:
+Clean
+Professional
+Trustworthy
+Simple
+Fast on mobile
+
+Layout structure:
+
+Top section:
+
+Centered company logo
+Company name (fallback if no logo)
+Clean white background
+Subtle divider
+
+Below:
+
+Step progress bar (3–4 steps)
+Active step highlighted
+Smooth transitions between steps
+
+Main card:
+
+Centered container
+Max width ~600px
+Rounded corners
+Soft shadow
+White background
+STEP FLOW (MATCH JOBBER STYLE)
+
+Step 1: Contact Information
+
+First name (optional toggle)
+Last name (optional toggle)
+Email (required)
+Phone (optional or required toggle)
+Marketing consent checkbox (toggleable by admin)
+
+Step 2: Address / Property
+
+Street address
+Unit (optional)
+City
+Province
+Postal code
+
+Step 3: Service Details
+
+Service type (dropdown)
+Property type (residential/commercial)
+Frequency (one-time, weekly, etc.)
+Square footage
+Rooms / bathrooms
+Preferred date
+Preferred time
+
+Step 4: Extras
+
+Upload photos
+Notes / special instructions
+Budget (optional)
+Submit button
+
+Admin must be able to:
+
+Remove entire steps
+Move fields between steps
+Reduce to 1-step or 2-step if needed
+INPUT DESIGN (MATCH IMAGE YOU SENT)
+
+Inputs must be:
+
+Full width or split in 2 columns (like first name / last name)
+Rounded corners
+Light grey borders
+Focus state with highlight
+Large tap areas (mobile friendly)
+
+Spacing:
+
+Consistent vertical spacing
+Clean grouping under section titles
+
+Labels:
+
+Always above input
+Placeholder inside input
+CONSENT / SMS / EMAIL SECTION
+
+Add optional toggles for:
+
+Checkbox:
+"I’d like to receive marketing emails"
+
+SMS consent block:
+
+Small text under phone input
+Auto-generated but editable
+Checkbox for SMS marketing
+
+Admin must be able to:
+
+Enable/disable this section
+Edit text
+PROGRESS BAR
+
+Top progress indicator:
+
+3–4 segments
+Smooth animation when switching steps
+Current step highlighted
+NAVIGATION
+
+Bottom of form:
+
+Back button (except first step)
+Next button
+Final step: Submit button
+
+Behavior:
+
+Validate before moving forward
+Smooth transitions
+No page reload
+SUBMISSION SUCCESS SCREEN
+
+After submit:
+Show clean success state:
+
+Checkmark icon
+"Request submitted successfully"
+Short message
+Optional:
+"We’ll contact you shortly"
+Button:
+"Submit another request"
+BRANDING
+
+Top:
+
+Company logo (uploaded by admin)
+
+Bottom footer:
+Small text:
+"Powered by Clockfield"
+
+Must:
+
+Be subtle
+Not distract
+Always visible
+ADMIN FORM BUILDER (UPGRADE)
+
+Builder UI must also feel premium.
+
+Left panel:
+
+Form settings
+Step manager
+Field toggles
+
+Center:
+
+Field configuration
+Label editing
+Required toggle
+Step assignment
+
+Right panel:
+
+Live preview (real-time)
+FIELD CONTROL (VERY IMPORTANT)
+
+Each field must support:
+
+Show / hide
+Required toggle
+Custom label
+Placeholder text
+Step assignment
+Order control
+MOBILE EXPERIENCE (CRITICAL)
+
+Must be optimized for phone:
+
+Single column layout
+Large buttons
+Sticky bottom navigation (Next / Back)
+No zoom issues
+Fast load
+PERFORMANCE
+Lazy load steps
+Optimize images (uploads)
+No lag between steps
+Instant validation feedback
+DATA HANDLING
+
+Store:
+
+Full submission
+Step breakdown
+Timestamp
+Form ID
+Uploaded files
+Client contact info
+
+Show inside admin:
+
+Clean submission view
+Expandable sections
+Easy contact actions
+URL STRUCTURE
+
+Use clean public links:
+
+clockfield.com/form/{company}/{form-name}
+
+Must:
+
+Be short
+Be shareable
+Work on mobile instantly
+SECURITY
+Only active forms accessible
+Validate all inputs
+Secure file uploads
+No admin data exposed
+FUTURE READY (DO NOT IMPLEMENT NOW BUT SUPPORT)
+
+Structure code to allow:
+
+Auto quote generation
+AI pricing suggestions
+Lead pipeline integration
+SMS/email auto replies
+Website embed
+
+FINAL RULE
+
+Do not touch:
+
+Worklogs
+Field notes
+Reports
+Payroll
+Scheduling
+Existing admin flows
+
+Only add and isolate this feature.
+
+Test:
+
+Desktop
+iPhone
+Android
+
+Must feel like a premium SaaS experience, not a basic form.

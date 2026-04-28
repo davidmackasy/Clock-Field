@@ -61,6 +61,9 @@ import PublicWorkReport from "@/pages/public/work-report";
 import PublicReviewShare from "@/pages/public/review-share";
 import PublicReportAccess from "@/pages/public/report-access";
 import PublicFieldNote from "@/pages/public/field-note";
+import PublicQuoteForm from "@/pages/public/quote-form";
+import AdminQuoteForms from "@/pages/admin/quote-forms";
+import AdminQuoteFormBuilder from "@/pages/admin/quote-form-builder";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import LandingPage from "@/pages/landing";
@@ -113,6 +116,8 @@ function AdminLayout() {
               <Route path="/admin/reports"><Redirect to="/admin/work-log?tab=reports" /></Route>
               <Route path="/admin/field-notes"><Redirect to="/admin/work-log?tab=field-notes" /></Route>
               <Route path="/admin/requests"><Redirect to="/admin/work-log?tab=requests" /></Route>
+              <Route path="/admin/quote-forms/:id" component={AdminQuoteFormBuilder} />
+              <Route path="/admin/quote-forms" component={AdminQuoteForms} />
               <Route path="/admin/supplies" component={AdminSupplies} />
               <Route path="/admin/publications/:id" component={AdminPublicationEditor} />
               <Route path="/admin/publications" component={AdminPublications} />
@@ -252,6 +257,14 @@ function AppRouter() {
     return (
       <Switch>
         <Route path="/public/field-notes/:token" component={PublicFieldNote} />
+      </Switch>
+    );
+  }
+
+  if (location.startsWith("/form/")) {
+    return (
+      <Switch>
+        <Route path="/form/:companyId/:slug" component={PublicQuoteForm} />
       </Switch>
     );
   }

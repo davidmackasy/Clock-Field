@@ -54,6 +54,9 @@ import {
   type PublicationMedia, type InsertPublicationMedia,
   type PublicationPricing, type InsertPublicationPricing,
   type PublicationVote, type InsertPublicationVote,
+  quoteForms, quoteFormSubmissions,
+  type QuoteForm, type InsertQuoteForm,
+  type QuoteFormSubmission, type InsertQuoteFormSubmission,
   supplies, supplyUpdates,
   inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses,
   type Supply, type InsertSupply,
@@ -311,6 +314,16 @@ export interface IStorage {
 
   createPublicationVote(data: InsertPublicationVote): Promise<PublicationVote>;
   getPublicationVoteCounts(publicationId: string): Promise<{ yes: number; no: number }>;
+
+  getQuoteFormsByCompany(companyId: string): Promise<QuoteForm[]>;
+  getQuoteForm(id: string): Promise<QuoteForm | undefined>;
+  getQuoteFormBySlug(companyId: string, slug: string): Promise<QuoteForm | undefined>;
+  createQuoteForm(data: InsertQuoteForm): Promise<QuoteForm>;
+  updateQuoteForm(id: string, data: Partial<InsertQuoteForm>): Promise<QuoteForm | undefined>;
+  deleteQuoteForm(id: string): Promise<void>;
+  getQuoteFormSubmissions(formId: string): Promise<QuoteFormSubmission[]>;
+  createQuoteFormSubmission(data: InsertQuoteFormSubmission): Promise<QuoteFormSubmission>;
+  updateQuoteFormSubmission(id: string, data: Partial<InsertQuoteFormSubmission>): Promise<QuoteFormSubmission | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1535,6 +1548,49 @@ export class DatabaseStorage implements IStorage {
     const yes = rows.filter(r => r.vote === "yes").length;
     const no = rows.filter(r => r.vote === "no").length;
     return { yes, no };
+  }
+
+  async getQuoteFormsByCompany(companyId: string): Promise<QuoteForm[]> {
+    return db.select().from(quoteForms).where(eq(quoteForms.companyId, companyId)).orderBy(desc(quoteForms.createdAt));
+  }
+
+  async getQuoteForm(id: string): Promise<QuoteForm | undefined> {
+    const [row] = await db.select().from(quoteForms).where(eq(quoteForms.id, id));
+    return row;
+  }
+
+  async getQuoteFormBySlug(companyId: string, slug: string): Promise<QuoteForm | undefined> {
+    const [row] = await db.select().from(quoteForms).where(and(eq(quoteForms.companyId, companyId), eq(quoteForms.slug, slug)));
+    return row;
+  }
+
+  async createQuoteForm(data: InsertQuoteForm): Promise<QuoteForm> {
+    const [row] = await db.insert(quoteForms).values(data as any).returning();
+    return row;
+  }
+
+  async updateQuoteForm(id: string, data: Partial<InsertQuoteForm>): Promise<QuoteForm | undefined> {
+    const [row] = await db.update(quoteForms).set(data as any).where(eq(quoteForms.id, id)).returning();
+    return row;
+  }
+
+  async deleteQuoteForm(id: string): Promise<void> {
+    await db.delete(quoteFormSubmissions).where(eq(quoteFormSubmissions.formId, id));
+    await db.delete(quoteForms).where(eq(quoteForms.id, id));
+  }
+
+  async getQuoteFormSubmissions(formId: string): Promise<QuoteFormSubmission[]> {
+    return db.select().from(quoteFormSubmissions).where(eq(quoteFormSubmissions.formId, formId)).orderBy(desc(quoteFormSubmissions.submittedAt));
+  }
+
+  async createQuoteFormSubmission(data: InsertQuoteFormSubmission): Promise<QuoteFormSubmission> {
+    const [row] = await db.insert(quoteFormSubmissions).values(data as any).returning();
+    return row;
+  }
+
+  async updateQuoteFormSubmission(id: string, data: Partial<InsertQuoteFormSubmission>): Promise<QuoteFormSubmission | undefined> {
+    const [row] = await db.update(quoteFormSubmissions).set(data as any).where(eq(quoteFormSubmissions.id, id)).returning();
+    return row;
   }
 }
 

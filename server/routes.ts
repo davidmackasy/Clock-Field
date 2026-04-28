@@ -7282,6 +7282,122 @@ FINAL RULES:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ── Quote Forms (Admin) ──────────────────────────────────────────────────
+  app.get("/api/admin/quote-forms", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const forms = await storage.getQuoteFormsByCompany(user.companyId);
+      res.json(forms.map(f => ({ ...f, config: JSON.parse(f.config) })));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/admin/quote-forms", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { name, config } = req.body;
+      if (!name) return res.status(400).json({ message: "Name is required" });
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "form";
+      const { DEFAULT_FORM_CONFIG } = await import("@shared/schema");
+      const form = await storage.createQuoteForm({
+        companyId: user.companyId,
+        name,
+        slug,
+        isActive: true,
+        config: JSON.stringify(config ?? DEFAULT_FORM_CONFIG),
+        createdAt: new Date().toISOString(),
+      });
+      res.json({ ...form, config: JSON.parse(form.config) });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/admin/quote-forms/:id", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const form = await storage.getQuoteForm(req.params.id);
+      if (!form || form.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      res.json({ ...form, config: JSON.parse(form.config) });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/admin/quote-forms/:id", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const form = await storage.getQuoteForm(req.params.id);
+      if (!form || form.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const updates: any = {};
+      if (req.body.name !== undefined) {
+        updates.name = req.body.name;
+        updates.slug = req.body.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "form";
+      }
+      if (req.body.isActive !== undefined) updates.isActive = req.body.isActive;
+      if (req.body.config !== undefined) updates.config = JSON.stringify(req.body.config);
+      const updated = await storage.updateQuoteForm(req.params.id, updates);
+      res.json({ ...updated, config: JSON.parse(updated!.config) });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/admin/quote-forms/:id", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const form = await storage.getQuoteForm(req.params.id);
+      if (!form || form.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      await storage.deleteQuoteForm(req.params.id);
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/admin/quote-forms/:id/submissions", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const form = await storage.getQuoteForm(req.params.id);
+      if (!form || form.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const subs = await storage.getQuoteFormSubmissions(req.params.id);
+      res.json(subs.map(s => ({ ...s, data: JSON.parse(s.data) })));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/admin/quote-forms/:formId/submissions/:id", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const form = await storage.getQuoteForm(req.params.formId);
+      if (!form || form.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const updated = await storage.updateQuoteFormSubmission(req.params.id, { status: req.body.status });
+      res.json({ ...updated, data: JSON.parse(updated!.data) });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Quote Forms (Public) ──────────────────────────────────────────────────
+  app.get("/api/public/forms/:companyId/:slug", async (req, res) => {
+    try {
+      const form = await storage.getQuoteFormBySlug(req.params.companyId, req.params.slug);
+      if (!form || !form.isActive) return res.status(404).json({ message: "Form not found" });
+      const company = await storage.getCompany(req.params.companyId);
+      res.json({
+        id: form.id,
+        name: form.name,
+        config: JSON.parse(form.config),
+        companyName: company?.name ?? "",
+        companyLogo: company?.companyLogoUrl ?? null,
+        brandColor: company?.brandColor ?? null,
+      });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/public/forms/:companyId/:slug/submit", async (req, res) => {
+    try {
+      const form = await storage.getQuoteFormBySlug(req.params.companyId, req.params.slug);
+      if (!form || !form.isActive) return res.status(404).json({ message: "Form not found" });
+      const submission = await storage.createQuoteFormSubmission({
+        formId: form.id,
+        companyId: req.params.companyId,
+        data: JSON.stringify(req.body),
+        status: "new",
+        submittedAt: new Date().toISOString(),
+      });
+      res.json({ id: submission.id });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   return httpServer;
 }
 

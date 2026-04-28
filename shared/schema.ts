@@ -1105,3 +1105,85 @@ export type PublicationPricing = typeof publicationPricing.$inferSelect;
 export type InsertPublicationPricing = z.infer<typeof insertPublicationPricingSchema>;
 export type PublicationVote = typeof publicationVotes.$inferSelect;
 export type InsertPublicationVote = z.infer<typeof insertPublicationVoteSchema>;
+
+// ── Quote Forms ────────────────────────────────────────────────────────────
+export type FormFieldType = "text" | "email" | "tel" | "number" | "select" | "textarea" | "checkbox" | "date";
+export type FormField = {
+  id: string; label: string; type: FormFieldType;
+  required: boolean; enabled: boolean;
+  placeholder?: string; options?: string[]; column: "full" | "half";
+};
+export type FormStep = { id: string; title: string; enabled: boolean; fields: FormField[] };
+export type FormConfig = { steps: FormStep[] };
+
+export const DEFAULT_FORM_CONFIG: FormConfig = {
+  steps: [
+    {
+      id: "contact", title: "Contact Information", enabled: true,
+      fields: [
+        { id: "firstName", label: "First Name", type: "text", required: false, enabled: true, placeholder: "Jane", column: "half" },
+        { id: "lastName", label: "Last Name", type: "text", required: false, enabled: true, placeholder: "Smith", column: "half" },
+        { id: "email", label: "Email Address", type: "email", required: true, enabled: true, placeholder: "jane@example.com", column: "full" },
+        { id: "phone", label: "Phone Number", type: "tel", required: false, enabled: true, placeholder: "(555) 000-0000", column: "full" },
+        { id: "smsConsent", label: "I agree to receive SMS updates about my service request", type: "checkbox", required: false, enabled: false, placeholder: "", column: "full" },
+        { id: "marketingConsent", label: "I'd like to receive marketing emails", type: "checkbox", required: false, enabled: false, placeholder: "", column: "full" },
+      ],
+    },
+    {
+      id: "address", title: "Service Address", enabled: true,
+      fields: [
+        { id: "street", label: "Street Address", type: "text", required: false, enabled: true, placeholder: "123 Main Street", column: "full" },
+        { id: "unit", label: "Unit / Suite", type: "text", required: false, enabled: true, placeholder: "Apt 4B", column: "full" },
+        { id: "city", label: "City", type: "text", required: false, enabled: true, placeholder: "Winnipeg", column: "half" },
+        { id: "province", label: "Province / State", type: "text", required: false, enabled: true, placeholder: "MB", column: "half" },
+        { id: "postalCode", label: "Postal Code", type: "text", required: false, enabled: true, placeholder: "R3C 0A1", column: "full" },
+      ],
+    },
+    {
+      id: "service", title: "Service Details", enabled: true,
+      fields: [
+        { id: "serviceType", label: "Service Type", type: "select", required: false, enabled: true, options: ["Regular Cleaning", "Deep Cleaning", "Move-In / Move-Out", "Post-Construction", "Office Cleaning", "Other"], column: "full" },
+        { id: "propertyType", label: "Property Type", type: "select", required: false, enabled: true, options: ["Residential", "Commercial"], column: "full" },
+        { id: "frequency", label: "How Often?", type: "select", required: false, enabled: true, options: ["One-Time", "Weekly", "Bi-Weekly", "Monthly"], column: "full" },
+        { id: "sqft", label: "Square Footage", type: "number", required: false, enabled: true, placeholder: "e.g. 1500", column: "half" },
+        { id: "rooms", label: "Bedrooms", type: "number", required: false, enabled: true, placeholder: "e.g. 3", column: "half" },
+        { id: "bathrooms", label: "Bathrooms", type: "number", required: false, enabled: true, placeholder: "e.g. 2", column: "half" },
+        { id: "preferredDate", label: "Preferred Date", type: "date", required: false, enabled: true, placeholder: "", column: "half" },
+        { id: "preferredTime", label: "Preferred Time", type: "select", required: false, enabled: true, options: ["Morning (8am–12pm)", "Afternoon (12pm–5pm)", "Evening (5pm–8pm)", "Flexible"], column: "full" },
+      ],
+    },
+    {
+      id: "extras", title: "Final Details", enabled: true,
+      fields: [
+        { id: "notes", label: "Special Instructions", type: "textarea", required: false, enabled: true, placeholder: "Anything we should know about your space?", column: "full" },
+        { id: "budget", label: "Budget Range (optional)", type: "text", required: false, enabled: true, placeholder: "e.g. $150–$200", column: "full" },
+      ],
+    },
+  ],
+};
+
+export const quoteForms = pgTable("quote_forms", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  config: text("config").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const quoteFormSubmissions = pgTable("quote_form_submissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  formId: varchar("form_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  data: text("data").notNull(),
+  status: text("status").notNull().default("new"),
+  submittedAt: text("submitted_at").notNull(),
+});
+
+export const insertQuoteFormSchema = createInsertSchema(quoteForms).omit({ id: true });
+export const insertQuoteFormSubmissionSchema = createInsertSchema(quoteFormSubmissions).omit({ id: true });
+export type QuoteForm = typeof quoteForms.$inferSelect;
+export type InsertQuoteForm = z.infer<typeof insertQuoteFormSchema>;
+export type QuoteFormSubmission = typeof quoteFormSubmissions.$inferSelect;
+export type InsertQuoteFormSubmission = z.infer<typeof insertQuoteFormSubmissionSchema>;

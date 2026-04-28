@@ -20,7 +20,8 @@ import {
   LayoutDashboard, Users, Calendar, ClipboardList,
   DollarSign, Building2,
   Settings, LogOut, Clock, Users2, BookOpen,
-  CreditCard, Bell, ShieldAlert, ChevronRight, Package, Newspaper
+  CreditCard, Bell, ShieldAlert, ChevronRight, Package, Newspaper,
+  FileInput,
 } from "lucide-react";
 
 const navItems = [
@@ -32,6 +33,7 @@ const navItems = [
   { title: "Clients", url: "/admin/clients", icon: Building2 },
   { title: "Management", url: "/admin/management", icon: Users2 },
   { title: "Work Log", url: "/admin/work-log", icon: BookOpen },
+  { title: "Quote Forms", url: "/admin/quote-forms", icon: FileInput },
   { title: "Supplies", url: "/admin/supplies", icon: Package },
   { title: "Publications", url: "/admin/publications", icon: Newspaper },
   { title: "Settings", url: "/admin/settings", icon: Settings },
