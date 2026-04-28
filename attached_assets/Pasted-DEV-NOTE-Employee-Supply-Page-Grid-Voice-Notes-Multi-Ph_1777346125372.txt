@@ -1,0 +1,559 @@
+DEV NOTE: Employee Supply Page Grid, Voice Notes, Multi-Photo Supply Reports, and Admin Response Notifications
+
+Project: Clockfield
+Area: Supplies / Supply Requests / Employee App / Admin App
+Goal: Improve the supply reporting flow without changing or breaking anything else that is already working.
+
+Important instruction:
+Do not break, remove, rename, or change any existing working supply, request, location, inventory, employee, admin, notification, or photo upload logic unless it is directly required for this task.
+
+Do not touch unrelated pages.
+
+Do not change authentication.
+
+Do not change payroll.
+
+Do not change schedule.
+
+Do not change attendance.
+
+Do not change field notes.
+
+Do not change reports.
+
+Only update the employee supply reporting flow and the related admin supply review/response flow.
+
+Current Issue
+
+On the employee side, the Supplies page currently shows supply items in a 2-column grid.
+
+The requested change is:
+
+Employee supply items should show in a 3-column grid where screen width allows it.
+
+When the cleaner taps a supply item, the popup should allow:
+
+Issue/status selection
+
+Short description
+
+Voice-to-text input for the description
+
+1 to 3 uploaded/taken photos
+
+Submission to admin
+
+The original supply product image must stay the same. Cleaner-submitted photos must be attached only to the submitted update/report.
+
+The admin must be able to view the cleaner’s submitted report, including all attached photos.
+
+The admin must be able to respond/update the supply request.
+
+The cleaner must receive a visible alert/notification when the admin responds or updates that item.
+
+Required Changes
+
+1. Employee Supplies Grid
+
+Update the employee Supplies page layout.
+
+Current behavior:
+Supply cards show in rows of 2.
+
+Required behavior:
+Show supply cards in a 3-column grid where space allows.
+
+Use responsive behavior:
+
+Mobile small screens:
+Use 2 columns only if 3 columns becomes too cramped.
+
+Normal mobile width shown in the screenshot:
+Use 3 columns.
+
+Tablet:
+Use 3 or 4 columns depending on available width.
+
+Desktop:
+Use 4 or more if the current admin/employee layout supports it.
+
+Make sure each card still shows:
+
+Supply image
+
+Supply name
+
+Category/location
+
+Status badge
+
+Assigned quantity
+
+The card must remain clickable.
+
+Do not crop images badly.
+
+Do not stretch product images.
+
+Use object-contain for product images.
+
+Keep the UI clean and professional.
+
+2. Supply Item Popup Update
+
+When the cleaner clicks a supply item, keep the existing modal/popup flow but improve it.
+
+The modal should include:
+
+Supply name
+
+Supply category
+
+Location name
+
+Original product image
+
+Assigned quantity
+
+Current status
+
+Report status dropdown
+
+Short description box
+
+Voice-to-text mic button
+
+Photo upload/camera section
+
+Submit Update button
+
+Do not remove the existing status dropdown.
+
+Do not remove the existing description field.
+
+Do not remove the existing submit button.
+
+Only enhance the modal.
+
+3. Voice-to-Text Description
+
+Add a mic button inside or beside the description field.
+
+Cleaner flow:
+
+Cleaner taps mic icon.
+
+Cleaner speaks the issue.
+
+The app transcribes the voice into text.
+
+After transcription, clean up the grammar.
+
+Insert the polished text into the description field.
+
+Example:
+
+Spoken:
+“the cleaner is almost finished only small left bottle leaking too”
+
+Final text:
+“The cleaner is almost finished. There is only a small amount left, and the bottle is leaking.”
+
+Requirements:
+
+The cleaner must be able to edit the text manually after transcription.
+
+Show recording state clearly.
+
+Example:
+
+Mic button changes to “Listening…”
+
+Show stop button if needed.
+
+Handle permission errors properly.
+
+If mic permission is blocked, show a friendly message:
+“Microphone access is blocked. Please allow microphone access or type your note manually.”
+
+Do not block manual typing.
+
+Recommended implementation:
+
+Use browser SpeechRecognition if already available in the app.
+
+If the app already uses OpenAI/GPT transcription anywhere else, reuse the existing safe pattern.
+
+After transcription, send the raw transcript to the backend for grammar cleanup using the existing AI utility if available.
+
+Do not expose API keys on the frontend.
+
+Do not create a new AI provider if the project already has one.
+
+Suggested backend endpoint:
+
+POST /api/supplies/grammarize-note
+
+Request:
+
+{
+"rawText": "the product is almost done bottle leaking"
+}
+
+Response:
+
+{
+"cleanText": "The product is almost finished, and the bottle is leaking."
+}
+
+If AI cleanup fails, keep the raw transcript and allow the cleaner to submit.
+
+4. Allow 1 to 3 Photos Per Supply Update
+
+Update the photo section in the supply report modal.
+
+Current behavior:
+Photo is optional and likely supports one image.
+
+Required behavior:
+Cleaner can attach up to 3 photos.
+
+Cleaner can attach:
+
+1 photo
+
+2 photos
+
+3 photos
+
+No photos only if current logic allows optional photos. Do not force photos unless the app already requires them.
+
+The UI should show:
+
+Take / Upload Photo button
+
+Preview thumbnails
+
+Remove button on each selected photo
+
+Counter:
+“0/3 photos added”
+“1/3 photos added”
+“2/3 photos added”
+“3/3 photos added”
+
+When 3 photos are added, disable the upload button or show:
+“Maximum 3 photos reached.”
+
+Accepted sources:
+
+Camera capture
+
+File upload
+
+Mobile camera upload
+
+Important:
+
+The cleaner-submitted photos must be stored as report/update attachments.
+
+They must not replace the original product image shown on the supply card.
+
+The supply product image must remain unchanged on both employee and admin sides.
+
+5. Submit Supply Update Payload
+
+When the cleaner submits the update, send:
+
+Supply item ID
+
+Location ID
+
+Employee ID
+
+Report status
+
+Cleaned/grammarized description
+
+Submitted photo URLs or uploaded photo files
+
+Timestamp
+
+Current assigned quantity if needed
+
+Company/business ID if needed for multi-tenant filtering
+
+Example payload:
+
+{
+"supplyItemId": "abc123",
+"locationId": "location123",
+"employeeId": "employee123",
+"status": "Out of Stock",
+"description": "The CP Cleaner is almost finished, and the dispenser area needs replacement soon.",
+"photos": [
+"photo-url-1",
+"photo-url-2",
+"photo-url-3"
+],
+"submittedAt": "timestamp"
+}
+
+Make sure this creates a new supply report/update record.
+
+Do not overwrite the supply item.
+
+Do not overwrite the product image.
+
+Do not overwrite the assigned inventory data unless the current app already does that intentionally.
+
+6. Admin Side: View Cleaner Supply Submissions
+
+On the admin side under Supplies, Requests, or the existing supplier/supply management area, make sure the admin can see cleaner-submitted supply updates.
+
+Admin must be able to see:
+
+Employee name
+
+Location
+
+Supply name
+
+Report status
+
+Description
+
+Submitted date/time
+
+Attached photos
+
+The admin should be able to click each photo to view it larger.
+
+Photo viewer requirements:
+
+Open photo in modal/lightbox.
+
+Allow closing.
+
+Show full image without cropping.
+
+If there are 2 or 3 images, allow viewing all submitted images.
+
+Do not only show the first image.
+
+Do not replace the original supply image with submitted photos.
+
+The submitted photos are proof/evidence for the cleaner’s report.
+
+7. Admin Response / Update Flow
+
+Add or connect admin response behavior.
+
+When admin opens a cleaner-submitted supply update, admin should be able to respond or mark the update.
+
+Examples:
+
+“Restocked”
+
+“Replacement approved”
+
+“Pending purchase”
+
+“Assigned to supervisor”
+
+“Resolved”
+
+Optional admin message:
+
+“We will replace this today.”
+
+When admin submits a response/update:
+
+Save the admin response.
+
+Attach it to the same supply report/update record.
+
+Update the report status if needed.
+
+Trigger a cleaner-side notification.
+
+Do not delete the cleaner’s original submission.
+
+Do not delete attached photos.
+
+8. Cleaner Notification After Admin Response
+
+When admin responds to a supply update, show an alert/notification to the cleaner.
+
+Cleaner should see it in one or more places depending on current app structure:
+
+On the supply item card
+
+Inside the supply item modal
+
+In the notification center if the app already has one
+
+Suggested UI:
+
+Badge on product card:
+“Updated”
+
+Inside modal:
+“Admin update: This item has been restocked. Please confirm when you are at the location.”
+
+Cleaner should be able to open the product and see:
+
+Admin response
+
+Admin response timestamp
+
+Current status
+
+Optional confirm button if needed:
+“Confirm Seen”
+or
+“Confirm Item Checked”
+
+Only add confirm behavior if it fits the existing system. Do not create a complicated new flow if there is no existing confirmation system.
+
+9. Data Safety Rules
+
+Do not modify old supply reports unless required for compatibility.
+
+Do not delete existing supply records.
+
+Do not delete product images.
+
+Do not change existing location assignment logic.
+
+Do not change existing cleaner assignment logic.
+
+Do not change existing admin supply creation logic.
+
+Do not change existing request flow unless it is part of supply report submission.
+
+Use database migrations carefully.
+
+If adding columns, make them nullable where needed so old records do not break.
+
+Possible new fields:
+
+supply_reports.photos JSON/text array
+
+supply_reports.admin_response text
+
+supply_reports.admin_status text
+
+supply_reports.admin_responded_at timestamp
+
+supply_reports.seen_by_employee boolean
+
+supply_reports.employee_confirmed_at timestamp
+
+Only use these names if they match the existing project naming style.
+
+10. UI/UX Requirements
+
+Employee side:
+
+Keep the page simple.
+
+Keep the modal mobile-friendly.
+
+Do not make users scroll too much.
+
+The submit button should stay easy to reach.
+
+The 3-photo preview should not make the modal broken on small screens.
+
+Admin side:
+
+Make submitted photos clear and easy to view.
+
+Do not hide photos inside tiny thumbnails only.
+
+Use clean cards or a table with expandable details.
+
+Status badges should be clear.
+
+Avoid red scary error styling unless it is a real error.
+
+11. Testing Checklist
+
+Test employee side:
+
+Supply page loads.
+
+Location dropdown still works.
+
+Supply cards show correctly.
+
+Supply card grid shows 3 columns where possible.
+
+Tapping a supply opens the modal.
+
+Status dropdown works.
+
+Manual description typing works.
+
+Mic button records voice.
+
+Voice transcript appears in the description box.
+
+Grammar cleanup improves the text.
+
+Cleaner can add 1 photo.
+
+Cleaner can add 2 photos.
+
+Cleaner can add 3 photos.
+
+Cleaner cannot add more than 3 photos.
+
+Cleaner can remove selected photos before submitting.
+
+Submission works.
+
+Original product image does not change after submission.
+
+Test admin side:
+
+Admin receives the supply update.
+
+Admin can see the correct location.
+
+Admin can see the correct cleaner.
+
+Admin can see the correct supply item.
+
+Admin can see the report status.
+
+Admin can see the description.
+
+Admin can view all uploaded photos.
+
+Admin can click photos to enlarge.
+
+Admin can respond/update the report.
+
+Admin response saves correctly.
+
+Test cleaner notification:
+
+Cleaner receives update after admin response.
+
+Cleaner sees “Updated” or similar alert on the supply item.
+
+Cleaner can open the product and view admin response.
+
+Existing supply flow still works.
+
+Existing request flow still works.
+
+Existing assigned supply quantity still works.
+
+Final Requirement
+
+This update must only improve the employee supply card grid, cleaner supply reporting modal, multi-photo attachments, voice-to-text grammarized description, admin review of submitted supply reports, and cleaner notification after admin response.
+
+Do not break or affect anything else that is already working in Clockfield.
