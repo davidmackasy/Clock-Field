@@ -1,0 +1,650 @@
+DEV NOTE: Field Notes Document Editor Upgrade
+
+Project: Clockfield
+Area: Field Notes
+Goal: Give admins full editing control after AI generates the Field Note document, without changing how Field Notes are captured.
+
+Critical instruction:
+Do not change, break, remove, or rebuild the existing Field Notes capture flow.
+
+The current flow must stay the same:
+
+Admin/cleaner can start a Field Note
+
+They can record voice
+
+They can take photos
+
+They can stop the Field Note
+
+AI generates the document
+
+Photos and transcript are saved
+
+Public link still works
+
+Only update what happens after the Field Note has been stopped and the AI-generated document is displayed.
+
+Do not touch unrelated pages, reports, schedules, payroll, supplies, attendance, auth, Stripe, or existing photo capture logic.
+
+Objective
+
+Right now, the admin can only edit limited parts of the Field Note, such as the title.
+
+We need to give the admin full control over the generated document before sharing it with a client.
+
+The admin must be able to edit:
+
+Main title
+
+Introduction
+
+Section titles
+
+Section subtitles
+
+Section descriptions
+
+Bullet points
+
+AI-generated general observations
+
+Spoken note text
+
+Transcript text
+
+Photo section names
+
+Photo captions if captions exist
+
+The admin must also be able to move photos from one section to another.
+
+The saved public link must show the edited version, not only the original AI version.
+
+Keep Existing Field Note Capture Flow Untouched
+
+Do not change the recording screen.
+
+Do not change photo capture.
+
+Do not change how photos are uploaded.
+
+Do not change how transcription is created.
+
+Do not change how AI initially generates the Field Note.
+
+Do not change how Field Notes are listed.
+
+Do not change the Photos tab.
+
+Do not change the Transcript tab unless needed only for making transcript text editable from the Document editor.
+
+This upgrade starts only after the generated Field Note document already exists.
+
+Add Full Document Edit Mode
+
+Add a clear Edit Document button or improve the existing edit icon behavior.
+
+When admin clicks Edit, the document should enter edit mode.
+
+In edit mode, every generated content area should become editable.
+
+Editable areas must include:
+
+Field Note title
+
+Intro paragraph
+
+Main section heading
+
+Subsection heading
+
+Section description
+
+Bullet points
+
+Observation text
+
+Spoken note text
+
+Transcript text
+
+Any AI-generated summary text
+
+Each editable block should have:
+
+Inline editing or text field
+
+Save behavior
+
+Cancel behavior
+
+Optional mic button for voice-to-text
+
+Clear visual state so admin knows they are editing
+
+Example:
+
+View mode:
+Kitchen
+General observations were made on the floors.
+
+Edit mode:
+Text field: Kitchen
+Textarea: General observations were made on the floors.
+
+Editable Introduction
+
+The AI-generated introduction at the top of the document must be editable.
+
+Admin should be able to:
+
+Click edit
+
+Change the intro manually
+
+Use voice-to-text to rewrite the intro
+
+Save the new intro
+
+Cancel if needed
+
+The public link must show the edited intro.
+
+Editable Sections
+
+Each document section must be editable.
+
+For each section, admin should be able to update:
+
+Section title
+
+Subsection title
+
+Short description
+
+Bullet points
+
+Spoken note
+
+Attached transcript text
+
+Example issue:
+AI says “Washroom,” but the area is actually “Kitchen Floor.”
+
+Admin should be able to change:
+
+Section title from “Washroom” to “Kitchen Floor”
+
+Subsection from “Washroom” to “Kitchen Floor”
+
+Description from AI text to admin-approved text
+
+The updated section names must also update on the public link.
+
+Editable Bullet Points
+
+Any AI-generated bullet points must be editable.
+
+Admin should be able to:
+
+Edit each bullet
+
+Add a new bullet
+
+Delete a bullet
+
+Reorder bullets if possible
+
+Save changes
+
+If reordering is too much for first version, at minimum allow editing, adding, and deleting bullet points.
+
+Do not remove bullet formatting from the public link.
+
+Editable Transcript and Spoken Notes
+
+If a Field Note has transcript or spoken notes, allow the admin to edit the text.
+
+Admin should be able to:
+
+Correct wrong words
+
+Fix grammar
+
+Remove unnecessary text
+
+Rewrite unclear text
+
+Use mic voice-to-text to replace or add to transcript/spoken note text
+
+Important:
+Only show transcript sections when transcript exists.
+
+If no transcript exists, do not show an empty transcript section on the public link.
+
+Voice-to-Text Editing Tool
+
+Add a small mic icon beside editable text areas.
+
+The mic should work for:
+
+Introduction
+
+Section title
+
+Section description
+
+Bullet points
+
+Spoken note
+
+Transcript text
+
+Admin flow:
+
+Admin clicks into a field.
+
+Admin clicks mic icon.
+
+Admin speaks.
+
+Speech converts to text.
+
+Text is inserted into the selected field.
+
+Admin can still manually edit after voice text appears.
+
+Add a simple grammar cleanup option if existing AI utilities already support it.
+
+Example button:
+“Clean Grammar”
+
+Do not expose AI keys on frontend.
+
+If grammar cleanup is added, it must happen on the backend using existing AI service patterns.
+
+If mic permission is denied, show:
+“Microphone access is blocked. Please allow microphone access or type manually.”
+
+Do not stop the admin from typing manually.
+
+Photo Drag and Drop Between Sections
+
+Add the ability for admin to move photos between document sections.
+
+Admin should be able to:
+
+Drag a photo from Section 1
+
+Drop it into Section 2
+
+Save the new photo placement
+
+See the updated order in the document
+
+Public link must show the photo under the new section after saving.
+
+Also allow:
+
+Moving photos within the same section to reorder them
+
+Moving photos into another existing section
+
+Optional if simple:
+Add a “Move to section” dropdown on each photo as a fallback for mobile or if drag/drop is difficult.
+
+Recommended behavior:
+
+Desktop:
+Drag and drop photos.
+
+Mobile:
+Use “Move to section” menu.
+
+Do not delete photos from storage when moving them.
+
+Only update the section relationship/order.
+
+Photo Section Management
+
+Admin should be able to correct sections when AI places photos wrongly.
+
+For each photo, store or update:
+
+photoId
+
+current sectionId
+
+sortOrder
+
+caption if available
+
+Do not change the original uploaded photo file.
+
+Do not compress again unless current system already does.
+
+Do not remove photos from the Photos tab.
+
+This is only about how photos are grouped in the Document view and public link.
+
+Save Edited Version
+
+Create a safe save system for the edited Field Note document.
+
+When admin saves changes:
+
+Save edited title
+
+Save edited intro
+
+Save edited sections
+
+Save edited bullet points
+
+Save edited transcript/spoken note
+
+Save photo section placement
+
+Save photo order
+
+Save updated timestamp
+
+The saved edited version should become the official document version shown on:
+
+Admin document tab
+
+Print view
+
+Share/public link
+
+Client public view
+
+Any PDF/export view if connected
+
+Do not regenerate the AI document after admin edits unless admin specifically asks to regenerate.
+
+Important:
+Admin edits must not be overwritten by background AI processing.
+
+Draft and Save Behavior
+
+Use a clear save system.
+
+Suggested buttons in edit mode:
+
+Save Changes
+
+Cancel
+
+Preview Public Link
+
+Optional:
+Save as Draft
+
+If the admin edits but tries to leave the page, show:
+“You have unsaved changes. Save before leaving?”
+
+Do not autosave in a way that accidentally breaks content unless the app already has autosave patterns.
+
+A safe first version can use manual Save Changes.
+
+Preserve Original AI Output
+
+Keep the original AI-generated content stored if possible.
+
+Recommended data structure:
+
+original_ai_document
+
+edited_document
+
+is_edited
+
+last_edited_by
+
+last_edited_at
+
+This helps prevent losing the original AI version.
+
+Public link should use:
+
+edited_document if available
+
+original_ai_document if no edited version exists
+
+Public Link Must Reflect Admin Edits
+
+After admin saves changes, the public field note link must show the edited version.
+
+Public link must show:
+
+Edited title
+
+Edited intro
+
+Edited section names
+
+Edited descriptions
+
+Edited bullet points
+
+Edited transcript/spoken note only if available
+
+Photos under the corrected sections
+
+Correct photo order
+
+No broken empty transcript section
+
+No wrong AI text if admin already corrected it
+
+Print and Share Must Use Edited Version
+
+The Print button must print the edited version.
+
+The Share button/public link must share the edited version.
+
+If “Turn into Quote” uses document content, it should use the edited version if available.
+
+Do not change the quote feature except to make sure it reads the final saved edited document when available.
+
+Permissions
+
+Only admin/authorized management users should edit Field Note documents.
+
+Do not allow public users to edit.
+
+Do not allow employees/cleaners to edit unless the current permission system already allows it.
+
+Use the existing role/permission system.
+
+UI Requirements
+
+Keep the current document layout.
+
+Do not redesign the whole page.
+
+Just add editing controls.
+
+The editor should feel simple:
+
+Click Edit
+
+Change text
+
+Move photos
+
+Save
+
+Photos should stay clean and organized.
+
+Drag/drop should not make the page jump or break.
+
+For large photo groups like 114 photos, performance must stay smooth.
+
+Use lazy loading if the app already uses it.
+
+Do not load full-size images for editing thumbnails if thumbnails already exist.
+
+Mobile Requirements
+
+The editor must work on mobile.
+
+On mobile:
+
+Text fields should be full width
+
+Mic button should be easy to tap
+
+Photos should have a “Move to section” dropdown because drag/drop may be hard
+
+Save button should stay easy to access
+
+Do not create horizontal scrolling.
+
+Suggested Data Model
+
+Use existing Field Note tables if possible.
+
+If new fields are needed, add them safely.
+
+Possible fields:
+
+field_notes.edited_document_json
+
+field_notes.original_document_json
+
+field_notes.is_document_edited
+
+field_notes.last_edited_by
+
+field_notes.last_edited_at
+
+field_note_photos.section_id
+
+field_note_photos.sort_order
+
+field_note_sections.title
+
+field_note_sections.description
+
+field_note_sections.bullets_json
+
+field_note_sections.transcript_text
+
+Only use these names if they match the project’s existing naming style.
+
+Make new database fields nullable where possible so old Field Notes do not break.
+
+Backend Requirements
+
+Add/update backend endpoints safely.
+
+Possible endpoints:
+
+GET /api/field-notes/:id/document
+
+PATCH /api/field-notes/:id/document
+
+PATCH /api/field-notes/:id/photos/reorder
+
+PATCH /api/field-notes/:id/photos/move-section
+
+POST /api/field-notes/grammar-cleanup
+
+Only add routes that fit the current backend structure.
+
+Validate permissions before saving.
+
+Validate that the user belongs to the same company/business as the Field Note.
+
+Validate that moved photos belong to the same Field Note.
+
+Validate that sections belong to the same Field Note.
+
+Testing Checklist
+
+Test existing flow first:
+
+Start Field Note still works
+
+Recording still works
+
+Taking photos still works
+
+Stopping Field Note still works
+
+AI generation still works
+
+Photos tab still works
+
+Transcript tab still works
+
+Public link still opens
+
+Then test new edit flow:
+
+Admin can edit Field Note title
+
+Admin can edit introduction
+
+Admin can edit section title
+
+Admin can edit subsection title
+
+Admin can edit section description
+
+Admin can edit bullet points
+
+Admin can add bullet points
+
+Admin can delete bullet points
+
+Admin can edit transcript text
+
+Admin can edit spoken note text
+
+Admin can use mic voice-to-text inside text fields
+
+Admin can manually edit voice-generated text
+
+Admin can move photo from one section to another
+
+Admin can reorder photos inside a section
+
+Admin can save changes
+
+Admin can cancel changes
+
+Admin gets warning for unsaved changes
+
+Public link shows edited version
+
+Print shows edited version
+
+Share link shows edited version
+
+Turn into Quote uses edited version if connected
+
+Old Field Notes still display correctly
+
+Field Notes with no transcript do not show empty transcript section
+
+Field Notes with many photos still load smoothly
+
+Cleaner/employee capture flow is not affected
+
+Final Instruction
+
+This update is only for giving admins more control over the AI-generated Field Note document after it has already been generated.
+
+Do not change how Field Notes are recorded.
+
+Do not change how photos are captured.
+
+Do not change how AI generation starts.
+
+Do not change unrelated app logic.
+
+Do not break or affect anything else that is already working in Clockfield.

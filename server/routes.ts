@@ -5464,10 +5464,11 @@ Return a JSON object with these exact fields:
       const session = await storage.getFieldNotesSession(req.params.sessionId);
       if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       if (user.role === "employee" && session.createdByUserId !== user.id) return res.status(403).json({ message: "Forbidden" });
-      const { title, aiSummary, clientSafeSummary, documentMode, quoteData, sessionSubtype, pageIntro, pageSummary, status, aiStatus } = req.body;
+      const { title, aiSummary, afterSummary, clientSafeSummary, documentMode, quoteData, sessionSubtype, pageIntro, pageSummary, status, aiStatus } = req.body;
       const updated = await storage.updateFieldNotesSession(session.id, {
         ...(title !== undefined && { title }),
         ...(aiSummary !== undefined && { aiSummary }),
+        ...(afterSummary !== undefined && { afterSummary }),
         ...(clientSafeSummary !== undefined && { clientSafeSummary }),
         ...(documentMode !== undefined && { documentMode }),
         ...(quoteData !== undefined && { quoteData: typeof quoteData === "string" ? quoteData : JSON.stringify(quoteData) }),
@@ -5583,7 +5584,7 @@ Return a JSON object with these exact fields:
   app.patch("/api/field-notes/entries/:entryId", fnAuth, async (req, res) => {
     try {
       const user = req.user as any;
-      const { title, body, areaName, priority, recommendedAction, clientSafeSummary } = req.body;
+      const { title, body, areaName, priority, recommendedAction, clientSafeSummary, assetIds, relatedTranscript } = req.body;
       const updated = await storage.updateFieldNotesEntry(req.params.entryId, {
         ...(title !== undefined && { title }),
         ...(body !== undefined && { body }),
@@ -5591,6 +5592,8 @@ Return a JSON object with these exact fields:
         ...(priority !== undefined && { priority }),
         ...(recommendedAction !== undefined && { recommendedAction }),
         ...(clientSafeSummary !== undefined && { clientSafeSummary }),
+        ...(assetIds !== undefined && { assetIds: typeof assetIds === "string" ? assetIds : JSON.stringify(assetIds) }),
+        ...(relatedTranscript !== undefined && { relatedTranscript }),
       });
       if (!updated) return res.status(404).json({ message: "Not found" });
       res.json(updated);

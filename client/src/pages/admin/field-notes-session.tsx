@@ -116,15 +116,54 @@ function SharePanel({ session, publicDoc, sessionId }: { session: any; publicDoc
   );
 }
 
+// ── Mic button helper ─────────────────────────────────────────────────────────
+function VoiceMicButton({ field, listening, micField, onStart }: {
+  field: string; listening: boolean; micField: string | null; onStart: (f: string) => void;
+}) {
+  const active = listening && micField === field;
+  return (
+    <button
+      type="button"
+      className={cn(
+        "flex-shrink-0 p-1 rounded-md transition-colors",
+        active ? "bg-red-100 text-red-600 animate-pulse" : "text-muted-foreground hover:text-foreground hover:bg-muted"
+      )}
+      onClick={() => onStart(field)}
+      title={active ? "Listening…" : "Voice input"}
+    >
+      <Mic className="w-3.5 h-3.5" />
+    </button>
+  );
+}
+
 // ── Document Observation Section ──────────────────────────────────────────────
-function DocumentObservation({ entry, assets, sessionId, index, onPhotoClick }: {
+function DocumentObservation({ entry, assets, sessionId, index, allEntries = [], onPhotoClick }: {
   entry: any; assets: any[]; sessionId: string; index: number;
+  allEntries?: any[];
   onPhotoClick: (url: string, entry: any) => void;
 }) {
+  const { toast } = useToast();
   const [editing, setEditing] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
-  const [form, setForm] = useState({ title: entry.title, body: entry.body, recommendedAction: entry.recommendedAction ?? "" });
-  const { toast } = useToast();
+  const [listening, setListening] = useState(false);
+  const [micField, setMicField] = useState<string | null>(null);
+
+  const parseBullets = (cs: string | null): string[] => {
+    try { const p = JSON.parse(cs || ""); if (Array.isArray(p)) return p; } catch {}
+    return [];
+  };
+
+  const [form, setForm] = useState({
+    title: entry.title,
+    areaName: entry.areaName ?? "",
+    body: entry.body,
+    recommendedAction: entry.recommendedAction ?? "",
+    relatedTranscript: entry.relatedTranscript ?? "",
+  });
+  const [bullets, setBullets] = useState<string[]>(() => parseBullets(entry.clientSafeSummary));
+  const [newBullet, setNewBullet] = useState("");
+  const [editingBulletIdx, setEditingBulletIdx] = useState<number | null>(null);
+  const [editingBulletText, setEditingBulletText] = useState("");
 
   const linkedAssets: any[] = (() => {
     try {
@@ -143,84 +182,186 @@ function DocumentObservation({ entry, assets, sessionId, index, onPhotoClick }: 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/field-notes/sessions", sessionId] });
       setEditing(false);
-      toast({ title: "Updated" });
+      toast({ title: "Section updated" });
     },
     onError: () => toast({ title: "Update failed", variant: "destructive" }),
   });
 
+  const movePhotoMutation = useMutation({
+    mutationFn: async ({ assetId, targetEntryId }: { assetId: string; targetEntryId: string }) => {
+      const curIds: string[] = (() => { try { return JSON.parse(entry.assetIds || "[]"); } catch { return []; } })();
+      const tgt = allEntries.find((e: any) => e.id === targetEntryId);
+      const tgtIds: string[] = (() => { try { return JSON.parse(tgt?.assetIds || "[]"); } catch { return []; } })();
+      await Promise.all([
+        apiRequest("PATCH", `/api/field-notes/entries/${entry.id}`, { assetIds: curIds.filter(id => id !== assetId) }),
+        apiRequest("PATCH", `/api/field-notes/entries/${targetEntryId}`, { assetIds: [...tgtIds.filter(id => id !== assetId), assetId] }),
+      ]);
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/field-notes/sessions", sessionId] }); toast({ title: "Photo moved" }); },
+    onError: () => toast({ title: "Failed to move photo", variant: "destructive" }),
+  });
+
+  const handleSave = () => {
+    updateMutation.mutate({
+      title: form.title,
+      areaName: form.areaName || null,
+      body: form.body,
+      recommendedAction: form.recommendedAction || null,
+      clientSafeSummary: JSON.stringify(bullets),
+      relatedTranscript: form.relatedTranscript || null,
+    });
+  };
+
+  const startVoice = (field: string) => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) { toast({ title: "Voice not supported", description: "Type manually instead." }); return; }
+    const rec = new SR();
+    rec.continuous = false; rec.interimResults = false; rec.lang = "en-US";
+    rec.onresult = (e: any) => {
+      const text: string = e.results[0][0].transcript;
+      setForm(f => {
+        const cur = ((f as any)[field] as string) || "";
+        return { ...f, [field]: cur ? cur + " " + text : text };
+      });
+      setListening(false); setMicField(null);
+    };
+    rec.onerror = () => { setListening(false); setMicField(null); };
+    rec.onend = () => { setListening(false); setMicField(null); };
+    rec.start();
+    setListening(true); setMicField(field);
+  };
+
+  const otherEntries = allEntries.filter(e => e.id !== entry.id);
+
   return (
     <div className="group relative">
-      {/* Section divider with number */}
+      {/* Section divider */}
       <div className="flex items-center gap-3 mb-4">
-        <span className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest whitespace-nowrap">
-          {index}.
-        </span>
-        {entry.areaName && (
+        <span className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest whitespace-nowrap">{index}.</span>
+        {entry.areaName && !editing && (
           <span className="text-xs font-semibold text-foreground/70">{entry.areaName}</span>
         )}
         <div className="flex-1 h-px bg-border" />
-        {/* Edit toggle */}
-        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          {editing ? (
-            <>
-              <Button size="icon" variant="ghost" className="w-6 h-6" disabled={updateMutation.isPending} onClick={() => updateMutation.mutate(form)}>
-                {updateMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-              </Button>
-              <Button size="icon" variant="ghost" className="w-6 h-6" onClick={() => { setEditing(false); setForm({ title: entry.title, body: entry.body, recommendedAction: entry.recommendedAction ?? "" }); }}>
-                <X className="w-3 h-3" />
-              </Button>
-            </>
-          ) : (
-            <Button data-testid={`button-edit-entry-${entry.id}`} size="icon" variant="ghost" className="w-6 h-6" onClick={() => setEditing(true)}>
-              <Edit3 className="w-3 h-3" />
+        {editing ? (
+          <div className="flex gap-0.5">
+            <Button size="icon" variant="ghost" className="w-6 h-6" disabled={updateMutation.isPending} onClick={handleSave}>
+              {updateMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
             </Button>
-          )}
-        </div>
+            <Button size="icon" variant="ghost" className="w-6 h-6" onClick={() => {
+              setEditing(false);
+              setForm({ title: entry.title, areaName: entry.areaName ?? "", body: entry.body, recommendedAction: entry.recommendedAction ?? "", relatedTranscript: entry.relatedTranscript ?? "" });
+              setBullets(parseBullets(entry.clientSafeSummary));
+            }}>
+              <X className="w-3 h-3" />
+            </Button>
+          </div>
+        ) : (
+          <Button
+            data-testid={`button-edit-entry-${entry.id}`}
+            size="icon" variant="ghost"
+            className="w-6 h-6 opacity-40 hover:opacity-100 transition-opacity"
+            onClick={() => setEditing(true)}
+          >
+            <Edit3 className="w-3 h-3" />
+          </Button>
+        )}
       </div>
+
+      {/* Area name (edit mode) */}
+      {editing && (
+        <div className="mb-3">
+          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1 block">Section / Area Name</Label>
+          <div className="flex gap-1.5">
+            <Input
+              value={form.areaName}
+              onChange={e => setForm(f => ({ ...f, areaName: e.target.value }))}
+              placeholder="e.g. Kitchen, Washroom, Exterior…"
+              className="h-7 text-sm flex-1"
+              data-testid="input-entry-area-name"
+            />
+            <VoiceMicButton field="areaName" listening={listening} micField={micField} onStart={startVoice} />
+          </div>
+        </div>
+      )}
 
       {/* Title */}
       {editing ? (
-        <Input data-testid="input-entry-title" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="text-base font-semibold mb-3 h-8" />
+        <div className="mb-3">
+          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1 block">Section Title</Label>
+          <div className="flex gap-1.5">
+            <Input
+              data-testid="input-entry-title"
+              value={form.title}
+              onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+              className="h-8 text-sm font-semibold flex-1"
+            />
+            <VoiceMicButton field="title" listening={listening} micField={micField} onStart={startVoice} />
+          </div>
+        </div>
       ) : (
         <h3 className="text-base font-semibold text-foreground mb-3 leading-snug">{entry.title}</h3>
       )}
 
-      {/* Photos — embedded in context, responsive multi-column grid */}
+      {/* Photos */}
       {linkedAssets.length > 0 && (
         <div className={cn(
           "mb-4",
-          linkedAssets.length === 1
-            ? "grid grid-cols-1 rounded-xl overflow-hidden"
-            : "grid grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-1"
+          linkedAssets.length === 1 ? "grid grid-cols-1 rounded-xl overflow-hidden" : "grid grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-1"
         )}>
           {linkedAssets.map((asset: any, i: number) => (
-            <div
-              key={asset.id}
-              data-testid={`img-doc-photo-${asset.id}`}
-              className="overflow-hidden rounded-lg cursor-pointer bg-muted hover:opacity-95 transition-opacity aspect-square"
-              onClick={() => onPhotoClick(asset.fileUrl, entry)}
-            >
-              <img
-                src={asset.fileUrl}
-                alt={`Photo ${i + 1}`}
-                className={cn("w-full h-full object-cover", linkedAssets.length === 1 ? "max-h-72" : "")}
-              />
+            <div key={asset.id} className="relative group/photo">
+              <div
+                data-testid={`img-doc-photo-${asset.id}`}
+                className="overflow-hidden rounded-lg cursor-pointer bg-muted hover:opacity-95 transition-opacity aspect-square"
+                onClick={() => onPhotoClick(asset.fileUrl, entry)}
+              >
+                <img src={asset.fileUrl} alt={`Photo ${i + 1}`} className={cn("w-full h-full object-cover", linkedAssets.length === 1 ? "max-h-72" : "")} />
+              </div>
+              {otherEntries.length > 0 && (
+                <div className="absolute bottom-0 left-0 right-0 opacity-0 group-hover/photo:opacity-100 transition-opacity">
+                  <select
+                    className="w-full text-[9px] bg-black/75 text-white px-1.5 py-1 cursor-pointer border-0 rounded-b-lg"
+                    defaultValue=""
+                    onChange={e => { if (e.target.value) { movePhotoMutation.mutate({ assetId: asset.id, targetEntryId: e.target.value }); e.target.value = ""; } }}
+                    title="Move to another section"
+                    data-testid={`select-move-photo-${asset.id}`}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <option value="" disabled>Move to…</option>
+                    {otherEntries.map((e2: any) => (
+                      <option key={e2.id} value={e2.id}>{e2.areaName || e2.title}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
 
-      {/* Body / Bullets */}
+      {/* Body */}
       {editing ? (
-        <Textarea data-testid="textarea-entry-body" value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))} rows={4} className="text-sm mb-3" />
+        <div className="mb-3">
+          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1 block">Description</Label>
+          <div className="flex gap-1.5 items-start">
+            <Textarea
+              data-testid="textarea-entry-body"
+              value={form.body}
+              onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
+              rows={4}
+              className="text-sm flex-1 resize-none"
+            />
+            <VoiceMicButton field="body" listening={listening} micField={micField} onStart={startVoice} />
+          </div>
+          {listening && micField === "body" && <p className="text-[10px] text-red-500 mt-1 flex items-center gap-1 animate-pulse"><Mic className="w-3 h-3" />Listening…</p>}
+        </div>
       ) : (() => {
-        let bullets: string[] | null = null;
-        try { const parsed = JSON.parse(entry.clientSafeSummary || ""); if (Array.isArray(parsed)) bullets = parsed; } catch {}
-        return bullets && bullets.length > 0 ? (
+        const viewBullets = parseBullets(entry.clientSafeSummary);
+        return viewBullets.length > 0 ? (
           <div className="mb-2">
             {entry.body && <p className="text-sm text-foreground/70 leading-relaxed mb-1.5">{entry.body}</p>}
             <ul className="space-y-1">
-              {bullets.map((bullet: string, bi: number) => (
+              {viewBullets.map((bullet: string, bi: number) => (
                 <li key={bi} className="flex items-start gap-2 text-sm text-foreground/80">
                   <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-foreground/30 shrink-0" />
                   <span className="leading-snug">{bullet}</span>
@@ -233,31 +374,107 @@ function DocumentObservation({ entry, assets, sessionId, index, onPhotoClick }: 
         );
       })()}
 
-      {/* Recommended action — plain text note, no colored box */}
+      {/* Bullet points editor (edit mode only) */}
+      {editing && (
+        <div className="mb-3">
+          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5 block">Bullet Points</Label>
+          <div className="space-y-1.5 mb-2">
+            {bullets.map((b, i) => (
+              <div key={i} className="flex gap-1 items-center group/bullet">
+                {editingBulletIdx === i ? (
+                  <>
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 shrink-0 ml-0.5" />
+                    <Input
+                      value={editingBulletText}
+                      onChange={e => setEditingBulletText(e.target.value)}
+                      className="h-7 text-xs flex-1"
+                      autoFocus
+                      onKeyDown={e => {
+                        if (e.key === "Enter") { const nb = [...bullets]; nb[i] = editingBulletText; setBullets(nb); setEditingBulletIdx(null); }
+                        if (e.key === "Escape") setEditingBulletIdx(null);
+                      }}
+                    />
+                    <Button size="icon" variant="ghost" className="w-6 h-6 shrink-0" onClick={() => { const nb = [...bullets]; nb[i] = editingBulletText; setBullets(nb); setEditingBulletIdx(null); }}>
+                      <Check className="w-3 h-3" />
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 shrink-0 ml-0.5" />
+                    <span className="text-xs flex-1 cursor-pointer hover:text-primary transition-colors" onClick={() => { setEditingBulletIdx(i); setEditingBulletText(b); }}>{b}</span>
+                    <button className="opacity-0 group-hover/bullet:opacity-100 transition-opacity text-muted-foreground hover:text-destructive" onClick={() => setBullets(bls => bls.filter((_, j) => j !== i))}>
+                      <X className="w-3 h-3" />
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-1.5">
+            <Input
+              value={newBullet}
+              onChange={e => setNewBullet(e.target.value)}
+              placeholder="Add a bullet point…"
+              className="h-7 text-xs flex-1"
+              onKeyDown={e => { if (e.key === "Enter" && newBullet.trim()) { setBullets(bs => [...bs, newBullet.trim()]); setNewBullet(""); } }}
+            />
+            <Button size="sm" variant="outline" className="h-7 text-xs px-2.5 shrink-0" onClick={() => { if (newBullet.trim()) { setBullets(bs => [...bs, newBullet.trim()]); setNewBullet(""); } }}>
+              <Plus className="w-3 h-3" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Recommended action */}
       {editing ? (
-        <Input data-testid="input-entry-action" value={form.recommendedAction} onChange={e => setForm(f => ({ ...f, recommendedAction: e.target.value }))} placeholder="Note or follow-up…" className="text-sm h-7 mb-2" />
+        <div className="mb-3">
+          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1 block">Note / Follow-up</Label>
+          <Input
+            data-testid="input-entry-action"
+            value={form.recommendedAction}
+            onChange={e => setForm(f => ({ ...f, recommendedAction: e.target.value }))}
+            placeholder="Note or follow-up…"
+            className="text-sm h-7"
+          />
+        </div>
       ) : entry.recommendedAction ? (
-        <p className="text-xs text-muted-foreground italic leading-relaxed mb-2">
-          Note: {entry.recommendedAction}
-        </p>
+        <p className="text-xs text-muted-foreground italic leading-relaxed mb-2">Note: {entry.recommendedAction}</p>
       ) : null}
 
-      {/* Spoken note — collapsible */}
-      {entry.relatedTranscript && (
-        <button
-          className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors mb-2.5 w-full text-left"
-          onClick={() => setShowTranscript(v => !v)}
-        >
-          <Mic className="w-3 h-3 shrink-0" />
-          <span className="font-medium">Spoken note</span>
-          {showTranscript ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-        </button>
-      )}
-      {showTranscript && entry.relatedTranscript && (
-        <blockquote className="text-xs italic text-muted-foreground border-l-2 border-muted-foreground/30 pl-3 mb-3 leading-relaxed">
-          "{entry.relatedTranscript}"
-        </blockquote>
-      )}
+      {/* Spoken note / transcript */}
+      {editing ? (
+        <div className="mb-2">
+          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1 block">Spoken Note / Transcript</Label>
+          <div className="flex gap-1.5 items-start">
+            <Textarea
+              value={form.relatedTranscript}
+              onChange={e => setForm(f => ({ ...f, relatedTranscript: e.target.value }))}
+              placeholder="Voice transcript or spoken note…"
+              rows={3}
+              className="text-xs text-muted-foreground flex-1 resize-none"
+              data-testid="textarea-entry-transcript"
+            />
+            <VoiceMicButton field="relatedTranscript" listening={listening} micField={micField} onStart={startVoice} />
+          </div>
+          {listening && micField === "relatedTranscript" && <p className="text-[10px] text-red-500 mt-1 flex items-center gap-1 animate-pulse"><Mic className="w-3 h-3" />Listening…</p>}
+        </div>
+      ) : entry.relatedTranscript ? (
+        <>
+          <button
+            className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors mb-2.5 w-full text-left"
+            onClick={() => setShowTranscript(v => !v)}
+          >
+            <Mic className="w-3 h-3 shrink-0" />
+            <span className="font-medium">Spoken note</span>
+            {showTranscript ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+          {showTranscript && (
+            <blockquote className="text-xs italic text-muted-foreground border-l-2 border-muted-foreground/30 pl-3 mb-3 leading-relaxed">
+              "{entry.relatedTranscript}"
+            </blockquote>
+          )}
+        </>
+      ) : null}
     </div>
   );
 }
@@ -755,6 +972,10 @@ export default function AdminFieldNotesSession() {
   const [lightboxPhoto, setLightboxPhoto] = useState<{ url: string; entry?: any } | null>(null);
   const [showShare, setShowShare] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [editingAiSummary, setEditingAiSummary] = useState(false);
+  const [aiSummaryDraft, setAiSummaryDraft] = useState("");
+  const [editingAfterSummary, setEditingAfterSummary] = useState(false);
+  const [afterSummaryDraft, setAfterSummaryDraft] = useState("");
 
   const { data: session, isLoading } = useQuery<any>({
     queryKey: ["/api/field-notes/sessions", sessionId],
@@ -766,6 +987,17 @@ export default function AdminFieldNotesSession() {
   const updateMutation = useMutation({
     mutationFn: (data: any) => apiRequest("PATCH", `/api/field-notes/sessions/${sessionId}`, data).then(r => r.json()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/field-notes/sessions", sessionId] }); setEditingTitle(false); },
+    onError: () => toast({ title: "Update failed", variant: "destructive" }),
+  });
+
+  const updateDocTextMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("PATCH", `/api/field-notes/sessions/${sessionId}`, data).then(r => r.json()),
+    onSuccess: (_data, vars: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/field-notes/sessions", sessionId] });
+      if (vars.aiSummary !== undefined) setEditingAiSummary(false);
+      if (vars.afterSummary !== undefined) setEditingAfterSummary(false);
+      toast({ title: "Document updated" });
+    },
     onError: () => toast({ title: "Update failed", variant: "destructive" }),
   });
 
@@ -1014,10 +1246,46 @@ export default function AdminFieldNotesSession() {
                   <AiExtractedPanel extracted={aiExtracted} onApply={handleApplyExtracted} />
                 )}
 
-                {/* Document intro paragraph */}
+                {/* Document intro paragraph — editable */}
                 {session.aiSummary && (
-                  <div className="mb-8">
-                    <p className="text-sm text-foreground/80 leading-relaxed">{session.aiSummary}</p>
+                  <div className="mb-8 group/intro">
+                    {editingAiSummary ? (
+                      <div>
+                        <Textarea
+                          value={aiSummaryDraft}
+                          onChange={e => setAiSummaryDraft(e.target.value)}
+                          rows={5}
+                          className="text-sm leading-relaxed resize-none mb-2 w-full"
+                          data-testid="textarea-ai-summary"
+                          autoFocus
+                        />
+                        <div className="flex gap-1.5">
+                          <Button
+                            size="sm" variant="default" className="h-7 text-xs gap-1"
+                            disabled={updateDocTextMutation.isPending}
+                            onClick={() => updateDocTextMutation.mutate({ aiSummary: aiSummaryDraft })}
+                          >
+                            {updateDocTextMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                            Save
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingAiSummary(false)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 items-start">
+                        <p className="text-sm text-foreground/80 leading-relaxed flex-1">{session.aiSummary}</p>
+                        <button
+                          className="opacity-0 group-hover/intro:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0 mt-0.5"
+                          onClick={() => { setAiSummaryDraft(session.aiSummary); setEditingAiSummary(true); }}
+                          title="Edit document intro"
+                          data-testid="button-edit-ai-summary"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                     <div className="h-px bg-border mt-6" />
                   </div>
                 )}
@@ -1030,12 +1298,50 @@ export default function AdminFieldNotesSession() {
                   </div>
                 )}
                 {session.afterStatus === "ready" && session.afterSummary && (
-                  <div className="mb-8 rounded-xl border bg-blue-50 dark:bg-blue-950/20 px-5 py-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />
-                      <p className="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400">After Walkthrough</p>
+                  <div className="mb-8 rounded-xl border bg-blue-50 dark:bg-blue-950/20 px-5 py-4 group/after">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />
+                        <p className="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400">After Walkthrough</p>
+                      </div>
+                      {!editingAfterSummary && (
+                        <button
+                          className="opacity-0 group-hover/after:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                          onClick={() => { setAfterSummaryDraft(session.afterSummary); setEditingAfterSummary(true); }}
+                          title="Edit after walkthrough summary"
+                          data-testid="button-edit-after-summary"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
-                    <p className="text-sm text-foreground/80 leading-relaxed">{session.afterSummary}</p>
+                    {editingAfterSummary ? (
+                      <div>
+                        <Textarea
+                          value={afterSummaryDraft}
+                          onChange={e => setAfterSummaryDraft(e.target.value)}
+                          rows={5}
+                          className="text-sm leading-relaxed resize-none mb-2 w-full bg-white/60 dark:bg-black/20"
+                          data-testid="textarea-after-summary"
+                          autoFocus
+                        />
+                        <div className="flex gap-1.5">
+                          <Button
+                            size="sm" variant="default" className="h-7 text-xs gap-1"
+                            disabled={updateDocTextMutation.isPending}
+                            onClick={() => updateDocTextMutation.mutate({ afterSummary: afterSummaryDraft })}
+                          >
+                            {updateDocTextMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                            Save
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingAfterSummary(false)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-foreground/80 leading-relaxed">{session.afterSummary}</p>
+                    )}
                   </div>
                 )}
 
@@ -1071,6 +1377,7 @@ export default function AdminFieldNotesSession() {
                                   assets={assets}
                                   sessionId={sessionId!}
                                   index={globalIndex}
+                                  allEntries={entries}
                                   onPhotoClick={(url, e) => setLightboxPhoto({ url, entry: e })}
                                 />
                               );
