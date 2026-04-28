@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   NotebookPen, Plus, Search, Camera, Clock, MapPin,
   ChevronRight, Loader2, User, FileCheck, FileClock, AlertCircle,
-  FileText, Trash2,
+  FileText, Trash2, StopCircle,
 } from "lucide-react";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -59,7 +59,11 @@ function DocStatusIcon({ aiStatus, status, sessionSubtype }: { aiStatus: string;
   return <span className="text-[10px] text-muted-foreground">—</span>;
 }
 
-function SessionCard({ s, onClick, onDelete }: { s: Session; onClick: () => void; onDelete: (e: React.MouseEvent) => void }) {
+function SessionCard({ s, onClick, onDelete, onStopRecording }: {
+  s: Session; onClick: () => void;
+  onDelete: (e: React.MouseEvent) => void;
+  onStopRecording: (e: React.MouseEvent) => void;
+}) {
   const label = SESSION_TYPES.find(t => t.value === s.sessionType)?.label ?? s.sessionType;
   const cfg = STATUS_CONFIG[s.status] ?? STATUS_CONFIG.failed;
   const isPage = s.sessionSubtype === "manual_page";
@@ -120,6 +124,18 @@ function SessionCard({ s, onClick, onDelete }: { s: Session; onClick: () => void
               {s.status}
             </Badge>
           )}
+          {/* Admin stop action for stuck recordings */}
+          {s.status === "recording" && (
+            <button
+              data-testid={`button-stop-recording-${s.id}`}
+              className="flex items-center gap-1 text-[10px] text-red-600 font-medium border border-red-200 rounded px-1.5 py-0.5 hover:bg-red-50 transition-colors"
+              onClick={onStopRecording}
+              title="Stop this stuck recording"
+            >
+              <StopCircle className="w-2.5 h-2.5" />
+              Stop
+            </button>
+          )}
           <div className="flex-1" />
           <DocStatusIcon aiStatus={s.aiStatus} status={s.status} sessionSubtype={s.sessionSubtype ?? "walkthrough_note"} />
         </div>
@@ -139,6 +155,7 @@ export default function AdminFieldNotes() {
   const [createMode, setCreateMode] = useState<CreateMode>(null);
   const [newSession, setNewSession] = useState({ sessionType: "site_visit", locationId: "", title: "" });
   const [deleteTarget, setDeleteTarget] = useState<Session | null>(null);
+  const [stopTarget, setStopTarget] = useState<Session | null>(null);
 
   const { data: sessions = [], isLoading } = useQuery<Session[]>({ queryKey: ["/api/field-notes"] });
   const { data: locations = [] } = useQuery<any[]>({ queryKey: ["/api/locations"] });
@@ -161,6 +178,16 @@ export default function AdminFieldNotes() {
       setDeleteTarget(null);
     },
     onError: () => toast({ title: "Failed to delete", variant: "destructive" }),
+  });
+
+  const stopRecordingMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("POST", `/api/field-notes/sessions/${id}/stop-recording`).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/field-notes"] });
+      toast({ title: "Recording stopped. AI document generation started." });
+      setStopTarget(null);
+    },
+    onError: (err: any) => toast({ title: err?.message ?? "Failed to stop recording", variant: "destructive" }),
   });
 
   const filtered = sessions.filter(s => {
@@ -274,6 +301,7 @@ export default function AdminFieldNotes() {
                         s={s}
                         onClick={() => handleCardClick(s)}
                         onDelete={(e) => { e.stopPropagation(); setDeleteTarget(s); }}
+                        onStopRecording={(e) => { e.stopPropagation(); setStopTarget(s); }}
                       />
                     ))}
                   </div>
@@ -324,6 +352,32 @@ export default function AdminFieldNotes() {
               className="flex-1 gap-1.5"
             >
               {startWalkthroughMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />} Start Capture
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stop Recording confirmation dialog */}
+      <Dialog open={!!stopTarget} onOpenChange={v => !v && setStopTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <StopCircle className="w-4 h-4" /> Stop Recording?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This will end the active recording for <span className="font-medium text-foreground">{stopTarget?.title || stopTarget?.sessionType}</span> and trigger AI document generation, the same as if the field worker stopped it normally.
+          </p>
+          <div className="flex gap-2 justify-end mt-2">
+            <Button variant="outline" onClick={() => setStopTarget(null)}>Cancel</Button>
+            <Button
+              data-testid="button-confirm-stop-recording"
+              variant="destructive"
+              disabled={stopRecordingMutation.isPending}
+              onClick={() => stopTarget && stopRecordingMutation.mutate(stopTarget.id)}
+            >
+              {stopRecordingMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : null}
+              Stop Recording
             </Button>
           </div>
         </DialogContent>

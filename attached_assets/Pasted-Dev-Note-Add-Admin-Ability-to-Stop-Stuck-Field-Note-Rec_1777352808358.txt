@@ -1,0 +1,146 @@
+Dev Note: Add Admin Ability to Stop Stuck Field Note Recordings
+Task goal
+Add a safe admin-only action that lets an admin stop a Field Note that is still showing as recording, then allow the same existing AI document generation process to run.
+This is only for cases where a cleaner started a Field Note but forgot to stop it.
+Do not change how cleaners start Field Notes.
+Do not change the cleaner Field Notes flow.
+Do not change recording logic for active cleaner sessions.
+Do not change the AI document generation process.
+Only add an admin rescue action for stuck recordings.
+Important scope rule
+Only touch Field Notes.
+Do not touch:
+Dashboard
+Employees
+Schedule
+Attendance
+Payroll
+Clients
+Management
+Work Log submissions
+Reports
+Requests
+Supplies
+Publications
+Settings
+Subscription
+Messages
+Priority clean
+Normal work submissions
+Auth
+Stripe
+Any unrelated database tables or routes
+What needs to be added
+On the admin Field Notes list, when a Field Note card has status recording, show an admin action:
+Stop Recording
+This should let the admin manually close the Field Note session.
+After stopping it, the Field Note should move from recording to the same status/state it normally gets when a cleaner stops the recording properly.
+Then the admin should be able to generate the AI document using the existing process.
+Expected admin flow
+Admin opens Field Notes.
+Admin sees a Field Note card marked recording.
+Admin clicks Stop Recording.
+Show confirmation modal:
+Title:
+Stop this recording?
+Message:
+This Field Note is still marked as recording. Use this only if the cleaner forgot to stop the session. This will close the recording and make it available for document generation.
+Buttons:
+Cancel
+Stop Recording
+After admin confirms:
+Set the Field Note recording status to stopped/completed using the same backend fields that the cleaner stop action uses.
+Save an endedAt or stoppedAt timestamp.
+Preserve all existing photos, notes, transcript, audio, location, cleaner name, and metadata.
+Do not delete anything.
+Do not overwrite existing captured content.
+Then show success message:
+Recording stopped. You can now generate the Field Note document.
+Backend behavior
+Find the existing cleaner “stop recording” backend route or service function.
+Do not duplicate logic if a shared function already exists.
+Create an admin-only endpoint or server action like:
+POST /api/admin/field-notes/:id/stop-recording
+This endpoint should:
+Verify the user is an admin or authorized management user.
+Find the Field Note by ID.
+Confirm the Field Note is currently recording.
+If it is not recording, return a safe message like:
+This Field Note is already stopped.
+Update only the required status fields.
+Set stoppedAt / endedAt to current server time if missing.
+Keep all existing media and transcript data untouched.
+Return the updated Field Note.
+Important
+Use the same status values already used in the app.
+Do not invent new status names unless absolutely required.
+If current statuses are recording, in_progress, completed, stopped, ready, or processing, follow the existing pattern.
+The goal is that the Field Note behaves exactly like a cleaner properly stopped it.
+AI generation behavior
+After admin stops the recording, the existing Generate Document / Generate with AI action should become available.
+Do not create a new AI generation system.
+Do not change prompts.
+Do not change AI models.
+Do not change document formatting.
+Do not change public link generation.
+Just make the stopped Field Note eligible for the existing AI document generation process.
+UI requirement
+On Field Note cards with recording status:
+Show the current red recording badge.
+Add a small admin action button or dropdown action:
+Stop Recording
+Recommended placement:
+Inside the card action menu, or near the status badge.
+Do not clutter the card.
+Do not change the card design outside this action.
+After stopping:
+The recording badge should disappear or change to the same status that stopped Field Notes normally show.
+The card should refresh without requiring a full page reload if possible.
+Safety rules
+Do not stop recordings automatically.
+Do not stop all recordings in bulk.
+Do not add auto-timeout logic.
+Do not mark old recordings stopped unless admin clicks the button.
+Do not change the cleaner app behavior.
+Do not affect active cleaners who are currently recording unless the admin manually confirms the stop.
+Do not remove or reset captured data.
+Do not overwrite transcript data.
+Do not overwrite photo sections.
+Do not change anything in public Field Notes unless the admin later generates or updates the document.
+Edge cases to handle
+If the Field Note has no photos:
+Allow stopping it, but show normal app behavior after.
+If the Field Note already stopped:
+Show:
+This Field Note is already stopped.
+If the admin does not have permission:
+Show:
+You do not have permission to stop this Field Note.
+If the stop action fails:
+Show:
+Unable to stop recording. Please try again.
+If the Field Note is actively being recorded by a cleaner:
+Still require admin confirmation before stopping.
+Do not silently stop it.
+Testing checklist
+Test this exact flow:
+Cleaner starts Field Note.
+Cleaner leaves without stopping.
+Admin sees Field Note marked recording.
+Admin clicks Stop Recording.
+Confirmation modal appears.
+Admin confirms.
+Recording status updates.
+Photos remain attached.
+Transcript remains attached if available.
+Cleaner name remains attached.
+Time/date remains correct.
+AI document generation becomes available.
+Admin generates Field Note document using existing process.
+Public Field Note can be created using existing process.
+No other Field Notes are changed.
+No cleaner flow is changed.
+No Work Log or Reports feature is affected.
+Final expected result
+Admin can fix a stuck Field Note recording without needing the cleaner to go back and stop it.
+The Field Note should then behave like a normally stopped Field Note and allow the admin to generate the AI document and public Field Note link.

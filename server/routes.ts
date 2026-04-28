@@ -5393,6 +5393,23 @@ Return a JSON object with these exact fields:
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  // POST /api/field-notes/sessions/:sessionId/stop-recording — admin force-stop a stuck recording
+  app.post("/api/field-notes/sessions/:sessionId/stop-recording", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const session = await storage.getFieldNotesSession(req.params.sessionId);
+      if (!session || session.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (session.status !== "recording") return res.status(400).json({ message: "This Field Note is already stopped." });
+      const now = new Date().toISOString();
+      const updated = await storage.updateFieldNotesSession(session.id, { status: "uploading", endedAt: now });
+      processFieldNoteSession(session.id, user.companyId).catch(err => {
+        console.error("[FieldNotes] Admin force-stop AI processing error:", err.message);
+        storage.updateFieldNotesSession(session.id, { aiStatus: "failed", status: "ready" });
+      });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   // POST /api/field-notes/sessions/:sessionId/stop-after — finish after-walkthrough
   app.post("/api/field-notes/sessions/:sessionId/stop-after", fnAuth, async (req, res) => {
     try {
