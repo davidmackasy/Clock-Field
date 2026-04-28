@@ -38,3 +38,34 @@ The application is built as a full-stack JavaScript application.
 - **Drizzle ORM**: TypeScript ORM for PostgreSQL.
 - **OpenAI (gpt-4o-mini)**: Used for AI-assisted writing in the Publications module (improve, summarize, SEO description, professional tone, captions, intros). Key: `OPENAI_API_KEY`.
 - **Web Speech API**: Browser-native voice-to-text used in the Publications section editor (no extra package).
+
+## Field Notes Module
+
+The Field Notes system allows employees to capture on-site inspections with photos, voice recordings, and AI-generated structured summaries.
+
+**Key tables**: `field_notes_sessions`, `field_notes_entries`, `field_notes_assets`, `field_notes_transcript_chunks`, `field_notes_public_documents`, `field_notes_todos`
+
+**Admin editor** (`/admin/field-notes/session/:id`): Full document editor with:
+- Tabs: Document (entry editing), Photos, Transcript
+- Each entry section has: Eye/EyeOff toggle (hide/show from public link), Edit button
+- Per-photo controls on hover: drag handle (top-left) for reordering, EyeOff/Eye button (top-right) to hide/show
+- Drag-to-reorder photos within a section (updates `assetIds` array order in entry)
+- Section text editing: title, area name, body, bullet points, recommended action, voice transcript
+- AI summary editing at session level
+
+**Public link** (`/public/field-notes/:token`): Client-facing document view:
+- Filters out entries where `isHiddenFromPublic = true`
+- Filters out assets where `isHiddenFromPublic = true`
+- Shows opening intro, area sections with photos, optional quote section
+- Supports quote accept/decline flow
+
+**Key schema fields**:
+- `field_notes_entries.isHiddenFromPublic` — hides entire section from public link
+- `field_notes_assets.isHiddenFromPublic` — hides individual photo from public link
+- `field_notes_entries.assetIds` — JSON array of asset IDs; order determines photo display order
+- `field_notes_entries.sortOrder` — entry display ordering
+
+**Key API routes**:
+- `PATCH /api/field-notes/entries/:id` — update entry (incl. `isHiddenFromPublic`, `assetIds` reorder)
+- `PATCH /api/field-notes/assets/:id` — update asset (incl. `isHiddenFromPublic`, `caption`, `phase`)
+- `GET /api/public/field-notes/:token` — public view (filters hidden entries + assets)

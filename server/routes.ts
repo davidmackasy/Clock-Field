@@ -5490,11 +5490,12 @@ Return a JSON object with these exact fields:
       if (!asset) return res.status(404).json({ message: "Not found" });
       const session = await storage.getFieldNotesSession(asset.sessionId);
       if (!session || session.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
-      const { caption, phase, areaLabel } = req.body;
+      const { caption, phase, areaLabel, isHiddenFromPublic } = req.body;
       const updated = await storage.updateFieldNotesAsset(asset.id, {
         ...(caption !== undefined && { caption }),
         ...(phase !== undefined && { phase }),
         ...(areaLabel !== undefined && { areaLabel }),
+        ...(isHiddenFromPublic !== undefined && { isHiddenFromPublic: !!isHiddenFromPublic }),
       });
       res.json(updated);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
@@ -5584,7 +5585,7 @@ Return a JSON object with these exact fields:
   app.patch("/api/field-notes/entries/:entryId", fnAuth, async (req, res) => {
     try {
       const user = req.user as any;
-      const { title, body, areaName, priority, recommendedAction, clientSafeSummary, assetIds, relatedTranscript } = req.body;
+      const { title, body, areaName, priority, recommendedAction, clientSafeSummary, assetIds, relatedTranscript, isHiddenFromPublic } = req.body;
       const updated = await storage.updateFieldNotesEntry(req.params.entryId, {
         ...(title !== undefined && { title }),
         ...(body !== undefined && { body }),
@@ -5594,6 +5595,7 @@ Return a JSON object with these exact fields:
         ...(clientSafeSummary !== undefined && { clientSafeSummary }),
         ...(assetIds !== undefined && { assetIds: typeof assetIds === "string" ? assetIds : JSON.stringify(assetIds) }),
         ...(relatedTranscript !== undefined && { relatedTranscript }),
+        ...(isHiddenFromPublic !== undefined && { isHiddenFromPublic: !!isHiddenFromPublic }),
       });
       if (!updated) return res.status(404).json({ message: "Not found" });
       res.json(updated);
@@ -5691,13 +5693,18 @@ Return a JSON object with these exact fields:
         storage.getFieldNotesEntries(session.id),
         storage.getFieldNotesTranscriptChunks(session.id),
       ]);
-      // Filter: only show client-safe entries unless showInternalNotes is on
-      const publicEntries = entries.filter(e => doc.showInternalNotes || e.clientSafeSummary || e.body);
+      // Filter: exclude hidden entries; only show client-safe entries unless showInternalNotes is on
+      const publicEntries = entries.filter(e =>
+        !(e as any).isHiddenFromPublic &&
+        (doc.showInternalNotes || (e as any).clientSafeSummary || e.body)
+      );
+      // Filter: exclude hidden assets
+      const publicAssets = assets.filter(a => !(a as any).isHiddenFromPublic);
       res.json({
         session: { ...session, createdByName, locationName },
         company: { name: companyRow?.name, companyLogoUrl: (companyRow as any)?.companyLogoUrl ?? null },
         entries: publicEntries,
-        assets: assets.map(a => ({ id: a.id, fileUrl: a.fileUrl, capturedAt: a.capturedAt, areaLabel: (a as any).areaLabel ?? null, phase: a.phase ?? null, caption: a.caption ?? null })),
+        assets: publicAssets.map(a => ({ id: a.id, fileUrl: a.fileUrl, capturedAt: a.capturedAt, areaLabel: (a as any).areaLabel ?? null, phase: a.phase ?? null, caption: a.caption ?? null })),
         transcriptChunks: doc.showInternalNotes ? chunks : [],
         hasTranscript: chunks.length > 0,
         publicDoc: doc,

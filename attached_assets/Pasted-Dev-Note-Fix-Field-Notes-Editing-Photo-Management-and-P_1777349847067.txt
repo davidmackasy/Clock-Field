@@ -1,0 +1,332 @@
+Dev Note: Fix Field Notes Editing, Photo Management, and Public Link Output
+Task goal
+Improve the Field Notes document editor and public shared link so companies can fully customize what they share with clients.
+This must only affect Field Notes.
+Do not touch payroll, schedules, attendance, worklogs, priority clean, inventory, requests, auth, Stripe, employee profiles, admin settings, or any other working feature.
+Do not refactor unrelated code.
+Do not redesign the full app.
+Do not change the database structure unless it is required for this exact Field Notes feature.
+Do not remove anything that is already working.
+Focus only on Field Notes admin editing, photo control, section control, and public link syncing.
+Main problem
+Right now, the admin can update some Field Notes text like title and subtitle, but the public link does not show the updated version properly.
+The public link still shows generic text like:
+A general inspection was performed at your site. Please note specifics were not detailed.
+That makes the public link look unfinished and not client-ready.
+Companies need to customize the public Field Notes output before sharing it with clients.
+Required fixes
+
+
+Make public link use the latest admin edits
+
+
+When the admin edits a Field Note, the public link must show the exact updated version.
+This includes:
+Title
+Subtitle
+Location name
+Prepared by name
+Date
+Main overview text
+Section titles
+Section descriptions
+Section bullet points
+Photo order
+Hidden sections
+Deleted photos
+Moved photos
+Any custom text added by the admin
+Expected behavior:
+Admin updates Field Note.
+Admin saves changes.
+Admin opens or refreshes the public link.
+Public link shows the updated content immediately.
+No generic fallback text should appear if the admin has provided custom text.
+Only use fallback text if the field is completely empty and there is no saved admin content.
+
+
+Add photo delete/removal option
+
+
+Admins must be able to remove photos they do not want included in the public Field Notes document.
+Add a clear delete/remove control on each photo inside the Field Notes admin editor.
+Expected behavior:
+Admin clicks remove on a photo.
+Ask for a simple confirmation.
+Once confirmed, the photo is removed from the Field Note output.
+The removed photo must not appear on the public link.
+This should not delete unrelated files or affect other Field Notes unless that same photo record is only tied to this Field Note.
+Use soft delete or field-level exclusion if safer.
+Recommended approach:
+Add an isHiddenFromPublic or removedFromFieldNote flag if hard deletion is risky.
+The public link should only render photos that are active and not hidden/removed.
+
+
+Add drag-and-drop photo ordering
+
+
+Admins need to reorder photos inside a section.
+Add drag-and-drop support to Field Notes photos.
+Expected behavior:
+Admin drags photo 4 before photo 1.
+Admin saves.
+The admin preview updates.
+The public link shows the new photo order.
+Store a sortOrder value for each photo.
+Do not rely only on upload time.
+
+
+Add ability to move photos between sections
+
+
+Admins need to move a photo from one section to another.
+Example:
+A photo currently under Section 1 should be moved to Section 2 if it fits better there.
+Required behavior:
+Each photo should support moving to another section.
+This can be done with drag-and-drop between sections or a dropdown like “Move to section.”
+Best implementation:
+Allow drag-and-drop between sections.
+Also add a simple backup option on each photo:
+Move to:
+General Overview
+Unupdated
+Section 1
+Section 2
+Custom section name
+Expected behavior:
+Admin moves photo from Section 1 to Section 2.
+Admin saves.
+Photo disappears from Section 1.
+Photo appears in Section 2.
+Public link shows the photo in Section 2 only.
+The photo count beside each section must update correctly.
+
+
+Add section hide/show controls
+
+
+Admins need the ability to hide full sections from the public link.
+Add a toggle for every Field Notes section:
+Show on public link / Hide from public link
+Expected behavior:
+If a section is hidden, the public link should not show:
+Section title
+Section description
+Bullet points
+Photos
+Photo count
+Divider line
+Empty spacing
+The admin editor can still show the hidden section with a clear “Hidden from public link” label.
+This allows the admin to keep the data internally while not sharing it with the client.
+
+
+Allow photos from top/general area to be moved into sections
+
+
+Right now, some photos appear at the top or in a general overview area.
+Admins must be able to move those photos into the correct section.
+Required behavior:
+Photos in the top/general photo group should be draggable into any section.
+The public link should not force those photos to stay at the top.
+If the top section has no photos and no custom text, it should not show empty space.
+
+
+Make Field Notes public link feel client-ready
+
+
+The public link should feel like a polished inspection/report document, not a generic system output.
+Required public link layout:
+Company logo or icon area
+Company name
+Field Notes title
+Subtitle/category
+Date
+Prepared by
+Custom overview text
+Clean section blocks
+Section title
+Section description
+Optional bullet points
+Photo grid
+Correct photo count
+No empty transcript section unless there is a transcript
+No generic text if custom content exists
+No empty sections
+No awkward blank spaces
+
+
+Fix generic top text issue
+
+
+Remove or stop forcing this generic text:
+“A general inspection was performed at your site. Please note specifics were not detailed.”
+Only show this if no custom overview exists.
+If the admin enters an overview, use the admin overview.
+Example custom overview:
+“This inspection was completed to document current site conditions, cleaning notes, and visual observations for client review.”
+The public link must display that exact saved text.
+
+
+Make save/update reliable
+
+
+Add one clear save action for Field Notes changes.
+When admin edits the Field Note:
+Text edits
+Photo deletions
+Photo movement
+Photo ordering
+Section hiding
+Section description updates
+All changes must save correctly.
+Expected behavior:
+After saving, show success message:
+“Field Note updated successfully.”
+Then the public link must reflect the same saved state.
+
+
+Add proper data syncing between admin and public link
+
+
+Check the backend route used by the public link.
+It is likely pulling old/original Field Notes data instead of the edited version.
+Fix the public link data source so it pulls the latest saved Field Notes version.
+Check for issues like:
+Public route using original generated content instead of edited content
+Cached public data not refreshing
+Separate public table not being updated after admin edits
+Frontend state updating but backend not saving
+Section edits saved locally but not persisted
+Photo order not stored
+Public link ignoring hidden/deleted photo flags
+Public link using fallback text before checking saved custom fields
+
+
+Add field-level fallback logic properly
+
+
+Use this logic:
+If custom admin value exists, show custom admin value.
+If no custom admin value exists, show generated value.
+If no generated value exists, show nothing or a clean fallback.
+Do not show generic filler text over real admin edits.
+
+
+Photo grid requirements
+
+
+Keep the photo grid clean and responsive.
+Desktop:
+4 photos per row if space allows
+Consistent image sizes
+Rounded corners
+No stretched images
+No broken cropping
+Mobile:
+2 photos per row or clean responsive layout
+Photos should not overflow
+No huge blank spaces
+Photo count must match visible photos only.
+If a section has 5 photos but 2 are hidden, public link should show 3 photos.
+
+
+Admin editor UI requirements
+
+
+Inside the admin Field Notes editor, add:
+Editable title
+Editable subtitle
+Editable overview text
+Editable section title
+Editable section description
+Editable bullet points if already supported
+Photo remove button
+Photo move control
+Drag-and-drop photo ordering
+Section hide/show toggle
+Clear save button
+Public preview/open link button
+Hidden section label
+Photo count per section
+Do not make the admin scroll all the way down just to manage everything if avoidable.
+Make the controls easy to find.
+
+
+Public link should never show editing controls
+
+
+The public shared link is view-only.
+Do not show:
+Delete buttons
+Move buttons
+Drag handles
+Admin controls
+Internal IDs
+Debug data
+Hidden sections
+Removed photos
+
+
+Testing checklist
+
+
+Test these before marking complete:
+Create or open a Field Note.
+Edit the title.
+Save.
+Open public link.
+Confirm title changed.
+Edit overview text.
+Save.
+Refresh public link.
+Confirm generic text is gone.
+Remove one photo.
+Save.
+Refresh public link.
+Confirm photo is gone.
+Move photo from top/general area into a section.
+Save.
+Refresh public link.
+Confirm photo appears in the new section.
+Move photo from Section 1 to Section 2.
+Save.
+Refresh public link.
+Confirm photo only appears in Section 2.
+Reorder photos.
+Save.
+Refresh public link.
+Confirm same order.
+Hide a section.
+Save.
+Refresh public link.
+Confirm section is fully hidden.
+Unhide the section.
+Save.
+Refresh public link.
+Confirm it shows again.
+Confirm photo counts are correct.
+Confirm mobile layout works.
+Confirm desktop layout works.
+Confirm no unrelated pages changed.
+Important instruction to the agent
+Do not touch anything outside Field Notes.
+Do not change unrelated routes, pages, models, layouts, or shared components unless they are directly used by Field Notes and required for this fix.
+Do not break anything currently working.
+Do not remove existing Field Notes data.
+Do not change the cleaner submission flow unless required to preserve existing Field Notes data.
+Do not change priority clean, normal work submissions, employee pages, reports, reviews, payroll, schedules, inventory, requests, auth, or billing.
+Only fix the Field Notes admin editor and public link output.
+Final expected result
+The admin should be able to fully prepare a clean, professional Field Notes document before sharing it.
+They should be able to:
+Edit the text
+Remove bad photos
+Move photos to the correct section
+Reorder photos
+Hide sections
+Save everything
+Generate/open the public link
+See the exact updated version on the public link
+The public link should look professional, customized, and client-ready.

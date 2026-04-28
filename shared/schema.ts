@@ -738,6 +738,7 @@ export const fieldNotesAssets = pgTable("field_notes_assets", {
   areaLabel: text("area_label"),
   areaConfidence: text("area_confidence"),
   phase: text("phase").notNull().default("before"),
+  isHiddenFromPublic: boolean("is_hidden_from_public").notNull().default(false),
   createdAt: text("created_at").notNull(),
 });
 
@@ -767,6 +768,7 @@ export const fieldNotesEntries = pgTable("field_notes_entries", {
   relatedTranscript: text("related_transcript"),
   issueDetected: boolean("issue_detected").notNull().default(false),
   recommendedAction: text("recommended_action"),
+  isHiddenFromPublic: boolean("is_hidden_from_public").notNull().default(false),
   createdByAi: boolean("created_by_ai").notNull().default(true),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),

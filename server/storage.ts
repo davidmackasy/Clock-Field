@@ -1287,7 +1287,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(fieldNotesEntryTags.sessionId, sessionId));
   }
 
-  async updateFieldNotesAsset(id: string, data: Partial<Pick<FieldNotesAsset, "caption" | "phase" | "areaLabel">>): Promise<FieldNotesAsset | undefined> {
+  async updateFieldNotesAsset(id: string, data: Partial<Pick<FieldNotesAsset, "caption" | "phase" | "areaLabel" | "isHiddenFromPublic">>): Promise<FieldNotesAsset | undefined> {
     const [row] = await db.update(fieldNotesAssets).set(data as any).where(eq(fieldNotesAssets.id, id)).returning();
     return row;
   }

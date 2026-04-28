@@ -15,9 +15,10 @@ import {
   ChevronLeft, MapPin, Clock, Camera, Mic,
   Loader2, Edit3, X, Check, Images, FileText,
   Sparkles, NotebookPen, Share2, Copy, Link as LinkIcon,
-  EyeOff, User, Printer, ChevronDown, ChevronUp,
+  EyeOff, Eye, User, Printer, ChevronDown, ChevronUp,
   FileCheck, DollarSign, Building, LayoutList, Wand2,
   CheckCircle2, XCircle, Plus, SplitSquareHorizontal, Trash2,
+  GripVertical,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format, parseISO, differenceInMinutes } from "date-fns";
@@ -147,6 +148,8 @@ function DocumentObservation({ entry, assets, sessionId, index, allEntries = [],
   const [showTranscript, setShowTranscript] = useState(false);
   const [listening, setListening] = useState(false);
   const [micField, setMicField] = useState<string | null>(null);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dropIdx, setDropIdx] = useState<number | null>(null);
 
   const parseBullets = (cs: string | null): string[] => {
     try { const p = JSON.parse(cs || ""); if (Array.isArray(p)) return p; } catch {}
@@ -201,6 +204,20 @@ function DocumentObservation({ entry, assets, sessionId, index, allEntries = [],
     onError: () => toast({ title: "Failed to move photo", variant: "destructive" }),
   });
 
+  const hidePhotoMutation = useMutation({
+    mutationFn: ({ assetId, hide }: { assetId: string; hide: boolean }) =>
+      apiRequest("PATCH", `/api/field-notes/assets/${assetId}`, { isHiddenFromPublic: hide }).then(r => r.json()),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/field-notes/sessions", sessionId] }); },
+    onError: () => toast({ title: "Failed to update photo", variant: "destructive" }),
+  });
+
+  const toggleSectionMutation = useMutation({
+    mutationFn: (hide: boolean) =>
+      apiRequest("PATCH", `/api/field-notes/entries/${entry.id}`, { isHiddenFromPublic: hide }).then(r => r.json()),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/field-notes/sessions", sessionId] }); },
+    onError: () => toast({ title: "Failed to update section", variant: "destructive" }),
+  });
+
   const handleSave = () => {
     updateMutation.mutate({
       title: form.title,
@@ -234,12 +251,15 @@ function DocumentObservation({ entry, assets, sessionId, index, allEntries = [],
   const otherEntries = allEntries.filter(e => e.id !== entry.id);
 
   return (
-    <div className="group relative">
+    <div className={cn("group relative", entry.isHiddenFromPublic && "opacity-60")}>
       {/* Section divider */}
       <div className="flex items-center gap-3 mb-4">
         <span className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest whitespace-nowrap">{index}.</span>
         {entry.areaName && !editing && (
           <span className="text-xs font-semibold text-foreground/70">{entry.areaName}</span>
+        )}
+        {entry.isHiddenFromPublic && (
+          <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border">Hidden from public</span>
         )}
         <div className="flex-1 h-px bg-border" />
         {editing ? (
@@ -256,14 +276,26 @@ function DocumentObservation({ entry, assets, sessionId, index, allEntries = [],
             </Button>
           </div>
         ) : (
-          <Button
-            data-testid={`button-edit-entry-${entry.id}`}
-            size="icon" variant="ghost"
-            className="w-6 h-6 opacity-40 hover:opacity-100 transition-opacity"
-            onClick={() => setEditing(true)}
-          >
-            <Edit3 className="w-3 h-3" />
-          </Button>
+          <div className="flex gap-0.5">
+            <Button
+              data-testid={`button-toggle-section-${entry.id}`}
+              size="icon" variant="ghost"
+              className="w-6 h-6 opacity-40 hover:opacity-100 transition-opacity"
+              title={entry.isHiddenFromPublic ? "Show section on public link" : "Hide section from public link"}
+              onClick={() => toggleSectionMutation.mutate(!entry.isHiddenFromPublic)}
+              disabled={toggleSectionMutation.isPending}
+            >
+              {entry.isHiddenFromPublic ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+            </Button>
+            <Button
+              data-testid={`button-edit-entry-${entry.id}`}
+              size="icon" variant="ghost"
+              className="w-6 h-6 opacity-40 hover:opacity-100 transition-opacity"
+              onClick={() => setEditing(true)}
+            >
+              <Edit3 className="w-3 h-3" />
+            </Button>
+          </div>
         )}
       </div>
 
@@ -309,13 +341,57 @@ function DocumentObservation({ entry, assets, sessionId, index, allEntries = [],
           linkedAssets.length === 1 ? "grid grid-cols-1 rounded-xl overflow-hidden" : "grid grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-1"
         )}>
           {linkedAssets.map((asset: any, i: number) => (
-            <div key={asset.id} className="relative group/photo">
+            <div
+              key={asset.id}
+              className={cn(
+                "relative group/photo transition-opacity",
+                asset.isHiddenFromPublic ? "opacity-40" : "",
+                dragIdx === i ? "opacity-50 scale-95" : "",
+                dropIdx === i && dragIdx !== i ? "ring-2 ring-primary ring-offset-1 rounded-lg" : "",
+              )}
+              draggable
+              onDragStart={() => setDragIdx(i)}
+              onDragOver={e => { e.preventDefault(); setDropIdx(i); }}
+              onDrop={() => {
+                if (dragIdx !== null && dragIdx !== i) {
+                  const newOrder = [...linkedAssets];
+                  const [removed] = newOrder.splice(dragIdx, 1);
+                  newOrder.splice(i, 0, removed);
+                  updateMutation.mutate({ assetIds: newOrder.map((a: any) => a.id) });
+                }
+                setDragIdx(null); setDropIdx(null);
+              }}
+              onDragEnd={() => { setDragIdx(null); setDropIdx(null); }}
+            >
               <div
                 data-testid={`img-doc-photo-${asset.id}`}
-                className="overflow-hidden rounded-lg cursor-pointer bg-muted hover:opacity-95 transition-opacity aspect-square"
-                onClick={() => onPhotoClick(asset.fileUrl, entry)}
+                className={cn(
+                  "overflow-hidden rounded-lg cursor-pointer bg-muted hover:opacity-95 transition-opacity aspect-square",
+                )}
+                onClick={() => !asset.isHiddenFromPublic && onPhotoClick(asset.fileUrl, entry)}
               >
                 <img src={asset.fileUrl} alt={`Photo ${i + 1}`} className={cn("w-full h-full object-cover", linkedAssets.length === 1 ? "max-h-72" : "")} />
+                {/* Hidden overlay */}
+                {asset.isHiddenFromPublic && (
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-lg">
+                    <span className="text-[8px] font-bold text-white uppercase tracking-widest bg-black/60 px-1.5 py-0.5 rounded">Hidden</span>
+                  </div>
+                )}
+                {/* Drag handle */}
+                <div className="absolute top-1 left-1 opacity-0 group-hover/photo:opacity-100 transition-opacity cursor-grab active:cursor-grabbing">
+                  <div className="w-4 h-4 bg-black/50 rounded flex items-center justify-center">
+                    <GripVertical className="w-2.5 h-2.5 text-white" />
+                  </div>
+                </div>
+                {/* Hide/unhide toggle */}
+                <button
+                  className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover/photo:opacity-100 transition-opacity z-10"
+                  onClick={e => { e.stopPropagation(); hidePhotoMutation.mutate({ assetId: asset.id, hide: !asset.isHiddenFromPublic }); }}
+                  title={asset.isHiddenFromPublic ? "Show on public link" : "Hide from public link"}
+                  data-testid={`button-toggle-photo-${asset.id}`}
+                >
+                  {asset.isHiddenFromPublic ? <Eye className="w-2.5 h-2.5" /> : <EyeOff className="w-2.5 h-2.5" />}
+                </button>
               </div>
               {otherEntries.length > 0 && (
                 <div className="absolute bottom-0 left-0 right-0 opacity-0 group-hover/photo:opacity-100 transition-opacity">
