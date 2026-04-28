@@ -409,9 +409,11 @@ function InventoryTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sh
         )}
       </div>
 
-      {/* Items Grid */}
+      {/* Items Grid — shelf-style, 4 per row on desktop */}
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{[1,2,3,4].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}</div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          {[1,2,3,4,5,6,7,8].map(i => <Skeleton key={i} className="aspect-[3/4] rounded-xl" />)}
+        </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Layers className="w-10 h-10 text-muted-foreground/30 mb-3" />
@@ -419,58 +421,55 @@ function InventoryTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sh
           <p className="text-xs text-muted-foreground mt-1">Add your first item to start tracking inventory</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           {filtered.map((item: any) => (
             <div
               key={item.id}
-              className="rounded-xl border bg-background shadow-sm hover:shadow-md transition-shadow"
+              className="rounded-xl border bg-background shadow-sm hover:shadow-md transition-all flex flex-col overflow-hidden"
               data-testid={`card-inventory-${item.id}`}
             >
-              <div className="flex gap-3 p-3">
-                <div className="w-14 h-14 rounded-lg bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
-                  {item.imageData ? (
-                    <img src={item.imageData} alt={item.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <Package className="w-5 h-5 text-muted-foreground/50" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-semibold truncate">{item.name}</p>
-                    <InvStatusBadge status={item.status} />
-                  </div>
-                  <p className="text-xs text-muted-foreground">{item.category}</p>
-                  <div className="flex items-center gap-2 mt-1.5 text-[11px] text-muted-foreground flex-wrap">
-                    <span className="font-medium text-foreground">{item.currentQuantity} in stock</span>
-                    <span>·</span>
-                    <span>{fmtCurrency(parseFloat(item.unitPrice))} / unit</span>
-                  </div>
-                  <div className="mt-0.5 text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">
-                    Value: {fmtCurrency(parseFloat(item.unitPrice) * item.currentQuantity)}
-                  </div>
+              {/* Product image */}
+              <div className="relative bg-muted/40 flex items-center justify-center aspect-square overflow-hidden">
+                {item.imageData ? (
+                  <img src={item.imageData} alt={item.name} className="w-full h-full object-contain p-2" />
+                ) : (
+                  <Package className="w-8 h-8 text-muted-foreground/30" />
+                )}
+                <div className="absolute top-1.5 right-1.5">
+                  <InvStatusBadge status={item.status} />
                 </div>
               </div>
-              <div className="flex border-t divide-x">
+              {/* Details */}
+              <div className="p-2.5 flex-1 space-y-1">
+                <p className="text-xs font-semibold leading-tight line-clamp-2">{item.name}</p>
+                <p className="text-[10px] text-muted-foreground">{item.category}</p>
+                <p className="text-[10px] text-foreground font-medium">{item.currentQuantity} in stock · {fmtCurrency(parseFloat(item.unitPrice))}/unit</p>
+                <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold">
+                  Value: {fmtCurrency(parseFloat(item.unitPrice) * item.currentQuantity)}
+                </p>
+              </div>
+              {/* Actions */}
+              <div className="flex border-t divide-x mt-auto">
                 <button
-                  className="flex-1 py-2 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-colors flex items-center justify-center gap-1 rounded-bl-xl"
+                  className="flex-1 py-1.5 text-[10px] font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-colors flex items-center justify-center gap-0.5"
                   onClick={() => setEditItem(item)}
                   data-testid={`button-edit-inventory-${item.id}`}
                 >
-                  <Pencil className="w-3 h-3" />Edit
+                  <Pencil className="w-2.5 h-2.5" />Edit
                 </button>
                 <button
-                  className="flex-1 py-2 text-xs font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors flex items-center justify-center gap-1"
+                  className="flex-1 py-1.5 text-[10px] font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors flex items-center justify-center gap-0.5"
                   onClick={() => setRestockItem(item)}
                   data-testid={`button-restock-${item.id}`}
                 >
-                  <PackageCheck className="w-3 h-3" />Restock
+                  <PackageCheck className="w-2.5 h-2.5" />Restock
                 </button>
                 <button
-                  className="flex-1 py-2 text-xs font-medium text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors flex items-center justify-center gap-1 rounded-br-xl"
+                  className="flex-1 py-1.5 text-[10px] font-medium text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors flex items-center justify-center gap-0.5"
                   onClick={() => setAssignItem(item)}
                   data-testid={`button-assign-${item.id}`}
                 >
-                  <ArrowRight className="w-3 h-3" />Assign
+                  <ArrowRight className="w-2.5 h-2.5" />Assign
                 </button>
               </div>
             </div>
@@ -1037,7 +1036,9 @@ function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sho
         </div>
 
         {isLoading ? (
-          <div className="space-y-2">{[1,2].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {[1,2,3,4].map(i => <Skeleton key={i} className="aspect-[3/4] rounded-xl" />)}
+          </div>
         ) : filteredAssigned.length === 0 ? (
           <div className="rounded-xl border border-dashed bg-muted/20 p-6 text-center">
             <p className="text-xs text-muted-foreground">No supplies assigned yet.</p>
@@ -1046,65 +1047,65 @@ function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sho
             </Button>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {filteredAssigned.map((s: any) => {
               const needsAttention = CONCERNING.includes(s.status);
               return (
                 <div
                   key={s.id}
-                  className={`rounded-xl border bg-background shadow-sm overflow-hidden ${needsAttention ? "border-orange-200 dark:border-orange-900" : ""}`}
+                  className={`rounded-xl border bg-background shadow-sm hover:shadow-md transition-all flex flex-col overflow-hidden ${needsAttention ? "border-orange-200 dark:border-orange-900" : ""}`}
                   data-testid={`card-assigned-${s.id}`}
                 >
+                  {/* Image */}
                   <button
-                    className="w-full text-left p-3 hover:bg-muted/30 transition-colors"
+                    className="relative bg-muted/40 flex items-center justify-center aspect-square overflow-hidden hover:opacity-90 transition-opacity"
                     onClick={() => { setDetailId(s.id); setEditMode(false); }}
                   >
-                    <div className="flex gap-3">
-                      <div className="w-12 h-12 rounded-lg bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
-                        {s.imageData ? (
-                          <img src={s.imageData} alt={s.name} className="w-full h-full object-cover" />
-                        ) : <Package className="w-4 h-4 text-muted-foreground/50" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-semibold truncate">{s.name}</p>
-                          <StatusBadge status={s.status} />
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">{s.category}</p>
-                        <div className="flex flex-wrap items-center gap-2 mt-1">
-                          {s.locationName && (
-                            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                              <MapPin className="w-3 h-3" />{s.locationName}
-                            </span>
-                          )}
-                          {s.assignedEmployeeName && (
-                            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                              <User className="w-3 h-3" />{s.assignedEmployeeName}
-                            </span>
-                          )}
-                          {needsAttention && (
-                            <span className="text-[11px] font-semibold text-orange-600 flex items-center gap-0.5">
-                              <AlertTriangle className="w-3 h-3" />Needs Attention
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                    {s.imageData ? (
+                      <img src={s.imageData} alt={s.name} className="w-full h-full object-contain p-2" />
+                    ) : <Package className="w-8 h-8 text-muted-foreground/30" />}
+                    <div className="absolute top-1.5 right-1.5">
+                      <StatusBadge status={s.status} />
                     </div>
+                    {needsAttention && (
+                      <div className="absolute top-1.5 left-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-orange-500" />
+                      </div>
+                    )}
                   </button>
-                  <div className="flex border-t divide-x">
+                  {/* Details */}
+                  <button
+                    className="p-2.5 text-left flex-1 hover:bg-muted/20 transition-colors"
+                    onClick={() => { setDetailId(s.id); setEditMode(false); }}
+                  >
+                    <p className="text-xs font-semibold leading-tight line-clamp-2">{s.name}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{s.category}</p>
+                    {s.locationName && (
+                      <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground mt-1">
+                        <MapPin className="w-2.5 h-2.5" />{s.locationName}
+                      </span>
+                    )}
+                    {s.assignedEmployeeName && (
+                      <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                        <User className="w-2.5 h-2.5" />{s.assignedEmployeeName}
+                      </span>
+                    )}
+                  </button>
+                  {/* Actions */}
+                  <div className="flex border-t divide-x mt-auto">
                     <button
-                      className="flex-1 py-2 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors flex items-center justify-center gap-1"
+                      className="flex-1 py-1.5 text-[10px] font-medium text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors flex items-center justify-center gap-0.5 whitespace-nowrap"
                       onClick={() => setRestockId(s.id)}
                       data-testid={`button-restock-${s.id}`}
                     >
-                      <RotateCcw className="w-3 h-3" />Restock / Add More
+                      <RotateCcw className="w-2.5 h-2.5" />Restock
                     </button>
                     <button
-                      className="flex-1 py-2 text-[11px] font-medium text-muted-foreground hover:bg-muted/50 transition-colors flex items-center justify-center gap-1"
+                      className="flex-1 py-1.5 text-[10px] font-medium text-muted-foreground hover:bg-muted/50 transition-colors flex items-center justify-center gap-0.5"
                       onClick={() => { setDetailId(s.id); setEditMode(false); }}
                       data-testid={`button-view-assigned-${s.id}`}
                     >
-                      <ChevronRight className="w-3 h-3" />View
+                      <ChevronRight className="w-2.5 h-2.5" />View
                     </button>
                   </div>
                 </div>
@@ -1132,76 +1133,85 @@ function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sho
         </div>
 
         {isLoading ? (
-          <div className="space-y-2">{[1,2].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {[1,2,3,4].map(i => <Skeleton key={i} className="aspect-[3/4] rounded-xl" />)}
+          </div>
         ) : filteredReqs.length === 0 ? (
           <div className="rounded-xl border border-dashed bg-muted/20 p-6 text-center">
             <p className="text-xs text-muted-foreground">No cleaner requests yet.</p>
             <p className="text-xs text-muted-foreground mt-1">Cleaners can request new supplies from their employee page.</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {filteredReqs.map((s: any) => {
               const isDone = ["fulfilled", "not_needed", "resolved"].includes(s.status);
               return (
                 <div
                   key={s.id}
-                  className={`rounded-xl border bg-background shadow-sm overflow-hidden ${isDone ? "opacity-60" : ""}`}
+                  className={`rounded-xl border bg-background shadow-sm hover:shadow-md transition-all flex flex-col overflow-hidden ${isDone ? "opacity-60" : ""}`}
                   data-testid={`card-request-${s.id}`}
                 >
+                  {/* Image */}
                   <button
-                    className="w-full text-left p-3 hover:bg-muted/30 transition-colors"
+                    className="relative bg-muted/40 flex items-center justify-center aspect-square overflow-hidden hover:opacity-90 transition-opacity"
                     onClick={() => { setDetailId(s.id); setEditMode(false); }}
                   >
-                    <div className="flex gap-3">
-                      <div className="w-12 h-12 rounded-lg bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
-                        {s.imageData ? (
-                          <img src={s.imageData} alt={s.name} className="w-full h-full object-cover" />
-                        ) : <Package className="w-4 h-4 text-muted-foreground/50" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-semibold truncate">{s.name}</p>
-                          <StatusBadge status={s.status} />
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">{s.category || "No category"}</p>
-                        <div className="flex flex-wrap items-center gap-2 mt-1">
-                          {s.locationName && (
-                            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                              <MapPin className="w-3 h-3" />{s.locationName}
-                            </span>
-                          )}
-                          {s.createdByUserName && (
-                            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                              <User className="w-3 h-3" />{s.createdByUserName}
-                            </span>
-                          )}
-                          {s.urgency && s.urgency !== "normal" && (
-                            <span className={`text-[11px] font-semibold ${s.urgency === "urgent" ? "text-red-600" : "text-orange-500"}`}>
-                              {s.urgency === "urgent" ? "⚠ Urgent" : "High Priority"}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                    {s.imageData ? (
+                      <img src={s.imageData} alt={s.name} className="w-full h-full object-contain p-2" />
+                    ) : <Package className="w-8 h-8 text-muted-foreground/30" />}
+                    <div className="absolute top-1.5 right-1.5">
+                      <StatusBadge status={s.status} />
                     </div>
+                    {s.urgency && s.urgency !== "normal" && (
+                      <div className="absolute top-1.5 left-1.5">
+                        <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${s.urgency === "urgent" ? "bg-red-100 text-red-600" : "bg-orange-100 text-orange-600"}`}>
+                          {s.urgency === "urgent" ? "URGENT" : "HIGH"}
+                        </span>
+                      </div>
+                    )}
                   </button>
-
-                  {!isDone && (
-                    <div className="flex border-t divide-x overflow-x-auto scrollbar-none">
+                  {/* Details */}
+                  <button
+                    className="p-2.5 text-left flex-1 hover:bg-muted/20 transition-colors"
+                    onClick={() => { setDetailId(s.id); setEditMode(false); }}
+                  >
+                    <p className="text-xs font-semibold leading-tight line-clamp-2">{s.name}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{s.category || "No category"}</p>
+                    {s.locationName && (
+                      <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground mt-1">
+                        <MapPin className="w-2.5 h-2.5" />{s.locationName}
+                      </span>
+                    )}
+                    {s.createdByUserName && (
+                      <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                        <User className="w-2.5 h-2.5" />{s.createdByUserName}
+                      </span>
+                    )}
+                  </button>
+                  {/* Actions */}
+                  {!isDone ? (
+                    <div className="flex border-t divide-x mt-auto">
                       <button
-                        className="flex-1 min-w-[90px] py-2 text-[11px] font-medium text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors flex items-center justify-center gap-1 whitespace-nowrap px-2"
+                        className="flex-1 py-1.5 text-[10px] font-medium text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors flex items-center justify-center gap-0.5"
                         onClick={() => setFulfillId(s.id)}
                         data-testid={`button-restock-from-inv-${s.id}`}
                       >
-                        <PackageSearch className="w-3 h-3" />Restock from Inventory
+                        <PackageSearch className="w-2.5 h-2.5" />Fulfill
                       </button>
                       <button
-                        className="flex-1 min-w-[80px] py-2 text-[11px] font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors flex items-center justify-center gap-1 whitespace-nowrap px-2"
+                        className="flex-1 py-1.5 text-[10px] font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors flex items-center justify-center gap-0.5"
                         onClick={() => statusMut.mutate({ id: s.id, status: "fulfilled", note: "Resolved by admin" })}
                         data-testid={`button-resolve-req-${s.id}`}
                         disabled={statusMut.isPending}
                       >
-                        <ClipboardCheck className="w-3 h-3" />Mark Resolved
+                        <ClipboardCheck className="w-2.5 h-2.5" />Resolve
                       </button>
+                    </div>
+                  ) : (
+                    <div className="border-t px-2.5 py-1.5 flex items-center justify-center">
+                      <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                        <CheckCircle className="w-2.5 h-2.5 text-emerald-500" />Completed
+                      </span>
                     </div>
                   )}
                 </div>

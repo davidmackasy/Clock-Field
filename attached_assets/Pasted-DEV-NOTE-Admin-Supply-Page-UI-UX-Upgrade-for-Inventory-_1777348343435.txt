@@ -1,0 +1,516 @@
+DEV NOTE: Admin Supply Page UI/UX Upgrade for Inventory and Requests
+
+Project: Clockfield
+Area: Admin Panel → Supplies
+Scope: Inventory tab and Requests tab only
+Goal: Improve the UI so products feel like items displayed on a shelf, make products easier to scan and click, show them in a clean grid of 4 per row, and reduce the need to scroll to the bottom to find cleaner requests.
+
+Critical instruction
+
+Do not break or change any working logic.
+
+Do not change the current backend behavior.
+
+Do not change database relationships unless absolutely needed for display only.
+
+Do not change how supplies are created.
+
+Do not change how supplies are assigned.
+
+Do not change how restock works.
+
+Do not change how view works.
+
+Do not change how requests are submitted.
+
+Do not change statuses, filters, or current workflows.
+
+Do not change anything outside the admin Supplies area.
+
+This task is UI/UX only for the admin side under Supplies, specifically the Inventory and Requests experience.
+
+Main problem
+
+Right now the admin supply pages work, but the UI does not feel organized or easy to scan.
+
+The current issues are:
+
+The Inventory page does not feel like a product shelf.
+Products do not feel visually organized enough.
+The layout does not make it easy to scan many products quickly.
+The cleaner requests feel buried too far down the page.
+Admin has to scroll too much to get to important requested items.
+The layout feels flat and more like a plain list than a shelf display.
+
+What we want
+
+We want the admin Supplies page to feel more like products placed on shelves.
+
+That means:
+
+Products should be displayed in a structured grid.
+Inventory items should show in 4 cards per row on desktop.
+The cards should feel like shelf items, clean and organized.
+Requests should also be easier to access and visually organized.
+Admin should not need to scroll all the way to the bottom just to see cleaner reports or requests.
+Keep the same actions and the same flows, but improve how they are presented.
+
+Required UI direction
+
+Inventory page should look like a shelf
+
+Update the Inventory tab UI so items appear as product cards arranged like items on a shelf.
+
+Each product should appear in a compact but clean card.
+
+Each card should include:
+
+Product image
+Product name
+Category
+Location if relevant
+Stock count
+Unit price
+Value
+Status badge
+Cleaner assigned if relevant
+Quick actions or click-to-open actions
+
+Visual style:
+
+Cards should feel like products sitting on a shelf.
+Use even spacing.
+Use clean card edges.
+Use a subtle border or shadow.
+Use consistent image area.
+Keep the cards aligned.
+Make the products feel more premium and easier to scan.
+
+Do not make the cards too tall.
+Keep them compact enough so 4 can fit in a row on desktop.
+
+Grid layout requirement
+
+Inventory tab:
+
+Desktop:
+Show 4 cards per row.
+
+Large desktop:
+If it still looks clean, allow 4 cards per row with slightly wider spacing.
+Do not go beyond what looks good visually.
+
+Tablet:
+Show 2 to 3 cards per row depending on width.
+
+Mobile:
+Show 1 or 2 per row depending on current responsive layout.
+
+Requests tab:
+Use the same card-based shelf style so the page feels consistent.
+
+Desktop:
+Use 4 per row if possible.
+
+Tablet:
+2 to 3 per row.
+
+Mobile:
+1 to 2 per row.
+
+Important:
+Do not break the existing responsive layout on smaller screens.
+
+Keep current flow the same
+
+Do not change the flow.
+
+The admin should still be able to do the same actions they can do now.
+
+That means:
+
+Inventory item still supports Edit
+Inventory item still supports Restock
+Inventory item still supports Assign
+Assigned supply/request item still supports View
+Assigned supply/request item still supports Restock / Add More
+Requests should still open and behave the same way they do now
+
+Only improve the presentation.
+
+Better card interaction
+
+Instead of long flat horizontal rows, use a more card-like interaction.
+
+Recommended behavior:
+
+Option A:
+Card shows key details and action buttons at the bottom.
+
+Option B:
+Card is clickable and opens product details drawer/modal where admin can then select:
+Restock / Add More
+View
+Edit
+Assign
+
+Either option is fine, but the workflow must remain the same.
+
+Important:
+Do not remove existing actions.
+Do not add extra confusing steps.
+Keep it simple.
+
+Recommended card layout
+
+Top section:
+Product image
+Status badge
+
+Middle section:
+Product name
+Category
+Location
+Cleaner or assigned info if relevant
+Stock and value summary
+
+Bottom section:
+Primary actions
+For inventory:
+Edit
+Restock
+Assign
+
+For assigned/request products:
+Restock / Add More
+View
+
+If needed, use a three-dot menu for secondary actions, but do not hide the main actions too deeply.
+
+Requests should not be buried at the bottom
+
+This is a key problem.
+
+Right now the admin has to scroll all the way to the bottom to see what the cleaner requested.
+
+That should be improved.
+
+Required change:
+
+Make the Requests tab a proper first-class tab with its own full card grid layout.
+
+The Requests tab should show all request-related items clearly, not as a bottom section buried under assigned products.
+
+Also add a summary near the top of the Supplies page or within the Requests tab:
+
+Pending requests count
+Unresolved cleaner reports count
+Low stock count if already available
+Out of stock count if already available
+
+This helps the admin know what needs attention immediately.
+
+If there is already a “Cleaner Reports” section, keep its logic, but surface the important count higher so the admin can click directly into it without scrolling.
+
+Inventory and Requests should feel consistent
+
+Both Inventory and Requests should visually match.
+
+That means:
+
+Same card style
+Same spacing
+Same image treatment
+Same badge style
+Same interaction pattern
+Same row structure
+
+Inventory cards and Request cards can show different details, but they should belong to the same design system.
+
+Shelf-like visual treatment
+
+We want it to feel like products on a shelf.
+
+That does not mean building a cartoon shelf.
+
+It means:
+
+Neat rows
+Consistent product card sizes
+Strong product image area
+Clean separation between products
+Easy scanning
+Compact product metadata
+Quick action access
+
+Optional visual enhancements:
+
+Subtle gray shelf background blocks behind each row
+Soft card shadows
+Consistent product image container
+Badge placement in the top right
+Location tag or cleaner tag in a small pill
+
+Do not overdesign it.
+Keep it professional.
+Keep it clean.
+
+Better use of space
+
+The current layout wastes space and forces unnecessary scrolling.
+
+Improve the page so that:
+
+Filters stay compact
+Cards use width efficiently
+Products are visible sooner
+More products fit above the fold
+The admin can see more items without heavy scrolling
+
+Keep the existing filters and tabs, but tighten the layout.
+
+Example:
+
+Header:
+Supply Management
+Short subheading
+Right-side Add Item / Add Supply to Location button
+
+Below:
+Tabs
+Filters
+Summary chips or counters
+Grid of products
+
+Suggested tab behavior
+
+Keep tabs working the same, but improve their presentation.
+
+Tabs:
+Overview
+Inventory
+Location Expenses
+Requests
+Purchase History
+
+Only Inventory and Requests need this upgrade right now.
+
+Inventory tab:
+Show all inventory products in shelf-style cards.
+
+Requests tab:
+Show all assigned/requested items and cleaner-submitted request items in the same improved visual style.
+
+If there are two types of request records, keep the backend logic the same but make the UI clearer, such as:
+
+Assigned Supplies
+Cleaner Requests
+Pending Reports
+
+These can be grouped visually within the Requests tab if needed.
+
+Product details preview
+
+When the admin clicks a product card, allow a better product preview instead of only relying on small buttons.
+
+The preview can be:
+
+A side drawer
+A modal
+An expanded card
+
+This preview can show:
+
+Large image
+Product name
+Category
+Location
+Cleaner assigned
+Stock or assigned quantity
+Status
+Buttons:
+Restock / Add More
+View
+Edit
+Assign
+
+Do not change the action logic.
+This is only to improve how the admin gets to those actions.
+
+Cleaner and location visibility
+
+The user specifically wants the location and cleaner to feel more visible.
+
+Make sure shelf cards show these clearly where relevant.
+
+For example:
+
+Location: 23 Junk Ave
+Cleaner: John Doe
+
+Use small tags or clear metadata lines.
+Do not hide this information.
+It should be easy to scan.
+
+Requests UI requirements
+
+In the Requests tab, each request card should show:
+
+Product image
+Product name
+Category
+Location
+Cleaner name if available
+Requested status
+Assigned quantity or reported issue if relevant
+Last update time if already available
+Action buttons:
+View
+Restock / Add More
+
+If the item is unresolved, make that clear with a badge:
+Pending
+Needs restock
+Out of stock
+Low stock
+Unresolved
+
+Do not change how statuses work.
+Only present them better.
+
+No logic changes
+
+Again, important:
+
+Do not alter existing flows.
+
+Restock should still do exactly what it does now.
+View should still do exactly what it does now.
+Assign should still do exactly what it does now.
+Requests should still do exactly what they do now.
+
+Do not change data models unless only adding harmless display support.
+
+This is a UI improvement only.
+
+Performance requirements
+
+The new grid must still load smoothly.
+
+If there are many products:
+
+Use pagination if already present
+Use lazy loading if already present
+Do not render huge heavy image sizes
+Use thumbnails where possible
+
+Do not slow down the page just for the new UI.
+
+Accessibility and usability
+
+Make the new UI easy to use.
+
+Requirements:
+
+Buttons remain easy to tap/click
+Cards have clear hover state on desktop
+Cards are keyboard accessible if the current app supports it
+Status badges are readable
+Text is not cramped
+Product names do not overflow badly
+Images do not stretch
+
+Use object-fit contain for product images.
+
+Suggested implementation approach
+
+Step 1
+Keep the current data fetching and business logic exactly as it is.
+
+Step 2
+Refactor the Inventory item list into a reusable product card component.
+
+Example:
+SupplyShelfCard
+
+This reusable card can be used in:
+Inventory
+Requests
+Assigned Supplies
+
+Step 3
+Create a responsive CSS grid layout:
+
+Desktop:
+grid-template-columns: repeat(4, minmax(0, 1fr))
+
+Tablet:
+repeat(2 or 3, minmax(0, 1fr))
+
+Mobile:
+repeat(1 or 2, minmax(0, 1fr))
+
+Step 4
+Move the cleaner request visibility higher by making the Requests tab the main place to review those items.
+
+Step 5
+Optionally add summary stats at the top for:
+Total products
+Pending requests
+Unresolved reports
+Low stock items
+
+Step 6
+Test that all existing actions still work.
+
+Testing checklist
+
+Test Inventory tab:
+
+Inventory loads correctly
+Products display in a grid
+Desktop shows 4 per row
+Tablet layout still looks good
+Mobile layout still looks good
+Product image displays correctly
+Product status badge displays correctly
+Edit works
+Restock works
+Assign works
+
+Test Requests tab:
+
+Requests load correctly
+Admin does not need to scroll to bottom just to see requests
+Requests display in the new card/grid style
+Desktop shows 4 per row where possible
+Location is clearly visible
+Cleaner is clearly visible
+View works
+Restock / Add More works
+Status is clear
+
+Test overall:
+
+Tabs still work
+Filters still work
+No backend behavior changed
+No existing actions broken
+No data lost
+No routing broken
+No modal/drawer flow broken
+No admin permissions affected
+
+Final instruction
+
+Only improve the UI/UX for the admin Supplies page under Inventory and Requests.
+
+Make it feel like products displayed on a shelf.
+
+Show products in a clean 4-column row on desktop.
+
+Make requests easier to access without scrolling all the way to the bottom.
+
+Keep all current flows, actions, statuses, and logic exactly the same.
+
+Do not break, change, or affect anything else that is already working in Clockfield.
