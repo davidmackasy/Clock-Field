@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -19,7 +19,7 @@ import {
   ChevronRight, Pencil, Archive, Image as ImageIcon,
   ShoppingCart, DollarSign, TrendingUp, Layers, RotateCcw,
   Building2, ArrowRight, History, BoxSelect, PackageCheck, Truck,
-  User, Ban, ClipboardCheck, PackageSearch
+  User, Ban, ClipboardCheck, PackageSearch, Bell, MessageSquare, ZoomIn, Send
 } from "lucide-react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -1116,6 +1116,11 @@ function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sho
 
       <Separator />
 
+      {/* ── Section 3: Cleaner Reports (employee-submitted supply status updates) ── */}
+      <CleanerReportsSection />
+
+      <Separator />
+
       {/* ── Section 2: Cleaner Requests ── */}
       <div>
         <div className="flex items-center gap-2 mb-3">
@@ -2181,5 +2186,327 @@ function FulfillFromInventoryDialog({ supply, locations, onClose }: { supply: an
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── Photo Lightbox ───────────────────────────────────────────────────────────
+function PhotoLightbox({ photos, initialIdx, onClose }: { photos: string[]; initialIdx: number; onClose: () => void }) {
+  const [idx, setIdx] = useState(initialIdx);
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowRight") setIdx(i => Math.min(i + 1, photos.length - 1));
+      if (e.key === "ArrowLeft") setIdx(i => Math.max(i - 1, 0));
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [photos.length, onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center" onClick={onClose}>
+      <div className="relative max-w-full max-h-full flex flex-col items-center gap-3 p-4" onClick={e => e.stopPropagation()}>
+        <button className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white hover:bg-white/30" onClick={onClose}>
+          <X className="w-4 h-4" />
+        </button>
+        <img src={photos[idx]} alt={`Photo ${idx + 1}`} className="max-h-[75vh] max-w-[90vw] object-contain rounded-lg" />
+        <div className="flex items-center gap-3">
+          <button className="text-white/70 hover:text-white disabled:opacity-30" onClick={() => setIdx(i => Math.max(i - 1, 0))} disabled={idx === 0}>
+            ←
+          </button>
+          <span className="text-white/80 text-sm">{idx + 1} / {photos.length}</span>
+          <button className="text-white/70 hover:text-white disabled:opacity-30" onClick={() => setIdx(i => Math.min(i + 1, photos.length - 1))} disabled={idx === photos.length - 1}>
+            →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Admin Respond Dialog ─────────────────────────────────────────────────────
+function AdminRespondDialog({ report, onClose }: { report: any; onClose: () => void }) {
+  const { toast } = useToast();
+  const [response, setResponse] = useState("");
+  const [newStatus, setNewStatus] = useState("");
+
+  const ADMIN_RESPONSES = [
+    "We will restock this soon.",
+    "This has been restocked. Please confirm.",
+    "Replacement approved. Will be delivered soon.",
+    "Item has been ordered. Expected within a few days.",
+    "Assigned to supervisor for review.",
+    "Issue noted. Will follow up.",
+    "Resolved.",
+  ];
+
+  const mut = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/supplies/${report.supplyId}/updates/${report.id}/respond`, {
+        response, newStatus: newStatus || undefined,
+      });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies/employee-reports"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies"] });
+      toast({ title: "Response sent", description: "The cleaner will see your response." });
+      onClose();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <Dialog open onOpenChange={v => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Respond to Report</DialogTitle>
+          <DialogDescription>
+            {report.supplyName} · {report.employeeName || "Cleaner"}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 pt-1">
+          {/* Quick responses */}
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Quick Response</Label>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {ADMIN_RESPONSES.map(r => (
+                <button
+                  key={r}
+                  className={`text-xs px-2.5 py-1.5 rounded-full border transition-colors ${response === r ? "bg-primary text-primary-foreground border-primary" : "bg-muted border-border hover:bg-muted/80"}`}
+                  onClick={() => setResponse(r)}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Custom Message</Label>
+            <Textarea
+              className="mt-1 resize-none text-sm"
+              rows={3}
+              placeholder="Type a custom response…"
+              value={response}
+              onChange={e => setResponse(e.target.value)}
+              data-testid="textarea-admin-response"
+            />
+          </div>
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Update Status (optional)</Label>
+            <Select value={newStatus} onValueChange={setNewStatus}>
+              <SelectTrigger className="mt-1" data-testid="select-admin-response-status">
+                <SelectValue placeholder="Keep current status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Keep current status</SelectItem>
+                {[
+                  { value: "in_stock", label: "In Stock" },
+                  { value: "refilled", label: "Refilled" },
+                  { value: "ordered", label: "Ordered" },
+                  { value: "running_low", label: "Running Low" },
+                  { value: "out_of_stock", label: "Out of Stock" },
+                  { value: "fulfilled", label: "Fulfilled" },
+                ].map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button
+              className="flex-1"
+              disabled={!response.trim() || mut.isPending}
+              onClick={() => mut.mutate()}
+              data-testid="button-send-admin-response"
+            >
+              <Send className="w-3.5 h-3.5 mr-1.5" />
+              {mut.isPending ? "Sending…" : "Send Response"}
+            </Button>
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Cleaner Reports Section ──────────────────────────────────────────────────
+function CleanerReportsSection() {
+  const { data: reports = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/supplies/employee-reports"] });
+  const [respondTo, setRespondTo] = useState<any | null>(null);
+  const [lightboxPhotos, setLightboxPhotos] = useState<string[] | null>(null);
+  const [lightboxIdx, setLightboxIdx] = useState(0);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const parsePhotos = (report: any): string[] => {
+    const all: string[] = [];
+    if (report.photoData) all.push(report.photoData);
+    if (report.photos) {
+      try {
+        const parsed = JSON.parse(report.photos);
+        if (Array.isArray(parsed)) all.push(...parsed);
+      } catch { /* ignore */ }
+    }
+    return all;
+  };
+
+  const openLightbox = (photos: string[], idx: number) => {
+    setLightboxPhotos(photos);
+    setLightboxIdx(idx);
+  };
+
+  const pendingCount = reports.filter(r => !r.adminResponse).length;
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <Bell className="w-4 h-4 text-blue-500" />
+        <h3 className="text-sm font-semibold">Cleaner Reports</h3>
+        {pendingCount > 0 && (
+          <span className="text-[11px] bg-blue-100 text-blue-700 rounded-full px-2 py-0.5 font-medium">{pendingCount} unresolved</span>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">{[1,2].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
+      ) : reports.length === 0 ? (
+        <div className="rounded-xl border border-dashed bg-muted/20 p-6 text-center">
+          <p className="text-xs text-muted-foreground">No cleaner reports yet.</p>
+          <p className="text-xs text-muted-foreground mt-1">Cleaners submit reports from their employee supplies page.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {reports.map((report: any) => {
+            const photos = parsePhotos(report);
+            const isExpanded = expandedId === report.id;
+            const hasResponse = !!report.adminResponse;
+
+            return (
+              <div
+                key={report.id}
+                className={`rounded-xl border bg-background shadow-sm overflow-hidden ${hasResponse ? "opacity-75" : ""}`}
+                data-testid={`card-report-${report.id}`}
+              >
+                <button
+                  className="w-full text-left p-3 hover:bg-muted/30 transition-colors"
+                  onClick={() => setExpandedId(isExpanded ? null : report.id)}
+                >
+                  <div className="flex gap-3">
+                    {/* Supply thumbnail */}
+                    <div className="w-11 h-11 rounded-lg bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
+                      {report.supplyImageData ? (
+                        <img src={report.supplyImageData} alt="" className="w-full h-full object-contain" />
+                      ) : <Package className="w-4 h-4 text-muted-foreground/40" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-semibold truncate">{report.supplyName || "Unknown Supply"}</p>
+                        {report.newStatus && <StatusBadge status={report.newStatus} />}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                        {report.employeeName && (
+                          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                            <User className="w-3 h-3" />{report.employeeName}
+                          </span>
+                        )}
+                        {report.supplyLocationName && (
+                          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                            <MapPin className="w-3 h-3" />{report.supplyLocationName}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-muted-foreground ml-auto">
+                          {new Date(report.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      {report.note && (
+                        <p className={`text-xs text-muted-foreground mt-1 ${isExpanded ? "" : "line-clamp-1"}`}>{report.note}</p>
+                      )}
+                    </div>
+                  </div>
+                </button>
+
+                {/* Expanded details */}
+                {isExpanded && (
+                  <div className="px-3 pb-3 space-y-3 border-t pt-3 bg-muted/10">
+                    {/* Photos from report */}
+                    {photos.length > 0 && (
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                          Submitted Photos ({photos.length})
+                        </p>
+                        <div className="flex gap-2 flex-wrap">
+                          {photos.map((photo, pIdx) => (
+                            <button
+                              key={pIdx}
+                              className="w-20 h-20 rounded-lg overflow-hidden border border-border hover:opacity-80 transition-opacity relative group"
+                              onClick={() => openLightbox(photos, pIdx)}
+                              data-testid={`button-view-photo-${report.id}-${pIdx}`}
+                            >
+                              <img src={photo} alt={`Report photo ${pIdx + 1}`} className="w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                <ZoomIn className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Admin response (if already responded) */}
+                    {hasResponse && (
+                      <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 rounded-xl p-3">
+                        <p className="text-[11px] font-semibold text-emerald-700 mb-1 flex items-center gap-1">
+                          <MessageSquare className="w-3 h-3" />Your response · {report.adminRespondedAt ? new Date(report.adminRespondedAt).toLocaleDateString() : ""}
+                        </p>
+                        <p className="text-xs text-emerald-800">{report.adminResponse}</p>
+                        <p className="text-[10px] text-emerald-600 mt-1">
+                          {report.seenByEmployee ? "✓ Seen by cleaner" : "Pending cleaner view"}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex border-t divide-x">
+                  {!hasResponse ? (
+                    <button
+                      className="flex-1 py-2 text-[11px] font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-colors flex items-center justify-center gap-1"
+                      onClick={() => setRespondTo(report)}
+                      data-testid={`button-respond-report-${report.id}`}
+                    >
+                      <MessageSquare className="w-3 h-3" />Respond
+                    </button>
+                  ) : (
+                    <button
+                      className="flex-1 py-2 text-[11px] font-medium text-muted-foreground hover:bg-muted/50 transition-colors flex items-center justify-center gap-1"
+                      onClick={() => setRespondTo(report)}
+                      data-testid={`button-re-respond-report-${report.id}`}
+                    >
+                      <RefreshCw className="w-3 h-3" />Update Response
+                    </button>
+                  )}
+                  {photos.length > 0 && (
+                    <button
+                      className="px-4 py-2 text-[11px] font-medium text-muted-foreground hover:bg-muted/50 transition-colors flex items-center justify-center gap-1"
+                      onClick={() => openLightbox(photos, 0)}
+                      data-testid={`button-view-photos-${report.id}`}
+                    >
+                      <ZoomIn className="w-3 h-3" />{photos.length} Photo{photos.length !== 1 ? "s" : ""}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {respondTo && (
+        <AdminRespondDialog report={respondTo} onClose={() => setRespondTo(null)} />
+      )}
+      {lightboxPhotos && (
+        <PhotoLightbox photos={lightboxPhotos} initialIdx={lightboxIdx} onClose={() => setLightboxPhotos(null)} />
+      )}
+    </div>
   );
 }

@@ -6536,6 +6536,112 @@ FINAL RULES:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // POST /api/supplies/grammarize-note — AI grammar cleanup for cleaner voice notes
+  app.post("/api/supplies/grammarize-note", requireAuth, async (req, res) => {
+    try {
+      const { rawText } = req.body;
+      if (!rawText || typeof rawText !== "string") return res.status(400).json({ message: "rawText required" });
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) return res.json({ cleanText: rawText });
+      const oai = new OpenAI({ apiKey });
+      const result = await oai.chat.completions.create({
+        model: "gpt-4o-mini",
+        max_tokens: 200,
+        messages: [{
+          role: "system",
+          content: "You are a grammar assistant for cleaning supply reports written by cleaning staff. Fix grammar, spelling and punctuation. Keep it concise and professional. Return ONLY the corrected text with no explanation."
+        }, {
+          role: "user",
+          content: rawText,
+        }],
+      });
+      const cleanText = result.choices[0]?.message?.content?.trim() || rawText;
+      res.json({ cleanText });
+    } catch (e: any) { res.json({ cleanText: req.body.rawText }); }
+  });
+
+  // GET /api/supplies/employee-reports — admin: see all cleaner-submitted supply updates
+  app.get("/api/supplies/employee-reports", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const reports = await db.select({
+        id: supplyUpdates.id,
+        supplyId: supplyUpdates.supplyId,
+        companyId: supplyUpdates.companyId,
+        locationId: supplyUpdates.locationId,
+        employeeId: supplyUpdates.employeeId,
+        employeeName: supplyUpdates.employeeName,
+        updatedByRole: supplyUpdates.updatedByRole,
+        updateType: supplyUpdates.updateType,
+        note: supplyUpdates.note,
+        photoData: supplyUpdates.photoData,
+        photos: supplyUpdates.photos,
+        previousStatus: supplyUpdates.previousStatus,
+        newStatus: supplyUpdates.newStatus,
+        adminResponse: supplyUpdates.adminResponse,
+        adminRespondedAt: supplyUpdates.adminRespondedAt,
+        adminRespondedBy: supplyUpdates.adminRespondedBy,
+        seenByEmployee: supplyUpdates.seenByEmployee,
+        createdAt: supplyUpdates.createdAt,
+        supplyName: supplies.name,
+        supplyCategory: supplies.category,
+        supplyLocationName: supplies.locationName,
+        supplyImageData: supplies.imageData,
+      }).from(supplyUpdates)
+        .leftJoin(supplies, eq(supplyUpdates.supplyId, supplies.id))
+        .where(and(
+          eq(supplyUpdates.companyId, user.companyId),
+          eq(supplyUpdates.updatedByRole, "employee")
+        ))
+        .orderBy(desc(supplyUpdates.createdAt))
+        .limit(100);
+      res.json(reports);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/supplies/:id/updates/:updateId/respond — admin responds to a cleaner report
+  app.post("/api/supplies/:id/updates/:updateId/respond", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const [supply] = await db.select().from(supplies).where(eq(supplies.id, req.params.id));
+      if (!supply || supply.companyId !== user.companyId) return res.status(404).json({ message: "Supply not found" });
+      const [upd] = await db.select().from(supplyUpdates).where(eq(supplyUpdates.id, req.params.updateId));
+      if (!upd || upd.supplyId !== supply.id) return res.status(404).json({ message: "Report not found" });
+      const { response, newStatus } = req.body;
+      if (!response) return res.status(400).json({ message: "response is required" });
+      const now = new Date().toISOString();
+      const [updated] = await db.update(supplyUpdates).set({
+        adminResponse: response,
+        adminRespondedAt: now,
+        adminRespondedBy: `${user.firstName} ${user.lastName}`,
+        seenByEmployee: 0,
+      }).where(eq(supplyUpdates.id, upd.id)).returning();
+      if (newStatus) {
+        await db.update(supplies).set({ status: newStatus, updatedAt: now }).where(eq(supplies.id, supply.id));
+        await db.insert(supplyUpdates).values({
+          supplyId: supply.id, companyId: user.companyId,
+          locationId: supply.locationId,
+          updatedByRole: "admin", updateType: "status_changed",
+          note: `Admin responded: ${response}`,
+          previousStatus: supply.status, newStatus, createdAt: now,
+        });
+      }
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/supplies/:id/updates/:updateId/mark-seen — employee marks admin response as seen
+  app.post("/api/supplies/:id/updates/:updateId/mark-seen", requireAuth, requireRole("employee"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const [supply] = await db.select().from(supplies).where(and(eq(supplies.id, req.params.id), eq(supplies.companyId, user.companyId)));
+      if (!supply) return res.status(404).json({ message: "Not found" });
+      await db.update(supplyUpdates).set({ seenByEmployee: 1 })
+        .where(and(eq(supplyUpdates.id, req.params.updateId), eq(supplyUpdates.supplyId, supply.id)));
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // GET /api/supplies/:id — supply detail with updates
   app.get("/api/supplies/:id", requireAuth, async (req, res) => {
     try {
@@ -6602,23 +6708,29 @@ FINAL RULES:
       const [supply] = await db.select().from(supplies).where(eq(supplies.id, req.params.id));
       if (!supply || supply.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       const now = new Date().toISOString();
-      const { updateType, note, photoData, newStatus } = req.body;
+      const { updateType, note, photoData, newStatus, photos } = req.body;
       if (!updateType) return res.status(400).json({ message: "updateType is required" });
       // If newStatus provided, update the supply status
       if (newStatus && newStatus !== supply.status) {
         await db.update(supplies).set({ status: newStatus, updatedAt: now }).where(eq(supplies.id, supply.id));
       }
+      const photosJson = photos && Array.isArray(photos) && photos.length > 0 ? JSON.stringify(photos) : null;
+      const isEmployee = user.role === "employee";
       const [row] = await db.insert(supplyUpdates).values({
         supplyId: supply.id, companyId: user.companyId,
         locationId: supply.locationId,
-        employeeId: user.role === "employee" ? user.id : null,
-        employeeName: user.role === "employee" ? `${user.firstName} ${user.lastName}` : null,
+        employeeId: isEmployee ? user.id : null,
+        employeeName: isEmployee ? `${user.firstName} ${user.lastName}` : null,
         updatedByRole: user.role === "admin" ? "admin" : "employee",
+        updatedByUserId: user.id,
+        updatedByName: `${user.firstName} ${user.lastName}`,
         updateType,
         note: note || null,
         photoData: photoData || null,
+        photos: photosJson,
         previousStatus: supply.status,
         newStatus: newStatus || null,
+        seenByEmployee: 0,
         createdAt: now,
       }).returning();
       res.status(201).json(row);
@@ -6653,14 +6765,42 @@ FINAL RULES:
           .orderBy(desc(supplies.updatedAt));
         rows = rows.filter(s => !s.locationId || locationIds.includes(s.locationId));
       }
+      // Get per-supply admin update flags (unseen admin responses)
+      const supplyIds = rows.map(s => s.id);
+      let adminUpdateMap: Record<string, { hasAdminUpdate: boolean; latestAdminUpdate: any }> = {};
+      if (supplyIds.length > 0) {
+        const adminUpdates = await db.select().from(supplyUpdates)
+          .where(and(
+            eq(supplyUpdates.companyId, user.companyId),
+            sql`${supplyUpdates.supplyId} = ANY(${sql.raw("ARRAY['" + supplyIds.join("','") + "']::varchar[]")})`
+          ))
+          .orderBy(desc(supplyUpdates.createdAt));
+        for (const upd of adminUpdates) {
+          if (!adminUpdateMap[upd.supplyId]) {
+            const hasUnseenAdminResponse = !!upd.adminResponse && (upd.seenByEmployee === 0 || upd.seenByEmployee === null);
+            adminUpdateMap[upd.supplyId] = {
+              hasAdminUpdate: hasUnseenAdminResponse,
+              latestAdminUpdate: upd.adminResponse ? upd : null,
+            };
+          } else if (!adminUpdateMap[upd.supplyId].hasAdminUpdate && upd.adminResponse && (upd.seenByEmployee === 0 || upd.seenByEmployee === null)) {
+            adminUpdateMap[upd.supplyId].hasAdminUpdate = true;
+            adminUpdateMap[upd.supplyId].latestAdminUpdate = upd;
+          }
+        }
+      }
+      const enrichedRows = rows.map(s => ({
+        ...s,
+        hasAdminUpdate: adminUpdateMap[s.id]?.hasAdminUpdate || false,
+        latestAdminUpdate: adminUpdateMap[s.id]?.latestAdminUpdate || null,
+      }));
       // Group by locationId
       const byLocation: Record<string, { locationId: string | null; locationName: string | null; items: any[] }> = {};
-      for (const s of rows) {
+      for (const s of enrichedRows) {
         const key = s.locationId || "__none__";
         if (!byLocation[key]) byLocation[key] = { locationId: s.locationId, locationName: s.locationName, items: [] };
         byLocation[key].items.push(s);
       }
-      res.json({ locationIds, locations: Object.values(byLocation), allSupplies: rows });
+      res.json({ locationIds, locations: Object.values(byLocation), allSupplies: enrichedRows });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
