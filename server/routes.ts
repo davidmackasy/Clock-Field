@@ -8350,6 +8350,226 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ── Agreement Templates (Admin) ─────────────────────────────────────────
+  app.get("/api/admin/agreement-templates", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const templates = await storage.getAgreementTemplates(user.companyId);
+      res.json(templates);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/admin/agreement-templates", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const now = new Date().toISOString();
+      const template = await storage.createAgreementTemplate({
+        companyId: user.companyId,
+        name: req.body.name || "Untitled Template",
+        title: req.body.title || "Service Agreement",
+        body: req.body.body || "",
+        termsText: req.body.termsText || "",
+        paymentTerms: req.body.paymentTerms || "",
+        contractDuration: req.body.contractDuration || "",
+        cancellationPolicy: req.body.cancellationPolicy || "",
+        witnessEnabled: req.body.witnessEnabled ?? false,
+        isDefault: req.body.isDefault ?? false,
+        createdAt: now, updatedAt: now,
+      });
+      res.json(template);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/admin/agreement-templates/:id", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const template = await storage.getAgreementTemplate(req.params.id);
+      if (!template || template.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const updated = await storage.updateAgreementTemplate(req.params.id, { ...req.body, updatedAt: new Date().toISOString() });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/admin/agreement-templates/:id", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const template = await storage.getAgreementTemplate(req.params.id);
+      if (!template || template.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      await storage.deleteAgreementTemplate(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Agreements (Admin) ──────────────────────────────────────────────────
+  app.get("/api/admin/agreements", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const list = await storage.getAgreementsByCompany(user.companyId);
+      res.json(list);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/admin/agreements/:id", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const agr = await storage.getAgreement(req.params.id);
+      if (!agr || agr.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      res.json(agr);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/admin/agreements/:id/activity", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const agr = await storage.getAgreement(req.params.id);
+      if (!agr || agr.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const logs = await storage.getAgreementActivity(req.params.id);
+      res.json(logs);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/admin/agreements", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const now = new Date().toISOString();
+      const token = `agr_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      // If proposalId given, pull client info from proposal
+      let clientInfo: any = {};
+      if (req.body.proposalId) {
+        const proposal = await storage.getProposal(req.body.proposalId);
+        if (proposal && proposal.companyId === user.companyId) {
+          clientInfo = {
+            clientName: proposal.clientName || "",
+            clientEmail: proposal.clientEmail || "",
+            clientCompany: proposal.clientCompany || "",
+            clientPhone: proposal.clientPhone || "",
+            serviceAddress: proposal.serviceAddress || "",
+          };
+        }
+      }
+      const agr = await storage.createAgreement({
+        companyId: user.companyId,
+        proposalId: req.body.proposalId || null,
+        templateId: req.body.templateId || null,
+        title: req.body.title || "Service Agreement",
+        content: req.body.content || "",
+        status: "draft",
+        ...clientInfo,
+        ...req.body.clientInfo,
+        publicToken: token,
+        witnessEnabled: req.body.witnessEnabled ?? false,
+        internalNotes: req.body.internalNotes || "",
+        createdAt: now, updatedAt: now,
+      });
+      await storage.addAgreementActivity({ agreementId: agr.id, companyId: user.companyId, eventType: "created", eventData: "{}", createdAt: now });
+      res.json(agr);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/admin/agreements/:id", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const agr = await storage.getAgreement(req.params.id);
+      if (!agr || agr.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (agr.status === "signed" || agr.status === "completed") return res.status(400).json({ message: "Cannot edit a signed agreement." });
+      const updated = await storage.updateAgreement(req.params.id, { ...req.body, updatedAt: new Date().toISOString() });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/admin/agreements/:id/send-email", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const agr = await storage.getAgreement(req.params.id);
+      if (!agr || agr.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const business = await storage.getCompany(user.companyId);
+      const businessName = business?.name || "Your Service Provider";
+      const proto = req.headers["x-forwarded-proto"] || "https";
+      const host = req.headers.host || "localhost:5000";
+      const publicUrl = `${proto}://${host}/public/agreements/${agr.publicToken}`;
+      const clientFirst = (agr.clientName || "").split(" ")[0] || "there";
+      const emailHtml = `
+        <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+          <h2 style="color:#1a1a1a">Agreement Ready for Signature</h2>
+          <p>Hi ${clientFirst},</p>
+          <p>${businessName} has prepared an agreement for your review and signature. Please click the button below to view and sign it.</p>
+          <div style="text-align:center;margin:32px 0">
+            <a href="${publicUrl}" style="background:#2563eb;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">View & Sign Agreement</a>
+          </div>
+          <p style="color:#666;font-size:14px">Or copy this link: ${publicUrl}</p>
+          <p style="color:#666;font-size:12px;margin-top:32px">${businessName}</p>
+        </div>`;
+      const now = new Date().toISOString();
+      try {
+        const { sendProposalEmail } = await import("./mail");
+        await sendProposalEmail({ to: agr.clientEmail, subject: req.body.subject || `Agreement for Your Review — ${businessName}`, message: emailHtml, sendCopyToSelf: true });
+        await storage.updateAgreement(agr.id, { status: agr.status === "draft" ? "sent" : agr.status, sentAt: now, updatedAt: now });
+        await storage.addAgreementActivity({ agreementId: agr.id, companyId: user.companyId, eventType: "sent_email", eventData: JSON.stringify({ to: agr.clientEmail }), createdAt: now });
+        res.json({ success: true, publicUrl });
+      } catch (mailErr: any) {
+        await storage.updateAgreement(agr.id, { status: agr.status === "draft" ? "sent" : agr.status, sentAt: now, updatedAt: now });
+        await storage.addAgreementActivity({ agreementId: agr.id, companyId: user.companyId, eventType: "sent_link", eventData: "{}", createdAt: now });
+        res.json({ success: false, emailError: "Email could not be sent. Copy the link to share it manually.", publicUrl });
+      }
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Public Agreement Routes ─────────────────────────────────────────────
+  app.get("/api/public/agreements/:token", async (req, res) => {
+    try {
+      const agr = await storage.getAgreementByToken(req.params.token);
+      if (!agr) return res.status(404).json({ message: "Agreement not found" });
+      const business = await storage.getCompany(agr.companyId);
+      // Mark as viewed if first time
+      if (!agr.viewedAt) {
+        const now = new Date().toISOString();
+        await storage.updateAgreement(agr.id, { viewedAt: now, status: agr.status === "sent" ? "viewed" : agr.status, updatedAt: now });
+        await storage.addAgreementActivity({ agreementId: agr.id, companyId: agr.companyId, eventType: "viewed", eventData: "{}", createdAt: now });
+      }
+      res.json({ agreement: agr, business: { name: business?.name, logo: (business as any)?.logo } });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/public/agreements/:token/sign", async (req, res) => {
+    try {
+      const agr = await storage.getAgreementByToken(req.params.token);
+      if (!agr) return res.status(404).json({ message: "Agreement not found" });
+      if (agr.status === "signed" || agr.status === "completed") return res.status(400).json({ message: "This agreement has already been signed." });
+      if (agr.status === "declined") return res.status(400).json({ message: "This agreement was declined." });
+      const { signerName, signatureImage, witnessName, witnessContact, witnessSignature, agreed } = req.body;
+      if (!agreed) return res.status(400).json({ message: "You must agree to the terms." });
+      if (!signerName?.trim()) return res.status(400).json({ message: "Signer name is required." });
+      if (!signatureImage) return res.status(400).json({ message: "Signature is required." });
+      const now = new Date().toISOString();
+      const ip = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "").split(",")[0].trim();
+      const updateData: any = {
+        status: "signed", signedAt: now, signerName: signerName.trim(),
+        signerIp: ip, signatureImage, updatedAt: now,
+      };
+      if (agr.witnessEnabled && witnessName) {
+        updateData.witnessName = witnessName;
+        updateData.witnessContact = witnessContact || "";
+        updateData.witnessSignature = witnessSignature || "";
+        updateData.witnessSignedAt = witnessSignature ? now : null;
+      }
+      await storage.updateAgreement(agr.id, updateData);
+      await storage.addAgreementActivity({ agreementId: agr.id, companyId: agr.companyId, eventType: "signed", eventData: JSON.stringify({ signerName, ip }), createdAt: now });
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/public/agreements/:token/decline", async (req, res) => {
+    try {
+      const agr = await storage.getAgreementByToken(req.params.token);
+      if (!agr) return res.status(404).json({ message: "Agreement not found" });
+      if (agr.status === "signed" || agr.status === "completed") return res.status(400).json({ message: "Agreement already signed." });
+      const now = new Date().toISOString();
+      await storage.updateAgreement(agr.id, { status: "declined", declinedAt: now, updatedAt: now });
+      await storage.addAgreementActivity({ agreementId: agr.id, companyId: agr.companyId, eventType: "declined", eventData: "{}", createdAt: now });
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   return httpServer;
 }
 

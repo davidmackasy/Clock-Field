@@ -67,6 +67,9 @@ import AdminQuoteFormBuilder from "@/pages/admin/quote-form-builder";
 import AdminProposals from "@/pages/admin/proposals";
 import AdminProposalBuilder from "@/pages/admin/proposal-builder";
 import PublicProposal from "@/pages/public/proposal";
+import AdminAgreements from "@/pages/admin/agreements";
+import AdminAgreementBuilder from "@/pages/admin/agreement-builder";
+import PublicAgreement from "@/pages/public/agreement";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import LandingPage from "@/pages/landing";
@@ -123,6 +126,8 @@ function AdminLayout() {
               <Route path="/admin/quote-forms" component={AdminQuoteForms} />
               <Route path="/admin/proposals/:id" component={AdminProposalBuilder} />
               <Route path="/admin/proposals" component={AdminProposals} />
+              <Route path="/admin/agreements/:id" component={AdminAgreementBuilder} />
+              <Route path="/admin/agreements" component={AdminAgreements} />
               <Route path="/admin/supplies" component={AdminSupplies} />
               <Route path="/admin/publications/:id" component={AdminPublicationEditor} />
               <Route path="/admin/publications" component={AdminPublications} />
@@ -278,6 +283,14 @@ function AppRouter() {
     return (
       <Switch>
         <Route path="/public/proposals/:token" component={PublicProposal} />
+      </Switch>
+    );
+  }
+
+  if (location.startsWith("/public/agreements/")) {
+    return (
+      <Switch>
+        <Route path="/public/agreements/:token" component={PublicAgreement} />
       </Switch>
     );
   }

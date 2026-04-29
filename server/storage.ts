@@ -65,6 +65,10 @@ import {
   proposals, proposalActivityLogs,
   type Proposal, type InsertProposal,
   type ProposalActivityLog, type InsertProposalActivityLog,
+  agreementTemplates, agreements, agreementActivityLogs,
+  type AgreementTemplate, type InsertAgreementTemplate,
+  type Agreement, type InsertAgreement,
+  type AgreementActivityLog, type InsertAgreementActivityLog,
   supplies, supplyUpdates,
   inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses,
   type Supply, type InsertSupply,
@@ -361,6 +365,21 @@ export interface IStorage {
   // Proposal activity logs
   getProposalActivityLogs(proposalId: string): Promise<ProposalActivityLog[]>;
   addProposalActivity(data: InsertProposalActivityLog): Promise<ProposalActivityLog>;
+  // Agreement Templates
+  getAgreementTemplates(companyId: string): Promise<AgreementTemplate[]>;
+  getAgreementTemplate(id: string): Promise<AgreementTemplate | undefined>;
+  createAgreementTemplate(data: InsertAgreementTemplate): Promise<AgreementTemplate>;
+  updateAgreementTemplate(id: string, data: Partial<InsertAgreementTemplate>): Promise<AgreementTemplate | undefined>;
+  deleteAgreementTemplate(id: string): Promise<void>;
+  // Agreements
+  getAgreementsByCompany(companyId: string): Promise<Agreement[]>;
+  getAgreement(id: string): Promise<Agreement | undefined>;
+  getAgreementByToken(token: string): Promise<Agreement | undefined>;
+  createAgreement(data: InsertAgreement): Promise<Agreement>;
+  updateAgreement(id: string, data: Partial<InsertAgreement>): Promise<Agreement | undefined>;
+  // Agreement Activity
+  getAgreementActivity(agreementId: string): Promise<AgreementActivityLog[]>;
+  addAgreementActivity(data: InsertAgreementActivityLog): Promise<AgreementActivityLog>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1753,6 +1772,56 @@ export class DatabaseStorage implements IStorage {
 
   async addProposalActivity(data: InsertProposalActivityLog): Promise<ProposalActivityLog> {
     const [row] = await db.insert(proposalActivityLogs).values(data as any).returning();
+    return row;
+  }
+
+  // ── Agreement Templates ───────────────────────────────────────────────────
+  async getAgreementTemplates(companyId: string): Promise<AgreementTemplate[]> {
+    return db.select().from(agreementTemplates).where(eq(agreementTemplates.companyId, companyId)).orderBy(desc(agreementTemplates.createdAt));
+  }
+  async getAgreementTemplate(id: string): Promise<AgreementTemplate | undefined> {
+    const [row] = await db.select().from(agreementTemplates).where(eq(agreementTemplates.id, id));
+    return row;
+  }
+  async createAgreementTemplate(data: InsertAgreementTemplate): Promise<AgreementTemplate> {
+    const [row] = await db.insert(agreementTemplates).values(data as any).returning();
+    return row;
+  }
+  async updateAgreementTemplate(id: string, data: Partial<InsertAgreementTemplate>): Promise<AgreementTemplate | undefined> {
+    const [row] = await db.update(agreementTemplates).set(data as any).where(eq(agreementTemplates.id, id)).returning();
+    return row;
+  }
+  async deleteAgreementTemplate(id: string): Promise<void> {
+    await db.delete(agreementTemplates).where(eq(agreementTemplates.id, id));
+  }
+
+  // ── Agreements ────────────────────────────────────────────────────────────
+  async getAgreementsByCompany(companyId: string): Promise<Agreement[]> {
+    return db.select().from(agreements).where(eq(agreements.companyId, companyId)).orderBy(desc(agreements.createdAt));
+  }
+  async getAgreement(id: string): Promise<Agreement | undefined> {
+    const [row] = await db.select().from(agreements).where(eq(agreements.id, id));
+    return row;
+  }
+  async getAgreementByToken(token: string): Promise<Agreement | undefined> {
+    const [row] = await db.select().from(agreements).where(eq(agreements.publicToken, token));
+    return row;
+  }
+  async createAgreement(data: InsertAgreement): Promise<Agreement> {
+    const [row] = await db.insert(agreements).values(data as any).returning();
+    return row;
+  }
+  async updateAgreement(id: string, data: Partial<InsertAgreement>): Promise<Agreement | undefined> {
+    const [row] = await db.update(agreements).set(data as any).where(eq(agreements.id, id)).returning();
+    return row;
+  }
+
+  // ── Agreement Activity ────────────────────────────────────────────────────
+  async getAgreementActivity(agreementId: string): Promise<AgreementActivityLog[]> {
+    return db.select().from(agreementActivityLogs).where(eq(agreementActivityLogs.agreementId, agreementId)).orderBy(desc(agreementActivityLogs.createdAt));
+  }
+  async addAgreementActivity(data: InsertAgreementActivityLog): Promise<AgreementActivityLog> {
+    const [row] = await db.insert(agreementActivityLogs).values(data as any).returning();
     return row;
   }
 }

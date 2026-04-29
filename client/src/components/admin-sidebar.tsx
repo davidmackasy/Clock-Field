@@ -21,7 +21,7 @@ import {
   DollarSign, Building2,
   Settings, LogOut, Clock, Users2, BookOpen,
   CreditCard, Bell, ShieldAlert, ChevronRight, Package, Newspaper,
-  FileInput, FileText,
+  FileInput, FileText, FileSignature,
 } from "lucide-react";
 
 const navItems = [
@@ -35,6 +35,7 @@ const navItems = [
   { title: "Work Log", url: "/admin/work-log", icon: BookOpen },
   { title: "Forms / Requests", url: "/admin/quote-forms", icon: FileInput },
   { title: "Proposals & Quotes", url: "/admin/proposals", icon: FileText },
+  { title: "Agreements", url: "/admin/agreements", icon: FileSignature },
   { title: "Supplies", url: "/admin/supplies", icon: Package },
   { title: "Publications", url: "/admin/publications", icon: Newspaper },
   { title: "Settings", url: "/admin/settings", icon: Settings },

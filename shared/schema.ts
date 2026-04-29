@@ -1575,3 +1575,77 @@ export type Proposal = typeof proposals.$inferSelect;
 export type InsertProposal = z.infer<typeof insertProposalSchema>;
 export type ProposalActivityLog = typeof proposalActivityLogs.$inferSelect;
 export type InsertProposalActivityLog = z.infer<typeof insertProposalActivityLogSchema>;
+
+// ── Agreement Templates ───────────────────────────────────────────────────────
+export const agreementTemplates = pgTable("agreement_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  name: text("name").notNull(),
+  title: text("title").notNull().default("Service Agreement"),
+  body: text("body").notNull().default(""),
+  termsText: text("terms_text").notNull().default(""),
+  paymentTerms: text("payment_terms").notNull().default(""),
+  contractDuration: text("contract_duration").notNull().default(""),
+  cancellationPolicy: text("cancellation_policy").notNull().default(""),
+  witnessEnabled: boolean("witness_enabled").notNull().default(false),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+// ── Agreements ────────────────────────────────────────────────────────────────
+export const agreements = pgTable("agreements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  proposalId: varchar("proposal_id"),
+  templateId: varchar("template_id"),
+  title: text("title").notNull().default("Service Agreement"),
+  content: text("content").notNull().default(""),
+  status: text("status").notNull().default("draft"),
+  // Client info
+  clientName: text("client_name").notNull().default(""),
+  clientEmail: text("client_email").notNull().default(""),
+  clientCompany: text("client_company").notNull().default(""),
+  clientPhone: text("client_phone").notNull().default(""),
+  serviceAddress: text("service_address").notNull().default(""),
+  // Public sharing
+  publicToken: text("public_token").notNull().unique(),
+  // Tracking
+  sentAt: text("sent_at"),
+  viewedAt: text("viewed_at"),
+  signedAt: text("signed_at"),
+  declinedAt: text("declined_at"),
+  // Signature data
+  signerName: text("signer_name").notNull().default(""),
+  signerIp: text("signer_ip").notNull().default(""),
+  signatureImage: text("signature_image").notNull().default(""),
+  // Witness
+  witnessEnabled: boolean("witness_enabled").notNull().default(false),
+  witnessName: text("witness_name").notNull().default(""),
+  witnessContact: text("witness_contact").notNull().default(""),
+  witnessSignature: text("witness_signature").notNull().default(""),
+  witnessSignedAt: text("witness_signed_at"),
+  // Internal
+  internalNotes: text("internal_notes").notNull().default(""),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+// ── Agreement Activity Logs ───────────────────────────────────────────────────
+export const agreementActivityLogs = pgTable("agreement_activity_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  agreementId: varchar("agreement_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  eventType: text("event_type").notNull(),
+  eventData: text("event_data").notNull().default("{}"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertAgreementTemplateSchema = createInsertSchema(agreementTemplates).omit({ id: true });
+export const insertAgreementSchema = createInsertSchema(agreements).omit({ id: true });
+export const insertAgreementActivityLogSchema = createInsertSchema(agreementActivityLogs).omit({ id: true });
+export type AgreementTemplate = typeof agreementTemplates.$inferSelect;
+export type InsertAgreementTemplate = z.infer<typeof insertAgreementTemplateSchema>;
+export type Agreement = typeof agreements.$inferSelect;
+export type InsertAgreement = z.infer<typeof insertAgreementSchema>;
+export type AgreementActivityLog = typeof agreementActivityLogs.$inferSelect;

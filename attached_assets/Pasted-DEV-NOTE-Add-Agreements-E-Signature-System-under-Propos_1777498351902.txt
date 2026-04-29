@@ -1,0 +1,378 @@
+DEV NOTE: Add Agreements & E-Signature System under Proposals (No Breakage)
+
+Goal
+Add a full Agreements system inside Clockfield that allows admins to generate, send, and collect legally structured agreement signatures tied to quotes.
+
+This must integrate with Proposals / Quotes and Publications without breaking existing functionality.
+
+Do not modify or remove the current Publication system.
+Do not change existing quote flows.
+This is an additive layer.
+
+FEATURE PLACEMENT
+
+Primary location:
+
+Proposals / Quotes → Add new tab or section:
+
+Agreements
+
+Also allow access from:
+
+Inside each Quote (Generate Agreement button)
+Optional view under Publications as a new type:
+“Agreement Publication” (separate from blog-style publications)
+CORE FLOW
+
+Admin flow:
+
+Create or open a quote
+Click “Generate Agreement”
+Agreement auto-generates using quote data
+Admin edits or confirms agreement
+Send agreement via email or link
+Client opens link
+Client reviews agreement
+Client signs digitally
+Optional witness signs
+Agreement status updates in real time
+Admin receives notification
+Agreement is stored and downloadable as PDF
+
+AGREEMENT BUILDER (ADMIN)
+
+Create Agreement Templates
+
+Admins can:
+
+Create new agreement template
+Edit existing template
+Duplicate templates
+Save as default
+
+Template fields:
+
+Agreement title
+Agreement body (rich text editor)
+Terms and conditions
+Payment terms (monthly, weekly, etc.)
+Contract duration
+Cancellation policy
+Signature sections
+Witness section toggle
+Auto-fill variables
+VARIABLES (AUTO-FILL SYSTEM)
+
+Agreement must support dynamic variables:
+
+{client_full_name}
+{client_company}
+{client_email}
+{client_phone}
+{service_address}
+{service_type}
+{quote_price}
+{payment_frequency}
+{contract_duration}
+{start_date}
+{company_name}
+{company_address}
+{admin_name}
+{date_generated}
+
+These values should auto-fill when agreement is generated from a quote.
+
+AGREEMENT GENERATION
+
+When admin clicks Generate Agreement:
+
+System should:
+
+Pull data from quote
+Apply selected template
+Auto-fill variables
+Generate structured agreement document
+
+Admin can:
+
+Edit content before sending
+Add custom notes
+Adjust pricing or terms if needed
+AGREEMENT STATUS
+
+Each agreement must have status:
+
+Draft
+Sent
+Viewed
+Signed
+Completed
+Declined
+
+Track timestamps for each stage.
+
+CLIENT SIGNING EXPERIENCE (CRITICAL)
+
+Public agreement page must be premium and simple.
+
+Top:
+
+Company logo
+Agreement title
+
+Body:
+
+Clean formatted agreement text
+Scrollable content
+
+Bottom:
+
+Signature section:
+
+Client must:
+
+Enter full name
+Enter company name (optional)
+Draw signature (canvas input using finger or mouse)
+Confirm checkbox:
+“I have read and agree to this agreement”
+
+Optional witness section:
+
+Witness name
+Witness phone/email
+Witness signature
+
+Submit button:
+
+“Sign Agreement”
+
+SIGNATURE SYSTEM
+
+Requirements:
+
+Canvas-based signature capture
+Save signature as image
+Timestamp signature
+Store IP/device metadata if allowed
+Lock agreement after signing
+
+Do not allow editing after signing.
+
+PDF GENERATION
+
+After signing:
+
+Generate a clean PDF including:
+
+Company logo
+Agreement content
+Client name
+Signature image
+Witness signature (if used)
+Date signed
+Agreement ID
+
+PDF must be:
+
+Properly spaced
+Professional layout
+Multi-page safe
+Printable
+
+Actions:
+
+Download PDF
+Email PDF
+Store in system
+EMAIL DELIVERY
+
+Admin can:
+
+Send agreement via email
+Copy public link
+
+Email content:
+
+Subject:
+Agreement for Your Cleaning Service
+
+Body:
+Hi {client_first_name},
+Please review and sign your agreement using the link below.
+
+[View & Sign Agreement]
+
+Admin can edit email template.
+
+REAL-TIME TRACKING
+
+Admin must see:
+
+When agreement is opened
+When it is signed
+Who signed
+Signature timestamp
+
+Add activity log:
+
+Agreement created
+Agreement sent
+Agreement viewed
+Agreement signed
+Witness signed
+
+INTEGRATION WITH QUOTES
+
+Inside each quote:
+
+Add section:
+
+Agreement
+
+Show:
+
+Agreement status
+Link to agreement
+Button: Generate Agreement
+Button: View Signed Agreement
+Button: Download PDF
+
+When agreement is signed:
+
+Quote can optionally move to Accepted
+Or require manual confirmation
+PUBLIC LINK STRUCTURE
+
+Agreement link:
+
+clockfield.com/public/agreements/{agreementId}
+
+Requirements:
+
+Secure
+Unique
+Non-editable after signing
+Accessible on mobile
+PUBLICATION INTEGRATION (DO NOT BREAK EXISTING)
+
+Extend Publications system:
+
+Add new type:
+
+Agreement Publication
+
+This type:
+
+Does not affect blog-style publications
+Is used only for agreement documents
+Supports signature UI
+Has restricted access
+
+Do not modify existing publication logic.
+
+DATABASE MODELS
+
+Add:
+
+agreements
+agreement_templates
+agreement_signatures
+agreement_witnesses
+agreement_activity
+
+Fields:
+
+Agreement:
+
+id
+company_id
+quote_id
+template_id
+content
+status
+client_name
+client_email
+signed_at
+pdf_url
+
+Signature:
+
+signature_image
+signer_name
+timestamp
+
+Witness:
+
+name
+contact
+signature
+SECURITY
+Only assigned client can sign
+Agreement cannot be edited after signing
+Signed agreement is locked
+Secure file storage for signatures
+PERMISSIONS
+
+Admins:
+
+Full access
+
+Assistants:
+
+Can view or send if allowed
+
+Clients:
+
+Can only view and sign
+FAILURE HANDLING
+
+If signature fails:
+
+Show retry option
+Do not lose entered data
+
+If PDF fails:
+
+Allow regeneration
+TESTING
+
+Test:
+
+Create template
+Generate agreement from quote
+Edit agreement
+Send email
+Open public link
+Sign using mouse and phone
+Witness signing
+PDF generation
+Download
+Status updates
+Mobile experience
+
+FINAL RULE
+
+This is a new feature.
+
+Do not modify:
+
+Worklogs
+Field notes
+Reports
+Reviews
+Scheduling
+Payroll
+Existing publications
+Existing quote flows
+
+Only extend quotes safely with agreements.
+
+Everything must be:
+
+Responsive
+Professional
+Reliable
+Production-safe
+
+This feature should feel like a full contract management system inside Clockfield.

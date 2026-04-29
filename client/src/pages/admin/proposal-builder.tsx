@@ -17,7 +17,7 @@ import {
   ArrowLeft, Copy, Mail, Eye, Save, Plus, Trash2, GripVertical,
   ChevronLeft, ChevronRight, Check, ExternalLink, Printer, Mic, MicOff,
   FileText, User, MapPin, Settings, DollarSign, AlignLeft, Share2, RefreshCw,
-  Wand2, ListChecks, ChevronDown,
+  Wand2, ListChecks, ChevronDown, FileSignature,
 } from "lucide-react";
 import type {
   Proposal, ScopeSection, IncludedItem, PricingLineItem, TaxConfig, PricingConfig, ServiceDetails,
@@ -740,6 +740,10 @@ export default function AdminProposalBuilder() {
           <Button size="sm" onClick={() => setEmailDialogOpen(true)} data-testid="button-send-email-proposal">
             <Mail className="w-3.5 h-3.5 mr-1.5" />
             Send Email
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => { window.location.href = `/admin/agreements?proposalId=${id}`; }} data-testid="button-generate-agreement">
+            <FileSignature className="w-3.5 h-3.5 mr-1.5" />
+            Agreement
           </Button>
         </div>
       </div>
