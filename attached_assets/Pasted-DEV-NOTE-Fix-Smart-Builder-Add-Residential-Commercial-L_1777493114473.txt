@@ -1,0 +1,238 @@
+DEV NOTE: Fix Smart Builder + Add Residential / Commercial Logic
+Goal:
+Fix the Forms / Quote Requests builder so Smart Cleaning Form and Custom Builder both work correctly.
+Do not touch or break anything else.
+Do not change existing submissions, pipeline, quotes, estimator, email settings, or other Clockfield modules.
+Only fix and improve the form builder logic.
+Issue 1: Public form crash
+Current error:
+Cannot access 'handleReset' before initialization
+File shown:
+client/src/pages/public/quote-form.tsx
+Fix:
+Move handleReset above where it is passed into the form component.
+The function is currently being referenced before it is declared.
+Expected result:
+Public form loads normally.
+No blank screen.
+No Vite runtime overlay.
+Reset button works if used.
+Form submission still works.
+Also check for similar issues:
+handleSubmit
+handleNext
+handleBack
+handleStepClick
+any const function passed before declaration
+Issue 2: Builder showing blank / no enabled steps
+Current issue:
+After creating Smart Cleaning Form, the builder preview shows:
+No enabled steps
+Fix:
+When Smart Cleaning Form is created, automatically seed default steps and fields.
+Required smart form steps:
+Step 1: Contact Information
+Fields:
+First name
+Last name
+Email
+Phone
+Preferred contact method
+Company name, optional
+Step 2: Service Type
+Fields:
+Residential or Commercial selector
+Service needed
+Frequency
+Preferred date
+Preferred time
+Notes
+Step 3A: Residential Details
+Only show if Residential is selected.
+Fields:
+Home type
+House
+Apartment
+Condo
+Townhouse
+Bedrooms
+Bathrooms
+Square footage
+Kitchen cleaning needed
+Basement cleaning needed
+Move-in / move-out
+Deep clean
+Regular maintenance clean
+Pets in home
+Supplies needed
+Parking instructions
+Access instructions
+Step 3B: Commercial Details
+Only show if Commercial is selected.
+Fields:
+Business type
+Office
+Restaurant
+Retail
+Clinic
+Warehouse
+School / daycare
+Gym
+Other
+Facility square footage
+Number of washrooms
+Number of offices
+Number of floors
+Kitchen / breakroom
+Floor type
+Carpet
+Tile
+Concrete
+Vinyl
+Hardwood
+Cleaning frequency
+Daily
+Weekly
+Bi-weekly
+Monthly
+After-hours required
+Daytime cleaning allowed
+Security / alarm instructions
+Garbage removal needed
+Restocking supplies needed
+Floor care needed
+Window cleaning needed
+Step 4: Photos / Final Notes
+Fields:
+Upload photos
+Special instructions
+Budget range
+Consent checkbox
+Submit
+Expected result:
+Smart Cleaning Form opens with populated steps.
+Preview shows the actual form.
+Admin can turn fields on/off.
+Residential and commercial logic works.
+Issue 3: Custom Builder must support residential/commercial branching
+Current issue:
+Custom Builder still behaves like one generic form.
+Required fix:
+Add conditional field groups to Custom Builder.
+Admin should be able to create:
+Shared fields
+Residential-only fields
+Commercial-only fields
+Add a required selector field:
+Property Type
+Options:
+Residential
+Commercial
+Behavior:
+If client selects Residential, show residential fields only.
+If client selects Commercial, show commercial fields only.
+Shared fields always show.
+Admin controls:
+Enable residential section
+Enable commercial section
+Enable both
+Rename section titles
+Turn fields on/off
+Mark fields required
+Move fields between:
+Shared
+Residential
+Commercial
+Issue 4: Smart Builder creation modal
+Update modal options:
+Custom Builder
+Description:
+Build your own custom form with shared, residential, and commercial field groups.
+Smart Cleaning Form
+Description:
+Pre-built cleaning quote form with residential and commercial conditional steps.
+When Smart Cleaning Form is selected:
+Create form with full prebuilt schema.
+Do not create empty form.
+When Custom Builder is selected:
+Create form with basic shared fields plus empty residential/commercial groups ready to edit.
+Issue 5: Conditional logic data model
+Add or update field config to support:
+visibilityRule:
+always
+residential_only
+commercial_only
+triggerField:
+property_type
+triggerValue:
+residential
+commercial
+Do not hardcode this only in the frontend.
+Save this logic in the form schema so public forms and preview forms behave the same.
+Issue 6: Builder UI updates
+In the builder left panel, show:
+Shared Fields
+Residential Fields
+Commercial Fields
+Final Step / Photos
+Each group should show:
+Field name
+Enabled toggle
+Required toggle
+Edit button
+In live preview:
+Add a small selector at the top of preview:
+Preview as Residential
+Preview as Commercial
+This lets admin test both versions.
+Issue 7: Public form behavior
+Public client form should:
+Ask property type first.
+If Residential selected:
+show residential questions.
+If Commercial selected:
+show commercial questions.
+Do not show both at the same time.
+Required:
+Step progress should adapt based on selected type.
+Residential users should not see commercial fields.
+Commercial users should not see residential fields.
+Issue 8: AI Quote Estimator compatibility
+The AI Quote Estimator must receive the correct request type.
+Pass:
+property_type: residential or commercial
+enabled field answers only
+uploaded photos
+service type
+frequency
+square footage
+custom notes
+Do not send hidden fields or disabled fields to the estimator.
+Issue 9: Validation
+Required fields should only validate if visible.
+Example:
+If user selects Residential, required commercial fields must not block submission.
+Issue 10: Testing checklist
+Test all:
+Create Smart Cleaning Form
+Open builder
+Preview residential
+Preview commercial
+Open public link
+Fill residential request
+Submit residential request
+Fill commercial request
+Submit commercial request
+Confirm submissions save
+Confirm AI estimator receives correct type
+Confirm custom builder can create shared fields
+Confirm custom builder can create residential-only fields
+Confirm custom builder can create commercial-only fields
+Confirm disabled fields do not show
+Confirm required hidden fields do not block submit
+Confirm mobile layout works
+Final rule:
+Only fix Forms / Quote Requests builder and public quote form.
+Do not touch or refactor unrelated Clockfield modules.
+Do not rename existing routes unless required to fix this feature.
+Do not break existing forms already created.

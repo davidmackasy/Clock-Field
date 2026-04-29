@@ -1112,6 +1112,7 @@ export type FormField = {
   id: string; label: string; type: FormFieldType;
   required: boolean; enabled: boolean;
   placeholder?: string; options?: string[]; column: "full" | "half";
+  visibilityRule?: "always" | "residential_only" | "commercial_only";
 };
 export type FormStep = { id: string; title: string; enabled: boolean; fields: FormField[] };
 export type FormConfig = { steps: FormStep[]; smartMode?: string };
@@ -1157,6 +1158,71 @@ export const DEFAULT_FORM_CONFIG: FormConfig = {
       fields: [
         { id: "notes", label: "Special Instructions", type: "textarea", required: false, enabled: true, placeholder: "Anything we should know about your space?", column: "full" },
         { id: "budget", label: "Budget Range (optional)", type: "text", required: false, enabled: true, placeholder: "e.g. $150–$200", column: "full" },
+      ],
+    },
+  ],
+};
+
+export const SMART_CLEANING_CONFIG: FormConfig = {
+  smartMode: "cleaning",
+  steps: [
+    {
+      id: "contact", title: "Contact Information", enabled: true,
+      fields: [
+        { id: "firstName", label: "First Name", type: "text", required: true, enabled: true, placeholder: "Jane", column: "half" },
+        { id: "lastName", label: "Last Name", type: "text", required: true, enabled: true, placeholder: "Smith", column: "half" },
+        { id: "email", label: "Email Address", type: "email", required: true, enabled: true, placeholder: "jane@example.com", column: "full" },
+        { id: "phone", label: "Phone Number", type: "tel", required: false, enabled: true, placeholder: "(555) 000-0000", column: "full" },
+        { id: "companyName", label: "Company Name (if commercial)", type: "text", required: false, enabled: true, placeholder: "ABC Corp", column: "full", visibilityRule: "commercial_only" },
+        { id: "preferredContact", label: "Preferred Contact Method", type: "select", required: false, enabled: true, options: ["Email", "Phone", "Text/SMS"], column: "full" },
+      ],
+    },
+    {
+      id: "service", title: "Service Type", enabled: true,
+      fields: [
+        { id: "propertyType", label: "Property Type", type: "select", required: true, enabled: true, options: ["Residential", "Commercial"], column: "full" },
+        { id: "serviceType", label: "Service Needed", type: "select", required: true, enabled: true, options: ["Regular Cleaning", "Deep Cleaning", "Move-In / Move-Out", "Post-Construction", "Office Cleaning", "Restaurant Cleaning", "Retail Cleaning", "Other"], column: "full" },
+        { id: "frequency", label: "How Often?", type: "select", required: false, enabled: true, options: ["One-Time", "Weekly", "Bi-Weekly", "Monthly", "Not Sure"], column: "full" },
+        { id: "preferredDate", label: "Preferred Start Date", type: "date", required: false, enabled: true, placeholder: "", column: "half" },
+        { id: "preferredTime", label: "Preferred Time", type: "select", required: false, enabled: true, options: ["Morning (8am–12pm)", "Afternoon (12pm–5pm)", "Evening (5pm–8pm)", "Flexible"], column: "half" },
+      ],
+    },
+    {
+      id: "details", title: "Property Details", enabled: true,
+      fields: [
+        // Shared
+        { id: "serviceAddress", label: "Service Address", type: "text", required: true, enabled: true, placeholder: "123 Main Street", column: "full" },
+        { id: "city", label: "City", type: "text", required: false, enabled: true, placeholder: "Winnipeg", column: "half" },
+        { id: "province", label: "Province", type: "text", required: false, enabled: true, placeholder: "MB", column: "half" },
+        { id: "sqft", label: "Square Footage", type: "number", required: false, enabled: true, placeholder: "e.g. 1500", column: "half" },
+        // Residential only
+        { id: "homeType", label: "Home Type", type: "select", required: false, enabled: true, options: ["House", "Apartment", "Condo", "Townhouse", "Other"], column: "half", visibilityRule: "residential_only" },
+        { id: "bedrooms", label: "Bedrooms", type: "number", required: false, enabled: true, placeholder: "e.g. 3", column: "half", visibilityRule: "residential_only" },
+        { id: "bathrooms", label: "Bathrooms", type: "number", required: false, enabled: true, placeholder: "e.g. 2", column: "half", visibilityRule: "residential_only" },
+        { id: "hasBasement", label: "Basement to be cleaned", type: "checkbox", required: false, enabled: true, placeholder: "", column: "full", visibilityRule: "residential_only" },
+        { id: "moveInOut", label: "Move-in / Move-out clean", type: "checkbox", required: false, enabled: true, placeholder: "", column: "full", visibilityRule: "residential_only" },
+        { id: "deepClean", label: "Deep cleaning required", type: "checkbox", required: false, enabled: true, placeholder: "", column: "full", visibilityRule: "residential_only" },
+        { id: "hasPets", label: "Pets in home", type: "checkbox", required: false, enabled: true, placeholder: "", column: "full", visibilityRule: "residential_only" },
+        { id: "suppliesNeeded", label: "Please bring cleaning supplies", type: "checkbox", required: false, enabled: true, placeholder: "", column: "full", visibilityRule: "residential_only" },
+        // Commercial only
+        { id: "businessType", label: "Type of Business", type: "select", required: false, enabled: true, options: ["Office", "Restaurant", "Retail", "Medical / Clinic", "Warehouse", "School / Daycare", "Gym / Fitness", "Other"], column: "full", visibilityRule: "commercial_only" },
+        { id: "washrooms", label: "Number of Washrooms", type: "number", required: false, enabled: true, placeholder: "e.g. 4", column: "half", visibilityRule: "commercial_only" },
+        { id: "offices", label: "Number of Offices / Rooms", type: "number", required: false, enabled: true, placeholder: "e.g. 10", column: "half", visibilityRule: "commercial_only" },
+        { id: "floors", label: "Number of Floors", type: "number", required: false, enabled: true, placeholder: "e.g. 2", column: "half", visibilityRule: "commercial_only" },
+        { id: "floorType", label: "Floor Type", type: "select", required: false, enabled: true, options: ["Carpet", "Tile", "Hardwood", "Concrete", "Vinyl", "Mixed"], column: "half", visibilityRule: "commercial_only" },
+        { id: "afterHours", label: "After-hours cleaning required", type: "checkbox", required: false, enabled: true, placeholder: "", column: "full", visibilityRule: "commercial_only" },
+        { id: "garbageRemoval", label: "Garbage removal needed", type: "checkbox", required: false, enabled: true, placeholder: "", column: "full", visibilityRule: "commercial_only" },
+        { id: "securityInstructions", label: "Security / Alarm Instructions", type: "textarea", required: false, enabled: true, placeholder: "Alarm code, access notes…", column: "full", visibilityRule: "commercial_only" },
+      ],
+    },
+    {
+      id: "extras", title: "Final Details", enabled: true,
+      fields: [
+        { id: "additionalAreas", label: "Areas to Clean", type: "textarea", required: false, enabled: true, placeholder: "Kitchen, living room, master bedroom…", column: "full" },
+        { id: "specialRequests", label: "Special Instructions or Requests", type: "textarea", required: false, enabled: true, placeholder: "Anything else we should know?", column: "full" },
+        { id: "budget", label: "Approximate Budget (optional)", type: "text", required: false, enabled: true, placeholder: "e.g. $150–$250", column: "half" },
+        { id: "howHeard", label: "How did you hear about us?", type: "select", required: false, enabled: true, options: ["Google", "Facebook", "Instagram", "Referral", "Flyer", "Other"], column: "half" },
+        { id: "consent", label: "I agree to be contacted about this service request", type: "checkbox", required: true, enabled: true, placeholder: "", column: "full" },
       ],
     },
   ],

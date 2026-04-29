@@ -191,14 +191,14 @@ function FormsTab() {
                   onClick={() => setSmartMode(false)}>
                   <FileText className="w-4 h-4 mb-1.5" />
                   <p className="text-xs font-semibold">Custom Builder</p>
-                  <p className="text-[10px] mt-0.5 opacity-70">Design your own steps and fields</p>
+                  <p className="text-[10px] mt-0.5 opacity-70">Build your own form with shared, residential, and commercial field groups</p>
                 </button>
                 <button type="button" data-testid="button-select-smart-form"
                   className={cn("p-3 rounded-xl border text-left transition-all", smartMode ? "border-purple-500 bg-purple-50 text-purple-700" : "border-muted bg-muted/30 text-muted-foreground hover:border-purple-300")}
                   onClick={() => setSmartMode(true)}>
                   <Sparkles className="w-4 h-4 mb-1.5" />
                   <p className="text-xs font-semibold">Smart Cleaning Form</p>
-                  <p className="text-[10px] mt-0.5 opacity-70">Conditional residential + commercial fields</p>
+                  <p className="text-[10px] mt-0.5 opacity-70">Pre-built cleaning quote form with residential and commercial conditional steps</p>
                 </button>
               </div>
             </div>

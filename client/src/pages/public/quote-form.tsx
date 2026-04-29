@@ -1,12 +1,21 @@
 import { useState } from "react";
 import { useRoute, useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Loader2, CheckCircle2, AlertCircle, ChevronRight, ChevronLeft, ClipboardList } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, ChevronRight, ChevronLeft, ClipboardList, Building2, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FormConfig, FormStep, FormField } from "@shared/schema";
-import SmartCleaningForm from "./smart-cleaning-form";
 
 type FormData = { id: string; name: string; config: FormConfig; companyName: string; companyLogo: string | null; brandColor: string | null };
+
+// ── Determine if a field should be visible based on visibilityRule ────────────
+function isFieldVisible(field: FormField, values: Record<string, any>): boolean {
+  const rule = field.visibilityRule ?? "always";
+  if (rule === "always") return true;
+  const propType = (values.propertyType ?? "").toLowerCase();
+  if (rule === "residential_only") return propType === "residential";
+  if (rule === "commercial_only") return propType === "commercial";
+  return true;
+}
 
 function FormInput({ field, value, onChange, error }: {
   field: FormField;
@@ -75,13 +84,14 @@ function StepForm({ step, values, errors, onChange }: {
   errors: Record<string, string>;
   onChange: (id: string, value: any) => void;
 }) {
-  const enabledFields = step.fields.filter(f => f.enabled);
+  const visibleFields = step.fields.filter(f => f.enabled && isFieldVisible(f, values));
+
   const rows: FormField[][] = [];
   let i = 0;
-  while (i < enabledFields.length) {
-    const f = enabledFields[i];
-    if (f.column === "half" && enabledFields[i + 1]?.column === "half") {
-      rows.push([f, enabledFields[i + 1]]);
+  while (i < visibleFields.length) {
+    const f = visibleFields[i];
+    if (f.column === "half" && visibleFields[i + 1]?.column === "half") {
+      rows.push([f, visibleFields[i + 1]]);
       i += 2;
     } else {
       rows.push([f]);
@@ -125,14 +135,20 @@ export default function PublicQuoteForm() {
   const search = useSearch();
   const companyId = params?.companyId ?? "";
   const slug = params?.slug ?? "";
-
-  // Embed mode: hide branding when ?embed=true is in the URL
   const isEmbed = new URLSearchParams(search).get("embed") === "true";
 
   const [currentStep, setCurrentStep] = useState(0);
   const [formValues, setFormValues] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
+
+  // ── handleReset declared early to avoid TDZ issues ───────────────────────
+  const handleReset = () => {
+    setSubmitted(false);
+    setCurrentStep(0);
+    setFormValues({});
+    setErrors({});
+  };
 
   const { data: formData, isLoading, error: loadError } = useQuery<FormData>({
     queryKey: ["/api/public/forms", companyId, slug],
@@ -144,11 +160,22 @@ export default function PublicQuoteForm() {
   });
 
   const submitMutation = useMutation({
-    mutationFn: () => fetch(`/api/public/forms/${companyId}/${slug}/submit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(formValues),
-    }).then(r => r.json()),
+    mutationFn: () => {
+      // Only submit visible field values (Issue 8: don't send hidden fields)
+      const visibleData: Record<string, any> = {};
+      formData?.config.steps.forEach(step => {
+        step.fields.forEach(field => {
+          if (field.enabled && isFieldVisible(field, formValues) && formValues[field.id] !== undefined) {
+            visibleData[field.id] = formValues[field.id];
+          }
+        });
+      });
+      return fetch(`/api/public/forms/${companyId}/${slug}/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(visibleData),
+      }).then(r => r.json());
+    },
     onSuccess: () => setSubmitted(true),
   });
 
@@ -179,38 +206,14 @@ export default function PublicQuoteForm() {
     );
   }
 
-  // Delegate to Smart Cleaning Form when smartMode === "cleaning"
-  if (formData.config.smartMode === "cleaning") {
-    return (
-      <SmartCleaningForm
-        formId={formData.id}
-        companyId={companyId}
-        slug={slug}
-        companyName={formData.companyName}
-        companyLogo={formData.companyLogo}
-        brandColor={brandColor}
-        isEmbed={isEmbed}
-        submitted={submitted}
-        onReset={handleReset}
-        onSubmit={async (data) => {
-          await fetch(`/api/public/forms/${companyId}/${slug}/submit`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
-          });
-          setSubmitted(true);
-        }}
-      />
-    );
-  }
-
   const enabledSteps = formData.config.steps.filter(s => s.enabled);
   const step = enabledSteps[currentStep];
   const isLastStep = currentStep === enabledSteps.length - 1;
 
   const validateStep = () => {
     const newErrors: Record<string, string> = {};
-    step.fields.filter(f => f.enabled && f.required).forEach(f => {
+    // Only validate enabled AND visible fields (Issue 9)
+    step.fields.filter(f => f.enabled && f.required && isFieldVisible(f, formValues)).forEach(f => {
       const v = formValues[f.id];
       if (!v || (typeof v === "string" && !v.trim())) {
         newErrors[f.id] = `${f.label} is required`;
@@ -222,7 +225,6 @@ export default function PublicQuoteForm() {
 
   const handleNext = () => {
     if (!validateStep()) return;
-    setErrors({});
     if (isLastStep) {
       submitMutation.mutate();
     } else {
@@ -237,14 +239,7 @@ export default function PublicQuoteForm() {
     if (!isEmbed) window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleReset = () => {
-    setSubmitted(false);
-    setCurrentStep(0);
-    setFormValues({});
-    setErrors({});
-  };
-
-  // ── Success screen ──────────────────────────────────────────────────────────
+  // ── Success screen ───────────────────────────────────────────────────────
   if (submitted) {
     return (
       <div className={cn("flex flex-col", isEmbed ? "bg-transparent" : "min-h-screen bg-gradient-to-b from-gray-50 to-white")}>
@@ -263,10 +258,7 @@ export default function PublicQuoteForm() {
 
         <main className={cn("flex items-center justify-center px-4", isEmbed ? "py-12" : "flex-1 pb-16")}>
           <div className="w-full max-w-md text-center">
-            <div
-              className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"
-              style={{ background: `${brandColor}15` }}
-            >
+            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style={{ background: `${brandColor}15` }}>
               <CheckCircle2 className="w-10 h-10" style={{ color: brandColor }} />
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-3">Request Submitted!</h2>
@@ -301,15 +293,14 @@ export default function PublicQuoteForm() {
     );
   }
 
-  // ── Form screen ─────────────────────────────────────────────────────────────
+  // ── Form screen ──────────────────────────────────────────────────────────
+  const propertyType = formValues.propertyType;
+  const isResidential = propertyType === "Residential";
+  const isCommercial = propertyType === "Commercial";
+
   return (
-    <div className={cn(
-      "flex flex-col",
-      isEmbed
-        ? "bg-transparent"
-        : "min-h-screen bg-gradient-to-b from-gray-50 to-white"
-    )}>
-      {/* Branding header — hidden in embed mode */}
+    <div className={cn("flex flex-col", isEmbed ? "bg-transparent" : "min-h-screen bg-gradient-to-b from-gray-50 to-white")}>
+      {/* Branding header */}
       {!isEmbed && (
         <header className="pt-8 pb-4 text-center px-4">
           {formData.companyLogo ? (
@@ -328,19 +319,24 @@ export default function PublicQuoteForm() {
       <div className={cn("px-4 max-w-lg mx-auto w-full", isEmbed ? "pt-4 pb-2" : "py-3")}>
         <div className="flex gap-1.5 mb-2">
           {enabledSteps.map((s, idx) => (
-            <div
-              key={s.id}
-              className="flex-1 h-1.5 rounded-full transition-all duration-500"
-              style={{
-                background: idx <= currentStep ? brandColor : "#e5e7eb",
-                opacity: idx < currentStep ? 0.5 : 1,
-              }}
+            <div key={s.id} className="flex-1 h-1.5 rounded-full transition-all duration-500"
+              style={{ background: idx <= currentStep ? brandColor : "#e5e7eb", opacity: idx < currentStep ? 0.5 : 1 }}
             />
           ))}
         </div>
-        <p className="text-[11px] text-gray-400 text-right">
-          Step {currentStep + 1} of {enabledSteps.length}
-        </p>
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] text-gray-400">Step {currentStep + 1} of {enabledSteps.length}</p>
+          {/* Property type badge — appears once user has selected one */}
+          {propertyType && (
+            <span className={cn(
+              "flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full",
+              isResidential ? "bg-green-50 text-green-700 border border-green-200" : "bg-blue-50 text-blue-700 border border-blue-200"
+            )}>
+              {isResidential ? <Home className="w-2.5 h-2.5" /> : <Building2 className="w-2.5 h-2.5" />}
+              {propertyType}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Main form card */}
@@ -349,6 +345,12 @@ export default function PublicQuoteForm() {
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
             <div className="mb-6">
               <h2 className="text-xl font-bold text-gray-900">{step.title}</h2>
+              {/* Show Residential/Commercial sub-heading on property details step */}
+              {propertyType && step.fields.some(f => f.visibilityRule && f.visibilityRule !== "always") && (
+                <p className="text-sm text-gray-400 mt-1">
+                  {isResidential ? "Showing residential fields" : "Showing commercial fields"}
+                </p>
+              )}
             </div>
 
             <StepForm
@@ -356,7 +358,12 @@ export default function PublicQuoteForm() {
               values={formValues}
               errors={errors}
               onChange={(id, value) => {
-                setFormValues(prev => ({ ...prev, [id]: value }));
+                setFormValues(prev => {
+                  const next = { ...prev, [id]: value };
+                  // When propertyType changes, clear errors for conditional fields
+                  if (id === "propertyType") setErrors({});
+                  return next;
+                });
                 if (errors[id]) setErrors(prev => { const e = { ...prev }; delete e[id]; return e; });
               }}
             />
@@ -364,11 +371,8 @@ export default function PublicQuoteForm() {
             {/* Navigation */}
             <div className={cn("flex gap-3 mt-8", currentStep > 0 ? "justify-between" : "justify-end")}>
               {currentStep > 0 && (
-                <button
-                  data-testid="button-form-back"
-                  onClick={handleBack}
-                  className="flex items-center gap-2 px-5 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-                >
+                <button data-testid="button-form-back" onClick={handleBack}
+                  className="flex items-center gap-2 px-5 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
                   <ChevronLeft className="w-4 h-4" /> Back
                 </button>
               )}
@@ -396,12 +400,8 @@ export default function PublicQuoteForm() {
       {isEmbed ? (
         <div className="mt-4 pb-4 text-center text-xs text-gray-500">
           Created using{" "}
-          <a
-            href="https://clockfield.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-gray-700 hover:text-gray-900 underline underline-offset-2"
-          >
+          <a href="https://clockfield.com" target="_blank" rel="noopener noreferrer"
+            className="font-medium text-gray-700 hover:text-gray-900 underline underline-offset-2">
             Clockfield
           </a>
         </div>

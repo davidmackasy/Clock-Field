@@ -7297,13 +7297,15 @@ FINAL RULES:
       const { name, config } = req.body;
       if (!name) return res.status(400).json({ message: "Name is required" });
       const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "form";
-      const { DEFAULT_FORM_CONFIG } = await import("@shared/schema");
+      const { DEFAULT_FORM_CONFIG, SMART_CLEANING_CONFIG } = await import("@shared/schema");
+      // When smartMode === "cleaning", seed the full pre-built config (not empty steps)
+      const finalConfig = config?.smartMode === "cleaning" ? SMART_CLEANING_CONFIG : (config ?? DEFAULT_FORM_CONFIG);
       const form = await storage.createQuoteForm({
         companyId: user.companyId,
         name,
         slug,
         isActive: true,
-        config: JSON.stringify(config ?? DEFAULT_FORM_CONFIG),
+        config: JSON.stringify(finalConfig),
         createdAt: new Date().toISOString(),
       });
       res.json({ ...form, config: JSON.parse(form.config) });
