@@ -1,0 +1,176 @@
+DEV NOTE: Add Separate Residential and Commercial Estimator Settings
+Goal:
+Update Estimator Settings so residential and commercial quotes use separate pricing rules.
+Do not break or affect anything else.
+Only update Forms / Quote Requests → Estimator Settings and AI Quote Estimator logic.
+
+
+Current issue
+
+
+Estimator Settings currently uses one shared pricing setup.
+This is not accurate because:
+Residential pricing is different from commercial pricing.
+Commercial jobs often need different minimums, square footage rates, crew size, frequency logic, and multipliers.
+
+
+Required update
+
+
+Create two estimator pricing profiles:
+Residential Pricing
+Commercial Pricing
+Add tabs inside Estimator Settings:
+Residential
+Commercial
+Each tab should have its own saved values.
+
+
+Residential pricing settings
+
+
+Fields:
+Hourly rate
+Minimum job price
+Price per sq ft
+Price per bathroom
+Price per bedroom
+Price per room
+Kitchen add-on
+Basement add-on
+Move-in / move-out multiplier
+Deep clean multiplier
+Pet fee
+Supply fee
+Travel fee
+Tax rate
+Profit margin
+Default crew size
+Productivity rate
+Currency
+
+
+Commercial pricing settings
+
+
+Fields:
+Hourly rate
+Minimum job price
+Price per sq ft
+Price per washroom
+Price per office
+Price per floor
+Kitchen / breakroom add-on
+Garbage removal add-on
+Restocking supplies add-on
+Floor care add-on
+Window cleaning add-on
+After-hours multiplier
+Daily service multiplier
+Commercial multiplier
+Supply fee
+Travel fee
+Tax rate
+Profit margin
+Default crew size
+Productivity rate
+Currency
+
+
+Estimate logic
+
+
+When form is submitted, check:
+property_type = residential
+or
+property_type = commercial
+If residential:
+Use Residential Pricing settings only.
+If commercial:
+Use Commercial Pricing settings only.
+Do not mix pricing rules.
+
+
+AI Quote Estimator prompt/data
+
+
+Pass this clearly to the AI:
+property_type
+selected_pricing_profile
+pricing_settings_for_selected_type
+frequency details
+form answers
+uploaded photos
+service type
+square footage
+rooms / bathrooms / washrooms
+notes
+Important:
+If property_type is commercial, do not send residential bedroom/bathroom pricing unless it was actually collected.
+If property_type is residential, do not send commercial office/washroom pricing unless it was actually collected.
+
+
+Submission result
+
+
+The generated estimate must show:
+Quote type:
+Residential or Commercial
+Pricing profile used:
+Residential Pricing or Commercial Pricing
+Then show:
+Per visit estimate
+Monthly estimate if recurring
+Contract total if contract length exists
+Labor hours
+Crew size
+Scope of work
+
+
+Fallback behavior
+
+
+If the correct pricing profile is missing:
+Show warning in admin:
+“Commercial pricing settings are incomplete. Estimate used fallback defaults.”
+Do not crash.
+Do not block form submission.
+
+
+UI requirement
+
+
+Estimator Settings page should show:
+Tabs:
+Residential Pricing
+Commercial Pricing
+Each tab should have:
+Base Pricing
+Service Multipliers
+Crew & Productivity
+Add-ons
+Save button
+Do not overwrite existing settings.
+Migrate current settings into Residential by default.
+Create Commercial defaults separately.
+
+
+Testing checklist
+
+
+Test:
+Residential form submission
+Commercial form submission
+Residential estimate uses residential rates
+Commercial estimate uses commercial rates
+Weekly recurring residential pricing
+Weekly recurring commercial pricing
+One-time residential pricing
+One-time commercial pricing
+Monthly calculation still works
+Contract total still works
+Missing commercial settings fallback
+Mobile admin settings page
+Final rule:
+Do not touch unrelated Clockfield modules.
+Do not break existing form builder, submissions, pipeline, quotes, or email settings.

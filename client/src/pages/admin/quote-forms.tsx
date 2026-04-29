@@ -706,21 +706,34 @@ function PipelineTab() {
 function EstimatorSettingsTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [pricingTab, setPricingTab] = useState<"residential" | "commercial">("residential");
   const { data: settings, isLoading } = useQuery<any>({ queryKey: ["/api/admin/estimator-settings"] });
 
   const defaults = {
+    // Residential
     hourlyRate: "25", minimumJobPrice: "80", pricePerSqft: "0.08",
-    pricePerBathroom: "15", pricePerRoom: "20",
+    pricePerBathroom: "15", pricePerRoom: "20", kitchenAddOn: "25",
+    basementAddOn: "40", petFee: "15",
     deepCleanMultiplier: "1.5", moveInOutMultiplier: "1.75",
-    postConstructionMultiplier: "2.0", commercialMultiplier: "1.2",
-    afterHoursMultiplier: "1.25", supplyFee: "15", travelFee: "0",
-    taxRate: "5", profitMargin: "20", currency: "CAD",
-    defaultCrewSize: "2", productivityRate: "300",
+    postConstructionMultiplier: "2.0", afterHoursMultiplier: "1.25",
+    supplyFee: "15", travelFee: "0", taxRate: "5", profitMargin: "20",
+    currency: "CAD", defaultCrewSize: "2", productivityRate: "300",
     serviceAreas: "", customRules: "",
+    // Commercial
+    commHourlyRate: "35", commMinimumJobPrice: "150", commPricePerSqft: "0.06",
+    commPricePerWashroom: "20", commPricePerOffice: "15", commPricePerFloor: "30",
+    commKitchenAddOn: "35", commGarbageAddOn: "25", commRestockAddOn: "20",
+    commFloorCareAddOn: "50", commWindowCleanAddOn: "45",
+    commAfterHoursMultiplier: "1.35", commDailyServiceMultiplier: "0.85",
+    commCommercialMultiplier: "1.2", commSupplyFee: "25", commTravelFee: "0",
+    commTaxRate: "5", commProfitMargin: "20",
+    commDefaultCrewSize: "3", commProductivityRate: "400", commCustomRules: "",
   };
 
   const [form, setForm] = useState<Record<string, any>>(defaults);
-  useEffect(() => { if (settings) setForm({ ...defaults, ...Object.fromEntries(Object.entries(settings).map(([k,v]) => [k, v ?? ""])) }); }, [settings]);
+  useEffect(() => {
+    if (settings) setForm({ ...defaults, ...Object.fromEntries(Object.entries(settings).map(([k, v]) => [k, v ?? ""])) });
+  }, [settings]);
 
   const saveMutation = useMutation({
     mutationFn: (data: any) => apiRequest("PUT", "/api/admin/estimator-settings", data).then(r => r.json()),
@@ -728,80 +741,174 @@ function EstimatorSettingsTab() {
     onError: () => toast({ title: "Failed to save", variant: "destructive" }),
   });
 
-  const field = (key: string, label: string, type = "number", placeholder = "") => (
+  const f = (key: string, label: string, type = "number") => (
     <div key={key}>
       <Label className="text-xs font-medium mb-1 block">{label}</Label>
-      <Input data-testid={`input-${key}`} type={type} className="h-8 text-sm" placeholder={placeholder}
-        value={form[key] ?? ""}
-        onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} />
+      <Input data-testid={`input-${key}`} type={type} className="h-8 text-sm"
+        value={form[key] ?? ""} onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} />
     </div>
   );
 
-  if (isLoading) return <div className="space-y-3">{[1,2,3,4].map(i => <Skeleton key={i} className="h-10" />)}</div>;
+  const currencySelect = (key: string) => (
+    <div key={key}>
+      <Label className="text-xs font-medium mb-1 block">Currency</Label>
+      <Select value={form[key] || "CAD"} onValueChange={v => setForm(p => ({ ...p, [key]: v }))}>
+        <SelectTrigger className="h-8 text-sm" data-testid={`select-${key}`}><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="CAD">CAD</SelectItem>
+          <SelectItem value="USD">USD</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
+  const commProfileConfigured = !!(settings?.commHourlyRate);
+
+  if (isLoading) return <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-10" />)}</div>;
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="max-w-2xl space-y-4">
       <div className="flex items-center gap-2">
         <SlidersHorizontal className="w-4 h-4 text-primary" />
-        <p className="text-sm text-muted-foreground">Set your pricing rules. The AI estimator uses these values when generating quotes.</p>
+        <p className="text-sm text-muted-foreground">Separate pricing rules for residential and commercial jobs. The AI estimator picks the right profile automatically.</p>
       </div>
 
-      <div className="rounded-xl border bg-card p-4 space-y-4">
-        <h3 className="text-sm font-semibold">Base Pricing</h3>
-        <div className="grid grid-cols-2 gap-4">
-          {field("hourlyRate", "Hourly Rate ($)")}
-          {field("minimumJobPrice", "Minimum Job Price ($)")}
-          {field("pricePerSqft", "Price Per Sq Ft ($)")}
-          {field("pricePerBathroom", "Price Per Bathroom ($)")}
-          {field("pricePerRoom", "Price Per Room ($)")}
-          {field("supplyFee", "Supply Fee ($)")}
-          {field("travelFee", "Travel Fee ($)")}
-          {field("taxRate", "Tax Rate (%)")}
-          {field("profitMargin", "Profit Margin (%)")}
-          <div>
-            <Label className="text-xs font-medium mb-1 block">Currency</Label>
-            <Select value={form.currency || "CAD"} onValueChange={v => setForm(p => ({ ...p, currency: v }))}>
-              <SelectTrigger className="h-8 text-sm" data-testid="select-currency"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="CAD">CAD</SelectItem>
-                <SelectItem value="USD">USD</SelectItem>
-              </SelectContent>
-            </Select>
+      {/* Residential / Commercial tab switcher */}
+      <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit">
+        <button
+          data-testid="button-tab-residential"
+          className={cn("flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all",
+            pricingTab === "residential" ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}
+          onClick={() => setPricingTab("residential")}>
+          <Home className="w-3.5 h-3.5" /> Residential Pricing
+        </button>
+        <button
+          data-testid="button-tab-commercial"
+          className={cn("flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all",
+            pricingTab === "commercial" ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}
+          onClick={() => setPricingTab("commercial")}>
+          <Building2 className="w-3.5 h-3.5" /> Commercial Pricing
+          {!commProfileConfigured && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 ml-0.5" title="Not configured yet" />}
+        </button>
+      </div>
+
+      {pricingTab === "residential" ? (
+        <div className="space-y-4">
+          <div className="rounded-xl border bg-card p-4 space-y-4">
+            <h3 className="text-sm font-semibold flex items-center gap-1.5"><Home className="w-3.5 h-3.5 text-green-600" /> Base Pricing</h3>
+            <div className="grid grid-cols-2 gap-4">
+              {f("hourlyRate", "Hourly Rate ($)")}
+              {f("minimumJobPrice", "Minimum Job Price ($)")}
+              {f("pricePerSqft", "Price Per Sq Ft ($)")}
+              {f("pricePerBathroom", "Price Per Bathroom ($)")}
+              {f("pricePerRoom", "Price Per Bedroom / Room ($)")}
+              {f("supplyFee", "Supply Fee ($)")}
+              {f("travelFee", "Travel Fee ($)")}
+              {f("taxRate", "Tax Rate (%)")}
+              {f("profitMargin", "Profit Margin (%)")}
+              {currencySelect("currency")}
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-card p-4 space-y-4">
+            <h3 className="text-sm font-semibold">Add-ons</h3>
+            <div className="grid grid-cols-2 gap-4">
+              {f("kitchenAddOn", "Kitchen Add-on ($)")}
+              {f("basementAddOn", "Basement Add-on ($)")}
+              {f("petFee", "Pet Fee ($)")}
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-card p-4 space-y-4">
+            <h3 className="text-sm font-semibold">Service Multipliers</h3>
+            <div className="grid grid-cols-2 gap-4">
+              {f("deepCleanMultiplier", "Deep Clean ×")}
+              {f("moveInOutMultiplier", "Move-In/Out ×")}
+              {f("postConstructionMultiplier", "Post-Construction ×")}
+              {f("afterHoursMultiplier", "After-Hours ×")}
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-card p-4 space-y-4">
+            <h3 className="text-sm font-semibold">Crew & Productivity</h3>
+            <div className="grid grid-cols-2 gap-4">
+              {f("defaultCrewSize", "Default Crew Size")}
+              {f("productivityRate", "Productivity Rate (sq ft / hr / person)")}
+            </div>
+            <div>
+              <Label className="text-xs font-medium mb-1 block">Service Areas</Label>
+              <Input data-testid="input-serviceAreas" className="h-8 text-sm" placeholder="e.g. Winnipeg, St. Vital, Transcona"
+                value={form.serviceAreas || ""} onChange={e => setForm(p => ({ ...p, serviceAreas: e.target.value }))} />
+            </div>
+            <div>
+              <Label className="text-xs font-medium mb-1 block">Custom Pricing Rules</Label>
+              <Textarea data-testid="input-customRules" className="text-sm min-h-[80px]" placeholder="e.g. Minimum 2 hours for all deep cleans."
+                value={form.customRules || ""} onChange={e => setForm(p => ({ ...p, customRules: e.target.value }))} />
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="space-y-4">
+          {!commProfileConfigured && (
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-800">
+              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              <span>Commercial pricing is using default values. Save to activate your commercial profile.</span>
+            </div>
+          )}
+          <div className="rounded-xl border bg-card p-4 space-y-4">
+            <h3 className="text-sm font-semibold flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5 text-blue-600" /> Base Pricing</h3>
+            <div className="grid grid-cols-2 gap-4">
+              {f("commHourlyRate", "Hourly Rate ($)")}
+              {f("commMinimumJobPrice", "Minimum Job Price ($)")}
+              {f("commPricePerSqft", "Price Per Sq Ft ($)")}
+              {f("commPricePerWashroom", "Price Per Washroom ($)")}
+              {f("commPricePerOffice", "Price Per Office / Room ($)")}
+              {f("commPricePerFloor", "Price Per Floor ($)")}
+              {f("commSupplyFee", "Supply Fee ($)")}
+              {f("commTravelFee", "Travel Fee ($)")}
+              {f("commTaxRate", "Tax Rate (%)")}
+              {f("commProfitMargin", "Profit Margin (%)")}
+            </div>
+          </div>
 
-      <div className="rounded-xl border bg-card p-4 space-y-4">
-        <h3 className="text-sm font-semibold">Service Multipliers</h3>
-        <div className="grid grid-cols-2 gap-4">
-          {field("deepCleanMultiplier", "Deep Clean ×")}
-          {field("moveInOutMultiplier", "Move-In/Out ×")}
-          {field("postConstructionMultiplier", "Post-Construction ×")}
-          {field("commercialMultiplier", "Commercial ×")}
-          {field("afterHoursMultiplier", "After-Hours ×")}
-        </div>
-      </div>
+          <div className="rounded-xl border bg-card p-4 space-y-4">
+            <h3 className="text-sm font-semibold">Add-ons</h3>
+            <div className="grid grid-cols-2 gap-4">
+              {f("commKitchenAddOn", "Kitchen / Breakroom ($)")}
+              {f("commGarbageAddOn", "Garbage Removal ($)")}
+              {f("commRestockAddOn", "Restocking Supplies ($)")}
+              {f("commFloorCareAddOn", "Floor Care ($)")}
+              {f("commWindowCleanAddOn", "Window Cleaning ($)")}
+            </div>
+          </div>
 
-      <div className="rounded-xl border bg-card p-4 space-y-4">
-        <h3 className="text-sm font-semibold">Crew & Productivity</h3>
-        <div className="grid grid-cols-2 gap-4">
-          {field("defaultCrewSize", "Default Crew Size")}
-          {field("productivityRate", "Productivity Rate (sq ft / hr / person)")}
+          <div className="rounded-xl border bg-card p-4 space-y-4">
+            <h3 className="text-sm font-semibold">Service Multipliers</h3>
+            <div className="grid grid-cols-2 gap-4">
+              {f("commCommercialMultiplier", "Commercial ×")}
+              {f("commAfterHoursMultiplier", "After-Hours ×")}
+              {f("commDailyServiceMultiplier", "Daily Service ×")}
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-card p-4 space-y-4">
+            <h3 className="text-sm font-semibold">Crew & Productivity</h3>
+            <div className="grid grid-cols-2 gap-4">
+              {f("commDefaultCrewSize", "Default Crew Size")}
+              {f("commProductivityRate", "Productivity Rate (sq ft / hr / person)")}
+            </div>
+            <div>
+              <Label className="text-xs font-medium mb-1 block">Custom Commercial Pricing Rules</Label>
+              <Textarea data-testid="input-commCustomRules" className="text-sm min-h-[80px]" placeholder="e.g. Minimum 3-hour visit for all commercial jobs."
+                value={form.commCustomRules || ""} onChange={e => setForm(p => ({ ...p, commCustomRules: e.target.value }))} />
+            </div>
+          </div>
         </div>
-        <div>
-          <Label className="text-xs font-medium mb-1 block">Service Areas</Label>
-          <Input data-testid="input-serviceAreas" className="h-8 text-sm" placeholder="e.g. Winnipeg, St. Vital, Transcona"
-            value={form.serviceAreas || ""} onChange={e => setForm(p => ({ ...p, serviceAreas: e.target.value }))} />
-        </div>
-        <div>
-          <Label className="text-xs font-medium mb-1 block">Custom Pricing Rules</Label>
-          <Textarea data-testid="input-customRules" className="text-sm min-h-[80px]" placeholder="e.g. Add $25 for homes with pets. Minimum 2 hours for all deep cleans."
-            value={form.customRules || ""} onChange={e => setForm(p => ({ ...p, customRules: e.target.value }))} />
-        </div>
-      </div>
+      )}
 
       <Button data-testid="button-save-estimator-settings" onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending} className="gap-1.5">
-        {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save Settings
+        {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+        Save {pricingTab === "residential" ? "Residential" : "Commercial"} Settings
       </Button>
     </div>
   );

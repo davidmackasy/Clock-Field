@@ -7473,56 +7473,132 @@ FINAL RULES:
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
       // Detect residential vs commercial from submitted data
-      const isCommercial = ["Commercial", "Industrial / Warehouse"].includes(data.propertyCategory) ||
-        data.propertyType === "Commercial" ||
+      const isCommercial = data.propertyType === "Commercial" ||
+        ["Commercial", "Industrial / Warehouse"].includes(data.propertyCategory) ||
         ["Commercial Cleaning", "Office Cleaning"].includes(data.serviceType);
 
-      // Resolve frequency details — support new frequencyType field and legacy frequency field
+      // Select the right pricing profile — commercial profile is used when configured + job is commercial
+      const commProfileAvailable = !!(settings.commHourlyRate && parseFloat(settings.commHourlyRate) > 0);
+      const useCommProfile = isCommercial && commProfileAvailable;
+      const pricingWarning = isCommercial && !commProfileAvailable
+        ? "Commercial pricing settings are incomplete. Estimate used residential fallback defaults." : null;
+
+      // Build the active pricing profile object
+      const pricing = useCommProfile ? {
+        hourlyRate: settings.commHourlyRate ?? settings.hourlyRate,
+        minimumJobPrice: settings.commMinimumJobPrice ?? settings.minimumJobPrice,
+        pricePerSqft: settings.commPricePerSqft ?? settings.pricePerSqft,
+        supplyFee: settings.commSupplyFee ?? settings.supplyFee,
+        travelFee: settings.commTravelFee ?? settings.travelFee,
+        taxRate: settings.commTaxRate ?? settings.taxRate,
+        profitMargin: settings.commProfitMargin ?? settings.profitMargin,
+        defaultCrewSize: settings.commDefaultCrewSize ?? settings.defaultCrewSize,
+        productivityRate: settings.commProductivityRate ?? settings.productivityRate,
+        // Commercial-specific
+        pricePerWashroom: settings.commPricePerWashroom,
+        pricePerOffice: settings.commPricePerOffice,
+        pricePerFloor: settings.commPricePerFloor,
+        kitchenBreakroomAddOn: settings.commKitchenAddOn,
+        garbageAddOn: settings.commGarbageAddOn,
+        restockAddOn: settings.commRestockAddOn,
+        floorCareAddOn: settings.commFloorCareAddOn,
+        windowCleanAddOn: settings.commWindowCleanAddOn,
+        afterHoursMultiplier: settings.commAfterHoursMultiplier,
+        dailyServiceMultiplier: settings.commDailyServiceMultiplier,
+        commercialMultiplier: settings.commCommercialMultiplier ?? settings.commercialMultiplier,
+        customRules: settings.commCustomRules || settings.customRules,
+      } : {
+        hourlyRate: settings.hourlyRate,
+        minimumJobPrice: settings.minimumJobPrice,
+        pricePerSqft: settings.pricePerSqft,
+        pricePerBathroom: settings.pricePerBathroom,
+        pricePerRoom: settings.pricePerRoom,
+        kitchenAddOn: settings.kitchenAddOn,
+        basementAddOn: settings.basementAddOn,
+        petFee: settings.petFee,
+        supplyFee: settings.supplyFee,
+        travelFee: settings.travelFee,
+        taxRate: settings.taxRate,
+        profitMargin: settings.profitMargin,
+        defaultCrewSize: settings.defaultCrewSize,
+        productivityRate: settings.productivityRate,
+        deepCleanMultiplier: settings.deepCleanMultiplier,
+        moveInOutMultiplier: settings.moveInOutMultiplier,
+        postConstructionMultiplier: settings.postConstructionMultiplier,
+        afterHoursMultiplier: settings.afterHoursMultiplier,
+        customRules: settings.customRules,
+      };
+
+      // Resolve frequency details
       const frequencyType = data.frequencyType || data.frequency || "One-time";
       const isRecurring = !["One-time", "one-time", "one time", "One-Time"].includes(frequencyType);
 
-      // Calculate estimated monthly visits based on frequency details
+      // Calculate estimated monthly visits
       let estimatedVisitsPerMonth = 1;
-      let visitsBiweeklyNum = 1;
       if (frequencyType === "Weekly" && data.daysPerWeek) {
-        const daysNum = parseInt(data.daysPerWeek) || 1;
-        estimatedVisitsPerMonth = Math.round(daysNum * 4.33 * 10) / 10;
+        estimatedVisitsPerMonth = Math.round(parseInt(data.daysPerWeek) * 4.33 * 10) / 10;
       } else if (frequencyType === "Bi-weekly" && data.visitsBiweekly) {
-        visitsBiweeklyNum = parseInt(data.visitsBiweekly) || 1;
-        estimatedVisitsPerMonth = Math.round(visitsBiweeklyNum * 2.17 * 10) / 10;
+        estimatedVisitsPerMonth = Math.round(parseInt(data.visitsBiweekly) * 2.17 * 10) / 10;
       } else if (frequencyType === "Monthly" && data.visitsPerMonth) {
         estimatedVisitsPerMonth = parseInt(data.visitsPerMonth) || 1;
       } else if (frequencyType === "Custom schedule" && data.estimatedVisitsPerMonth) {
         estimatedVisitsPerMonth = parseFloat(data.estimatedVisitsPerMonth) || 1;
       }
 
-      // Contract length in months (for total calculation)
+      // Contract length in months
       const contractLengthRaw = data.contractLength ?? "";
       const contractMonths = contractLengthRaw.includes("12") ? 12
         : contractLengthRaw.includes("6") ? 6
         : contractLengthRaw.includes("3") ? 3
-        : 0; // 0 = month-to-month or not specified
+        : 0;
 
-      const prompt = `You are an expert cleaning service estimator. Use the pricing rules below to calculate a structured estimate.
+      const pricingRulesText = useCommProfile ? `
+PRICING PROFILE: COMMERCIAL
+- Hourly rate: $${pricing.hourlyRate}/hr
+- Minimum job price: $${pricing.minimumJobPrice}
+- Price per sq ft: $${pricing.pricePerSqft}
+- Price per washroom: $${pricing.pricePerWashroom}
+- Price per office/room: $${pricing.pricePerOffice}
+- Price per floor: $${pricing.pricePerFloor}
+- Kitchen/breakroom add-on: $${pricing.kitchenBreakroomAddOn}
+- Garbage removal add-on: $${pricing.garbageAddOn}
+- Restocking supplies add-on: $${pricing.restockAddOn}
+- Floor care add-on: $${pricing.floorCareAddOn}
+- Window cleaning add-on: $${pricing.windowCleanAddOn}
+- Commercial multiplier: ${pricing.commercialMultiplier}x
+- After-hours multiplier: ${pricing.afterHoursMultiplier}x
+- Daily service multiplier: ${pricing.dailyServiceMultiplier}x
+- Supply fee: $${pricing.supplyFee}
+- Tax rate: ${pricing.taxRate}%
+- Profit margin: ${pricing.profitMargin}%
+- Default crew size: ${pricing.defaultCrewSize}
+- Productivity: ${pricing.productivityRate} sq ft/hr/person
+${pricing.customRules ? `- Custom rules: ${pricing.customRules}` : ""}` : `
+PRICING PROFILE: RESIDENTIAL
+- Hourly rate: $${pricing.hourlyRate}/hr
+- Minimum job price: $${pricing.minimumJobPrice}
+- Price per sq ft: $${pricing.pricePerSqft}
+- Price per bathroom: $${pricing.pricePerBathroom}
+- Price per bedroom/room: $${pricing.pricePerRoom}
+- Kitchen add-on: $${pricing.kitchenAddOn}
+- Basement add-on: $${pricing.basementAddOn}
+- Pet fee: $${pricing.petFee}
+- Deep clean multiplier: ${pricing.deepCleanMultiplier}x
+- Move-in/out multiplier: ${pricing.moveInOutMultiplier}x
+- Post-construction multiplier: ${pricing.postConstructionMultiplier}x
+- After-hours multiplier: ${pricing.afterHoursMultiplier}x
+- Supply fee: $${pricing.supplyFee}
+- Tax rate: ${pricing.taxRate}%
+- Profit margin: ${pricing.profitMargin}%
+- Default crew size: ${pricing.defaultCrewSize}
+- Productivity: ${pricing.productivityRate} sq ft/hr/person
+${pricing.customRules ? `- Custom rules: ${pricing.customRules}` : ""}`;
 
-PRICING RULES:
-- Hourly rate: $${settings.hourlyRate}/hr
-- Minimum job price: $${settings.minimumJobPrice}
-- Price per sq ft: $${settings.pricePerSqft}
-- Price per bathroom: $${settings.pricePerBathroom}
-- Price per bedroom/room: $${settings.pricePerRoom}
-- Deep clean multiplier: ${settings.deepCleanMultiplier}x
-- Move-in/out multiplier: ${settings.moveInOutMultiplier}x
-- Post-construction multiplier: ${settings.postConstructionMultiplier}x
-- Commercial multiplier: ${settings.commercialMultiplier}x
-- Supply fee: $${settings.supplyFee}
-- Tax rate: ${settings.taxRate}%
-- Profit margin: ${settings.profitMargin}%
-- Default crew size: ${settings.defaultCrewSize}
-- Productivity: ${settings.productivityRate} sq ft/hr/person
-${settings.customRules ? `- Custom rules: ${settings.customRules}` : ""}
+      const prompt = `You are an expert cleaning service estimator.
 
 JOB TYPE: ${isCommercial ? "COMMERCIAL" : "RESIDENTIAL"}
+${pricingRulesText}
+
 FREQUENCY TYPE: ${frequencyType}
 ${isRecurring ? `ESTIMATED MONTHLY VISITS: ${estimatedVisitsPerMonth}` : ""}
 ${isRecurring && data.daysPerWeek ? `DAYS PER WEEK: ${data.daysPerWeek}` : ""}
@@ -7530,6 +7606,7 @@ ${isRecurring && data.visitsBiweekly ? `VISITS EVERY 2 WEEKS: ${data.visitsBiwee
 ${isRecurring && data.visitsPerMonth ? `VISITS PER MONTH: ${data.visitsPerMonth}` : ""}
 ${isRecurring && data.contractLength ? `SERVICE AGREEMENT: ${data.contractLength} (${contractMonths > 0 ? contractMonths + " months" : "month-to-month"})` : ""}
 ${isRecurring && data.preferredDays ? `PREFERRED DAYS: ${data.preferredDays}` : ""}
+${pricingWarning ? `WARNING: ${pricingWarning}` : ""}
 
 CALCULATION RULES:
 ${frequencyType === "Weekly" && data.daysPerWeek ? `- Monthly visits = ${parseInt(data.daysPerWeek) || 1} days × 4.33 = ${estimatedVisitsPerMonth} visits/month` : ""}
@@ -7546,6 +7623,7 @@ Return ONLY a valid JSON object (no extra text):
   "price_max": number,
   "recommended_price": number,
   "billing_type": "${isRecurring ? "per_visit" : "one_time"}",
+  "pricing_profile": "${isCommercial ? (commProfileAvailable ? "commercial" : "residential_fallback") : "residential"}",
   "labor_hours": number,
   "crew_size": number,
   "pricing_breakdown": [
@@ -7567,12 +7645,13 @@ Return ONLY a valid JSON object (no extra text):
 }
 
 RULES:
-- Never return less than the minimum job price ($${settings.minimumJobPrice})
+- Never return less than the minimum job price ($${pricing.minimumJobPrice})
 - Show 3-6 pricing breakdown line items
 - recommended_price = per-visit price for recurring jobs, total for one-time
 - monthly_total = recommended_price × ${estimatedVisitsPerMonth} visits/month
 ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} months` : ""}
-- Recommended price should be between price_min and price_max`;
+- Recommended price must be between price_min and price_max
+- Only use the pricing profile passed above — do not mix residential and commercial rates`;
 
       try {
         const completion = await openai.chat.completions.create({
