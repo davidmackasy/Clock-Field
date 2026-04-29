@@ -675,7 +675,8 @@ function EmbedTab() {
   useEffect(() => { if (forms.length > 0 && !selectedForm) setSelectedForm(forms[0].id); }, [forms]);
 
   const publicUrl = form ? `${window.location.origin}/form/${form.companyId}/${form.slug}` : "";
-  const embedCode = form ? `<iframe src="${publicUrl}" width="100%" height="900" frameborder="0" style="border:none;"></iframe>` : "";
+  const embedUrl = form ? `${publicUrl}?embed=true` : "";
+  const embedCode = form ? `<iframe src="${embedUrl}" width="100%" height="900" frameborder="0" style="border:none; width:100%; max-width:100%;"></iframe>` : "";
 
   const copy = (text: string, label: string) => { navigator.clipboard.writeText(text); toast({ title: `${label} copied!` }); };
 

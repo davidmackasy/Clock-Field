@@ -1,0 +1,260 @@
+Dev Note: Improve Embedded Form Display Without Breaking Existing Form Flow
+Goal:
+Update the Clockfield form display so the same form can work properly in two contexts:
+
+
+Direct Clockfield public form link
+
+
+Embedded form inside WordPress, Elementor, Wix, Squarespace, or any other website builder
+
+
+The embedded version should look clean and professional without showing duplicate branding, logo, or builder text.
+Important:
+Do not break or affect the existing form builder.
+Do not change how forms are created.
+Do not change how form submissions work.
+Do not change AI quote estimation.
+Do not change CRM lead pipeline logic.
+Do not change email auto-reply logic.
+Only update the public form display and embed display behavior.
+Current Issue:
+When the form is embedded into WordPress, the form currently shows:
+
+
+Clockfield or company logo
+
+
+Company name
+
+
+The small subtitle text that says “build” or “builder”
+
+
+The form inputs
+
+
+This creates a duplicate branding issue because the website already has its own header and logo.
+When embedded inside a website builder, the form should only show the actual contact form fields and steps.
+Required Behavior:
+
+
+Direct Clockfield Form Link
+
+
+When the user opens the form directly from Clockfield, for example:
+/form/:formId/build
+The page should show:
+
+
+Company logo
+
+
+Company name
+
+
+Form title if available
+
+
+No “build” or “builder” subtitle
+
+
+Form progress bar
+
+
+Form fields
+
+
+Submit flow
+
+
+Remove any small subtitle that says:
+
+
+build
+
+
+builder
+
+
+powered builder
+
+
+form builder
+
+
+The direct Clockfield version should still look branded and professional.
+
+
+Embedded Form Version
+
+
+When the form is used as an embed inside WordPress or another website builder, the form should show only:
+
+
+Form fields
+
+
+Step progress bar if the form has multiple steps
+
+
+Next / Back / Submit buttons
+
+
+Success message after submission
+
+
+The embedded version should not show:
+
+
+Company logo
+
+
+Company name
+
+
+Header branding
+
+
+“build” text
+
+
+“builder” text
+
+
+Extra top spacing
+
+
+Any duplicate title that makes the embed look like a full page
+
+
+This is important because the client website already has its own branding.
+Recommended Implementation
+Add an embed mode using a URL query parameter.
+Example:
+/form/:formId/build?embed=true
+When embed=true is present, hide the form branding block.
+Example iframe code:
+<iframe   src="https://YOUR-DOMAIN.com/form/FORM_ID/build?embed=true"  width="100%"   height="900"   frameborder="0"  style="border:none; width:100%; max-width:100%;"></iframe>
+Expected logic:
+const isEmbedMode = searchParams.get("embed") === "true";
+Then conditionally render the branding section:
+{!isEmbedMode && (  <FormBrandingHeader    logo={companyLogo}    companyName={companyName}    formTitle={formTitle}  />)}
+Do not render the subtitle “build” or “builder” anywhere.
+Direct form:
+Logo and company name visible.
+Embedded form:
+Logo and company name hidden.
+UI Requirements for Embedded Mode
+When embed=true:
+
+
+Remove top padding above the form
+
+
+Center the form container
+
+
+Keep the form responsive
+
+
+Keep the form max width clean
+
+
+Do not show a large white/gray empty space above the form
+
+
+Make it look like a native form inside the website
+
+
+Suggested styling:
+.embedded-form-page {  padding-top: 0;  margin-top: 0;  background: transparent;}.embedded-form-page .form-shell {  max-width: 720px;  margin: 0 auto;}
+For normal direct mode, keep the existing page spacing and branding.
+Iframe Embed Code Generator Update
+If there is a “copy embed code” button inside Clockfield, update it to generate the embed version automatically.
+Current iframe likely uses:
+/form/:formId/build
+Change copied embed iframe to:
+/form/:formId/build?embed=true
+This ensures users embedding the form on WordPress or other builders get the clean version.
+Do not change the direct public link button.
+There should be two different links:
+Public Link:
+/form/:formId/build
+Embed Code:
+/form/:formId/build?embed=true
+Acceptance Criteria
+This is complete when:
+
+
+Opening the direct form link still shows company logo and company name.
+
+
+The direct form link does not show “build” or “builder” text.
+
+
+Copying the iframe embed code uses ?embed=true.
+
+
+Opening the iframe embed version does not show logo, company name, or builder text.
+
+
+The embed version only shows the contact form fields, progress bar, and buttons.
+
+
+The embed version has no large empty top spacing.
+
+
+Form submissions still work.
+
+
+Multi-step forms still work.
+
+
+AI quote estimation still works after submission.
+
+
+CRM lead creation still works.
+
+
+Email auto-reply still works.
+
+
+Existing forms still load correctly.
+
+
+No existing Clockfield pages, menus, auth, subscriptions, or admin tools are changed.
+
+
+Testing Steps
+
+
+Open a form directly from Clockfield.
+
+
+Confirm the logo and company name show.
+
+
+Confirm the word “build” or “builder” does not show.
+
+
+Copy the embed code.
+
+
+Confirm the iframe URL includes ?embed=true.
+
+
+Paste the embed code into WordPress.
+
+
+Confirm the WordPress page only shows the form inputs and buttons.
+
+
+Submit a test form.
+
+
+Confirm the submission appears in Clockfield.
+
+
+Confirm AI quote estimation, CRM lead pipeline, and email auto-reply still work exactly as before.
+

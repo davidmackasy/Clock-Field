@@ -1,7 +1,6 @@
-import { useState, useEffect } from "react";
-import { useRoute } from "wouter";
+import { useState } from "react";
+import { useRoute, useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
 import { Loader2, CheckCircle2, AlertCircle, ChevronRight, ChevronLeft, ClipboardList } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FormConfig, FormStep, FormField } from "@shared/schema";
@@ -122,8 +121,12 @@ function StepForm({ step, values, errors, onChange }: {
 
 export default function PublicQuoteForm() {
   const [, params] = useRoute("/form/:companyId/:slug");
+  const search = useSearch();
   const companyId = params?.companyId ?? "";
   const slug = params?.slug ?? "";
+
+  // Embed mode: hide branding when ?embed=true is in the URL
+  const isEmbed = new URLSearchParams(search).get("embed") === "true";
 
   const [currentStep, setCurrentStep] = useState(0);
   const [formValues, setFormValues] = useState<Record<string, any>>({});
@@ -152,7 +155,7 @@ export default function PublicQuoteForm() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className={cn("flex items-center justify-center", isEmbed ? "py-16" : "min-h-screen bg-gray-50")}>
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
           <p className="text-sm text-gray-500">Loading form…</p>
@@ -163,7 +166,7 @@ export default function PublicQuoteForm() {
 
   if (loadError || !formData) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className={cn("flex items-center justify-center p-4", isEmbed ? "py-16" : "min-h-screen bg-gray-50")}>
         <div className="text-center max-w-sm">
           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <AlertCircle className="w-8 h-8 text-gray-400" />
@@ -198,14 +201,14 @@ export default function PublicQuoteForm() {
       submitMutation.mutate();
     } else {
       setCurrentStep(prev => prev + 1);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      if (!isEmbed) window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
   const handleBack = () => {
     setErrors({});
     setCurrentStep(prev => prev - 1);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (!isEmbed) window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleReset = () => {
@@ -215,21 +218,24 @@ export default function PublicQuoteForm() {
     setErrors({});
   };
 
+  // ── Success screen ──────────────────────────────────────────────────────────
   if (submitted) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex flex-col">
-        <header className="pt-10 pb-6 text-center px-4">
-          {formData.companyLogo ? (
-            <img src={formData.companyLogo} alt={formData.companyName} className="h-12 w-auto mx-auto mb-3 object-contain" />
-          ) : (
-            <div className="w-12 h-12 rounded-2xl mx-auto mb-3 flex items-center justify-center" style={{ background: brandColor }}>
-              <ClipboardList className="w-6 h-6 text-white" />
-            </div>
-          )}
-          <h1 className="text-base font-semibold text-gray-900">{formData.companyName}</h1>
-        </header>
+      <div className={cn("flex flex-col", isEmbed ? "bg-transparent" : "min-h-screen bg-gradient-to-b from-gray-50 to-white")}>
+        {!isEmbed && (
+          <header className="pt-10 pb-6 text-center px-4">
+            {formData.companyLogo ? (
+              <img src={formData.companyLogo} alt={formData.companyName} className="h-12 w-auto mx-auto mb-3 object-contain" />
+            ) : (
+              <div className="w-12 h-12 rounded-2xl mx-auto mb-3 flex items-center justify-center" style={{ background: brandColor }}>
+                <ClipboardList className="w-6 h-6 text-white" />
+              </div>
+            )}
+            <h1 className="text-base font-semibold text-gray-900">{formData.companyName}</h1>
+          </header>
+        )}
 
-        <main className="flex-1 flex items-center justify-center px-4 pb-16">
+        <main className={cn("flex items-center justify-center px-4", isEmbed ? "py-12" : "flex-1 pb-16")}>
           <div className="w-full max-w-md text-center">
             <div
               className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"
@@ -252,44 +258,47 @@ export default function PublicQuoteForm() {
           </div>
         </main>
 
-        <footer className="py-5 text-center">
-          <p className="text-xs text-gray-400">Powered by <span className="font-medium">Clockfield</span></p>
-        </footer>
+        {!isEmbed && (
+          <footer className="py-5 text-center">
+            <p className="text-xs text-gray-400">Powered by <span className="font-medium">Clockfield</span></p>
+          </footer>
+        )}
       </div>
     );
   }
 
+  // ── Form screen ─────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex flex-col">
-      {/* Header */}
-      <header className="pt-8 pb-4 text-center px-4">
-        {formData.companyLogo ? (
-          <img src={formData.companyLogo} alt={formData.companyName} className="h-12 w-auto mx-auto mb-3 object-contain" />
-        ) : (
-          <div className="w-12 h-12 rounded-2xl mx-auto mb-3 flex items-center justify-center" style={{ background: brandColor }}>
-            <ClipboardList className="w-6 h-6 text-white" />
-          </div>
-        )}
-        <h1 className="text-base font-semibold text-gray-900">{formData.companyName}</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{formData.name}</p>
-
-        {/* Divider */}
-        <div className="mt-4 h-px bg-gray-100 max-w-md mx-auto" />
-      </header>
+    <div className={cn(
+      "flex flex-col",
+      isEmbed
+        ? "bg-transparent"
+        : "min-h-screen bg-gradient-to-b from-gray-50 to-white"
+    )}>
+      {/* Branding header — hidden in embed mode */}
+      {!isEmbed && (
+        <header className="pt-8 pb-4 text-center px-4">
+          {formData.companyLogo ? (
+            <img src={formData.companyLogo} alt={formData.companyName} className="h-12 w-auto mx-auto mb-3 object-contain" />
+          ) : (
+            <div className="w-12 h-12 rounded-2xl mx-auto mb-3 flex items-center justify-center" style={{ background: brandColor }}>
+              <ClipboardList className="w-6 h-6 text-white" />
+            </div>
+          )}
+          <h1 className="text-base font-semibold text-gray-900">{formData.companyName}</h1>
+          <div className="mt-4 h-px bg-gray-100 max-w-md mx-auto" />
+        </header>
+      )}
 
       {/* Progress bar */}
-      <div className="px-4 py-3 max-w-lg mx-auto w-full">
+      <div className={cn("px-4 max-w-lg mx-auto w-full", isEmbed ? "pt-4 pb-2" : "py-3")}>
         <div className="flex gap-1.5 mb-2">
           {enabledSteps.map((s, idx) => (
             <div
               key={s.id}
               className="flex-1 h-1.5 rounded-full transition-all duration-500"
               style={{
-                background: idx < currentStep
-                  ? brandColor
-                  : idx === currentStep
-                  ? brandColor
-                  : "#e5e7eb",
+                background: idx <= currentStep ? brandColor : "#e5e7eb",
                 opacity: idx < currentStep ? 0.5 : 1,
               }}
             />
@@ -301,7 +310,7 @@ export default function PublicQuoteForm() {
       </div>
 
       {/* Main form card */}
-      <main className="flex-1 px-4 pb-6">
+      <main className={cn("px-4", isEmbed ? "pb-4" : "flex-1 pb-6")}>
         <div className="max-w-lg mx-auto w-full">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
             <div className="mb-6">
@@ -349,10 +358,12 @@ export default function PublicQuoteForm() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="py-5 text-center">
-        <p className="text-xs text-gray-400">Powered by <span className="font-medium">Clockfield</span></p>
-      </footer>
+      {/* Footer — hidden in embed mode */}
+      {!isEmbed && (
+        <footer className="py-5 text-center">
+          <p className="text-xs text-gray-400">Powered by <span className="font-medium">Clockfield</span></p>
+        </footer>
+      )}
     </div>
   );
 }
