@@ -258,7 +258,15 @@ export default function PublicQuoteForm() {
           </div>
         </main>
 
-        {!isEmbed && (
+        {isEmbed ? (
+          <div className="mt-4 pb-4 text-center text-xs text-gray-500">
+            Created using{" "}
+            <a href="https://clockfield.com" target="_blank" rel="noopener noreferrer"
+              className="font-medium text-gray-700 hover:text-gray-900 underline underline-offset-2">
+              Clockfield
+            </a>
+          </div>
+        ) : (
           <footer className="py-5 text-center">
             <p className="text-xs text-gray-400">Powered by <span className="font-medium">Clockfield</span></p>
           </footer>
@@ -358,8 +366,20 @@ export default function PublicQuoteForm() {
         </div>
       </main>
 
-      {/* Footer — hidden in embed mode */}
-      {!isEmbed && (
+      {/* Footer */}
+      {isEmbed ? (
+        <div className="mt-4 pb-4 text-center text-xs text-gray-500">
+          Created using{" "}
+          <a
+            href="https://clockfield.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-gray-700 hover:text-gray-900 underline underline-offset-2"
+          >
+            Clockfield
+          </a>
+        </div>
+      ) : (
         <footer className="py-5 text-center">
           <p className="text-xs text-gray-400">Powered by <span className="font-medium">Clockfield</span></p>
         </footer>

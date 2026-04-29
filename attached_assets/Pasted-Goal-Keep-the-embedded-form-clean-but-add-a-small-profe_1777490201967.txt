@@ -1,0 +1,132 @@
+Goal:
+Keep the embedded form clean, but add a small professional Clockfield branding line under the form.
+
+The embedded form should still hide the client logo, company name, and builder text, but it should show a small footer line that helps promote Clockfield.
+
+Important:
+Do not bring back the company logo in embed mode.
+Do not bring back the company name in embed mode.
+Do not bring back the “build” or “builder” subtitle.
+Do not change the form fields.
+Do not change the form submission flow.
+Do not change AI quote estimation, CRM lead pipeline, or email auto-reply.
+Do not break or affect any existing Clockfield feature.
+
+Current Issue:
+The embedded form now looks clean, but there is no Clockfield attribution. We need a small line that says the form was created or powered by Clockfield, with Clockfield linking back to the Clockfield website.
+
+Required Behavior:
+
+When the form is opened with:
+
+/form/:formId/build?embed=true
+
+Show a small branding line below the form card:
+
+Created using Clockfield
+
+or
+
+Powered by Clockfield
+
+Preferred text:
+
+Created using Clockfield
+
+The word “Clockfield” must be clickable.
+
+Link destination:
+
+https://clockfield.com
+
+Open the link in a new tab.
+
+Example HTML behavior:
+
+<a
+  href="https://clockfield.com"
+  target="_blank"
+  rel="noopener noreferrer"
+>
+  Clockfield
+</a>
+
+Visual Requirements:
+
+Place the branding below the form card
+Keep it small and professional
+Do not make it look like an ad
+Use subtle text color
+Center it under the form
+Add enough spacing so it does not touch the form card
+It should be visible on desktop and mobile
+It should not block or distract from the form
+
+Suggested UI:
+
+{isEmbedMode && (
+  <div className="mt-4 text-center text-xs text-gray-500">
+    Created using{" "}
+    <a
+      href="https://clockfield.com"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="font-medium text-gray-700 hover:text-gray-900 underline underline-offset-2"
+    >
+      Clockfield
+    </a>
+  </div>
+)}
+
+Direct Clockfield Form Link Behavior:
+
+When the form is opened directly without embed mode:
+
+/form/:formId/build
+
+Keep the normal branded version:
+
+Company logo visible
+Company name visible
+Form title visible if available
+No “build” or “builder” text
+Form fields visible
+
+Optional:
+The direct form can also show the same small “Created using Clockfield” line at the bottom, but only if it does not make the page look cluttered.
+
+Embed Mode Final Layout:
+
+The embedded form should show:
+
+Form card
+Form inputs
+Next / Back / Submit buttons
+Success message after submission
+Small “Created using Clockfield” line below the form
+
+The embedded form should not show:
+
+Client logo
+Client company name
+“build”
+“builder”
+Big header branding
+Large empty spacing above the form
+
+Acceptance Criteria:
+
+This is complete when:
+
+WordPress embedded iframe still shows only the form content.
+A small “Created using Clockfield” line appears below the form.
+The word “Clockfield” is clickable.
+The Clockfield link opens in a new tab.
+The branding is subtle and centered.
+The branding works on mobile and desktop.
+The form still submits successfully.
+Multi-step form flow still works.
+AI quote estimation still works after submission.
+CRM lead creation still works.
+Email auto-reply still works.
+No existing Clockfield pages or features are changed.
