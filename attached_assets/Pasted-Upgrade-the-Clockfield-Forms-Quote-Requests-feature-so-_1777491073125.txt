@@ -1,0 +1,1094 @@
+Upgrade the Clockfield Forms / Quote Requests feature so cleaning businesses can collect better quote information, respond to leads properly, and generate useful estimates for residential and commercial jobs.
+
+This must be implemented as an isolated upgrade to the Forms / Quote Requests system only.
+
+Do not break or affect anything else.
+
+Do not change existing authentication.
+Do not change existing subscriptions.
+Do not change existing worklogs.
+Do not change field notes.
+Do not change payroll.
+Do not change incident reports.
+Do not change existing client reports.
+Do not remove any current form submission data.
+Do not rename existing routes unless required for this feature.
+Do not delete existing fields.
+Do not change working form embed behavior.
+Do not remove the “Created using Clockfield” embedded branding.
+If anything outside this feature needs to be changed, ask first.
+
+1. Current Problems
+
+The current quote form is too basic.
+
+It collects:
+
+Contact information
+Service address
+Basic service details
+Square footage
+Bedrooms
+Bathrooms
+Preferred date
+Preferred time
+
+This is not enough to create a proper cleaning quote.
+
+Residential and commercial jobs need different questions.
+
+The submission page is also too limited.
+
+Current submission issue:
+
+Admin receives the submission, but the submission mainly shows basic contact details.
+Reply / respond actions do not work properly.
+There is no proper flow to generate an estimate from the submission.
+There is no proper residential estimator.
+Commercial estimator is not giving a clear estimated charge result.
+2. Required Final Behavior
+
+When a customer fills out a quote form:
+
+They select Residential or Commercial.
+The form changes based on what they select.
+The customer only sees questions that match their service type.
+The admin receives a detailed submission.
+The admin can respond to the customer by email.
+The admin can send the submission into the estimator.
+The estimator can generate a suggested quote amount.
+The estimate result can be used to create/send a cleaning quote.
+3. Upgrade the Public Quote Form
+3.1 Keep Existing Embed Behavior
+
+Do not break the existing embed mode.
+
+The embedded form must still work with:
+
+/form/:formId/build?embed=true
+
+Embed mode must still:
+
+Hide client logo
+Hide company name
+Hide builder text
+Show only the form
+Show Created using Clockfield under the form
+Keep Clockfield clickable
+
+Direct mode must still:
+
+Show company logo
+Show company name
+Hide build/builder subtitle
+Show the form
+4. Add Conditional Form Logic
+
+Add conditional fields based on Service Type.
+
+Service Type should control the next questions.
+
+Required service type options:
+
+Residential Cleaning
+Commercial Cleaning
+Post-Construction Cleaning
+Move-In / Move-Out Cleaning
+Deep Cleaning
+Recurring Cleaning
+Other
+
+Main required split:
+
+Residential Cleaning → show residential questions
+Commercial Cleaning → show commercial questions
+
+Move-In / Move-Out and Deep Cleaning can reuse residential or commercial questions based on Property Type.
+
+Add a field after Service Type:
+
+Property Category
+
+Options:
+
+Residential
+Commercial
+Industrial / Warehouse
+Other
+
+If user chooses Residential, show Residential Details.
+
+If user chooses Commercial or Industrial / Warehouse, show Commercial Details.
+
+5. Residential Form Questions
+
+When Property Category = Residential, show these fields.
+
+5.1 Residential Property Type
+Apartment / Condo
+Townhouse
+Single-Family House
+Duplex
+Two-Story House
+Basement Suite
+Other
+5.2 Home Size
+Square Footage
+Number of Bedrooms
+Number of Bathrooms
+Number of Kitchens
+Number of Living Rooms
+Number of Dining Areas
+Number of Floors
+5.3 Basement
+
+Question:
+
+Do you have a basement?
+
+Options:
+
+No
+Yes, unfinished basement
+Yes, finished basement
+Yes, basement suite
+
+Follow-up if yes:
+
+Do you want the basement cleaned?
+
+Options:
+
+Yes
+No
+Only part of it
+
+If “Only part of it” is selected, show:
+
+Please describe what basement areas need cleaning
+5.4 Kitchen Details
+
+Add:
+
+Do you want kitchen appliances cleaned?
+
+Checkbox options:
+
+Inside fridge
+Inside oven
+Microwave
+Dishwasher exterior
+Cabinet exterior
+Inside cabinets
+Pantry
+Range hood
+None
+5.5 Add-ons / Upsells
+
+Add a section called:
+
+Extra Cleaning Add-ons
+
+Checkbox options:
+
+Inside fridge
+Inside oven
+Microwave cleaning
+Inside cabinets
+Wall spot cleaning
+Baseboards
+Interior windows
+Garage cleaning
+Basement cleaning
+Laundry room
+Pantry cleaning
+Carpet cleaning
+Upholstery cleaning
+Pet hair removal
+Trash removal
+Heavy-duty deep clean
+5.6 Condition of the Home
+
+Add:
+
+Current condition
+
+Options:
+
+Light cleaning needed
+Normal cleaning needed
+Deep cleaning needed
+Very dirty / heavy buildup
+Move-out condition
+Post-renovation dust
+5.7 Supplies
+
+Add:
+
+Should the cleaner bring supplies?
+
+Options:
+
+Yes, bring all supplies
+No, supplies are provided
+Some supplies are provided
+5.8 Photos
+
+Add optional upload field:
+
+Upload photos of the space
+
+Allow multiple images.
+
+Use this for better estimate review.
+
+6. Commercial Form Questions
+
+When Property Category = Commercial, show these fields.
+
+6.1 Commercial Property Type
+Office
+Retail Store
+Restaurant
+Medical Clinic
+Dental Clinic
+School / Daycare
+Church
+Gym / Fitness Facility
+Warehouse
+Industrial Building
+Apartment Common Area
+Post-Construction Site
+Other
+6.2 Commercial Size
+Total square footage
+Number of floors
+Is there a second story?
+Is there an elevator?
+Are stairs included?
+
+If second story = yes, show:
+
+How many offices or rooms are upstairs?
+Are upstairs washrooms included?
+Is upstairs kitchen/break room included?
+6.3 Office / Room Breakdown
+
+Add:
+
+Number of private offices
+Number of open office areas
+Number of boardrooms / meeting rooms
+Number of reception areas
+Number of hallways
+Number of storage rooms
+Number of staff rooms
+Number of back offices
+6.4 Washrooms
+
+Add:
+
+Number of washrooms
+Number of single-stall washrooms
+Number of multi-stall washrooms
+Total number of toilets
+Total number of urinals
+Total number of sinks
+Do washrooms need restocking?
+
+Restocking options:
+
+Toilet paper
+Paper towel
+Soap
+Sanitizer
+Garbage bags
+Not needed
+6.5 Kitchen / Breakroom
+
+Add:
+
+Does the property have a kitchen or breakroom?
+
+If yes, show:
+
+Number of kitchens / breakrooms
+Appliance cleaning needed
+Inside fridge
+Inside oven
+Microwave
+Cabinet exterior
+Inside cabinets
+Countertops
+Sink cleaning
+Pantry
+6.6 Floor Types
+
+Add checkbox:
+
+Floor types
+
+Options:
+
+Vinyl
+Tile
+Carpet
+Concrete
+Hardwood
+Laminate
+Epoxy
+Rubber gym flooring
+Other
+6.7 Cleaning Frequency
+
+Add:
+
+How often do you need cleaning?
+
+Options:
+
+One-time
+Daily
+2x per week
+3x per week
+Weekly
+Bi-weekly
+Monthly
+Custom
+
+If Custom, show:
+
+Describe preferred schedule
+6.8 Estimated Cleaning Time
+
+Add:
+
+How long does cleaning usually take now?
+
+Options:
+
+Not sure
+Under 1 hour
+1–2 hours
+2–4 hours
+4–6 hours
+6+ hours
+Multiple cleaners needed
+
+Also add optional field:
+
+How many cleaners are usually needed?
+6.9 Commercial Add-ons
+
+Add checkbox section:
+
+Additional Commercial Services
+
+Options:
+
+Interior windows
+Exterior windows
+Carpet cleaning
+Floor scrubbing
+Floor stripping and waxing
+High dusting
+Disinfection
+Garbage removal
+Recycling service
+Restocking supplies
+Kitchen appliance cleaning
+Warehouse floor cleaning
+Post-construction dust removal
+Pressure washing
+6.10 Commercial Condition
+
+Add:
+
+Current condition
+
+Options:
+
+Light maintenance cleaning
+Normal cleaning
+Heavy traffic areas
+Deep cleaning needed
+Post-construction dust
+Grease buildup
+Industrial dirt / dust
+6.11 Photos
+
+Add optional upload field:
+
+Upload photos of the property
+
+Allow multiple images.
+
+7. Form UX Requirements
+
+The form should not feel overwhelming.
+
+Use steps.
+
+Recommended step structure:
+
+Step 1: Contact Information
+Step 2: Service Address
+Step 3: Service Type
+Step 4: Property Details
+Step 5: Add-ons and Photos
+Step 6: Review and Submit
+
+Important UX rules:
+
+Only show relevant questions.
+Do not show residential and commercial questions at the same time.
+Keep progress bar accurate.
+Keep Back and Next buttons working.
+Required fields should be clear.
+Optional fields should be marked optional.
+Mobile layout must be clean.
+Desktop layout should use 2-column fields where it makes sense.
+8. Database / Schema Roadmap
+
+Do not delete existing fields.
+
+Add new nullable fields so old submissions still work.
+
+Recommended approach:
+
+Keep existing base fields:
+
+firstName
+lastName
+email
+phone
+streetAddress
+unitSuite
+city
+provinceState
+postalCode
+serviceType
+propertyType
+squareFootage
+bedrooms
+bathrooms
+preferredDate
+preferredTime
+message
+
+Add flexible JSON fields:
+
+propertyCategory
+residentialDetails Json?
+commercialDetails Json?
+addons Json?
+photos Json?
+estimateData Json?
+submissionStatus
+leadStage
+lastResponseAt
+
+Example residentialDetails:
+
+residentialDetails: {
+  propertyType: string;
+  squareFootage: number | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  kitchens: number | null;
+  livingRooms: number | null;
+  diningAreas: number | null;
+  floors: number | null;
+  basementType: string | null;
+  basementCleaningRequired: string | null;
+  basementNotes: string | null;
+  applianceCleaning: string[];
+  condition: string | null;
+  supplies: string | null;
+}
+
+Example commercialDetails:
+
+commercialDetails: {
+  propertyType: string;
+  squareFootage: number | null;
+  floors: number | null;
+  hasSecondStory: boolean;
+  hasElevator: boolean;
+  stairsIncluded: boolean;
+  upstairsOfficeCount: number | null;
+  upstairsWashroomsIncluded: boolean;
+  upstairsKitchenIncluded: boolean;
+  privateOffices: number | null;
+  openOfficeAreas: number | null;
+  boardrooms: number | null;
+  receptionAreas: number | null;
+  hallways: number | null;
+  storageRooms: number | null;
+  staffRooms: number | null;
+  backOffices: number | null;
+  washrooms: number | null;
+  singleStallWashrooms: number | null;
+  multiStallWashrooms: number | null;
+  toilets: number | null;
+  urinals: number | null;
+  sinks: number | null;
+  restockingItems: string[];
+  hasKitchen: boolean;
+  kitchens: number | null;
+  applianceCleaning: string[];
+  floorTypes: string[];
+  frequency: string | null;
+  customSchedule: string | null;
+  currentCleaningDuration: string | null;
+  currentCleanerCount: number | null;
+  condition: string | null;
+}
+
+Example addons:
+
+addons: {
+  selected: string[];
+  notes: string | null;
+}
+
+Example estimateData:
+
+estimateData: {
+  estimatorType: "residential" | "commercial";
+  suggestedLow: number;
+  suggestedHigh: number;
+  suggestedPrice: number;
+  billingType: "one_time" | "per_visit" | "weekly" | "monthly" | "yearly";
+  estimatedHours: number;
+  recommendedCleanerCount: number;
+  pricingBreakdown: Array<{
+    label: string;
+    amount: number;
+  }>;
+  notes: string;
+  generatedAt: string;
+}
+9. Upgrade Submissions Page
+
+The submissions page must become useful for admins.
+
+9.1 Submission List
+
+Show each submission as a lead card or table row.
+
+Include:
+
+Client name
+Email
+Phone
+Service type
+Property category
+City
+Preferred date
+Submission date
+Status
+Lead stage
+Estimate status
+
+Statuses:
+
+New
+Reviewed
+Estimate Generated
+Quote Sent
+Won
+Lost
+Closed
+
+Lead stages:
+
+New Lead
+Contacted
+Needs Estimate
+Estimate Ready
+Quote Sent
+Follow-up Needed
+Converted
+Not Interested
+9.2 Submission Detail Page
+
+When admin opens a submission, show full grouped details.
+
+Sections:
+
+Contact Information
+Service Address
+Service Type
+Residential Details or Commercial Details
+Add-ons
+Photos
+AI Estimate
+Response History
+Admin Notes
+
+Do not show empty fields.
+
+Only show fields that were answered.
+
+10. Fix Respond / Reply Button
+
+The Respond button currently does nothing useful.
+
+Update it.
+
+When admin clicks Respond:
+
+Open a response modal.
+
+Modal fields:
+
+To
+Subject
+Message
+Send Email button
+Save Draft button if available
+
+Auto-fill:
+
+To: customer email
+Subject: Re: Your cleaning quote request
+Message: professional response template
+
+Example default message:
+
+Hi [First Name],
+
+Thank you for submitting your cleaning quote request. We received your details and are reviewing the information you provided.
+
+We will follow up shortly with an estimated price or any questions needed to finalize your quote.
+
+Thank you,
+[Business Name]
+
+Use the app’s connected email provider/system.
+
+If the email system is already connected, use it.
+
+If no email provider is configured, show:
+
+Email sending is not configured yet. You can copy this message and send it manually.
+
+Do not silently fail.
+
+After sending:
+
+Save response history
+Update lead stage to Contacted
+Set lastResponseAt
+Show success toast
+11. Add “Generate Estimate” From Submission
+
+On the submission detail page, add a button:
+
+Generate Estimate
+
+When clicked:
+
+The system should use the submitted form data and open the correct estimator.
+
+If Residential:
+
+Open Residential Estimator
+Pre-fill residential details from submission
+
+If Commercial:
+
+Open Commercial Estimator
+Pre-fill commercial details from submission
+
+Admin should be able to review and adjust fields before generating.
+
+Add another button:
+
+Generate AI Estimate
+
+This should calculate a suggested price range and breakdown.
+
+12. Residential Estimator
+
+Create or upgrade the residential estimator.
+
+Inputs:
+
+Square footage
+Bedrooms
+Bathrooms
+Kitchens
+Floors
+Basement type
+Basement cleaning required
+Condition
+Supplies required
+Add-ons
+Frequency
+Preferred date/time
+Photos if available
+
+Pricing settings should be configurable by business.
+
+Recommended settings:
+
+Base residential cleaning price
+Price per square foot
+Price per bedroom
+Price per bathroom
+Price per kitchen
+Extra floor charge
+Basement charge
+Deep clean multiplier
+Move-out multiplier
+Post-renovation multiplier
+Add-on prices
+Minimum job price
+Hourly rate
+Estimated cleaner productivity per hour
+
+Output:
+
+Suggested low price
+Suggested high price
+Recommended price
+Estimated hours
+Recommended number of cleaners
+Pricing breakdown
+Admin notes
+Client-friendly quote summary
+
+Example output:
+
+Suggested Estimate: $280 - $360
+Recommended Price: $320
+Estimated Time: 4 hours
+Recommended Team: 2 cleaners
+13. Commercial Estimator
+
+Upgrade the commercial estimator.
+
+Inputs:
+
+Square footage
+Commercial property type
+Number of floors
+Office count
+Washroom count
+Toilet/urinal/sink count
+Kitchen/breakroom count
+Floor types
+Cleaning frequency
+Current cleaning duration
+Current cleaner count
+Condition
+Add-ons
+Restocking needs
+Photos if available
+
+Pricing settings should be configurable by business.
+
+Recommended settings:
+
+Base commercial visit price
+Price per square foot
+Office area charge
+Washroom charge
+Kitchen/breakroom charge
+Floor type multiplier
+Second floor charge
+Elevator/stair factor
+Deep clean multiplier
+Grease buildup multiplier
+Post-construction multiplier
+Restocking service charge
+Add-on prices
+Minimum commercial job price
+Hourly rate
+Estimated cleaner productivity per hour
+
+Output:
+
+Suggested low price
+Suggested high price
+Recommended price per visit
+Weekly total
+Monthly total
+Yearly estimate if applicable
+Estimated hours per visit
+Recommended number of cleaners
+Pricing breakdown
+Client-friendly quote summary
+
+Example output:
+
+Recommended Price Per Visit: $180
+Estimated Time Per Visit: 3 hours
+Recommended Team: 2 cleaners
+Monthly Estimate: $1,440 based on 2 visits per week
+14. Billing Period Logic
+
+Estimator must clearly show what the price means.
+
+Add billing type options:
+
+One-time
+Per visit
+Weekly
+Bi-weekly
+Monthly
+Yearly
+Custom contract
+
+If frequency is recurring, calculate:
+
+Price per visit
+Weekly total
+Monthly total
+Yearly total
+
+Use average monthly calculation:
+
+monthly = weekly * 4.33
+
+For contracts, allow:
+
+Contract length in months
+
+Then show:
+
+Monthly price
+Contract total
+
+Example:
+
+$500/month for 12 months
+Contract total: $6,000
+
+This prevents client confusion.
+
+15. AI Estimate Logic
+
+The AI estimator should not just give random text.
+
+It must return structured data.
+
+Required AI output shape:
+
+{
+  "suggestedLow": 0,
+  "suggestedHigh": 0,
+  "recommendedPrice": 0,
+  "billingType": "per_visit",
+  "estimatedHours": 0,
+  "recommendedCleanerCount": 0,
+  "pricingBreakdown": [
+    {
+      "label": "Base cleaning",
+      "amount": 0
+    }
+  ],
+  "clientSummary": "",
+  "adminNotes": ""
+}
+
+Rules:
+
+Use business pricing settings first.
+Use submitted details second.
+Use AI only to explain, adjust, and summarize the estimate.
+Never generate an estimate without showing the price breakdown.
+Never hide the billing period.
+Never overwrite admin-edited settings without confirmation.
+16. Admin Settings for Pricing
+
+Add or upgrade pricing settings.
+
+Location:
+
+Management / Settings / Quote Pricing
+
+Tabs:
+
+Residential Pricing
+Commercial Pricing
+Add-ons
+Email Templates
+
+Residential Pricing settings:
+
+Minimum residential price
+Base residential price
+Price per square foot
+Price per bedroom
+Price per bathroom
+Price per kitchen
+Basement charge
+Deep clean multiplier
+Move-out multiplier
+Hourly rate
+
+Commercial Pricing settings:
+
+Minimum commercial price
+Base commercial visit price
+Price per square foot
+Price per office
+Price per washroom
+Price per kitchen/breakroom
+Second floor charge
+Hourly rate
+Monthly calculation multiplier
+
+Add-ons:
+
+Inside fridge
+Inside oven
+Microwave
+Inside cabinets
+Windows
+Baseboards
+Carpet cleaning
+Floor scrubbing
+Floor stripping and waxing
+Disinfection
+Restocking service
+
+Email Templates:
+
+Submission received
+Estimate follow-up
+Quote sent
+Follow-up reminder
+17. Quote Generation From Estimate
+
+After estimate is generated, admin should have actions:
+
+Create Quote
+Send Estimate Email
+Copy Estimate
+Download PDF
+Mark as Quote Sent
+
+The quote should include:
+
+Client name
+Service address
+Service type
+Scope summary
+Add-ons
+Recommended price
+Billing period
+Estimated time
+Terms / notes
+Business contact details
+
+Do not force auto-send.
+
+Admin must review before sending.
+
+18. Validation Rules
+
+Required fields:
+
+First name
+Email or phone
+Service address
+Service type
+Property category
+
+For Residential:
+
+Property type
+Square footage or bedrooms/bathrooms
+
+For Commercial:
+
+Property type
+Square footage
+Cleaning frequency
+
+Allow incomplete submissions, but mark them:
+
+Needs More Info
+
+Do not block users too aggressively.
+
+19. Mobile Requirements
+
+The public form must work well on mobile.
+
+Mobile rules:
+
+Single-column layout
+Large tap targets
+Sticky Next / Back button area if needed
+No horizontal scrolling
+Date input must be easy to use
+Dropdowns must be readable
+Powered by Clockfield text must not overlap
+
+Admin submission pages must also be mobile-friendly.
+
+20. Testing Checklist
+
+Test these flows before marking complete.
+
+Public Form Tests
+Submit residential apartment quote request
+Submit residential house with basement
+Submit residential deep clean with fridge/oven add-ons
+Submit commercial office quote request
+Submit commercial restaurant with kitchen add-ons
+Submit commercial warehouse quote request
+Submit form through direct Clockfield link
+Submit form through WordPress iframe embed
+Submit form on mobile
+Submit form with photos
+Submit form without optional fields
+Admin Submission Tests
+New submission appears in submissions list
+Residential submission shows residential details
+Commercial submission shows commercial details
+Photos display properly
+Empty fields are hidden
+Status can be updated
+Lead stage can be updated
+Admin notes save
+Respond button opens modal
+Respond email sends or shows fallback if email is not configured
+Response history saves
+Estimator Tests
+Generate estimate from residential submission
+Generate estimate from commercial submission
+Edit estimator fields before generating
+Check pricing breakdown
+Check billing period
+Check monthly/yearly totals
+Create quote from estimate
+Send estimate email after review
+Old submissions still open correctly
+Regression Tests
+Existing forms still load
+Existing form builder still works
+Existing embed code still works
+Created using Clockfield still appears in embed mode
+AI quote estimation still runs
+CRM lead pipeline still works
+Email auto-reply still works
+No other Clockfield pages are affected
+21. Final Instruction
+
+Implement this as a focused upgrade to Forms / Quote Requests, Submissions, and Estimator only.
+
+Do not touch unrelated pages or working systems.
+
+Do not remove existing fields.
+
+Do not break existing submitted data.
+
+Do not change the current embed behavior except adding the new conditional form questions and keeping the small “Created using Clockfield” branding.
+
+If any change requires touching unrelated systems, stop and ask before making that change.

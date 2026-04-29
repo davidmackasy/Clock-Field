@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Loader2, CheckCircle2, AlertCircle, ChevronRight, ChevronLeft, ClipboardList } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FormConfig, FormStep, FormField } from "@shared/schema";
+import SmartCleaningForm from "./smart-cleaning-form";
 
 type FormData = { id: string; name: string; config: FormConfig; companyName: string; companyLogo: string | null; brandColor: string | null };
 
@@ -175,6 +176,31 @@ export default function PublicQuoteForm() {
           <p className="text-gray-500 text-sm">This form may have been removed or deactivated.</p>
         </div>
       </div>
+    );
+  }
+
+  // Delegate to Smart Cleaning Form when smartMode === "cleaning"
+  if (formData.config.smartMode === "cleaning") {
+    return (
+      <SmartCleaningForm
+        formId={formData.id}
+        companyId={companyId}
+        slug={slug}
+        companyName={formData.companyName}
+        companyLogo={formData.companyLogo}
+        brandColor={brandColor}
+        isEmbed={isEmbed}
+        submitted={submitted}
+        onReset={handleReset}
+        onSubmit={async (data) => {
+          await fetch(`/api/public/forms/${companyId}/${slug}/submit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          });
+          setSubmitted(true);
+        }}
+      />
     );
   }
 

@@ -21,6 +21,7 @@ import {
   ChevronRight, ChevronLeft, User, Phone, MapPin, Calendar,
   RotateCw, CheckCircle2, XCircle, AlertCircle, Clock, DollarSign,
   Save, ArrowRight, FileCheck, SlidersHorizontal, RefreshCw, Eye,
+  Send, Sparkles, Building2, Home, BarChart3,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -72,13 +73,23 @@ function FormsTab() {
   const qc = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
+  const [smartMode, setSmartMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<QuoteForm | null>(null);
 
   const { data: forms = [], isLoading } = useQuery<QuoteForm[]>({ queryKey: ["/api/admin/quote-forms"] });
 
   const createMutation = useMutation({
-    mutationFn: (name: string) => apiRequest("POST", "/api/admin/quote-forms", { name }).then(r => r.json()),
-    onSuccess: (form) => { qc.invalidateQueries({ queryKey: ["/api/admin/quote-forms"] }); setCreateOpen(false); setNewName(""); navigate(`/admin/quote-forms/${form.id}`); },
+    mutationFn: ({ name, smart }: { name: string; smart: boolean }) =>
+      apiRequest("POST", "/api/admin/quote-forms", {
+        name,
+        config: smart ? { smartMode: "cleaning", steps: [] } : undefined,
+      }).then(r => r.json()),
+    onSuccess: (form, { smart }) => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/quote-forms"] });
+      setCreateOpen(false); setNewName(""); setSmartMode(false);
+      if (smart) { toast({ title: `Smart Cleaning Form "${form.name}" created!` }); }
+      else { navigate(`/admin/quote-forms/${form.id}`); }
+    },
     onError: () => toast({ title: "Failed to create form", variant: "destructive" }),
   });
   const deleteMutation = useMutation({
@@ -124,7 +135,12 @@ function FormsTab() {
                   </button>
                   <div className="flex items-start justify-between gap-2 pr-6">
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm truncate leading-tight">{form.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-semibold text-sm truncate leading-tight">{form.name}</p>
+                        {form.config?.smartMode === "cleaning" && (
+                          <span className="flex-shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">Smart</span>
+                        )}
+                      </div>
                       <p className="text-[11px] text-muted-foreground mt-0.5">/{form.slug}</p>
                     </div>
                     <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 flex-shrink-0", form.isActive ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-100 text-gray-500")}>
@@ -155,23 +171,44 @@ function FormsTab() {
         </div>
       )}
 
-      <Dialog open={createOpen} onOpenChange={v => { setCreateOpen(v); if (!v) setNewName(""); }}>
-        <DialogContent className="max-w-sm">
+      <Dialog open={createOpen} onOpenChange={v => { setCreateOpen(v); if (!v) { setNewName(""); setSmartMode(false); } }}>
+        <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><Settings2 className="w-4 h-4 text-primary" /> New Form</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-1">
+          <div className="space-y-4 py-1">
             <div>
               <Label className="text-xs font-medium mb-1.5 block">Form Name</Label>
-              <Input data-testid="input-new-form-name" placeholder="e.g. Residential Cleaning Request" value={newName}
+              <Input data-testid="input-new-form-name" placeholder="e.g. Cleaning Quote Request" value={newName}
                 onChange={e => setNewName(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && newName.trim()) createMutation.mutate(newName.trim()); }} autoFocus />
+                onKeyDown={e => { if (e.key === "Enter" && newName.trim()) createMutation.mutate({ name: newName.trim(), smart: smartMode }); }} autoFocus />
               <p className="text-[11px] text-muted-foreground mt-1">URL: /form/…/{newName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "form"}</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-medium block">Form Type</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button"
+                  className={cn("p-3 rounded-xl border text-left transition-all", !smartMode ? "border-primary bg-primary/5 text-primary" : "border-muted bg-muted/30 text-muted-foreground hover:border-primary/30")}
+                  onClick={() => setSmartMode(false)}>
+                  <FileText className="w-4 h-4 mb-1.5" />
+                  <p className="text-xs font-semibold">Custom Builder</p>
+                  <p className="text-[10px] mt-0.5 opacity-70">Design your own steps and fields</p>
+                </button>
+                <button type="button" data-testid="button-select-smart-form"
+                  className={cn("p-3 rounded-xl border text-left transition-all", smartMode ? "border-purple-500 bg-purple-50 text-purple-700" : "border-muted bg-muted/30 text-muted-foreground hover:border-purple-300")}
+                  onClick={() => setSmartMode(true)}>
+                  <Sparkles className="w-4 h-4 mb-1.5" />
+                  <p className="text-xs font-semibold">Smart Cleaning Form</p>
+                  <p className="text-[10px] mt-0.5 opacity-70">Conditional residential + commercial fields</p>
+                </button>
+              </div>
             </div>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button data-testid="button-create-form-confirm" className="flex-1" disabled={!newName.trim() || createMutation.isPending}
-              onClick={() => createMutation.mutate(newName.trim())}>
-              {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null} Create & Edit
+            <Button data-testid="button-create-form-confirm" className={cn("flex-1", smartMode && "bg-purple-600 hover:bg-purple-700")} disabled={!newName.trim() || createMutation.isPending}
+              onClick={() => createMutation.mutate({ name: newName.trim(), smart: smartMode })}>
+              {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
+              {smartMode ? "Create Smart Form" : "Create & Edit"}
             </Button>
           </div>
         </DialogContent>
@@ -201,6 +238,10 @@ function SubmissionsTab() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [stageFilter, setStageFilter] = useState("all");
   const [noteInput, setNoteInput] = useState("");
+  const [respondOpen, setRespondOpen] = useState(false);
+  const [respondTo, setRespondTo] = useState("");
+  const [respondSubject, setRespondSubject] = useState("");
+  const [respondMessage, setRespondMessage] = useState("");
 
   const { data: submissions = [], isLoading } = useQuery<Submission[]>({ queryKey: ["/api/admin/submissions"] });
   const { data: detail } = useQuery<Submission>({
@@ -226,6 +267,28 @@ function SubmissionsTab() {
       apiRequest("POST", `/api/admin/submissions/${id}/activity`, { eventType: "note", note }).then(r => r.json()),
     onSuccess: () => { setNoteInput(""); qc.invalidateQueries({ queryKey: ["/api/admin/submissions", selectedId] }); },
   });
+
+  const respondMutation = useMutation({
+    mutationFn: ({ id, to, subject, message }: { id: string; to: string; subject: string; message: string }) =>
+      apiRequest("POST", `/api/admin/submissions/${id}/respond`, { to, subject, message }).then(r => r.json()),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/submissions", selectedId] });
+      if (res.success) {
+        toast({ title: "Email sent successfully!" });
+        setRespondOpen(false); setRespondTo(""); setRespondSubject(""); setRespondMessage("");
+      } else {
+        toast({ title: "Email not sent", description: res.emailError || "Unknown error", variant: "destructive" });
+      }
+    },
+    onError: () => toast({ title: "Failed to send", variant: "destructive" }),
+  });
+
+  const openRespondModal = (sub: Submission) => {
+    setRespondTo(sub.clientEmail || "");
+    setRespondSubject(`Re: Your Cleaning Quote Request`);
+    setRespondMessage(`Hi ${sub.clientName?.split(" ")[0] || "there"},\n\nThank you for reaching out! We've reviewed your request and would love to help.\n\n`);
+    setRespondOpen(true);
+  };
 
   const filtered = stageFilter === "all" ? submissions : submissions.filter(s => s.pipelineStage === stageFilter);
 
@@ -277,7 +340,7 @@ function SubmissionsTab() {
             {/* Header */}
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <User className="w-5 h-5 text-primary" />
+                {["Commercial","Industrial / Warehouse"].includes(detail.data?.propertyCategory) ? <Building2 className="w-5 h-5 text-primary" /> : <Home className="w-5 h-5 text-primary" />}
               </div>
               <div className="flex-1 min-w-0">
                 <h2 className="font-semibold text-base">{detail.clientName || "Unknown Client"}</h2>
@@ -286,7 +349,14 @@ function SubmissionsTab() {
                   {detail.clientPhone && <span className="text-xs text-muted-foreground">{detail.clientPhone}</span>}
                 </div>
               </div>
-              {stageBadge(detail.pipelineStage)}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {stageBadge(detail.pipelineStage)}
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5"
+                  data-testid="button-respond-email"
+                  onClick={() => openRespondModal(detail)}>
+                  <Send className="w-3.5 h-3.5" /> Respond
+                </Button>
+              </div>
             </div>
 
             {/* Info row */}
@@ -329,15 +399,57 @@ function SubmissionsTab() {
               ) : detail.estimate.status === "running" ? (
                 <p className="text-xs text-blue-500 flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Running AI estimate…</p>
               ) : (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-4 text-sm">
-                    <span className="text-muted-foreground">Range:</span>
-                    <span className="font-semibold">{fmtCurrency(detail.estimate.priceMin)} – {fmtCurrency(detail.estimate.priceMax)}</span>
-                    <span className="text-muted-foreground">Recommended:</span>
-                    <span className="font-bold text-green-700">{fmtCurrency(detail.estimate.recommendedPrice)}</span>
+                <div className="space-y-3">
+                  {/* Price header */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="text-center bg-green-50 border border-green-200 rounded-lg px-4 py-2">
+                      <p className="text-[10px] text-green-700 font-medium uppercase tracking-wide">Recommended</p>
+                      <p className="text-xl font-bold text-green-700">{fmtCurrency(detail.estimate.recommendedPrice)}</p>
+                      {(() => {
+                        try { const r = JSON.parse(detail.estimate.rawResponse || "{}"); return r.billing_type === "per_visit" ? <p className="text-[10px] text-green-600">per visit</p> : null; } catch { return null; }
+                      })()}
+                    </div>
+                    <div className="text-center bg-muted/50 rounded-lg px-3 py-2">
+                      <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Range</p>
+                      <p className="text-sm font-semibold">{fmtCurrency(detail.estimate.priceMin)} – {fmtCurrency(detail.estimate.priceMax)}</p>
+                    </div>
+                    {(() => {
+                      try {
+                        const r = JSON.parse(detail.estimate.rawResponse || "{}");
+                        if (r.monthly_total) return (
+                          <div className="text-center bg-purple-50 border border-purple-200 rounded-lg px-3 py-2">
+                            <p className="text-[10px] text-purple-700 font-medium uppercase tracking-wide">Monthly</p>
+                            <p className="text-sm font-semibold text-purple-700">{fmtCurrency(r.monthly_total)}</p>
+                          </div>
+                        );
+                      } catch {}
+                      return null;
+                    })()}
                   </div>
-                  {detail.estimate.laborHours && <p className="text-xs text-muted-foreground">Labor: {detail.estimate.laborHours}h, Crew: {detail.estimate.crewSize || "—"}</p>}
-                  {detail.estimate.suggestedServices && <p className="text-xs"><span className="font-medium">Suggested: </span>{detail.estimate.suggestedServices}</p>}
+
+                  {/* Pricing breakdown */}
+                  {(() => {
+                    try {
+                      const r = JSON.parse(detail.estimate.rawResponse || "{}");
+                      if (r.pricing_breakdown?.length) return (
+                        <div className="bg-muted/30 rounded-lg p-3">
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Pricing Breakdown</p>
+                          <div className="space-y-1">
+                            {r.pricing_breakdown.map((item: any, i: number) => (
+                              <div key={i} className="flex justify-between text-xs">
+                                <span className="text-muted-foreground">{item.label}</span>
+                                <span className="font-medium">{fmtCurrency(item.amount)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    } catch {}
+                    return null;
+                  })()}
+
+                  <p className="text-xs text-muted-foreground">Labor: {detail.estimate.laborHours}h · Crew: {detail.estimate.crewSize || "—"}</p>
+                  {detail.estimate.suggestedServices && <p className="text-xs bg-purple-50 text-purple-800 rounded p-2">{detail.estimate.suggestedServices}</p>}
                   {detail.estimate.riskNotes && <p className="text-xs text-yellow-700 bg-yellow-50 rounded p-2"><AlertCircle className="inline w-3.5 h-3.5 mr-1" />{detail.estimate.riskNotes}</p>}
                   {detail.estimate.followUpQuestions && <p className="text-xs text-blue-700 bg-blue-50 rounded p-2">{detail.estimate.followUpQuestions}</p>}
                   <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
@@ -348,17 +460,70 @@ function SubmissionsTab() {
               )}
             </div>
 
-            {/* Form Answers */}
+            {/* Form Answers — smart grouped display */}
             <div className="rounded-xl border bg-card p-4">
-              <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5"><ClipboardList className="w-4 h-4 text-primary" /> Form Answers</h3>
-              <div className="grid grid-cols-1 gap-2">
-                {Object.entries(detail.data || {}).filter(([,v]) => v !== "" && v !== null && v !== undefined && v !== false).map(([k, v]) => (
-                  <div key={k} className="flex items-start gap-2 text-xs">
-                    <span className="text-muted-foreground capitalize w-28 flex-shrink-0">{k.replace(/([A-Z])/g, " $1").replace(/_/g, " ")}</span>
-                    <span className="text-foreground">{String(v)}</span>
+              <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5"><ClipboardList className="w-4 h-4 text-primary" /> Submission Details</h3>
+              {(() => {
+                const d = detail.data || {};
+                const isCommercial = ["Commercial","Industrial / Warehouse"].includes(d.propertyCategory);
+                const groups: { label: string; icon: any; color: string; keys: string[] }[] = [
+                  { label: "Property", icon: isCommercial ? Building2 : Home, color: isCommercial ? "text-blue-600" : "text-green-600",
+                    keys: ["propertyCategory","serviceAddress","city","province","postalCode"] },
+                  { label: "Service", icon: Sparkles, color: "text-purple-600",
+                    keys: ["serviceType","cleaningFrequency","preferredTime","preferredDate","availabilityNotes"] },
+                  { label: isCommercial ? "Commercial Details" : "Property Details", icon: isCommercial ? BarChart3 : Home, color: "text-orange-600",
+                    keys: isCommercial
+                      ? ["sqft","floorCount","employeeCount","weeklyVisits","operatingHours","businessType","wasteDisposal","cleaningAreas","lastCleaned"]
+                      : ["sqft","bedrooms","bathrooms","halfBaths","floors","pets","hasKids","unfurnished"] },
+                  { label: "Add-ons & Notes", icon: Plus, color: "text-pink-600",
+                    keys: ["addons","specialRequests","howHeard","referral"] },
+                ];
+                return (
+                  <div className="space-y-3">
+                    {groups.map(group => {
+                      const entries = group.keys.map(k => [k, d[k]]).filter(([,v]) => v !== "" && v !== null && v !== undefined && v !== false && !(Array.isArray(v) && v.length === 0));
+                      if (!entries.length) return null;
+                      const Icon = group.icon;
+                      return (
+                        <div key={group.label}>
+                          <div className={`flex items-center gap-1.5 text-xs font-semibold mb-1.5 ${group.color}`}><Icon className="w-3.5 h-3.5" /> {group.label}</div>
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 pl-5">
+                            {entries.map(([k, v]) => (
+                              <div key={String(k)} className="flex items-start gap-1.5 text-xs">
+                                <span className="text-muted-foreground capitalize flex-shrink-0" style={{minWidth:"80px"}}>
+                                  {String(k).replace(/([A-Z])/g, " $1").replace(/_/g, " ")}
+                                </span>
+                                <span className="text-foreground font-medium">
+                                  {Array.isArray(v) ? v.join(", ") : String(v)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {/* Any ungrouped fields */}
+                    {(() => {
+                      const allGrouped = groups.flatMap(g => g.keys);
+                      const extra = Object.entries(d).filter(([k, v]) => !allGrouped.includes(k) && v !== "" && v !== null && v !== undefined && v !== false && !["firstName","lastName","email","phone","companyName"].includes(k));
+                      if (!extra.length) return null;
+                      return (
+                        <div>
+                          <div className="flex items-center gap-1.5 text-xs font-semibold mb-1.5 text-muted-foreground"><FileText className="w-3.5 h-3.5" /> Other</div>
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 pl-5">
+                            {extra.map(([k, v]) => (
+                              <div key={k} className="flex items-start gap-1.5 text-xs">
+                                <span className="text-muted-foreground capitalize flex-shrink-0" style={{minWidth:"80px"}}>{k.replace(/([A-Z])/g, " $1")}</span>
+                                <span className="text-foreground font-medium">{Array.isArray(v) ? v.join(", ") : String(v)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
-                ))}
-              </div>
+                );
+              })()}
             </div>
 
             {/* Notes / Activity */}
@@ -392,16 +557,21 @@ function SubmissionsTab() {
                 <div className="space-y-2">
                   {[...(detail.activity || [])].reverse().map(a => {
                     let text = a.eventType.replace(/_/g, " ");
+                    let icon = "●";
                     try {
                       const d = JSON.parse(a.eventData);
                       if (a.eventType === "stage_changed") text = `Moved from "${d.from?.replace(/_/g," ")}" to "${d.to?.replace(/_/g," ")}"`;
                       else if (a.eventType === "estimate_completed") text = `Estimate completed — Recommended: ${fmtCurrency(d.recommended)}`;
                       else if (a.eventType === "note") text = `Note added`;
                       else if (a.eventType === "submitted") text = `Submitted via ${d.formName || "form"}`;
+                      else if (a.eventType === "email_sent") { text = `Email sent to ${d.to || "client"}${d.subject ? ` — "${d.subject}"` : ""}${!d.emailSent ? " (delivery failed)" : ""}`; icon = "✉"; }
                     } catch {}
                     return (
                       <div key={a.id} className="flex items-start gap-2 text-xs">
-                        <div className="w-1.5 h-1.5 rounded-full bg-primary/50 mt-1.5 flex-shrink-0" />
+                        <div className={cn("w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center text-[9px] mt-0.5",
+                          a.eventType === "email_sent" ? "bg-blue-100 text-blue-600" : "bg-primary/10 text-primary/60")}>
+                          {icon}
+                        </div>
                         <div><p>{text}</p><p className="text-muted-foreground">{fmtDate(a.createdAt)}</p></div>
                       </div>
                     );
@@ -412,6 +582,38 @@ function SubmissionsTab() {
           </div>
         )}
       </div>
+
+      {/* Respond via Email Dialog */}
+      <Dialog open={respondOpen} onOpenChange={v => { setRespondOpen(v); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Send className="w-4 h-4 text-primary" /> Respond via Email</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div>
+              <Label className="text-xs font-medium mb-1 block">To</Label>
+              <Input data-testid="input-respond-to" value={respondTo} onChange={e => setRespondTo(e.target.value)} placeholder="client@email.com" />
+            </div>
+            <div>
+              <Label className="text-xs font-medium mb-1 block">Subject</Label>
+              <Input data-testid="input-respond-subject" value={respondSubject} onChange={e => setRespondSubject(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs font-medium mb-1 block">Message</Label>
+              <Textarea data-testid="input-respond-message" value={respondMessage} onChange={e => setRespondMessage(e.target.value)} className="min-h-[160px] text-sm" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setRespondOpen(false)}>Cancel</Button>
+            <Button data-testid="button-respond-send" className="flex-1 gap-1.5"
+              disabled={!respondTo.trim() || !respondSubject.trim() || !respondMessage.trim() || respondMutation.isPending}
+              onClick={() => { if (detail) respondMutation.mutate({ id: detail.id, to: respondTo, subject: respondSubject, message: respondMessage }); }}>
+              {respondMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              Send Email
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

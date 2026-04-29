@@ -7442,45 +7442,65 @@ FINAL RULES:
       const OpenAI = (await import("openai")).default;
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-      const prompt = `You are a professional cleaning service estimator. Use ONLY the pricing rules provided below.
+      // Detect residential vs commercial from submitted data
+      const isCommercial = ["Commercial", "Industrial / Warehouse"].includes(data.propertyCategory) ||
+        ["Commercial Cleaning", "Office Cleaning"].includes(data.serviceType);
+      const frequency = data.frequency || data.preferredTime || "one-time";
+      const isRecurring = !["One-time", "one-time", "one time"].includes(frequency) && frequency;
 
-PRICING RULES (must be followed exactly):
+      const prompt = `You are an expert cleaning service estimator. Use the pricing rules below to calculate a structured estimate.
+
+PRICING RULES:
 - Hourly rate: $${settings.hourlyRate}/hr
 - Minimum job price: $${settings.minimumJobPrice}
 - Price per sq ft: $${settings.pricePerSqft}
 - Price per bathroom: $${settings.pricePerBathroom}
-- Price per bedroom: $${settings.pricePerRoom}
+- Price per bedroom/room: $${settings.pricePerRoom}
 - Deep clean multiplier: ${settings.deepCleanMultiplier}x
 - Move-in/out multiplier: ${settings.moveInOutMultiplier}x
 - Post-construction multiplier: ${settings.postConstructionMultiplier}x
 - Commercial multiplier: ${settings.commercialMultiplier}x
-- After-hours multiplier: ${settings.afterHoursMultiplier}x
 - Supply fee: $${settings.supplyFee}
-- Travel fee: $${settings.travelFee}
 - Tax rate: ${settings.taxRate}%
 - Profit margin: ${settings.profitMargin}%
 - Default crew size: ${settings.defaultCrewSize}
-- Productivity rate: ${settings.productivityRate} sq ft/hr/person
+- Productivity: ${settings.productivityRate} sq ft/hr/person
 ${settings.customRules ? `- Custom rules: ${settings.customRules}` : ""}
 
-CLIENT REQUEST:
+JOB TYPE: ${isCommercial ? "COMMERCIAL" : "RESIDENTIAL"}
+FREQUENCY: ${frequency}
+
+CLIENT SUBMISSION:
 ${JSON.stringify(data, null, 2)}
 
-Provide a JSON estimate with these fields:
+Return ONLY a valid JSON object (no extra text):
 {
   "price_min": number,
   "price_max": number,
   "recommended_price": number,
+  "billing_type": "${isRecurring ? "per_visit" : "one_time"}",
   "labor_hours": number,
   "crew_size": number,
+  "pricing_breakdown": [
+    { "label": "Base cleaning", "amount": 0 },
+    { "label": "Additional item", "amount": 0 }
+  ],
+  "weekly_total": ${isRecurring ? "number" : "null"},
+  "monthly_total": ${isRecurring ? "number" : "null"},
+  "client_summary": "short professional summary for the client (2-3 sentences)",
   "suggested_services": "string describing recommended services",
   "add_ons": "string listing optional add-ons with prices",
-  "supplies_needed": "string listing supplies",
   "risk_notes": "string describing any risks or special considerations",
   "follow_up_questions": "string with questions for the client if info is missing",
   "confidence_level": "high|medium|low",
-  "confidence_note": "string explaining confidence level"
-}`;
+  "confidence_note": "string explaining confidence"
+}
+
+RULES:
+- Never return less than the minimum job price ($${settings.minimumJobPrice})
+- Show 3-6 pricing breakdown line items
+- For recurring jobs calculate weekly and monthly totals (monthly = weekly * 4.33)
+- Recommended price should be between price_min and price_max`;
 
       try {
         const completion = await openai.chat.completions.create({
@@ -7497,7 +7517,7 @@ Provide a JSON estimate with these fields:
           recommendedPrice: String(result.recommended_price ?? 0),
           laborHours: String(result.labor_hours ?? 0),
           crewSize: result.crew_size ?? settings.defaultCrewSize,
-          suggestedServices: result.suggested_services ?? "",
+          suggestedServices: result.client_summary ?? result.suggested_services ?? "",
           addOns: result.add_ons ?? "",
           suppliesNeeded: result.supplies_needed ?? "",
           riskNotes: result.risk_notes ?? "",
@@ -7599,6 +7619,68 @@ Provide a JSON estimate with these fields:
         createdByUserId: user.id, createdAt: new Date().toISOString(),
       });
       res.json(item);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Respond to submission via email
+  app.post("/api/admin/submissions/:id/respond", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getQuoteFormSubmission(req.params.id);
+      if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+
+      const { to, subject, message } = req.body;
+      if (!to || !subject || !message) return res.status(400).json({ message: "to, subject, and message are required" });
+
+      // Get company info for the from name
+      const company = await storage.getCompany(user.companyId);
+      const companyName = company?.name || "Your Cleaning Company";
+
+      let emailSent = false;
+      let emailError = "";
+      try {
+        const FormDataLib = (await import("form-data")).default;
+        const Mailgun = (await import("mailgun.js")).default;
+        const mg = new Mailgun(FormDataLib);
+        const apiKey = process.env.MAILGUN_API_KEY;
+        const domain = process.env.MAILGUN_DOMAIN;
+        if (!apiKey || !domain) throw new Error("Email not configured");
+        const client = mg.client({ username: "api", key: apiKey });
+        const from = process.env.MAIL_FROM || `${companyName} <noreply@clockfield.ca>`;
+        await client.messages.create(domain, {
+          from,
+          to: [to],
+          subject,
+          text: message,
+          html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+<p style="white-space:pre-line;font-size:15px;color:#374151;line-height:1.7;">${message.replace(/\n/g, "<br/>")}</p>
+<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
+<p style="font-size:12px;color:#9ca3af;">${companyName}</p>
+</div>`,
+        });
+        emailSent = true;
+      } catch (mailErr: any) {
+        emailError = mailErr.message;
+      }
+
+      // Log the activity
+      await storage.addLeadActivity({
+        submissionId: sub.id, companyId: user.companyId,
+        eventType: "email_sent",
+        eventData: JSON.stringify({ to, subject, emailSent, emailError, sentBy: user.id }),
+        createdByUserId: user.id, createdAt: new Date().toISOString(),
+      });
+
+      // Move stage to "follow_up" if still at new_request
+      if (sub.pipelineStage === "new_request") {
+        await storage.updateQuoteFormSubmission(sub.id, { pipelineStage: "follow_up" });
+      }
+
+      if (emailSent) {
+        res.json({ success: true, message: "Email sent successfully." });
+      } else {
+        res.json({ success: false, emailError, message: "Email could not be sent. Your message was saved." });
+      }
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 

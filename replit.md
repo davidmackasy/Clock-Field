@@ -86,13 +86,26 @@ A full CRM pipeline and AI-powered quoting system, accessible at `/admin/quote-f
 
 **Extended** `quote_form_submissions` with: `clientName`, `clientEmail`, `clientPhone`, `serviceType`, `serviceAddress`, `pipelineStage`, `estimateStatus`, `adminNotes`, `assignedTo`, `archivedAt`, `emailConfirmationSent`, `emailConfirmationSentAt`, `emailConfirmationMessageId`
 
-**AI Estimate** (`POST /api/admin/submissions/:id/estimate`): Uses OpenAI gpt-4o-mini + estimatorSettings to generate priceMin/priceMax/recommendedPrice/laborHours/crewSize/suggestedServices/riskNotes/confidenceLevel
+**AI Estimate** (`POST /api/admin/submissions/:id/estimate`): Uses OpenAI gpt-4o-mini + estimatorSettings to generate a structured estimate. Now residential/commercial aware. Returns: `priceMin`, `priceMax`, `recommendedPrice`, `laborHours`, `crewSize`, `billing_type` (one_time | per_visit), `pricing_breakdown[]` (array of {label, amount}), `weekly_total`, `monthly_total`, `client_summary`, `suggestedServices`, `riskNotes`, `confidenceLevel`. Admin estimate card shows a visual pricing breakdown table and monthly totals for recurring jobs.
+
+**Smart Cleaning Form**: When a form has `config.smartMode === "cleaning"`, the public form renders a hardcoded 6-step conditional flow (`client/src/pages/public/smart-cleaning-form.tsx`):
+1. Contact — name, email, phone, company (if commercial)
+2. Address — service address, city, province, postal
+3. Service Type — cleaning type, frequency, preferred time
+4. Property Details (conditional) — residential: bedrooms, bathrooms, sqft, pets; commercial: sqft, floors, employee count, operating hours, business type
+5. Add-ons — optional services (fridge, oven, windows, laundry, etc.), special requests
+6. Review + Submit — confirmation screen with "Created using Clockfield" branding
+All data stored as flat keys in the existing `data` JSON field. No new DB tables needed.
+Create smart forms via admin hub: "New Form" → select "Smart Cleaning Form" type → name it → "Create Smart Form".
+
+**Respond to Submission** (`POST /api/admin/submissions/:id/respond`): Admin can email clients directly from the submission detail pane. Pre-fills To/Subject/Message fields. Sends via Mailgun, logs `email_sent` activity event, auto-advances `pipelineStage` from `new_request` to `follow_up`. Graceful fallback if Mailgun not configured.
 
 **Key API routes**:
 - `GET /api/admin/submissions` — all submissions across all company forms
 - `GET /api/admin/submissions/:id` — detail with estimate + quote + activity
 - `PATCH /api/admin/submissions/:id` — update pipelineStage, adminNotes, etc.
-- `POST /api/admin/submissions/:id/estimate` — run AI estimate
+- `POST /api/admin/submissions/:id/estimate` — run AI estimate (res/com aware, structured breakdown)
+- `POST /api/admin/submissions/:id/respond` — send email reply to client, log activity
 - `POST /api/admin/submissions/:id/activity` — add note/activity event
 - `GET|PUT /api/admin/estimator-settings` — pricing configuration
 - `GET|PUT /api/admin/form-email-settings` — email template configuration

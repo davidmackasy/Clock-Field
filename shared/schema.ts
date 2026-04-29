@@ -1114,7 +1114,7 @@ export type FormField = {
   placeholder?: string; options?: string[]; column: "full" | "half";
 };
 export type FormStep = { id: string; title: string; enabled: boolean; fields: FormField[] };
-export type FormConfig = { steps: FormStep[] };
+export type FormConfig = { steps: FormStep[]; smartMode?: string };
 
 export const DEFAULT_FORM_CONFIG: FormConfig = {
   steps: [
