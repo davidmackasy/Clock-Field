@@ -21,11 +21,15 @@ import {
   ChevronRight, ChevronLeft, User, Phone, MapPin, Calendar,
   RotateCw, CheckCircle2, XCircle, AlertCircle, Clock, DollarSign,
   Save, ArrowRight, FileCheck, SlidersHorizontal, RefreshCw, Eye,
-  Send, Sparkles, Building2, Home, BarChart3,
+  Send, Sparkles, Building2, Home, BarChart3, Camera, Images, Mic,
+  Edit3, X, ChevronDown, ChevronUp,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type QuoteForm = { id: string; name: string; slug: string; companyId: string; isActive: boolean; createdAt: string; config: any };
+type WalkthroughPhoto = { id: string; walkthroughId: string; fileUrl: string; orderIndex: number; capturedAt: string; aiLabel?: string; aiDescription?: string; adminLabel?: string; adminDescription?: string };
+type WalkthroughSection = { id: string; walkthroughId: string; title: string; description: string; orderIndex: number; photoIds: string; aiGenerated: boolean; adminEdited: boolean; adminNotes?: string };
+type WalkthroughDetail = { id: string; submissionId?: string; photoCount: number; durationSeconds?: number; audioUrl?: string; transcript?: string; aiTitle?: string; aiSummary?: string; aiStatus: string; photos: WalkthroughPhoto[]; sections: WalkthroughSection[] };
 type Submission = {
   id: string; formId: string; formName: string; companyId: string;
   data: Record<string, any>; status: string; submittedAt: string;
@@ -33,6 +37,8 @@ type Submission = {
   serviceType?: string; serviceAddress?: string;
   pipelineStage: string; estimateStatus: string; adminNotes?: string; archivedAt?: string;
   estimate?: any; quote?: any; activity?: any[];
+  walkthrough?: WalkthroughDetail | null;
+  hasWalkthrough?: boolean;
 };
 
 const PIPELINE_STAGES = [
@@ -242,6 +248,12 @@ function SubmissionsTab() {
   const [respondTo, setRespondTo] = useState("");
   const [respondSubject, setRespondSubject] = useState("");
   const [respondMessage, setRespondMessage] = useState("");
+  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+  const [editingSection, setEditingSection] = useState<string | null>(null);
+  const [editSectionTitle, setEditSectionTitle] = useState("");
+  const [editSectionDesc, setEditSectionDesc] = useState("");
+  const [editSectionNotes, setEditSectionNotes] = useState("");
+  const [respondSelectedPhotoIds, setRespondSelectedPhotoIds] = useState<string[]>([]);
 
   const { data: submissions = [], isLoading } = useQuery<Submission[]>({ queryKey: ["/api/admin/submissions"] });
   const { data: detail } = useQuery<Submission>({
@@ -266,6 +278,17 @@ function SubmissionsTab() {
     mutationFn: ({ id, note }: { id: string; note: string }) =>
       apiRequest("POST", `/api/admin/submissions/${id}/activity`, { eventType: "note", note }).then(r => r.json()),
     onSuccess: () => { setNoteInput(""); qc.invalidateQueries({ queryKey: ["/api/admin/submissions", selectedId] }); },
+  });
+
+  const editSectionMutation = useMutation({
+    mutationFn: ({ submissionId, sectionId, title, description, adminNotes }: { submissionId: string; sectionId: string; title: string; description: string; adminNotes: string }) =>
+      apiRequest("PATCH", `/api/admin/submissions/${submissionId}/walkthrough/sections/${sectionId}`, { title, description, adminNotes }).then(r => r.json()),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/submissions", selectedId] }); setEditingSection(null); toast({ title: "Section updated." }); },
+  });
+
+  const processAiMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("POST", `/api/admin/submissions/${id}/walkthrough/process-ai`, {}).then(r => r.json()),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/submissions", selectedId] }); toast({ title: "AI processing started." }); },
   });
 
   const respondMutation = useMutation({
@@ -319,7 +342,14 @@ function SubmissionsTab() {
                   {stageBadge(sub.pipelineStage)}
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{sub.serviceType || sub.formName}</p>
-                <p className="text-[11px] text-muted-foreground">{fmtDate(sub.submittedAt)}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-[11px] text-muted-foreground">{fmtDate(sub.submittedAt)}</p>
+                  {sub.hasWalkthrough && (
+                    <span className="flex items-center gap-0.5 text-[10px] font-medium text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded-full border border-violet-200">
+                      <Camera className="w-2.5 h-2.5" /> Walkthrough
+                    </span>
+                  )}
+                </div>
               </button>
             ))
           }
@@ -578,6 +608,119 @@ function SubmissionsTab() {
               </div>
             </div>
 
+            {/* Client Walkthrough Section */}
+            {detail.walkthrough && (
+              <div className="rounded-xl border bg-card p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <Camera className="w-4 h-4 text-violet-500" /> Client Walkthrough
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    {detail.walkthrough.aiStatus === "pending" || detail.walkthrough.aiStatus === "failed" ? (
+                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                        disabled={processAiMutation.isPending}
+                        onClick={() => processAiMutation.mutate(detail.id)}>
+                        {processAiMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                        {detail.walkthrough.aiStatus === "failed" ? "Retry AI" : "Process AI"}
+                      </Button>
+                    ) : detail.walkthrough.aiStatus === "processing" ? (
+                      <span className="text-[11px] text-muted-foreground flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> AI processing…</span>
+                    ) : null}
+                    <Badge variant="outline" className="text-[11px] bg-violet-50 text-violet-700 border-violet-200">
+                      {detail.walkthrough.photoCount} photos
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* AI Summary */}
+                {detail.walkthrough.aiSummary && (
+                  <div className="bg-violet-50 border border-violet-100 rounded-lg p-3 mb-3">
+                    {detail.walkthrough.aiTitle && <p className="text-xs font-semibold text-violet-800 mb-1">{detail.walkthrough.aiTitle}</p>}
+                    <p className="text-xs text-violet-700 leading-relaxed">{detail.walkthrough.aiSummary}</p>
+                  </div>
+                )}
+
+                {/* Transcript */}
+                {detail.walkthrough.transcript && (
+                  <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-3">
+                    <p className="text-[11px] font-medium text-blue-700 flex items-center gap-1 mb-1"><Mic className="w-3 h-3" /> Voice Notes Transcript</p>
+                    <p className="text-xs text-blue-800 leading-relaxed">{detail.walkthrough.transcript}</p>
+                  </div>
+                )}
+
+                {/* Duration */}
+                {detail.walkthrough.durationSeconds != null && detail.walkthrough.durationSeconds > 0 && (
+                  <p className="text-[11px] text-muted-foreground mb-3">Duration: {Math.floor(detail.walkthrough.durationSeconds / 60)}:{String(detail.walkthrough.durationSeconds % 60).padStart(2, "0")}</p>
+                )}
+
+                {/* Sections */}
+                {detail.walkthrough.sections.length > 0 && (
+                  <div className="space-y-3 mb-3">
+                    {detail.walkthrough.sections.map(section => {
+                      const sectionPhotoIds = (() => { try { return JSON.parse(section.photoIds) as string[]; } catch { return []; } })();
+                      const sectionPhotos = sectionPhotoIds.map(pid => detail.walkthrough!.photos.find(p => p.id === pid)).filter(Boolean) as WalkthroughPhoto[];
+                      const isEditing = editingSection === section.id;
+                      return (
+                        <div key={section.id} className="rounded-lg border bg-background p-3">
+                          {isEditing ? (
+                            <div className="space-y-2">
+                              <Input data-testid={`input-section-title-${section.id}`} value={editSectionTitle} onChange={e => setEditSectionTitle(e.target.value)} placeholder="Section title" className="text-sm" />
+                              <Textarea value={editSectionDesc} onChange={e => setEditSectionDesc(e.target.value)} placeholder="Section description" className="text-sm min-h-[60px]" />
+                              <Textarea value={editSectionNotes} onChange={e => setEditSectionNotes(e.target.value)} placeholder="Admin notes (internal)" className="text-sm min-h-[48px]" />
+                              <div className="flex gap-2">
+                                <Button size="sm" className="h-7 text-xs" disabled={editSectionMutation.isPending}
+                                  onClick={() => editSectionMutation.mutate({ submissionId: detail.id, sectionId: section.id, title: editSectionTitle, description: editSectionDesc, adminNotes: editSectionNotes })}>
+                                  {editSectionMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Save
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingSection(null)}>Cancel</Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <div className="flex items-start justify-between gap-2 mb-1">
+                                <p className="text-xs font-semibold text-foreground">{section.title}</p>
+                                <button data-testid={`button-edit-section-${section.id}`}
+                                  onClick={() => { setEditingSection(section.id); setEditSectionTitle(section.title); setEditSectionDesc(section.description); setEditSectionNotes(section.adminNotes || ""); }}
+                                  className="text-muted-foreground hover:text-foreground transition-colors">
+                                  <Edit3 className="w-3 h-3" />
+                                </button>
+                              </div>
+                              <p className="text-xs text-muted-foreground mb-2">{section.description}</p>
+                              {section.adminNotes && <p className="text-[11px] text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-100 mb-2">{section.adminNotes}</p>}
+                              {sectionPhotos.length > 0 && (
+                                <div className="flex gap-1.5 flex-wrap">
+                                  {sectionPhotos.map(photo => (
+                                    <button key={photo.id} data-testid={`img-walkthrough-section-${photo.id}`}
+                                      className="w-14 h-14 rounded-md overflow-hidden border border-gray-200 hover:border-violet-400 transition-colors cursor-pointer"
+                                      onClick={() => setPreviewPhoto(photo.fileUrl)}>
+                                      <img src={photo.fileUrl} alt={photo.aiLabel || ""} className="w-full h-full object-cover" />
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* All Photos Grid (for walkthroughs with no sections yet) */}
+                {detail.walkthrough.sections.length === 0 && detail.walkthrough.photos.length > 0 && (
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {detail.walkthrough.photos.map(photo => (
+                      <button key={photo.id} data-testid={`img-walkthrough-photo-${photo.id}`}
+                        className="aspect-square rounded-md overflow-hidden border border-gray-200 hover:border-violet-400 transition-colors"
+                        onClick={() => setPreviewPhoto(photo.fileUrl)}>
+                        <img src={photo.fileUrl} alt={photo.aiLabel || ""} className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Activity Timeline */}
             {(detail.activity || []).length > 0 && (
               <div className="rounded-xl border bg-card p-4">
@@ -611,9 +754,17 @@ function SubmissionsTab() {
         )}
       </div>
 
+      {/* Walkthrough Photo Preview Modal */}
+      {previewPhoto && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setPreviewPhoto(null)}>
+          <button className="absolute top-4 right-4 text-white/70 hover:text-white" onClick={() => setPreviewPhoto(null)}><X className="w-6 h-6" /></button>
+          <img src={previewPhoto} alt="" className="max-w-full max-h-full rounded-xl object-contain" />
+        </div>
+      )}
+
       {/* Respond via Email Dialog */}
       <Dialog open={respondOpen} onOpenChange={v => { setRespondOpen(v); }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Send className="w-4 h-4 text-primary" /> Respond via Email</DialogTitle>
           </DialogHeader>
@@ -630,6 +781,29 @@ function SubmissionsTab() {
               <Label className="text-xs font-medium mb-1 block">Message</Label>
               <Textarea data-testid="input-respond-message" value={respondMessage} onChange={e => setRespondMessage(e.target.value)} className="min-h-[160px] text-sm" />
             </div>
+            {/* Walkthrough photo selection */}
+            {detail?.walkthrough && detail.walkthrough.photos.length > 0 && (
+              <div>
+                <Label className="text-xs font-medium mb-2 block flex items-center gap-1"><Images className="w-3 h-3" /> Attach walkthrough photos (optional)</Label>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {detail.walkthrough.photos.map(photo => {
+                    const selected = respondSelectedPhotoIds.includes(photo.id);
+                    return (
+                      <button key={photo.id} data-testid={`button-select-photo-${photo.id}`}
+                        className={cn("relative aspect-square rounded-md overflow-hidden border-2 transition-all",
+                          selected ? "border-primary" : "border-transparent opacity-70 hover:opacity-100")}
+                        onClick={() => setRespondSelectedPhotoIds(prev => selected ? prev.filter(id => id !== photo.id) : [...prev, photo.id])}>
+                        <img src={photo.fileUrl} alt="" className="w-full h-full object-cover" />
+                        {selected && <div className="absolute top-0.5 right-0.5 w-4 h-4 bg-primary rounded-full flex items-center justify-center"><CheckCircle2 className="w-3 h-3 text-white" /></div>}
+                      </button>
+                    );
+                  })}
+                </div>
+                {respondSelectedPhotoIds.length > 0 && (
+                  <p className="text-[11px] text-muted-foreground mt-1">{respondSelectedPhotoIds.length} photo{respondSelectedPhotoIds.length !== 1 ? "s" : ""} will be noted in the email</p>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1" onClick={() => setRespondOpen(false)}>Cancel</Button>

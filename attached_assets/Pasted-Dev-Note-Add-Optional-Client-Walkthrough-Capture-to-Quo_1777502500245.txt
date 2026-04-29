@@ -1,0 +1,335 @@
+Dev Note: Add Optional Client Walkthrough Capture to Quote Request Forms
+Goal:
+Add an optional “Client Walkthrough” step inside Quote Request Forms so clients can take photos, record short voice notes, and submit visual context with their quote request.
+This should use the same concept as Field Notes, but it must not break, rename, or change the existing Field Notes feature used by employees and admins.
+This is a new Forms / Quote Requests feature only.
+Do not change existing Field Notes behavior.
+Do not change employee Field Notes.
+Do not change admin Field Notes.
+Do not change public Field Notes links.
+Do not change existing worklogs.
+Do not change payroll, reports, schedules, incidents, client reports, or any unrelated Clockfield feature.
+Do not remove existing form fields.
+Do not make all form fields required.
+Do not break the current WordPress iframe embed flow.
+Do not remove “Created using Clockfield” from embedded forms.
+If anything outside Forms / Quote Requests, Submissions, or Estimator needs to be changed, stop and ask first.
+
+1. Feature Summary
+Add a new optional step before final submission:
+Client Walkthrough
+This step asks:
+Would you like to add a quick walkthrough of your space?
+Client options:
+Yes, start walkthrough
+No, skip and submit
+If the client chooses yes, they can:
+Take multiple photos
+Record voice notes while taking photos
+Pause or mute the mic
+Stop the walkthrough
+Review photos before submitting
+Submit the form with the walkthrough attached
+This should help cleaning companies see the property condition, important areas, and client concerns before creating a quote.
+
+2. Important Field Notes Rule
+Use the Field Notes concept only as a reference.
+Do not directly modify the existing Field Notes employee/admin workflow unless a shared utility is needed.
+Preferred implementation:
+Create a separate form-specific module:
+clientWalkthrough
+formWalkthrough
+quoteRequestWalkthrough
+Do not reuse routes in a way that changes current Field Notes behavior.
+Recommended naming:
+QuoteRequestWalkthroughClientWalkthroughCaptureFormWalkthroughRecorderSubmissionWalkthroughViewer
+Do not call this normal Field Notes in the UI for clients.
+Use client-friendly wording:
+Quick WalkthroughAdd PhotosVoice NotesShow us your space
+
+3. Public Form UX
+Add this as a step before Review and Submit.
+Recommended updated form steps:
+Step 1: Contact InformationStep 2: Service AddressStep 3: Service TypeStep 4: Property DetailsStep 5: Add-onsStep 6: Quick WalkthroughStep 7: Review and Submit
+The Quick Walkthrough step should be optional.
+Text:
+Would you like to add a quick walkthrough of your space?Photos and voice notes help us understand the condition of the space and provide a more accurate quote.
+Buttons:
+Yes, Start WalkthroughSkip This Step
+The client must be allowed to submit without adding photos or voice notes.
+
+4. Required Optional Field Behavior
+Do not make every question mandatory.
+Required fields only:
+First NameEmail or PhoneService AddressService TypeProperty Category
+Optional fields:
+BedroomsBathroomsKitchensBasement detailsAdd-onsPhotosWalkthrough recordingVoice notesEstimated cleaning timeCurrent conditionPreferred datePreferred timeAdditional notes
+If optional fields are blank:
+Do not block submission.
+Do not show validation errors.
+Do not break estimator.
+Mark missing data as:
+Not provided
+The estimator should still run with available information, but show:
+Estimate confidence: Low / Medium / High
+
+5. Walkthrough Capture UI
+When client clicks “Yes, Start Walkthrough,” show a simple capture interface.
+Required UI elements:
+Timer
+Microphone button
+Capture Photo button
+Stop Walkthrough button
+Photo count
+Short instruction text
+Suggested layout:
+Timer at topInstruction text under timerCamera preview areaCapture Photo button in the centerMic on/off buttonStop Walkthrough buttonPhoto thumbnails below
+Button labels:
+Take PhotoMic OnMic OffStop WalkthroughRetakeRemoveContinue
+Instruction text:
+Walk through your space and take photos of the areas you want cleaned. You can talk while taking photos so we understand what each area needs.
+The client should be able to:
+Take as many photos as needed
+Remove a photo before submitting
+Turn mic on or off
+Stop the walkthrough
+Continue without recording voice if they do not want to use the mic
+Mobile-first requirement:
+The capture flow must work properly on phones.
+
+6. Voice Note Behavior
+If the client allows microphone access:
+Record audio while walkthrough is active.
+If the client denies microphone access:
+Continue photo capture without audio.
+Show a small message:
+Microphone is off. You can still take photos and submit your walkthrough.
+Do not block the walkthrough if microphone permission is denied.
+If the client turns mic off:
+Stop recording new audio.
+Keep photo capture working.
+If the client turns mic back on:
+Continue recording from that point if possible.
+Save:
+Audio file
+Duration
+Transcript if generated
+Photo timestamps
+Photo order
+
+7. Photo Capture Behavior
+Each photo should store:
+{  id: string;  fileUrl: string;  thumbnailUrl?: string;  capturedAt: string;  timestampSeconds?: number;  clientNote?: string;  aiLabel?: string;  aiDescription?: string;  sectionId?: string;}
+The app should store the photo order.
+Photos should be attached to the quote submission.
+Photos should show in admin submission detail.
+Photos should be available for estimator review.
+
+8. AI Walkthrough Processing
+After the walkthrough is stopped or after form submit, run AI processing.
+AI should use:
+Submitted form details
+Photo timestamps
+Voice transcript
+Photo content if vision processing is available
+Client notes
+AI should generate:
+Walkthrough title
+Walkthrough summary
+Photo groups
+Area names
+Short descriptions
+Important issues
+Possible add-ons
+Estimator notes
+Do not block submission if AI fails.
+If AI processing fails, save the raw photos and audio anyway.
+Show admin:
+AI walkthrough summary pending
+or
+AI walkthrough summary unavailable
+
+9. Four-Photo Section Grouping
+In the submission detail, organize walkthrough photos into sections.
+Rule:
+Every 4 photos should become one section.
+Example:
+Photos 1 to 4:
+Section 1: Main Kitchen AreaShort description based on client voice note and photo content.
+Photos 5 to 8:
+Section 2: Washrooms and HallwayShort description based on client voice note and photo content.
+Photos 9 to 12:
+Section 3: Basement and Storage AreaShort description based on client voice note and photo content.
+Each section should include:
+Section title
+Short description
+Four-photo grid where possible
+Editable title
+Editable description
+Optional internal admin note
+If fewer than 4 photos are left, create a final section with the remaining photos.
+Do not force exactly 4 photos per section if the user submitted fewer.
+
+10. Editable AI Output
+Admin must be able to edit AI-generated walkthrough sections.
+Editable fields:
+Walkthrough titleWalkthrough summarySection titleSection descriptionPhoto labelPhoto descriptionInternal notes
+Save edits without changing original uploaded files.
+Keep original AI result and edited result if possible.
+Recommended structure:
+walkthroughAiRaw Json?walkthroughEdited Json?
+
+11. Submission Detail Page Upgrade
+On the submission detail page, add a new section:
+Client Walkthrough
+Show this only if walkthrough data exists.
+If no walkthrough was submitted, show small text:
+No walkthrough was added by the client.
+Client Walkthrough section should show:
+Walkthrough summaryRecording durationTranscript if availablePhoto countAI grouped sectionsEditable section titles/descriptionsPhoto gridImportant areasSuggested add-ons
+Each photo should be clickable for preview.
+Preview should show:
+Photo
+AI label
+AI description
+Client voice note context if available
+Captured time
+
+12. Submission List Upgrade
+In the submissions list, add an indicator:
+Walkthrough Added
+or
+Photos Added
+Examples:
+12 photosVoice noteAI summary ready
+This helps admins know which submissions have visual context.
+
+13. Respond / Reply With Selected Photos
+Upgrade the Respond / Reply modal.
+Admin should be able to include selected walkthrough photos or sections in the response to the client.
+Add section in response modal:
+Attach walkthrough references
+Options:
+Select individual photosSelect full sectionInclude AI section summaryInclude estimate summary
+Admin can select some photos and add notes.
+Example response content:
+Hi Jane,Thank you for your walkthrough. We reviewed the kitchen and basement photos you submitted.Based on the areas shown, we recommend a deep cleaning service with appliance cleaning and basement cleaning included.Estimated price: $320 - $380.Thank you,[Business Name]
+Important:
+Do not auto-send photos without admin review.
+Admin must choose which photos or sections to include.
+If email attachments are supported:
+Attach selected images.
+If email attachments are not supported yet:
+Include secure links or photo references.
+Show a clear fallback message.
+
+14. Estimator Integration
+The estimator should use walkthrough data as extra context.
+When admin clicks Generate Estimate from a submission:
+Pass these into the estimator:
+Form answersResidential or commercial detailsAdd-ons selectedWalkthrough summaryPhoto countAI section summariesCondition notesSuggested add-ons from AI
+Estimator should show:
+Walkthrough Context
+Inside the estimator page or modal.
+Example:
+Client submitted 14 walkthrough photos and a 2-minute voice note.AI detected: kitchen buildup, basement dust, two washrooms, appliance cleaning request.Suggested add-ons: inside fridge, oven, baseboards, basement cleaning.
+The admin can choose whether to apply AI-suggested add-ons.
+Do not automatically increase pricing without showing the admin.
+
+15. Database / Schema Additions
+Do not remove existing columns.
+Add nullable fields.
+Recommended tables:
+quote_request_walkthroughsquote_request_walkthrough_photosquote_request_walkthrough_sections
+Alternative:
+Use JSON fields if the current system is simpler, but make sure it can support many photos.
+Recommended structure:
+quoteRequestWalkthrough {  id: string;  submissionId: string;  businessId: string;  durationSeconds: number | null;  audioUrl: string | null;  transcript: string | null;  aiSummary: string | null;  aiStatus: "pending" | "completed" | "failed" | "not_started";  photoCount: number;  createdAt: Date;  updatedAt: Date;}
+quoteRequestWalkthroughPhoto {  id: string;  walkthroughId: string;  submissionId: string;  businessId: string;  fileUrl: string;  thumbnailUrl: string | null;  orderIndex: number;  capturedAt: Date;  timestampSeconds: number | null;  aiLabel: string | null;  aiDescription: string | null;  adminLabel: string | null;  adminDescription: string | null;  createdAt: Date;}
+quoteRequestWalkthroughSection {  id: string;  walkthroughId: string;  submissionId: string;  businessId: string;  title: string;  description: string;  orderIndex: number;  photoIds: string[];  aiGenerated: boolean;  adminEdited: boolean;  createdAt: Date;  updatedAt: Date;}
+
+16. API Roadmap
+Add form-specific APIs only.
+Suggested endpoints:
+POST /api/forms/:formId/walkthrough/startPOST /api/forms/:formId/walkthrough/photoPOST /api/forms/:formId/walkthrough/audioPOST /api/forms/:formId/walkthrough/stopPOST /api/forms/:formId/walkthrough/process-aiGET /api/submissions/:submissionId/walkthroughPATCH /api/submissions/:submissionId/walkthrough/sections/:sectionIdPATCH /api/submissions/:submissionId/walkthrough/photos/:photoId
+Rules:
+Validate formIdValidate businessIdAttach walkthrough to the correct submissionDo not expose private admin-only data to public form usersLimit file sizeLimit accepted file typesProtect upload endpoints from abuse
+
+17. Upload Limits
+Set safe limits.
+Recommended defaults:
+Max photos per walkthrough: 40Max image size: 10 MB eachAccepted image types: jpg, jpeg, png, webpMax recording duration: 10 minutesAccepted audio types: webm, mp4, m4a, wav if supported
+If limit is reached, show:
+You have reached the maximum number of photos for this walkthrough.
+
+18. Privacy and Consent Text
+Before starting walkthrough, show simple consent text.
+Example:
+Only upload photos and voice notes you want to share with the cleaning company. Do not include private documents, passwords, payment cards, or personal items you do not want reviewed.
+Add checkbox:
+I agree to share these photos and voice notes with the cleaning company for quote review.
+This checkbox should be required only if they start the walkthrough.
+Do not require it if they skip walkthrough.
+
+19. Error Handling
+If camera permission is denied:
+Camera access is off. You can skip this step or upload photos manually.
+If microphone permission is denied:
+Microphone is off. You can still take photos.
+If upload fails:
+This photo could not upload. Please try again or remove it before submitting.
+If AI processing fails:
+Walkthrough saved. AI summary could not be generated.
+Do not lose the form data if upload or AI fails.
+
+20. Public Form Review Step
+On Review and Submit, show:
+Contact infoService addressService detailsAdd-onsWalkthrough addedPhoto countVoice note duration
+Example:
+Walkthrough: 12 photos, 2 min voice note
+If skipped:
+Walkthrough: Not added
+
+21. Email Auto-Reply Update
+If client submitted walkthrough, auto-reply can mention it.
+Example:
+Hi [First Name],Thank you for submitting your cleaning quote request. We received your details and walkthrough photos.Our team will review the information and follow up with an estimate or any questions needed to finalize your quote.Thank you,[Business Name]
+If no walkthrough:
+Use existing auto-reply.
+
+22. Acceptance Criteria
+This is complete when:
+The quote form includes an optional Quick Walkthrough step.
+Client can skip walkthrough and still submit.
+Client can take multiple photos from the form.
+Client can record voice notes while taking photos.
+Client can turn mic on/off.
+Client can stop walkthrough.
+Timer works.
+Photos are attached to the final form submission.
+Audio/transcript are attached if available.
+Submission detail shows Client Walkthrough.
+Photos are grouped into sections of 4.
+Each section has editable title and description.
+Admin can edit AI-generated labels and descriptions.
+Estimator can use walkthrough summary as context.
+Reply modal can include selected photos or sections.
+Form embed still works in WordPress.
+Created using Clockfield still appears under embedded form.
+Existing Field Notes still work exactly as before.
+Employee Field Notes still work exactly as before.
+Admin Field Notes still work exactly as before.
+No unrelated Clockfield features are changed.
+
+23. Testing Checklist
+Test these before marking complete:
+Public form:
+Submit form without walkthroughSubmit form with photos onlySubmit form with photos and mic onSubmit form with mic deniedSubmit form with camera deniedSubmit form with 1 photoSubmit form with 4 photosSubmit form with 5 photosSubmit form with 12 photosSubmit form through WordPress iframeSubmit form from mobile browserSubmit form from desktop browser
+Admin:
+Submission appears with walkthrough indicatorSubmission detail opens correctlyPhotos display in orderPhotos group every 4 imagesAI summary appears when completeAI failure does not break submissionAdmin can edit section titleAdmin can edit section descriptionAdmin can edit photo labelRespond modal opensAdmin can select photos/sections for responseEstimator receives walkthrough context
+Regression:
+Existing Field Notes employee capture still worksExisting Field Notes admin documents still workExisting Field Notes public links still workExisting form submissions still openExisting embed mode still worksExisting CRM lead pipeline still worksExisting email auto-reply still worksExisting AI estimator still works
+Final Instruction:
+Implement this only inside Forms / Quote Requests, Submissions, and Estimator.
+Use the Field Notes concept as inspiration, but do not break, rename, or change the current Field Notes system.
+Ask before touching anything outside this scope.

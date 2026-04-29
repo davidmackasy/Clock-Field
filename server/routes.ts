@@ -7400,12 +7400,15 @@ FINAL RULES:
   app.get("/api/admin/submissions", requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
-      const subs = await storage.getAllSubmissionsByCompany(user.companyId);
-      // Attach form names
-      const forms = await storage.getQuoteFormsByCompany(user.companyId);
+      const [subs, forms, walkthroughSubIds] = await Promise.all([
+        storage.getAllSubmissionsByCompany(user.companyId),
+        storage.getQuoteFormsByCompany(user.companyId),
+        storage.getWalkthroughSubmissionIdsByCompany(user.companyId),
+      ]);
       const formMap: Record<string, string> = {};
       forms.forEach(f => { formMap[f.id] = f.name; });
-      res.json(subs.map(s => ({ ...s, data: JSON.parse(s.data), formName: formMap[s.formId] || "Unknown Form" })));
+      const walkthroughSet = new Set(walkthroughSubIds);
+      res.json(subs.map(s => ({ ...s, data: JSON.parse(s.data), formName: formMap[s.formId] || "Unknown Form", hasWalkthrough: walkthroughSet.has(s.id) })));
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
@@ -7415,14 +7418,23 @@ FINAL RULES:
       const user = req.user as any;
       const sub = await storage.getQuoteFormSubmission(req.params.id);
       if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      const [estimate, quote, activity] = await Promise.all([
+      const [estimate, quote, activity, walkthrough] = await Promise.all([
         storage.getAiEstimateBySubmission(sub.id),
         storage.getFormQuoteBySubmission(sub.id),
         storage.getLeadActivity(sub.id),
+        storage.getQuoteRequestWalkthroughBySubmission(sub.id),
       ]);
       const forms = await storage.getQuoteFormsByCompany(user.companyId);
       const form = forms.find(f => f.id === sub.formId);
-      res.json({ ...sub, data: JSON.parse(sub.data), formName: form?.name || "Unknown Form", estimate, quote, activity });
+      let walkthroughDetail: any = null;
+      if (walkthrough) {
+        const [photos, sections] = await Promise.all([
+          storage.getQuoteRequestWalkthroughPhotos(walkthrough.id),
+          storage.getQuoteRequestWalkthroughSections(walkthrough.id),
+        ]);
+        walkthroughDetail = { ...walkthrough, photos, sections };
+      }
+      res.json({ ...sub, data: JSON.parse(sub.data), formName: form?.name || "Unknown Form", estimate, quote, activity, walkthrough: walkthroughDetail });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
@@ -7461,6 +7473,20 @@ FINAL RULES:
       const now = new Date().toISOString();
       let data: any = {};
       try { data = JSON.parse(sub.data); } catch {}
+
+      // Fetch walkthrough context if available
+      const walkthroughForEstimate = await storage.getQuoteRequestWalkthroughBySubmission(sub.id);
+      let walkthroughContext = "";
+      if (walkthroughForEstimate) {
+        const wtSections = await storage.getQuoteRequestWalkthroughSections(walkthroughForEstimate.id);
+        walkthroughContext = `
+WALKTHROUGH CONTEXT:
+- Client submitted ${walkthroughForEstimate.photoCount} walkthrough photos${walkthroughForEstimate.durationSeconds ? ` and a ${Math.round(walkthroughForEstimate.durationSeconds / 60)}-minute voice note` : ""}
+${walkthroughForEstimate.aiSummary ? `- AI Summary: ${walkthroughForEstimate.aiSummary}` : ""}
+${walkthroughForEstimate.transcript ? `- Voice transcript: "${walkthroughForEstimate.transcript.substring(0, 500)}${walkthroughForEstimate.transcript.length > 500 ? "..." : ""}"` : ""}
+${wtSections.length > 0 ? `- Photo sections identified: ${wtSections.map(s => `${s.title}: ${s.description}`).join("; ")}` : ""}
+Use this visual context to refine your estimate. Add-ons or condition-based adjustments may apply.`;
+      }
 
       // Create pending estimate record
       let estimate = await storage.createAiEstimate({
@@ -7616,6 +7642,7 @@ ${contractMonths > 0 ? `- contract_total = monthly_price × ${contractMonths} mo
 
 CLIENT SUBMISSION:
 ${JSON.stringify(data, null, 2)}
+${walkthroughContext}
 
 Return ONLY a valid JSON object (no extra text):
 {
@@ -8587,6 +8614,172 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ── Public Walkthrough Routes ──────────────────────────────────────────────
+  // Create walkthrough (called when client starts recording)
+  app.post("/api/public/walkthrough/start", async (req, res) => {
+    try {
+      const { companyId } = req.body;
+      if (!companyId) return res.status(400).json({ message: "companyId required" });
+      const now = new Date().toISOString();
+      const walkthrough = await storage.createQuoteRequestWalkthrough({
+        companyId, submissionId: null as any,
+        aiStatus: "not_started", photoCount: 0,
+        createdAt: now, updatedAt: now,
+      });
+      res.json({ walkthroughId: walkthrough.id });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Upload a photo to a walkthrough
+  app.post("/api/public/walkthrough/:walkthroughId/photo", async (req, res) => {
+    try {
+      const { walkthroughId } = req.params;
+      const walkthrough = await storage.getQuoteRequestWalkthrough(walkthroughId);
+      if (!walkthrough) return res.status(404).json({ message: "Walkthrough not found" });
+      const { fileUrl, orderIndex, timestampSeconds } = req.body;
+      if (!fileUrl) return res.status(400).json({ message: "fileUrl required" });
+      // Validate it's a data URL (security)
+      if (!fileUrl.startsWith("data:image/")) return res.status(400).json({ message: "Invalid file type" });
+      // Check limit
+      const existing = await storage.getQuoteRequestWalkthroughPhotos(walkthroughId);
+      if (existing.length >= 40) return res.status(400).json({ message: "Maximum 40 photos reached" });
+      const now = new Date().toISOString();
+      const photo = await storage.addQuoteRequestWalkthroughPhoto({
+        walkthroughId, submissionId: walkthrough.submissionId,
+        companyId: walkthrough.companyId,
+        fileUrl, orderIndex: orderIndex ?? existing.length,
+        capturedAt: now,
+        timestampSeconds: timestampSeconds ?? null,
+        createdAt: now,
+      });
+      // Update photoCount
+      await storage.updateQuoteRequestWalkthrough(walkthroughId, {
+        photoCount: existing.length + 1,
+        updatedAt: now,
+      });
+      res.json({ photoId: photo.id, orderIndex: photo.orderIndex });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Remove a photo from a walkthrough
+  app.delete("/api/public/walkthrough/:walkthroughId/photo/:photoId", async (req, res) => {
+    try {
+      const { walkthroughId, photoId } = req.params;
+      const walkthrough = await storage.getQuoteRequestWalkthrough(walkthroughId);
+      if (!walkthrough) return res.status(404).json({ message: "Not found" });
+      await storage.deleteQuoteRequestWalkthroughPhoto(photoId);
+      const remaining = await storage.getQuoteRequestWalkthroughPhotos(walkthroughId);
+      const now = new Date().toISOString();
+      await storage.updateQuoteRequestWalkthrough(walkthroughId, { photoCount: remaining.length, updatedAt: now });
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Upload audio and finalize walkthrough
+  app.post("/api/public/walkthrough/:walkthroughId/stop", async (req, res) => {
+    try {
+      const { walkthroughId } = req.params;
+      const walkthrough = await storage.getQuoteRequestWalkthrough(walkthroughId);
+      if (!walkthrough) return res.status(404).json({ message: "Not found" });
+      const { audioUrl, durationSeconds, transcript } = req.body;
+      const now = new Date().toISOString();
+      const updated = await storage.updateQuoteRequestWalkthrough(walkthroughId, {
+        audioUrl: audioUrl || null,
+        durationSeconds: durationSeconds || null,
+        transcript: transcript || null,
+        updatedAt: now,
+      });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Link walkthrough to submission after form submit
+  app.post("/api/public/walkthrough/:walkthroughId/link", async (req, res) => {
+    try {
+      const { walkthroughId } = req.params;
+      const { submissionId } = req.body;
+      if (!submissionId) return res.status(400).json({ message: "submissionId required" });
+      const walkthrough = await storage.getQuoteRequestWalkthrough(walkthroughId);
+      if (!walkthrough) return res.status(404).json({ message: "Not found" });
+      const now = new Date().toISOString();
+      await storage.updateQuoteRequestWalkthrough(walkthroughId, { submissionId, updatedAt: now });
+      // Also update all photos with submissionId
+      const photos = await storage.getQuoteRequestWalkthroughPhotos(walkthroughId);
+      for (const photo of photos) {
+        await storage.updateQuoteRequestWalkthroughPhoto(photo.id, { submissionId });
+      }
+      // Trigger AI processing async
+      processWalkthroughAI(walkthroughId, walkthrough.companyId, submissionId).catch(err =>
+        console.error("[Walkthrough] AI processing error:", err.message)
+      );
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Admin Walkthrough Routes ───────────────────────────────────────────────
+  // Get walkthrough detail for a submission
+  app.get("/api/admin/submissions/:id/walkthrough", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getQuoteFormSubmission(req.params.id);
+      if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const walkthrough = await storage.getQuoteRequestWalkthroughBySubmission(sub.id);
+      if (!walkthrough) return res.json(null);
+      const [photos, sections] = await Promise.all([
+        storage.getQuoteRequestWalkthroughPhotos(walkthrough.id),
+        storage.getQuoteRequestWalkthroughSections(walkthrough.id),
+      ]);
+      res.json({ ...walkthrough, photos, sections });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Reprocess AI for a walkthrough
+  app.post("/api/admin/submissions/:id/walkthrough/process-ai", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getQuoteFormSubmission(req.params.id);
+      if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const walkthrough = await storage.getQuoteRequestWalkthroughBySubmission(sub.id);
+      if (!walkthrough) return res.status(404).json({ message: "No walkthrough found" });
+      processWalkthroughAI(walkthrough.id, user.companyId, sub.id).catch(() => {});
+      res.json({ success: true, message: "AI processing started" });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Edit walkthrough section
+  app.patch("/api/admin/submissions/:id/walkthrough/sections/:sectionId", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getQuoteFormSubmission(req.params.id);
+      if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const { title, description, adminNotes } = req.body;
+      const now = new Date().toISOString();
+      const updated = await storage.updateQuoteRequestWalkthroughSection(req.params.sectionId, {
+        ...(title !== undefined && { title }),
+        ...(description !== undefined && { description }),
+        ...(adminNotes !== undefined && { adminNotes }),
+        adminEdited: true,
+        updatedAt: now,
+      });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Edit walkthrough photo label
+  app.patch("/api/admin/submissions/:id/walkthrough/photos/:photoId", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getQuoteFormSubmission(req.params.id);
+      if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const { adminLabel, adminDescription } = req.body;
+      const updated = await storage.updateQuoteRequestWalkthroughPhoto(req.params.photoId, {
+        ...(adminLabel !== undefined && { adminLabel }),
+        ...(adminDescription !== undefined && { adminDescription }),
+      });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   app.post("/api/public/agreements/:token/decline", async (req, res) => {
     try {
       const agr = await storage.getAgreementByToken(req.params.token);
@@ -8598,6 +8791,98 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
       res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
+
+  // ── Walkthrough AI Processing ──────────────────────────────────────────────
+  async function processWalkthroughAI(walkthroughId: string, companyId: string, submissionId: string) {
+    try {
+      await storage.updateQuoteRequestWalkthrough(walkthroughId, { aiStatus: "pending", updatedAt: new Date().toISOString() });
+      const photos = await storage.getQuoteRequestWalkthroughPhotos(walkthroughId);
+      const walkthrough = await storage.getQuoteRequestWalkthrough(walkthroughId);
+      if (!walkthrough || photos.length === 0) {
+        await storage.updateQuoteRequestWalkthrough(walkthroughId, { aiStatus: "completed", updatedAt: new Date().toISOString() });
+        return;
+      }
+      const OpenAI = (await import("openai")).default;
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const photoCount = photos.length;
+      const transcript = walkthrough.transcript || "";
+      const prompt = `You are analyzing a client walkthrough of a property for a cleaning service quote.
+The client submitted ${photoCount} photos${walkthrough.durationSeconds ? ` and a ${Math.round(walkthrough.durationSeconds / 60)} minute voice note` : ""}.
+${transcript ? `Voice note transcript: "${transcript}"` : ""}
+
+Group the ${photoCount} photos into sections of up to 4 photos each.
+For each section, create a descriptive title and short description based on what would typically be in that section of a home walkthrough.
+
+Return ONLY valid JSON:
+{
+  "title": "Quick walkthrough title",
+  "summary": "2-3 sentence overall summary of the property walkthrough",
+  "sections": [
+    {
+      "title": "Section title (e.g. Main Kitchen Area)",
+      "description": "Short description of what was shown in these photos",
+      "photoStartIndex": 0,
+      "photoEndIndex": 3,
+      "suggestedAddons": ["addon1", "addon2"]
+    }
+  ]
+}`;
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.4,
+        response_format: { type: "json_object" },
+      });
+      const raw = completion.choices[0].message.content || "{}";
+      let parsed: any = {};
+      try { parsed = JSON.parse(raw); } catch {}
+      const now = new Date().toISOString();
+      await storage.updateQuoteRequestWalkthrough(walkthroughId, {
+        aiTitle: parsed.title || "Client Walkthrough",
+        aiSummary: parsed.summary || "",
+        aiStatus: "completed",
+        aiRaw: raw,
+        updatedAt: now,
+      });
+      // Create sections based on AI groupings
+      const aiSections: any[] = parsed.sections || [];
+      if (aiSections.length === 0) {
+        // Fallback: group every 4 photos automatically
+        for (let i = 0; i < photoCount; i += 4) {
+          const sectionPhotos = photos.slice(i, i + 4);
+          const sectionNum = Math.floor(i / 4) + 1;
+          await storage.createQuoteRequestWalkthroughSection({
+            walkthroughId, submissionId, companyId,
+            title: `Section ${sectionNum}`,
+            description: "",
+            orderIndex: sectionNum - 1,
+            photoIds: JSON.stringify(sectionPhotos.map(p => p.id)),
+            aiGenerated: true, adminEdited: false,
+            createdAt: now, updatedAt: now,
+          });
+        }
+      } else {
+        for (let i = 0; i < aiSections.length; i++) {
+          const section = aiSections[i];
+          const start = section.photoStartIndex ?? (i * 4);
+          const end = section.photoEndIndex ?? Math.min(start + 3, photoCount - 1);
+          const sectionPhotos = photos.slice(start, end + 1);
+          await storage.createQuoteRequestWalkthroughSection({
+            walkthroughId, submissionId, companyId,
+            title: section.title || `Section ${i + 1}`,
+            description: section.description || "",
+            orderIndex: i,
+            photoIds: JSON.stringify(sectionPhotos.map(p => p.id)),
+            aiGenerated: true, adminEdited: false,
+            createdAt: now, updatedAt: now,
+          });
+        }
+      }
+    } catch (err: any) {
+      console.error("[WalkthroughAI] Error:", err.message);
+      await storage.updateQuoteRequestWalkthrough(walkthroughId, { aiStatus: "failed", updatedAt: new Date().toISOString() });
+    }
+  }
 
   return httpServer;
 }

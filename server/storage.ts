@@ -69,6 +69,10 @@ import {
   type AgreementTemplate, type InsertAgreementTemplate,
   type Agreement, type InsertAgreement,
   type AgreementActivityLog, type InsertAgreementActivityLog,
+  quoteRequestWalkthroughs, quoteRequestWalkthroughPhotos, quoteRequestWalkthroughSections,
+  type QuoteRequestWalkthrough, type InsertQuoteRequestWalkthrough,
+  type QuoteRequestWalkthroughPhoto, type InsertQuoteRequestWalkthroughPhoto,
+  type QuoteRequestWalkthroughSection, type InsertQuoteRequestWalkthroughSection,
   supplies, supplyUpdates,
   inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses,
   type Supply, type InsertSupply,
@@ -1822,6 +1826,58 @@ export class DatabaseStorage implements IStorage {
   }
   async addAgreementActivity(data: InsertAgreementActivityLog): Promise<AgreementActivityLog> {
     const [row] = await db.insert(agreementActivityLogs).values(data as any).returning();
+    return row;
+  }
+
+  // ── Quote Request Walkthroughs ─────────────────────────────────────────────
+  async createQuoteRequestWalkthrough(data: InsertQuoteRequestWalkthrough): Promise<QuoteRequestWalkthrough> {
+    const [row] = await db.insert(quoteRequestWalkthroughs).values(data as any).returning();
+    return row;
+  }
+  async getQuoteRequestWalkthrough(id: string): Promise<QuoteRequestWalkthrough | undefined> {
+    const [row] = await db.select().from(quoteRequestWalkthroughs).where(eq(quoteRequestWalkthroughs.id, id));
+    return row;
+  }
+  async getQuoteRequestWalkthroughBySubmission(submissionId: string): Promise<QuoteRequestWalkthrough | undefined> {
+    const [row] = await db.select().from(quoteRequestWalkthroughs).where(eq(quoteRequestWalkthroughs.submissionId, submissionId));
+    return row;
+  }
+  async getWalkthroughSubmissionIdsByCompany(companyId: string): Promise<string[]> {
+    const rows = await db.select({ submissionId: quoteRequestWalkthroughs.submissionId }).from(quoteRequestWalkthroughs)
+      .where(eq(quoteRequestWalkthroughs.companyId, companyId));
+    return rows.map(r => r.submissionId).filter(Boolean) as string[];
+  }
+  async updateQuoteRequestWalkthrough(id: string, data: Partial<InsertQuoteRequestWalkthrough>): Promise<QuoteRequestWalkthrough | undefined> {
+    const [row] = await db.update(quoteRequestWalkthroughs).set(data as any).where(eq(quoteRequestWalkthroughs.id, id)).returning();
+    return row;
+  }
+  async addQuoteRequestWalkthroughPhoto(data: InsertQuoteRequestWalkthroughPhoto): Promise<QuoteRequestWalkthroughPhoto> {
+    const [row] = await db.insert(quoteRequestWalkthroughPhotos).values(data as any).returning();
+    return row;
+  }
+  async getQuoteRequestWalkthroughPhotos(walkthroughId: string): Promise<QuoteRequestWalkthroughPhoto[]> {
+    return db.select().from(quoteRequestWalkthroughPhotos)
+      .where(eq(quoteRequestWalkthroughPhotos.walkthroughId, walkthroughId))
+      .orderBy(asc(quoteRequestWalkthroughPhotos.orderIndex));
+  }
+  async updateQuoteRequestWalkthroughPhoto(id: string, data: Partial<InsertQuoteRequestWalkthroughPhoto>): Promise<QuoteRequestWalkthroughPhoto | undefined> {
+    const [row] = await db.update(quoteRequestWalkthroughPhotos).set(data as any).where(eq(quoteRequestWalkthroughPhotos.id, id)).returning();
+    return row;
+  }
+  async deleteQuoteRequestWalkthroughPhoto(id: string): Promise<void> {
+    await db.delete(quoteRequestWalkthroughPhotos).where(eq(quoteRequestWalkthroughPhotos.id, id));
+  }
+  async createQuoteRequestWalkthroughSection(data: InsertQuoteRequestWalkthroughSection): Promise<QuoteRequestWalkthroughSection> {
+    const [row] = await db.insert(quoteRequestWalkthroughSections).values(data as any).returning();
+    return row;
+  }
+  async getQuoteRequestWalkthroughSections(walkthroughId: string): Promise<QuoteRequestWalkthroughSection[]> {
+    return db.select().from(quoteRequestWalkthroughSections)
+      .where(eq(quoteRequestWalkthroughSections.walkthroughId, walkthroughId))
+      .orderBy(asc(quoteRequestWalkthroughSections.orderIndex));
+  }
+  async updateQuoteRequestWalkthroughSection(id: string, data: Partial<InsertQuoteRequestWalkthroughSection>): Promise<QuoteRequestWalkthroughSection | undefined> {
+    const [row] = await db.update(quoteRequestWalkthroughSections).set(data as any).where(eq(quoteRequestWalkthroughSections.id, id)).returning();
     return row;
   }
 }

@@ -1655,3 +1655,62 @@ export type InsertAgreementTemplate = z.infer<typeof insertAgreementTemplateSche
 export type Agreement = typeof agreements.$inferSelect;
 export type InsertAgreement = z.infer<typeof insertAgreementSchema>;
 export type AgreementActivityLog = typeof agreementActivityLogs.$inferSelect;
+
+// ── Quote Request Walkthroughs ─────────────────────────────────────────────────
+export const quoteRequestWalkthroughs = pgTable("quote_request_walkthroughs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  submissionId: varchar("submission_id"),
+  companyId: varchar("company_id").notNull(),
+  durationSeconds: integer("duration_seconds"),
+  audioUrl: text("audio_url"),
+  transcript: text("transcript"),
+  aiTitle: text("ai_title"),
+  aiSummary: text("ai_summary"),
+  aiStatus: text("ai_status").notNull().default("not_started"),
+  aiRaw: text("ai_raw"),
+  photoCount: integer("photo_count").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const quoteRequestWalkthroughPhotos = pgTable("quote_request_walkthrough_photos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  walkthroughId: varchar("walkthrough_id").notNull(),
+  submissionId: varchar("submission_id"),
+  companyId: varchar("company_id").notNull(),
+  fileUrl: text("file_url").notNull(),
+  orderIndex: integer("order_index").notNull().default(0),
+  capturedAt: text("captured_at").notNull(),
+  timestampSeconds: integer("timestamp_seconds"),
+  aiLabel: text("ai_label"),
+  aiDescription: text("ai_description"),
+  adminLabel: text("admin_label"),
+  adminDescription: text("admin_description"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const quoteRequestWalkthroughSections = pgTable("quote_request_walkthrough_sections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  walkthroughId: varchar("walkthrough_id").notNull(),
+  submissionId: varchar("submission_id"),
+  companyId: varchar("company_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  orderIndex: integer("order_index").notNull().default(0),
+  photoIds: text("photo_ids").notNull().default("[]"),
+  aiGenerated: boolean("ai_generated").notNull().default(false),
+  adminEdited: boolean("admin_edited").notNull().default(false),
+  adminNotes: text("admin_notes"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const insertQuoteRequestWalkthroughSchema = createInsertSchema(quoteRequestWalkthroughs).omit({ id: true });
+export const insertQuoteRequestWalkthroughPhotoSchema = createInsertSchema(quoteRequestWalkthroughPhotos).omit({ id: true });
+export const insertQuoteRequestWalkthroughSectionSchema = createInsertSchema(quoteRequestWalkthroughSections).omit({ id: true });
+export type QuoteRequestWalkthrough = typeof quoteRequestWalkthroughs.$inferSelect;
+export type InsertQuoteRequestWalkthrough = z.infer<typeof insertQuoteRequestWalkthroughSchema>;
+export type QuoteRequestWalkthroughPhoto = typeof quoteRequestWalkthroughPhotos.$inferSelect;
+export type InsertQuoteRequestWalkthroughPhoto = z.infer<typeof insertQuoteRequestWalkthroughPhotoSchema>;
+export type QuoteRequestWalkthroughSection = typeof quoteRequestWalkthroughSections.$inferSelect;
+export type InsertQuoteRequestWalkthroughSection = z.infer<typeof insertQuoteRequestWalkthroughSectionSchema>;
