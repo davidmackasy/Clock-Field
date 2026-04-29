@@ -1246,6 +1246,9 @@ export type PricingConfig = {
   taxConfig: TaxConfig;
   subtotalOverride: number | null;
   notes: string;
+  billingType?: string | null;
+  billingLabel?: string | null;
+  billingSuffix?: string | null;
 };
 
 export type ClientResponse = {

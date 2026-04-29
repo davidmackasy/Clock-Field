@@ -1,0 +1,559 @@
+DEV NOTE: Fix Proposal Pricing Display, Billing Period, Contract Length, and Total Clarity
+
+Project: Clockfield
+Area: Admin Panel → Proposals & Quotes → Pricing + Public Proposal + PDF
+Goal: Make proposal pricing clear so clients know if the total is per visit, monthly, every 3 months, every 6 months, yearly, or full contract total.
+
+Critical instruction
+
+Do not break or change anything that already works.
+
+Do not remove the current proposal builder.
+
+Do not remove current pricing fields.
+
+Do not remove taxes.
+
+Do not remove PDF download.
+
+Do not remove print.
+
+Do not remove public proposal links.
+
+Do not change client accept/reject/thinking flow.
+
+Do not change email sending flow.
+
+Do not change quote forms, field notes, supplies, payroll, schedule, attendance, or clients.
+
+Only improve pricing clarity inside Proposals & Quotes.
+
+Current problem
+
+The proposal currently shows a total like “Total $557.55,” but it does not clearly say whether that amount is monthly, yearly, per visit, or for the full contract. In the exported proposal, the service summary shows “Contract Length: 12 Months,” while the pricing section only shows “Total $557.55,” which could confuse clients. 
+
+Required fix
+
+The pricing section must clearly show the billing period.
+
+Instead of only showing:
+
+Total $557.55
+
+It should show something like:
+
+Monthly Total: $557.55 / month
+
+or
+
+Per Visit Total: $557.55 / visit
+
+or
+
+Annual Total: $6,690.60 / year
+
+or
+
+12-Month Contract Total: $6,690.60
+
+The client must understand exactly what they are accepting.
+
+1. Add Billing Type / Pricing Period field
+
+In the proposal pricing step, add a field called:
+
+Billing Type
+
+Options:
+
+Per Visit
+
+Weekly
+
+Bi-Weekly
+
+Monthly
+
+Every 3 Months
+
+Every 6 Months
+
+Yearly
+
+Full Contract Total
+
+Custom
+
+This should control how the total is displayed on:
+
+Admin builder
+
+Admin preview
+
+Public proposal
+
+PDF download
+
+Print view
+
+Email PDF attachment
+
+2. Add Pricing Display Label
+
+Add a field called:
+
+Pricing Display Label
+
+This can auto-fill based on Billing Type.
+
+Examples:
+
+Per Visit → “Per Visit Total”
+
+Weekly → “Weekly Total”
+
+Bi-Weekly → “Bi-Weekly Total”
+
+Monthly → “Monthly Total”
+
+Every 3 Months → “Quarterly Total”
+
+Every 6 Months → “6-Month Total”
+
+Yearly → “Annual Total”
+
+Full Contract Total → “Contract Total”
+
+Custom → admin can type custom label
+
+This label must replace the generic “Total” label in the final proposal.
+
+3. Show amount with period
+
+In the final proposal, show the total with a clear period.
+
+Examples:
+
+Monthly Total
+$557.55 / month
+
+Per Visit Total
+$180.00 / visit
+
+Weekly Total
+$420.00 / week
+
+Annual Total
+$6,690.60 / year
+
+12-Month Contract Total
+$6,690.60
+
+Do not show only “Total” without context.
+
+4. Add Contract Length calculation
+
+If the proposal has a contract length, calculate the full contract estimate.
+
+Example:
+
+Monthly Total: $557.55 / month
+Contract Length: 12 months
+Estimated 12-Month Total: $6,690.60
+
+Formula:
+
+contract total = billing period total × number of billing periods in contract
+
+For Monthly + 12 months:
+
+$557.55 × 12 = $6,690.60
+
+For Weekly + 12 months:
+
+weekly total × 52
+
+For Bi-Weekly + 12 months:
+
+bi-weekly total × 26
+
+For Every 3 Months + 12 months:
+
+quarterly total × 4
+
+For Every 6 Months + 12 months:
+
+6-month total × 2
+
+For Yearly + 12 months:
+
+yearly total × 1
+
+If the contract length is custom or unclear, do not force calculation. Show only the billing period total.
+
+5. Update pricing table
+
+Current pricing table:
+
+Item | Qty | Unit Price | Subtotal
+GST
+Total
+
+Required pricing table:
+
+Item | Billing Type | Qty | Unit Price | Subtotal
+
+Then below:
+
+Subtotal: $531.00
+GST (5%): $26.55
+Monthly Total: $557.55 / month
+Estimated 12-Month Contract Total: $6,690.60
+
+If Billing Type is Per Visit:
+
+Subtotal: $531.00
+GST (5%): $26.55
+Per Visit Total: $557.55 / visit
+Estimated Monthly Total: optional if visits per month is known
+
+6. Add pricing mode in admin builder
+
+In the pricing step, add:
+
+Pricing Mode
+
+Options:
+
+Manual Price
+
+Price Per Visit
+
+Monthly Price
+
+Hourly Estimate
+
+Full Contract Price
+
+Recommended behavior:
+
+Manual Price:
+Admin enters subtotal and selects billing type.
+
+Price Per Visit:
+Admin enters price per visit and expected visits per week/month.
+
+Monthly Price:
+Admin enters monthly price directly.
+
+Hourly Estimate:
+Admin enters hourly rate, hours per visit, visits per week, number of cleaners.
+
+Full Contract Price:
+Admin enters one total for the entire contract.
+
+Do not remove the existing pricing inputs. Add these as clearer controls around the current pricing system.
+
+7. Monthly pricing example
+
+If admin selects Monthly Price:
+
+Admin enters:
+
+Monthly subtotal: $531.00
+
+Tax: GST 5%
+
+Contract length: 12 months
+
+Final proposal should show:
+
+Monthly Subtotal: $531.00
+GST (5%): $26.55
+Monthly Total: $557.55 / month
+Estimated 12-Month Contract Total: $6,690.60
+
+8. Per visit pricing example
+
+If admin selects Per Visit:
+
+Admin enters:
+
+Per visit price: $150.00
+
+Visits per month: 4
+
+Tax: GST 5%
+
+Final proposal should show:
+
+Per Visit Subtotal: $150.00
+GST (5%): $7.50
+Per Visit Total: $157.50 / visit
+Estimated Monthly Total: $630.00
+Estimated 12-Month Total: $7,560.00
+
+Only show monthly and contract estimates if enough information exists.
+
+9. Full contract price example
+
+If admin selects Full Contract Price:
+
+Admin enters:
+
+Contract total: $6,000.00
+
+Tax: GST 5%
+
+Final proposal should show:
+
+Contract Subtotal: $6,000.00
+GST (5%): $300.00
+12-Month Contract Total: $6,300.00
+
+Do not show “/ month” if it is a full contract total.
+
+10. Add pricing explanation under the total
+
+Add a short clear line under pricing.
+
+Examples:
+
+For monthly pricing:
+“This price is billed monthly for the selected contract period.”
+
+For per visit pricing:
+“This price is billed per completed service visit.”
+
+For full contract:
+“This amount represents the total estimated price for the selected contract period.”
+
+For custom:
+Use admin’s custom pricing note.
+
+11. Update Pricing Notes / Billing Details default text
+
+Use this default:
+
+Pricing is based on the selected billing period, service frequency, estimated labour hours, and scope of work listed in this proposal. The total shown above reflects the selected pricing type, such as per visit, monthly, yearly, or full contract pricing.
+
+If a contract length is selected, the estimated contract total is shown for clarity. Any additional work outside the listed scope, changes in service frequency, specialty cleaning requests, or extra supplies may require approval and may be billed separately.
+
+Payment terms, billing schedule, and final service start date will be confirmed before service begins.
+
+12. Update public proposal pricing section
+
+The public proposal must clearly display:
+
+Billing Type
+
+Billing Period
+
+Subtotal
+
+Taxes
+
+Total with period
+
+Contract estimate if available
+
+Example final display:
+
+Pricing
+
+Monthly Cleaning Service
+Qty: 1
+Unit Price: $531.00
+Subtotal: $531.00
+
+GST (5%): $26.55
+
+Monthly Total: $557.55 / month
+
+Estimated 12-Month Contract Total: $6,690.60
+
+Billing Details:
+This price is billed monthly for the selected 12-month contract period.
+
+13. Update PDF and print output
+
+The PDF and print version must use the same improved pricing display.
+
+Do not let the PDF show only:
+
+Total $557.55
+
+It must show:
+
+Monthly Total: $557.55 / month
+
+and if contract length exists:
+
+Estimated 12-Month Contract Total: $6,690.60
+
+14. Update email PDF attachment
+
+If the proposal is emailed with a PDF attachment, the attached PDF must also include the improved pricing labels.
+
+The email does not need to include every calculation, but the proposal PDF and public link must.
+
+15. Admin builder validation
+
+Before saving or sending a proposal, check:
+
+Billing Type is selected
+
+Pricing amount exists
+
+Tax is calculated if selected
+
+Contract length is clear if showing contract total
+
+If Billing Type is missing, show:
+
+“Please select a billing type so the client knows whether this price is per visit, monthly, yearly, or for the full contract.”
+
+Do not allow sending a proposal with unclear pricing.
+
+16. Suggested data fields
+
+Use existing pricing JSON if possible.
+
+Add these fields inside pricing_json:
+
+{
+"pricingMode": "monthly",
+"billingType": "monthly",
+"billingLabel": "Monthly Total",
+"billingSuffix": "/ month",
+"subtotal": 531,
+"taxRate": 5,
+"taxName": "GST",
+"taxAmount": 26.55,
+"periodTotal": 557.55,
+"contractLengthValue": 12,
+"contractLengthUnit": "months",
+"estimatedContractTotal": 6690.60,
+"showContractEstimate": true,
+"pricingNote": ""
+}
+
+Make fields nullable for old proposals.
+
+Old proposals should still load.
+
+If an old proposal has no billing type, fallback to:
+
+Billing Type: Monthly
+
+Only if the proposal service summary has contract length or monthly hours.
+
+Otherwise show:
+
+Total: $557.55
+
+with a warning in admin preview:
+“Billing type missing. Please update pricing before sending.”
+
+17. Backward compatibility
+
+Old proposals must not break.
+
+For old proposals:
+
+Keep displaying existing data.
+
+Add admin warning:
+“This proposal does not have a billing type selected. Update the pricing section before sending or sharing.”
+
+Do not force migration that breaks existing records.
+
+18. Testing checklist
+
+Test admin builder:
+
+Admin can select Per Visit
+
+Admin can select Monthly
+
+Admin can select Yearly
+
+Admin can select Full Contract Total
+
+Admin can enter subtotal
+
+Admin can apply GST
+
+Admin can set 12-month contract
+
+Admin can see monthly total
+
+Admin can see estimated contract total
+
+Admin can save proposal
+
+Admin can preview proposal
+
+Admin cannot send proposal with missing billing type
+
+Test public proposal:
+
+Public page shows Monthly Total instead of generic Total
+
+Public page shows / month
+
+Public page shows estimated 12-month total
+
+Public page shows GST correctly
+
+Public page shows pricing note correctly
+
+Client can still accept proposal
+
+Client can still reject proposal
+
+Client can still mark thinking
+
+Test PDF:
+
+PDF shows Monthly Total
+
+PDF shows / month
+
+PDF shows estimated contract total
+
+PDF does not only show generic Total
+
+Print layout still works
+
+Email attachment PDF shows the same pricing
+
+Safety:
+
+Existing proposals still open
+
+Existing proposal links still work
+
+Existing accept/reject flow still works
+
+Existing email flow still works
+
+No settings changes break
+
+No quote forms break
+
+No clients break
+
+No other app area is affected
+
+Final instruction
+
+Only improve proposal pricing clarity.
+
+Make sure every proposal clearly says whether the price is per visit, monthly, yearly, every 3 months, every 6 months, or for the full contract.
+
+If contract length is selected, show the estimated full contract total.
+
+Do not leave the client seeing only a generic “Total” because that can be confusing.
+
+Do not break or affect anything else in Clockfield.

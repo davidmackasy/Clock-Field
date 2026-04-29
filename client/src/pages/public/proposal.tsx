@@ -45,6 +45,36 @@ function calcPricing(pricingConfig: PricingConfig) {
   return { lineSubtotal, effectiveSubtotal, taxAmount, total };
 }
 
+const BILLING_TYPE_META: Record<string, { label: string; suffix: string }> = {
+  per_visit:       { label: "Per Visit Total",  suffix: "/ visit" },
+  weekly:          { label: "Weekly Total",      suffix: "/ week" },
+  bi_weekly:       { label: "Bi-Weekly Total",   suffix: "/ two weeks" },
+  monthly:         { label: "Monthly Total",     suffix: "/ month" },
+  every_3_months:  { label: "Quarterly Total",   suffix: "/ quarter" },
+  every_6_months:  { label: "6-Month Total",     suffix: "/ 6 months" },
+  yearly:          { label: "Annual Total",       suffix: "/ year" },
+  full_contract:   { label: "Contract Total",    suffix: "" },
+  custom:          { label: "Total",             suffix: "" },
+};
+
+function calcContractEstimate(total: number, billingType: string, contractLength: string, daysPerWeek: string): number | null {
+  const monthsMap: Record<string, number> = { "3 Months": 3, "6 Months": 6, "12 Months": 12 };
+  const months = monthsMap[contractLength];
+  if (!months || months <= 1) return null;
+  const dpw = parseFloat(daysPerWeek) || 0;
+  const visitsPerMonth = dpw * 4.33;
+  switch (billingType) {
+    case "per_visit":      return visitsPerMonth > 0 ? total * months * visitsPerMonth : null;
+    case "weekly":         return total * months * (52 / 12);
+    case "bi_weekly":      return total * months * (26 / 12);
+    case "monthly":        return total * months;
+    case "every_3_months": return total * (months / 3);
+    case "every_6_months": return total * (months / 6);
+    case "yearly":         return total * (months / 12);
+    default:               return null;
+  }
+}
+
 export default function PublicProposal() {
   const { token } = useParams<{ token: string }>();
   const [acceptOpen, setAcceptOpen] = useState(false);
@@ -148,6 +178,18 @@ export default function PublicProposal() {
   try { pricingConfig = JSON.parse(proposal.pricingConfig); } catch {}
 
   const { effectiveSubtotal, taxAmount, total } = calcPricing(pricingConfig);
+
+  // Billing period label & suffix
+  const billingType = pricingConfig.billingType || "";
+  const btMeta = BILLING_TYPE_META[billingType];
+  const billingLabel = pricingConfig.billingLabel || btMeta?.label || "Total";
+  const billingSuffix = pricingConfig.billingSuffix !== undefined ? pricingConfig.billingSuffix : (btMeta?.suffix ?? "");
+  const hasBillingType = !!billingType;
+
+  // Contract estimate
+  const contractEstimate = (hasBillingType && serviceDetails.contractLength && serviceDetails.daysPerWeek)
+    ? calcContractEstimate(total, billingType, serviceDetails.contractLength, serviceDetails.daysPerWeek)
+    : null;
   const brand = snapshot.brandColor || "#1e293b";
   const isExpired = proposal.expiryDate && new Date(proposal.expiryDate) < new Date();
   const isAlreadyAccepted = proposal.status === "accepted";
@@ -377,18 +419,33 @@ export default function PublicProposal() {
                     )}
                     {taxAmount > 0 && (
                       <tr>
-                        <td colSpan={3} className="text-right py-1.5 text-gray-500 pr-4">{pricingConfig.taxConfig.label}</td>
+                        <td colSpan={3} className="text-right py-1.5 text-gray-500 pr-4">{pricingConfig.taxConfig?.label ?? "Tax"}</td>
                         <td className="text-right py-1.5 tabular-nums text-gray-700">{fmtCurrency(taxAmount)}</td>
                       </tr>
                     )}
+                    {/* Billing period total — replaces generic "Total" */}
                     <tr className="border-t-2 border-gray-300">
-                      <td colSpan={3} className="text-right py-2 font-bold text-gray-900 pr-4">Total</td>
+                      <td colSpan={3} className="text-right py-2 pr-4">
+                        <span className="font-bold text-gray-900">{billingLabel}</span>
+                        {billingSuffix && (
+                          <span className="text-gray-400 text-xs font-normal ml-1">{billingSuffix}</span>
+                        )}
+                      </td>
                       <td className="text-right py-2 font-bold text-gray-900 tabular-nums text-base">{fmtCurrency(total)}</td>
                     </tr>
+                    {/* Contract estimate row */}
+                    {contractEstimate != null && serviceDetails.contractLength && (
+                      <tr className="border-t border-gray-100">
+                        <td colSpan={3} className="text-right py-1.5 text-gray-500 pr-4 text-xs">
+                          Estimated {serviceDetails.contractLength} Contract Total
+                        </td>
+                        <td className="text-right py-1.5 tabular-nums text-gray-700 font-semibold">{fmtCurrency(contractEstimate)}</td>
+                      </tr>
+                    )}
                   </tfoot>
                 </table>
                 {pricingConfig.notes && (
-                  <p className="text-xs text-gray-500 mt-2 italic">{pricingConfig.notes}</p>
+                  <p className="text-xs text-gray-500 mt-3 leading-relaxed">{pricingConfig.notes}</p>
                 )}
               </section>
             )}

@@ -55,6 +55,41 @@ const TAX_TYPES = [
   { value: "custom", label: "Custom Rate", rate: 0 },
 ];
 
+const BILLING_TYPES = [
+  { value: "per_visit",        label: "Per Visit",        billingLabel: "Per Visit Total",   suffix: "/ visit" },
+  { value: "weekly",           label: "Weekly",           billingLabel: "Weekly Total",      suffix: "/ week" },
+  { value: "bi_weekly",        label: "Bi-Weekly",        billingLabel: "Bi-Weekly Total",   suffix: "/ two weeks" },
+  { value: "monthly",          label: "Monthly",          billingLabel: "Monthly Total",     suffix: "/ month" },
+  { value: "every_3_months",   label: "Every 3 Months",   billingLabel: "Quarterly Total",   suffix: "/ quarter" },
+  { value: "every_6_months",   label: "Every 6 Months",   billingLabel: "6-Month Total",     suffix: "/ 6 months" },
+  { value: "yearly",           label: "Yearly",           billingLabel: "Annual Total",      suffix: "/ year" },
+  { value: "full_contract",    label: "Full Contract",    billingLabel: "Contract Total",    suffix: "" },
+  { value: "custom",           label: "Custom",           billingLabel: "Total",             suffix: "" },
+];
+
+// Given a contract length string (e.g. "12 Months") and billing type, return how many
+// billing periods fit in the contract. Returns null if we can't compute it.
+function getContractMultiplier(contractLength: string, billingType: string, visitsPerMonth: number): number | null {
+  const monthsMap: Record<string, number> = { "3 Months": 3, "6 Months": 6, "12 Months": 12, "Monthly": 1 };
+  const months = monthsMap[contractLength];
+  if (!months || months <= 1) return null;
+  switch (billingType) {
+    case "per_visit":      return visitsPerMonth > 0 ? months * visitsPerMonth : null;
+    case "weekly":         return months * (52 / 12);
+    case "bi_weekly":      return months * (26 / 12);
+    case "monthly":        return months;
+    case "every_3_months": return months / 3;
+    case "every_6_months": return months / 6;
+    case "yearly":         return months / 12;
+    case "full_contract":  return null; // already the full contract price
+    default:               return null;
+  }
+}
+
+function contractLabel(contractLength: string, billingType: string): string {
+  return `Estimated ${contractLength} Total`;
+}
+
 const PROFESSIONAL_TERMS = `1. Proposal Validity
    This proposal is valid until the expiry date shown on the document. Pricing and availability may be subject to change after this date.
 
@@ -1023,122 +1058,221 @@ export default function AdminProposalBuilder() {
           )}
 
           {/* ── Step 3: Pricing ──────────────────────────────────────── */}
-          {step === 3 && (
-            <div className="space-y-6">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-base font-semibold">Pricing</h2>
-                  <Button variant="outline" size="sm" onClick={addLineItem} data-testid="button-add-line-item">
-                    <Plus className="w-3.5 h-3.5 mr-1.5" /> Add Line Item
-                  </Button>
+          {step === 3 && (() => {
+            // Billing type helpers
+            const billingType = pricingConfig.billingType || "";
+            const btPreset = BILLING_TYPES.find(b => b.value === billingType);
+            const billingLabel = pricingConfig.billingLabel || btPreset?.billingLabel || "Total";
+            const billingSuffix = pricingConfig.billingSuffix !== undefined ? pricingConfig.billingSuffix : (btPreset?.suffix ?? "");
+
+            // Contract estimate
+            const dpw = parseFloat(serviceDetails.daysPerWeek) || 0;
+            const visitsPerMonth = dpw * 4.33;
+            const multiplier = billingType && serviceDetails.contractLength
+              ? getContractMultiplier(serviceDetails.contractLength, billingType, visitsPerMonth)
+              : null;
+            const contractEstimate = multiplier != null ? totalAmount * multiplier : null;
+            const hasBillingType = !!billingType;
+
+            function setBillingType(v: string) {
+              const preset = BILLING_TYPES.find(b => b.value === v);
+              setPricingConfig(p => ({
+                ...p,
+                billingType: v,
+                billingLabel: preset?.billingLabel ?? "Total",
+                billingSuffix: preset?.suffix ?? "",
+              }));
+            }
+
+            return (
+              <div className="space-y-6">
+                {/* Billing Type — most important, at the top */}
+                <div className="border rounded-xl p-4 space-y-3">
+                  <div>
+                    <h3 className="text-sm font-semibold">Billing Type <span className="text-red-500">*</span></h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Tells the client whether this price is per visit, monthly, yearly, or for the full contract.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <Select value={billingType} onValueChange={setBillingType}>
+                      <SelectTrigger className="w-56" data-testid="select-billing-type">
+                        <SelectValue placeholder="Select billing type…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {BILLING_TYPES.map(b => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    {billingType === "custom" && (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={pricingConfig.billingLabel || ""}
+                          onChange={e => setPricingConfig(p => ({ ...p, billingLabel: e.target.value }))}
+                          className="h-9 w-44 text-sm"
+                          placeholder="e.g. Monthly Total"
+                          data-testid="input-custom-billing-label"
+                        />
+                        <Input
+                          value={pricingConfig.billingSuffix || ""}
+                          onChange={e => setPricingConfig(p => ({ ...p, billingSuffix: e.target.value }))}
+                          className="h-9 w-32 text-sm"
+                          placeholder="e.g. / month"
+                          data-testid="input-custom-billing-suffix"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {!hasBillingType && (
+                    <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                      Please select a billing type so the client knows whether this price is per visit, monthly, yearly, or for the full contract.
+                    </p>
+                  )}
+                  {hasBillingType && billingLabel && (
+                    <p className="text-xs text-muted-foreground">
+                      The total will display as: <strong>{billingLabel}{billingSuffix ? ` (${billingSuffix})` : ""}</strong>
+                    </p>
+                  )}
                 </div>
 
-                <div className="space-y-2">
-                  {pricingConfig.lineItems.length > 0 && (
-                    <div className="grid grid-cols-[1fr_80px_100px_80px_32px] gap-2 text-xs font-medium text-muted-foreground px-1">
-                      <span>Item</span><span className="text-center">Qty</span><span className="text-center">Unit Price</span><span className="text-right">Subtotal</span><span />
-                    </div>
-                  )}
-                  {pricingConfig.lineItems.map((item, idx) => (
-                    <div key={item.id} className="border rounded-lg p-3 space-y-2">
-                      <div className="grid grid-cols-[1fr_80px_100px_80px_32px] gap-2 items-center">
-                        <Input value={item.name} onChange={e => updateLineItem(idx, { name: e.target.value })} className="h-8 text-sm" placeholder="Service or item name" data-testid={`input-line-name-${idx}`} />
-                        <Input type="number" min="0" step="1" value={item.quantity} onChange={e => updateLineItem(idx, { quantity: parseFloat(e.target.value) || 0 })} className="h-8 text-sm text-center" data-testid={`input-line-qty-${idx}`} />
-                        <Input type="number" min="0" step="0.01" value={item.unitPrice} onChange={e => updateLineItem(idx, { unitPrice: parseFloat(e.target.value) || 0 })} className="h-8 text-sm text-right" data-testid={`input-line-price-${idx}`} />
-                        <span className="text-sm font-medium text-right tabular-nums">${(item.quantity * item.unitPrice).toFixed(2)}</span>
-                        <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-destructive" onClick={() => removeLineItem(idx)}>
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                {/* Line items */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-base font-semibold">Line Items</h2>
+                    <Button variant="outline" size="sm" onClick={addLineItem} data-testid="button-add-line-item">
+                      <Plus className="w-3.5 h-3.5 mr-1.5" /> Add Line Item
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    {pricingConfig.lineItems.length > 0 && (
+                      <div className="grid grid-cols-[1fr_80px_100px_80px_32px] gap-2 text-xs font-medium text-muted-foreground px-1">
+                        <span>Item</span><span className="text-center">Qty</span><span className="text-center">Unit Price</span><span className="text-right">Subtotal</span><span />
                       </div>
-                      <div className="flex items-center gap-4">
-                        <Input value={item.description} onChange={e => updateLineItem(idx, { description: e.target.value })} className="h-7 text-xs flex-1 text-muted-foreground" placeholder="Optional description…" />
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-shrink-0">
-                          <Switch checked={item.taxable} onCheckedChange={v => updateLineItem(idx, { taxable: v })} className="scale-75" data-testid={`switch-taxable-${idx}`} />
-                          <span>Taxable</span>
+                    )}
+                    {pricingConfig.lineItems.map((item, idx) => (
+                      <div key={item.id} className="border rounded-lg p-3 space-y-2">
+                        <div className="grid grid-cols-[1fr_80px_100px_80px_32px] gap-2 items-center">
+                          <Input value={item.name} onChange={e => updateLineItem(idx, { name: e.target.value })} className="h-8 text-sm" placeholder="Service or item name" data-testid={`input-line-name-${idx}`} />
+                          <Input type="number" min="0" step="1" value={item.quantity} onChange={e => updateLineItem(idx, { quantity: parseFloat(e.target.value) || 0 })} className="h-8 text-sm text-center" data-testid={`input-line-qty-${idx}`} />
+                          <Input type="number" min="0" step="0.01" value={item.unitPrice} onChange={e => updateLineItem(idx, { unitPrice: parseFloat(e.target.value) || 0 })} className="h-8 text-sm text-right" data-testid={`input-line-price-${idx}`} />
+                          <span className="text-sm font-medium text-right tabular-nums">${(item.quantity * item.unitPrice).toFixed(2)}</span>
+                          <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-destructive" onClick={() => removeLineItem(idx)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <Input value={item.description} onChange={e => updateLineItem(idx, { description: e.target.value })} className="h-7 text-xs flex-1 text-muted-foreground" placeholder="Optional description…" />
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-shrink-0">
+                            <Switch checked={item.taxable} onCheckedChange={v => updateLineItem(idx, { taxable: v })} className="scale-75" data-testid={`switch-taxable-${idx}`} />
+                            <span>Taxable</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                  {pricingConfig.lineItems.length === 0 && (
-                    <div className="border-2 border-dashed rounded-xl p-6 text-center text-muted-foreground text-sm">
-                      Add line items to build the price.
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Tax */}
-              <div className="border rounded-xl p-4 space-y-3">
-                <h3 className="text-sm font-semibold">Tax</h3>
-                <div className="flex items-center gap-3">
-                  <Select value={pricingConfig.taxConfig.type} onValueChange={setTaxType}>
-                    <SelectTrigger className="w-52" data-testid="select-tax-type"><SelectValue /></SelectTrigger>
-                    <SelectContent>{TAX_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
-                  </Select>
-                  {pricingConfig.taxConfig.type === "custom" && (
-                    <div className="flex items-center gap-2">
-                      <Input type="number" min="0" step="0.1" value={pricingConfig.taxConfig.rate} onChange={e => setPricingConfig(p => ({ ...p, taxConfig: { ...p.taxConfig, rate: parseFloat(e.target.value) || 0, label: `Custom (${e.target.value}%)` } }))} className="h-9 w-20 text-sm" data-testid="input-custom-tax-rate" />
-                      <span className="text-sm text-muted-foreground">%</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Subtotal override */}
-              <div className="border rounded-xl p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold">Manual Subtotal Override</h3>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Switch checked={pricingConfig.subtotalOverride != null} onCheckedChange={v => setPricingConfig(p => ({ ...p, subtotalOverride: v ? lineSubtotal : null }))} data-testid="switch-subtotal-override" />
-                    Override calculated total
-                  </div>
-                </div>
-                {pricingConfig.subtotalOverride != null && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">$</span>
-                    <Input type="number" min="0" step="0.01" value={pricingConfig.subtotalOverride} onChange={e => setPricingConfig(p => ({ ...p, subtotalOverride: parseFloat(e.target.value) || 0 }))} className="h-9 w-36 text-sm" data-testid="input-subtotal-override" />
-                  </div>
-                )}
-              </div>
-
-              {/* Pricing Notes / Billing Details */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-sm">Pricing Notes / Billing Details</Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">Add billing details, payment terms, pricing assumptions, or special notes.</p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <VoiceMicButton onTranscript={t => setPricingConfig(p => ({ ...p, notes: p.notes ? `${p.notes} ${t}` : t }))} />
-                    {pricingConfig.notes && (
-                      <Button type="button" variant="ghost" size="sm" className="text-xs h-7" onClick={() => runGrammarCleanup("pricingNotes", pricingConfig.notes)} disabled={grammarMutation.isPending && grammarField === "pricingNotes"}>
-                        <Wand2 className="w-3 h-3 mr-1" />
-                        {grammarMutation.isPending && grammarField === "pricingNotes" ? "Cleaning…" : "Clean"}
-                      </Button>
+                    ))}
+                    {pricingConfig.lineItems.length === 0 && (
+                      <div className="border-2 border-dashed rounded-xl p-6 text-center text-muted-foreground text-sm">
+                        Add line items to build the price.
+                      </div>
                     )}
                   </div>
                 </div>
-                <Textarea
-                  value={pricingConfig.notes}
-                  onChange={e => setPricingConfig(p => ({ ...p, notes: e.target.value }))}
-                  rows={3}
-                  placeholder="e.g. Pricing is based on 5 visits per week, approximately 2 hours per visit. Additional work outside the listed scope may require approval and may be billed separately."
-                  data-testid="textarea-pricing-notes"
-                />
-              </div>
 
-              {/* Summary */}
-              <div className="border rounded-xl bg-muted/30 p-4 space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">Line total</span><span className="tabular-nums">${lineSubtotal.toFixed(2)}</span></div>
-                {pricingConfig.subtotalOverride != null && (
-                  <div className="flex justify-between text-amber-700"><span>Manual override</span><span className="tabular-nums">${effectiveSubtotal.toFixed(2)}</span></div>
-                )}
-                <div className="flex justify-between"><span className="text-muted-foreground">{pricingConfig.taxConfig.label}</span><span className="tabular-nums">${taxAmount.toFixed(2)}</span></div>
-                <Separator />
-                <div className="flex justify-between font-semibold text-base"><span>Total</span><span className="tabular-nums">${totalAmount.toFixed(2)}</span></div>
+                {/* Tax */}
+                <div className="border rounded-xl p-4 space-y-3">
+                  <h3 className="text-sm font-semibold">Tax</h3>
+                  <div className="flex items-center gap-3">
+                    <Select value={pricingConfig.taxConfig.type} onValueChange={setTaxType}>
+                      <SelectTrigger className="w-52" data-testid="select-tax-type"><SelectValue /></SelectTrigger>
+                      <SelectContent>{TAX_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                    {pricingConfig.taxConfig.type === "custom" && (
+                      <div className="flex items-center gap-2">
+                        <Input type="number" min="0" step="0.1" value={pricingConfig.taxConfig.rate} onChange={e => setPricingConfig(p => ({ ...p, taxConfig: { ...p.taxConfig, rate: parseFloat(e.target.value) || 0, label: `Custom (${e.target.value}%)` } }))} className="h-9 w-20 text-sm" data-testid="input-custom-tax-rate" />
+                        <span className="text-sm text-muted-foreground">%</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Subtotal override */}
+                <div className="border rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold">Manual Subtotal Override</h3>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Switch checked={pricingConfig.subtotalOverride != null} onCheckedChange={v => setPricingConfig(p => ({ ...p, subtotalOverride: v ? lineSubtotal : null }))} data-testid="switch-subtotal-override" />
+                      Override calculated total
+                    </div>
+                  </div>
+                  {pricingConfig.subtotalOverride != null && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">$</span>
+                      <Input type="number" min="0" step="0.01" value={pricingConfig.subtotalOverride} onChange={e => setPricingConfig(p => ({ ...p, subtotalOverride: parseFloat(e.target.value) || 0 }))} className="h-9 w-36 text-sm" data-testid="input-subtotal-override" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Pricing Notes / Billing Details */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-sm">Pricing Notes / Billing Details</Label>
+                      <p className="text-xs text-muted-foreground mt-0.5">Add payment terms, billing schedule, pricing assumptions, or special conditions.</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <VoiceMicButton onTranscript={t => setPricingConfig(p => ({ ...p, notes: p.notes ? `${p.notes} ${t}` : t }))} />
+                      {pricingConfig.notes && (
+                        <Button type="button" variant="ghost" size="sm" className="text-xs h-7" onClick={() => runGrammarCleanup("pricingNotes", pricingConfig.notes)} disabled={grammarMutation.isPending && grammarField === "pricingNotes"}>
+                          <Wand2 className="w-3 h-3 mr-1" />
+                          {grammarMutation.isPending && grammarField === "pricingNotes" ? "Cleaning…" : "Clean"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <Textarea
+                    value={pricingConfig.notes}
+                    onChange={e => setPricingConfig(p => ({ ...p, notes: e.target.value }))}
+                    rows={3}
+                    placeholder="e.g. Pricing is based on the selected billing period, service frequency, and estimated labour. Additional work outside the listed scope may require approval and will be billed separately. Payment terms will be confirmed before service begins."
+                    data-testid="textarea-pricing-notes"
+                  />
+                </div>
+
+                {/* Pricing Summary */}
+                <div className="border rounded-xl bg-muted/30 p-4 space-y-2 text-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Pricing Preview</p>
+                  {pricingConfig.lineItems.length > 0 && (
+                    <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span className="tabular-nums">${effectiveSubtotal.toFixed(2)}</span></div>
+                  )}
+                  {pricingConfig.subtotalOverride != null && (
+                    <div className="flex justify-between text-amber-700"><span>Manual override</span><span className="tabular-nums">${effectiveSubtotal.toFixed(2)}</span></div>
+                  )}
+                  {taxAmount > 0 && (
+                    <div className="flex justify-between"><span className="text-muted-foreground">{pricingConfig.taxConfig.label}</span><span className="tabular-nums">${taxAmount.toFixed(2)}</span></div>
+                  )}
+                  <Separator />
+                  <div className="flex justify-between font-semibold text-base">
+                    <span>{billingLabel}</span>
+                    <span className="tabular-nums">
+                      ${totalAmount.toFixed(2)}{billingSuffix ? <span className="text-sm font-normal text-muted-foreground ml-1">{billingSuffix}</span> : null}
+                    </span>
+                  </div>
+                  {contractEstimate != null && serviceDetails.contractLength && (
+                    <>
+                      <Separator />
+                      <div className="flex justify-between text-sm font-medium text-primary">
+                        <span>{contractLabel(serviceDetails.contractLength, billingType)}</span>
+                        <span className="tabular-nums">${contractEstimate.toFixed(2)}</span>
+                      </div>
+                    </>
+                  )}
+                  {!hasBillingType && totalAmount > 0 && (
+                    <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                      ⚠ Billing type not set — client will see a generic "Total". Please set a billing type above.
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* ── Step 4: Terms ────────────────────────────────────────── */}
           {step === 4 && (
