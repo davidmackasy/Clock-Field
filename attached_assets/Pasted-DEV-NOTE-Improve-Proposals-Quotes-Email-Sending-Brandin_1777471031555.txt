@@ -1,0 +1,1290 @@
+DEV NOTE: Improve Proposals & Quotes Email Sending, Branding, Templates, Scope Dropdowns, Voice Notes, and Terms
+
+Project: Clockfield
+Area: Admin Panel → Proposals & Quotes
+Current page seen: /admin/proposals or /admin/proposals/:id
+Goal: Improve the proposal system so admins can send proposals professionally by email, auto-use company settings branding, reduce manual typing with dropdown templates, add voice-to-text notes, and improve the final proposal terms and conditions.
+
+Critical instruction
+
+Do not break or change anything that is already working.
+
+Do not remove the current proposal builder.
+
+Do not remove the current tabs.
+
+Do not remove Copy Link.
+
+Do not remove Preview.
+
+Do not remove Save.
+
+Do not remove Send Email.
+
+Do not change authentication.
+
+Do not change Clients.
+
+Do not change Settings except reading company data from it.
+
+Do not change Stripe.
+
+Do not change Field Notes.
+
+Do not change Supplies.
+
+Do not change Work Logs.
+
+Do not change Quote Forms.
+
+Only improve the current Proposals & Quotes feature.
+
+Main problems to fix
+
+1. Send Email currently fails with:
+   Could not send email.
+
+2. The final proposal must automatically include the admin company information from Settings.
+
+3. The final proposal must show the business logo from Settings.
+
+4. Admin should not have to manually type everything.
+
+5. Scope of Work should have dropdown/template selections.
+
+6. What’s Included should have dropdown/template selections.
+
+7. Pricing Notes should be clearer and easier to fill.
+
+8. Add mic voice-to-text to long text fields.
+
+9. Add professional default Terms & Conditions.
+
+10. Email should be sent professionally, either with a proposal link and/or attached PDF.
+
+11. Fix Send Proposal by Email
+
+The Send Email button must work reliably.
+
+Current issue:
+The modal opens, but sending fails with a red error:
+“Could not send email.”
+
+Required behavior:
+
+Admin clicks Send Email.
+
+Email modal opens.
+
+Client email is auto-filled from the proposal client email.
+
+Admin can edit the email before sending.
+
+Admin clicks Send Email.
+
+System sends a professional email to the client.
+
+If successful, show:
+“Proposal sent successfully.”
+
+Update proposal status to Sent.
+
+Save sent_at timestamp.
+
+Add activity log:
+“Proposal sent by email to [client email].”
+
+If email fails, show a clean, helpful error:
+“Proposal saved, but the email could not be sent. Please check email settings or copy the proposal link instead.”
+
+Do not show raw backend errors to the admin.
+
+2. Email system requirements
+
+Use the existing Clockfield email system if one already exists.
+
+If Clockfield already uses Mailgun, use the same Mailgun setup.
+
+Do not expose Mailgun API keys on the frontend.
+
+Do not send email directly from the browser.
+
+Email must be sent from the backend.
+
+Backend route example:
+
+POST /api/proposals/:id/send-email
+
+Payload:
+
+{
+"to": "[client@email.com](mailto:client@email.com)",
+"subject": "Proposal from [Business Name]",
+"message": "Optional custom message",
+"includePdfAttachment": true
+}
+
+The backend should:
+
+Validate admin permission
+
+Validate proposal belongs to the admin’s business
+
+Load proposal data
+
+Load business settings
+
+Generate public proposal link
+
+Generate or attach PDF if selected
+
+Send email
+
+Save sent status
+
+Return success
+
+3. Email content
+
+The email should look professional.
+
+Subject example:
+
+Proposal from [Business Name] - [Proposal Title]
+
+Email body example:
+
+Hi [Client Name],
+
+[Business Name] has prepared a proposal for your cleaning service request.
+
+You can review the full proposal, download a PDF, print it, and accept or respond using the secure button below.
+
+View Proposal:
+[Proposal Link Button]
+
+Proposal Number: [Q-2026-0001]
+Valid Until: [Expiry Date]
+
+Thank you,
+[Business Name]
+[Phone]
+[Email]
+
+Required:
+
+Include business name from Settings.
+
+Include logo if available.
+
+Include proposal title.
+
+Include proposal number.
+
+Include secure proposal link.
+
+Include expiry date.
+
+Include contact phone/email from Settings.
+
+4. Direct proposal in email
+
+The user wants the client to be able to open the proposal directly from the email.
+
+Support this in two ways:
+
+Required first version:
+
+Email includes a large “View Proposal” button that opens the public proposal page.
+
+Optional but strongly recommended:
+
+Attach the proposal as a PDF to the email.
+
+In the Send Email modal, add checkbox:
+
+Include PDF attachment
+
+Default: checked
+
+This way, the client can:
+
+Open the proposal link
+
+View the proposal in browser
+
+Accept/reject from the link
+
+Download PDF
+
+Print
+
+Also open the PDF from email
+
+Important:
+The PDF attachment is for viewing/printing only.
+Accept, Reject, and Thinking actions must happen on the secure public link, not inside the static PDF.
+
+5. Auto-add company information from Settings
+
+The final proposal must automatically use the admin company information from Settings.
+
+Pull these fields from Settings:
+
+Company name
+
+Company logo
+
+Business address
+
+Phone number
+
+Email
+
+Website if available
+
+Tax number if available
+
+Brand color if available
+
+Admin/prepared-by name if available
+
+This information must show on:
+
+Admin proposal preview
+
+Public proposal link
+
+PDF download
+
+Print view
+
+Email body
+
+Email PDF attachment
+
+Do not require the admin to type company info manually for every proposal.
+
+If the Settings logo exists, show it in the proposal header.
+
+If no logo exists, show the company name as text.
+
+6. Business snapshot for proposal
+
+When a proposal is created or sent, save a snapshot of the business info used.
+
+Reason:
+If the admin changes the logo or address later, old proposals should not randomly change unless intentionally refreshed.
+
+Suggested field:
+
+business_snapshot_json
+
+Include:
+
+{
+"companyName": "",
+"logoUrl": "",
+"address": "",
+"phone": "",
+"email": "",
+"website": "",
+"taxNumber": "",
+"brandColor": ""
+}
+
+When rendering the proposal:
+
+Use business_snapshot_json if available.
+
+If not available, fallback to current Settings data.
+
+Add optional button:
+
+Refresh Branding From Settings
+
+Only admin can use it.
+
+7. Improve final proposal header
+
+The final proposal header should look professional.
+
+Header should show:
+
+Logo on left
+
+Business name
+
+Address
+
+Phone
+
+Email
+
+Website
+
+Proposal title on right
+
+Proposal number
+
+Date
+
+Expiry date
+
+Status badge if admin view
+
+Client view should not show admin-only status unless accepted/rejected.
+
+8. Reduce manual typing with templates and dropdowns
+
+The current builder has too many manual fields.
+
+Add preset dropdowns so admin can build proposals faster.
+
+This should not remove manual editing.
+
+Admin must still be able to type custom text.
+
+8.1 Service type dropdown
+
+Add service type presets:
+
+Office Cleaning
+
+Commercial Cleaning
+
+Restaurant Cleaning
+
+Restaurant Kitchen Deep Cleaning
+
+Retail Store Cleaning
+
+Medical Office Cleaning
+
+Gym Cleaning
+
+School / Daycare Cleaning
+
+Post-Construction Cleaning
+
+Move-In / Move-Out Cleaning
+
+One-Time Deep Clean
+
+Floor Care
+
+Carpet Cleaning
+
+Window Cleaning
+
+Janitorial Service
+
+Custom
+
+When admin selects service type, suggest matching scope sections.
+
+Do not auto-overwrite existing content without warning.
+
+If scope already has content, show:
+“Apply this template? This will add suggested scope items. Existing custom items will stay.”
+
+9. Scope of Work dropdowns
+
+Scope of Work should be easier to build.
+
+Admin should be able to:
+
+Select a scope section from dropdown
+
+Select bullet points from dropdown
+
+Add custom section
+
+Add custom bullet
+
+Edit selected text after adding
+
+Delete selected text
+
+Recommended UI:
+
+Scope section:
+
+Dropdown:
+Select section type
+
+Options:
+
+General Cleaning
+
+Washroom Cleaning
+
+Kitchen / Breakroom Cleaning
+
+Restaurant Kitchen Cleaning
+
+Floor Cleaning
+
+High-Touch Disinfection
+
+Garbage & Recycling
+
+Glass & Entrance Cleaning
+
+Dusting
+
+Vacuuming
+
+Mopping
+
+Deep Cleaning
+
+Post-Construction Cleaning
+
+Carpet Cleaning
+
+Floor Stripping & Waxing
+
+Window Cleaning
+
+Supply Restocking
+
+Custom Section
+
+After selecting section, show suggested checklist items.
+
+Admin can tick multiple items and click Add Selected.
+
+10. Suggested Scope of Work items
+
+Add many preset scope items.
+
+General Cleaning:
+
+Empty garbage and replace liners
+
+Dust desks, ledges, and accessible surfaces
+
+Wipe high-touch surfaces
+
+Spot clean doors and walls
+
+Clean entrance areas
+
+Vacuum carpeted areas
+
+Sweep hard floors
+
+Mop hard floors
+
+Remove cobwebs from accessible areas
+
+Straighten common areas
+
+Washroom Cleaning:
+
+Clean and disinfect toilets
+
+Clean and disinfect urinals
+
+Clean and disinfect sinks
+
+Clean counters and fixtures
+
+Clean mirrors
+
+Restock toilet paper if supplied
+
+Restock paper towels if supplied
+
+Restock hand soap if supplied
+
+Empty washroom garbage
+
+Mop washroom floors
+
+Disinfect high-touch points
+
+Spot clean partitions and doors
+
+Kitchen / Breakroom:
+
+Wipe counters
+
+Clean sinks and faucets
+
+Clean exterior of appliances
+
+Wipe tables and chairs
+
+Empty garbage
+
+Clean microwave exterior
+
+Spot clean cabinet fronts
+
+Sweep and mop floors
+
+Remove visible spills
+
+Restaurant Kitchen:
+
+Degrease cooking area surfaces
+
+Clean floor edges and corners
+
+Scrub buildup around equipment
+
+Clean under accessible equipment
+
+Remove grease from high-touch areas
+
+Clean stainless steel surfaces
+
+Sweep and mop kitchen floors
+
+Detail drains where accessible
+
+Wipe prep tables
+
+Remove food debris from floor areas
+
+Floor Cleaning:
+
+Sweep floors
+
+Dust mop floors
+
+Wet mop floors
+
+Auto-scrub floors if required
+
+Spot clean floor stains
+
+Clean baseboard edges
+
+Remove visible floor buildup
+
+Vacuum carpets
+
+Spot vacuum entrance mats
+
+Floor Care:
+
+Strip and wax floors
+
+Buff floors
+
+Burnish floors
+
+Apply floor finish
+
+Deep scrub tile floors
+
+Restore dull floor areas
+
+Carpet Cleaning:
+
+Vacuum carpet
+
+Spot treat stains
+
+Extract carpet
+
+Deodorize carpet
+
+Clean entrance mats
+
+Window / Glass:
+
+Clean interior glass
+
+Clean entrance doors
+
+Clean partition glass
+
+Remove fingerprints from glass
+
+Clean mirrors
+
+High-Touch Disinfection:
+
+Disinfect door handles
+
+Disinfect light switches
+
+Disinfect railings
+
+Disinfect counters
+
+Disinfect shared surfaces
+
+Disinfect touch points in common areas
+
+Post-Construction:
+
+Remove dust from horizontal surfaces
+
+Vacuum construction dust
+
+Clean windows and frames
+
+Wipe doors and trims
+
+Clean cabinets inside and outside
+
+Remove small debris
+
+Mop floors
+
+Detail washrooms
+
+Custom:
+
+Admin can type custom item
+
+11. What’s Included dropdowns
+
+Add dropdowns and checkboxes for What’s Included.
+
+Options:
+
+Labour
+
+Basic cleaning supplies
+
+Commercial-grade cleaning products
+
+Disinfectant products
+
+Garbage bags
+
+Microfiber cloths
+
+Mop and bucket
+
+Vacuum equipment
+
+Auto-scrubber if required
+
+Floor care equipment
+
+Quality checks
+
+Supervisor inspection
+
+Before and after photos
+
+Service report
+
+Restocking support
+
+Client communication
+
+Scheduled cleaning checklist
+
+After-hours service
+
+Emergency cleaning support
+
+Admin should select status for each:
+
+Included
+
+Not included
+
+Available at extra cost
+
+Client supplied
+
+Example display:
+
+Basic cleaning supplies: Included
+
+Paper products: Client supplied
+
+Floor stripping and waxing: Available at extra cost
+
+12. Pricing Notes improvement
+
+Rename or clarify Pricing Notes.
+
+Current label may be confusing.
+
+Use:
+
+Pricing Notes / Billing Details
+
+Description:
+“Add any billing details, payment terms, pricing assumptions, or special notes for this proposal.”
+
+Add placeholder:
+
+Example:
+“Pricing is based on 5 visits per week, approximately 2 hours per visit. Additional work outside the listed scope may require approval and may be billed separately.”
+
+Add mic voice-to-text button to this field.
+
+13. Voice-to-text for long fields
+
+Add mic button to proposal text fields.
+
+Fields that should support voice-to-text:
+
+Scope custom section
+
+Scope custom bullet item
+
+What’s Included custom item
+
+Pricing Notes / Billing Details
+
+Terms and Conditions
+
+Internal Notes
+
+Email message
+
+Client notes if admin edits them
+
+Admin flow:
+
+Click inside field.
+
+Click mic icon.
+
+Speak.
+
+Speech converts to text.
+
+Grammar cleanup runs.
+
+Cleaned text appears in the field.
+
+Admin can edit manually after.
+
+If mic permission is denied, show:
+
+“Microphone access is blocked. Please allow microphone access or type manually.”
+
+Do not block manual typing.
+
+14. Grammar cleanup for voice text
+
+When voice text is captured, clean it before inserting or provide a button:
+
+Clean Grammar
+
+Backend route example:
+
+POST /api/proposals/grammar-cleanup
+
+Payload:
+
+{
+"rawText": "this cleaning is 5 days weekly and we do washroom mop and garbage"
+}
+
+Response:
+
+{
+"cleanText": "This cleaning service is scheduled 5 days per week and includes washroom cleaning, mopping, and garbage removal."
+}
+
+Use existing AI utility if available.
+
+Do not expose AI keys on frontend.
+
+If AI cleanup fails, insert raw transcript.
+
+15. Professional default Terms and Conditions
+
+Replace the weak default terms with this professional version.
+
+Default Terms and Conditions:
+
+1. Proposal Validity
+   This proposal is valid until the expiry date shown on the document. Pricing and availability may be subject to change after this date.
+
+2. Scope of Work
+   The services included in this proposal are limited to the scope of work listed in this document. Any additional services, special requests, or work outside the agreed scope may require a separate quote or written approval.
+
+3. Service Schedule
+   Service days, times, and start date are subject to final confirmation between the client and the service provider. The preferred start date selected by the client will be reviewed and confirmed before service begins.
+
+4. Pricing and Taxes
+   All pricing is based on the service details, frequency, estimated labour, and scope listed in this proposal. Applicable taxes will be added where required. Final pricing may change if site conditions, service requirements, or cleaning frequency differ from the information provided.
+
+5. Supplies and Equipment
+   Unless stated otherwise, standard cleaning supplies and equipment required to complete the listed scope are included. Specialty supplies, consumables, paper products, dispensers, waste bags, floor care products, or equipment rentals may be billed separately if not included in this proposal.
+
+6. Access to Site
+   The client is responsible for providing safe and reasonable access to the service location during the agreed service time. Delays or missed access may affect scheduling and may result in additional charges.
+
+7. Health and Safety
+   The service provider may refuse or pause work if unsafe conditions are present. Hazardous materials, biohazards, pest issues, excessive debris, or unsafe areas may require additional assessment before work can continue.
+
+8. Changes and Cancellations
+   Any requested changes to the scope, schedule, or frequency should be communicated in advance. Cancellations, rescheduling, or service changes may be subject to the business’s cancellation policy if applicable.
+
+9. Acceptance
+   By accepting this proposal, the client confirms that they have reviewed the scope of work, pricing, service details, and terms listed in this document. Acceptance does not replace a separate service agreement if one is required by the business.
+
+10. Payment Terms
+    Payment terms will be confirmed by the service provider. Invoices are due according to the agreed billing schedule. Late payments may affect future service scheduling.
+
+Admin must be able to edit these terms.
+
+Do not make the terms locked.
+
+16. Shorter terms option
+
+Add a dropdown:
+
+Terms Style
+
+Options:
+
+Standard Cleaning Terms
+
+Short Terms
+
+Custom Terms
+
+Short Terms default:
+
+This proposal is valid until the expiry date shown. Services are limited to the scope of work listed in this document. Any extra work may require approval and additional charges. Pricing is based on the service frequency, estimated labour, and site details provided. The preferred start date is subject to final confirmation. By accepting this proposal, the client confirms they have reviewed the service details, pricing, and terms.
+
+17. Template-based proposal creation
+
+Add template presets so the admin does not start from blank.
+
+Templates:
+
+Office Cleaning Proposal
+
+Restaurant Cleaning Proposal
+
+Restaurant Kitchen Deep Cleaning Proposal
+
+Commercial Building Cleaning Proposal
+
+Post-Construction Cleaning Proposal
+
+Move-In / Move-Out Cleaning Proposal
+
+One-Time Deep Clean Proposal
+
+Floor Care Proposal
+
+Carpet Cleaning Proposal
+
+Custom Proposal
+
+When selected, auto-fill:
+
+Service type
+
+Suggested frequency
+
+Scope sections
+
+What’s Included
+
+Default pricing note
+
+Default terms
+
+Admin can edit everything after template is applied.
+
+18. Final public proposal page improvements
+
+The client-facing proposal must look polished.
+
+Required content:
+
+Business logo from Settings
+
+Business name from Settings
+
+Business address from Settings
+
+Phone/email from Settings
+
+Proposal title
+
+Proposal number
+
+Date
+
+Expiry date
+
+Client/lead details
+
+Service address
+
+Service summary
+
+Scope of work
+
+What’s included
+
+Pricing table
+
+Taxes
+
+Total
+
+Pricing notes
+
+Terms and conditions
+
+Download PDF button
+
+Print button
+
+Accept Proposal button
+
+I’m Thinking About It button
+
+Reject Proposal button
+
+The client should not see:
+
+Internal notes
+
+Admin controls
+
+Draft-only fields
+
+Backend IDs
+
+19. PDF improvements
+
+The PDF must also include the same branding and company information.
+
+PDF must show:
+
+Logo
+
+Company name
+
+Address
+
+Phone
+
+Email
+
+Website if available
+
+Proposal number
+
+Client info
+
+Scope
+
+Included items
+
+Pricing
+
+Taxes
+
+Terms
+
+PDF must not show:
+
+Accept button
+
+Reject button
+
+Thinking button
+
+Admin sidebar
+
+App navigation
+
+Internal notes
+
+20. Print improvements
+
+Print layout must match the final proposal.
+
+Use print CSS.
+
+Hide:
+
+App sidebar
+
+Top nav
+
+Buttons
+
+Admin controls
+
+Show only:
+
+Proposal document
+
+Branding
+
+Client info
+
+Scope
+
+Pricing
+
+Terms
+
+21. Send Email modal improvements
+
+Update modal fields:
+
+Client Email
+
+Subject
+
+Message
+
+Include PDF attachment checkbox
+
+Send copy to myself checkbox optional
+
+Buttons:
+
+Cancel
+
+Send Email
+
+Subject should auto-fill:
+
+Proposal from [Business Name] - [Proposal Title]
+
+Message should auto-fill:
+
+Hi [Client Name],
+
+Please review the attached proposal from [Business Name]. You can also open the secure proposal link to view, print, download, accept, or respond to the proposal.
+
+Thank you,
+[Business Name]
+
+The admin can edit the message before sending.
+
+22. Backend email failure checks
+
+Check why email is failing.
+
+Confirm:
+
+Mailgun API key exists
+
+Mailgun domain exists
+
+FROM email is configured
+
+Recipient email is valid
+
+Backend route is connected
+
+Frontend is calling the correct endpoint
+
+Server logs show real error
+
+CORS/auth is not blocking request
+
+Proposal has a public token before sending
+
+Business settings are loaded before sending
+
+PDF generation does not crash before email sends
+
+If PDF attachment fails, still allow email with link if possible.
+
+Show:
+
+“Email sent with proposal link, but PDF attachment could not be generated.”
+
+23. Public link fallback
+
+Even if email sending fails, admin must always be able to copy the public proposal link.
+
+The Copy Link button should work independently from email.
+
+Do not make proposal sharing depend only on email.
+
+24. Save before send
+
+Before sending email, make sure the proposal is saved.
+
+If admin changed form fields but did not save, either:
+
+Auto-save safely before sending
+
+or show:
+
+“Please save this proposal before sending.”
+
+Recommended:
+Auto-save draft first, then send email.
+
+25. Testing checklist
+
+Email:
+
+Send Email modal opens
+
+Client email auto-fills
+
+Subject auto-fills
+
+Message auto-fills
+
+Admin can edit email
+
+Email sends successfully
+
+Client receives email
+
+Email includes proposal link
+
+Email includes business name
+
+Email includes logo if supported
+
+Email includes PDF attachment if checked
+
+Status updates to Sent
+
+sent_at saves
+
+Activity log saves
+
+Friendly error shows if sending fails
+
+Copy Link still works if email fails
+
+Branding:
+
+Proposal pulls company name from Settings
+
+Proposal pulls logo from Settings
+
+Proposal pulls address from Settings
+
+Proposal pulls phone from Settings
+
+Proposal pulls email from Settings
+
+Public proposal shows branding
+
+PDF shows branding
+
+Print shows branding
+
+Email shows branding
+
+Scope dropdowns:
+
+Admin can select service type
+
+Admin can apply preset scope sections
+
+Admin can select bullet points from dropdown
+
+Admin can add custom section
+
+Admin can add custom bullet
+
+Admin can edit selected bullet
+
+Admin can delete selected bullet
+
+What’s Included:
+
+Admin can select included items
+
+Admin can mark Included
+
+Admin can mark Not Included
+
+Admin can mark Extra Cost
+
+Admin can mark Client Supplied
+
+Voice-to-text:
+
+Mic button works on pricing notes
+
+Mic button works on terms
+
+Mic button works on custom scope item
+
+Mic button works on internal notes
+
+Grammar cleanup works
+
+Manual typing still works
+
+Terms:
+
+Professional default terms appear
+
+Admin can edit terms
+
+Short terms option works
+
+Custom terms option works
+
+Public page:
+
+Public proposal opens from email
+
+Client can view full proposal
+
+Client can print
+
+Client can download PDF
+
+Client can accept
+
+Client can reject
+
+Client can mark thinking
+
+Admin sees the client response
+
+Safety:
+
+Existing proposal records still open
+
+Existing quote forms still work
+
+Existing client pages still work
+
+Existing settings page still works
+
+No broken navigation
+
+No broken public links
+
+No auth changes break anything
+
+Final instruction
+
+Improve the existing Proposals & Quotes feature without changing or breaking anything else.
+
+The most important fixes are:
+
+Make Send Email work.
+
+Allow the email to send the proposal link and optional PDF attachment.
+
+Auto-add company logo and company information from Settings to the final proposal, public link, PDF, print view, and email.
+
+Add dropdown templates for Scope of Work and What’s Included so admins do not have to type everything manually.
+
+Add mic voice-to-text with grammar cleanup for long text fields.
+
+Replace weak terms with professional editable Terms and Conditions.
+
+Keep the current proposal flow, buttons, routes, and working parts intact.

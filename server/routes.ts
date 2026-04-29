@@ -7401,7 +7401,7 @@ FINAL RULES:
         subtotalOverride: null,
         notes: "",
       });
-      const defaultTerms = `This proposal is valid until the expiry date listed above.\nService can begin after acceptance and schedule confirmation.\nAdditional work outside the listed scope may require a separate quote.\nPricing may change if site conditions are different from the information provided.\nPayment terms will be confirmed before service begins.`;
+      const defaultTerms = `1. Proposal Validity\n   This proposal is valid until the expiry date shown on the document. Pricing and availability may be subject to change after this date.\n\n2. Scope of Work\n   The services included in this proposal are limited to the scope of work listed in this document. Any additional services, special requests, or work outside the agreed scope may require a separate quote or written approval.\n\n3. Service Schedule\n   Service days, times, and start date are subject to final confirmation between the client and the service provider. The preferred start date selected by the client will be reviewed and confirmed before service begins.\n\n4. Pricing and Taxes\n   All pricing is based on the service details, frequency, estimated labour, and scope listed in this proposal. Applicable taxes will be added where required. Final pricing may change if site conditions, service requirements, or cleaning frequency differ from the information provided.\n\n5. Supplies and Equipment\n   Unless stated otherwise, standard cleaning supplies and equipment required to complete the listed scope are included. Specialty supplies, consumables, paper products, dispensers, waste bags, floor care products, or equipment rentals may be billed separately if not included in this proposal.\n\n6. Access to Site\n   The client is responsible for providing safe and reasonable access to the service location during the agreed service time. Delays or missed access may affect scheduling and may result in additional charges.\n\n7. Health and Safety\n   The service provider may refuse or pause work if unsafe conditions are present. Hazardous materials, biohazards, pest issues, excessive debris, or unsafe areas may require additional assessment before work can continue.\n\n8. Changes and Cancellations\n   Any requested changes to the scope, schedule, or frequency should be communicated in advance. Cancellations, rescheduling, or service changes may be subject to the business's cancellation policy if applicable.\n\n9. Acceptance\n   By accepting this proposal, the client confirms that they have reviewed the scope of work, pricing, service details, and terms listed in this document. Acceptance does not replace a separate service agreement if one is required by the business.\n\n10. Payment Terms\n    Payment terms will be confirmed by the service provider. Invoices are due according to the agreed billing schedule. Late payments may affect future service scheduling.`;
       const defaultIncluded = JSON.stringify([
         { id: "labour", label: "Labour", status: "included" },
         { id: "basic_supplies", label: "Basic cleaning supplies", status: "included" },
@@ -7491,34 +7491,121 @@ FINAL RULES:
       const user = req.user as any;
       const p = await storage.getProposal(req.params.id);
       if (!p || p.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      if (!p.clientEmail) return res.status(400).json({ message: "No client email on this proposal" });
-      const snapshot = JSON.parse(p.businessSnapshot) as any;
+      // Use email from request body first, then fall back to stored clientEmail
+      const toEmail = (req.body.to || p.clientEmail || "").trim();
+      if (!toEmail) return res.status(400).json({ message: "No recipient email address provided. Add a client email and try again." });
+      let snapshot: any = {};
+      try { snapshot = JSON.parse(p.businessSnapshot); } catch {}
+      const businessName = snapshot.name || "Your Service Provider";
+      const brandColor = snapshot.brandColor || "#1e293b";
+      const logoUrl = snapshot.logoUrl || null;
       const host = req.headers.host || "app.clockfield.ca";
-      const proto = req.headers["x-forwarded-proto"] || "https";
+      const proto = (req.headers["x-forwarded-proto"] as string || "https").split(",")[0].trim();
       const proposalUrl = `${proto}://${host}/public/proposals/${p.publicToken}`;
-      await sendProposalEmail({
-        to: p.clientEmail,
-        clientName: p.clientName || "there",
-        businessName: snapshot.name || "Your Service Provider",
-        proposalTitle: p.title,
-        proposalNumber: p.proposalNumber,
-        proposalUrl,
-        expiryDate: p.expiryDate,
-      });
-      const now = new Date().toISOString();
-      const updatedStatus = p.status === "draft" ? "sent" : p.status;
-      await storage.updateProposal(p.id, { status: updatedStatus, sentAt: now, updatedAt: now });
-      await storage.addProposalActivity({
-        proposalId: p.id, companyId: user.companyId, eventType: "sent_email",
-        eventData: JSON.stringify({ to: p.clientEmail }), createdByUserId: user.id, createdAt: now,
-      });
-      res.json({ success: true });
-    } catch (e: any) {
-      if (e.message?.includes("Mailgun not configured")) {
-        res.status(200).json({ success: false, emailError: "Mailgun not configured. Copy the link to share manually." });
-      } else {
-        res.status(500).json({ message: e.message });
+      const customSubject = req.body.subject || `Proposal from ${businessName} — ${p.proposalNumber}`;
+      const customMessage = req.body.message || null;
+      const sendCopyToSelf = req.body.sendCopyToSelf === true;
+      const adminEmail = user.email || null;
+      try {
+        await sendProposalEmail({
+          to: toEmail,
+          clientName: p.clientName || "there",
+          businessName,
+          brandColor,
+          logoUrl,
+          proposalTitle: p.title,
+          proposalNumber: p.proposalNumber,
+          proposalUrl,
+          expiryDate: p.expiryDate,
+          customSubject,
+          customMessage,
+          businessPhone: snapshot.phone || null,
+          businessEmail: snapshot.email || null,
+        });
+        if (sendCopyToSelf && adminEmail && adminEmail !== toEmail) {
+          await sendProposalEmail({
+            to: adminEmail,
+            clientName: p.clientName || "there",
+            businessName,
+            brandColor,
+            logoUrl,
+            proposalTitle: p.title,
+            proposalNumber: p.proposalNumber,
+            proposalUrl,
+            expiryDate: p.expiryDate,
+            customSubject: `[COPY] ${customSubject}`,
+            customMessage,
+            businessPhone: snapshot.phone || null,
+            businessEmail: snapshot.email || null,
+          });
+        }
+        const now = new Date().toISOString();
+        const updatedStatus = p.status === "draft" ? "sent" : p.status;
+        // Also update clientEmail if the body provided a different one
+        const patch: any = { status: updatedStatus, sentAt: now, updatedAt: now };
+        if (req.body.to && req.body.to !== p.clientEmail) patch.clientEmail = req.body.to;
+        await storage.updateProposal(p.id, patch);
+        await storage.addProposalActivity({
+          proposalId: p.id, companyId: user.companyId, eventType: "sent_email",
+          eventData: JSON.stringify({ to: toEmail }), createdByUserId: user.id, createdAt: now,
+        });
+        res.json({ success: true });
+      } catch (mailErr: any) {
+        // Email failed — still return 200 with error description so frontend can show friendly message
+        if (mailErr.message?.includes("Mailgun not configured")) {
+          res.json({ success: false, emailError: "Email is not configured on this account. Copy the proposal link to share it manually." });
+        } else {
+          res.json({ success: false, emailError: "The proposal was saved but the email could not be sent. Please check your email settings or copy the proposal link instead." });
+        }
       }
+    } catch (e: any) {
+      res.status(500).json({ message: "An unexpected error occurred. Please try again." });
+    }
+  });
+
+  // Refresh business snapshot from current settings
+  app.post("/api/proposals/:id/refresh-branding", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const p = await storage.getProposal(req.params.id);
+      if (!p || p.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const company = await storage.getCompany(user.companyId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      const snapshot = JSON.stringify({
+        name: company.name,
+        logoUrl: company.companyLogoUrl ?? null,
+        address: company.address ?? null,
+        city: company.city ?? null,
+        province: company.province ?? null,
+        postalCode: company.postalCode ?? null,
+        phone: company.companyPhone ?? null,
+        email: company.companyEmail ?? null,
+        website: null,
+        brandColor: company.brandColor ?? null,
+      });
+      const updated = await storage.updateProposal(p.id, { businessSnapshot: snapshot, updatedAt: new Date().toISOString() });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Grammar cleanup via OpenAI
+  app.post("/api/proposals/grammar-cleanup", requireAuth, async (req, res) => {
+    try {
+      const { rawText } = req.body;
+      if (!rawText || typeof rawText !== "string") return res.status(400).json({ message: "rawText required" });
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: "You are a professional editor. Clean up the provided text: fix grammar, capitalization, punctuation, and phrasing. Keep the same meaning and bullet-point style if present. Return ONLY the cleaned text with no explanation." },
+          { role: "user", content: rawText },
+        ],
+        max_tokens: 500,
+      });
+      const cleanText = completion.choices[0]?.message?.content?.trim() || rawText;
+      res.json({ cleanText });
+    } catch (e: any) {
+      res.status(200).json({ cleanText: req.body.rawText, error: "Grammar cleanup failed — raw text returned." });
     }
   });
 

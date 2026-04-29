@@ -826,43 +826,74 @@ export async function sendProposalEmail(opts: {
   to: string;
   clientName: string;
   businessName: string;
+  brandColor?: string | null;
+  logoUrl?: string | null;
   proposalTitle: string;
   proposalNumber: string;
   proposalUrl: string;
-  expiryDate?: string;
+  expiryDate?: string | null;
+  customSubject?: string | null;
+  customMessage?: string | null;
+  businessPhone?: string | null;
+  businessEmail?: string | null;
 }) {
   const { client, domain } = getClient();
   const from = process.env.MAIL_FROM || "Clockfield <noreply@clockfield.ca>";
-  const expiryLine = opts.expiryDate ? `<p style="margin:0 0 24px;font-size:14px;color:#6b7280;">This proposal is valid until <strong>${opts.expiryDate}</strong>.</p>` : "";
+  const brand = opts.brandColor || "#1e293b";
+  const expiryLine = opts.expiryDate
+    ? `<tr><td style="padding:8px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280;width:130px;">Valid Until</td><td style="padding:8px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:600;">${opts.expiryDate}</td></tr>`
+    : "";
+
+  const logoBlock = opts.logoUrl
+    ? `<img src="${opts.logoUrl}" alt="${opts.businessName}" style="height:44px;max-width:180px;object-fit:contain;display:block;margin-bottom:8px;" />`
+    : `<span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.3px;">${opts.businessName}</span>`;
+
+  const contactFooter = [opts.businessPhone, opts.businessEmail].filter(Boolean).join(" &bull; ");
+
+  const messageBlock = opts.customMessage
+    ? `<div style="background:#f8f9fa;border-left:3px solid ${brand};border-radius:0 6px 6px 0;padding:14px 18px;margin:0 0 24px;font-size:14px;color:#374151;line-height:1.7;white-space:pre-line;">${opts.customMessage.replace(/\n/g, "<br/>")}</div>`
+    : `<p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.7;">Hi <strong>${opts.clientName}</strong>,<br/><br/>${opts.businessName} has prepared a proposal for your service request. You can review the full proposal, print it, download it, and accept or respond using the secure button below.</p>`;
+
+  const subject = opts.customSubject || `Proposal from ${opts.businessName} — ${opts.proposalNumber}`;
 
   const html = `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>Proposal from ${opts.businessName}</title></head>
-<body style="margin:0;padding:0;background:#f6f7f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7f9;padding:40px 0;">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>${subject}</title></head>
+<body style="margin:0;padding:0;background:#f0f2f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f2f5;padding:40px 16px;">
     <tr><td align="center">
-      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
-        <tr><td style="background:#1e293b;padding:24px 32px;">
-          <span style="color:#ffffff;font-size:20px;font-weight:700;">${opts.businessName}</span>
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);max-width:600px;width:100%;">
+        <!-- Header -->
+        <tr><td style="background:${brand};padding:28px 36px;">
+          ${logoBlock}
+          ${opts.logoUrl ? `<p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px;">${opts.businessName}</p>` : ""}
         </td></tr>
-        <tr><td style="padding:36px 32px 24px;">
-          <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">Proposal for You</p>
-          <p style="margin:0 0 20px;font-size:15px;color:#6b7280;line-height:1.6;">Hi ${opts.clientName},<br/><br/>${opts.businessName} has prepared a proposal for your service request.</p>
-          <p style="margin:0 0 4px;font-size:13px;color:#9ca3af;font-weight:500;">PROPOSAL</p>
-          <p style="margin:0 0 20px;font-size:16px;font-weight:600;color:#111827;">${opts.proposalTitle} &bull; ${opts.proposalNumber}</p>
-          ${expiryLine}
+        <!-- Body -->
+        <tr><td style="padding:36px 36px 24px;">
+          <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:${brand};text-transform:uppercase;letter-spacing:1px;">New Proposal</p>
+          <p style="margin:0 0 20px;font-size:24px;font-weight:700;color:#111827;line-height:1.2;">${opts.proposalTitle}</p>
+          ${messageBlock}
+          <!-- Proposal details table -->
+          <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:28px;">
+            <tr><td style="padding:8px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280;width:130px;">Proposal #</td><td style="padding:8px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:600;">${opts.proposalNumber}</td></tr>
+            <tr><td style="padding:8px 14px;${opts.expiryDate ? "border-bottom:1px solid #e5e7eb;" : ""}font-size:13px;color:#6b7280;">Prepared For</td><td style="padding:8px 14px;${opts.expiryDate ? "border-bottom:1px solid #e5e7eb;" : ""}font-size:13px;">${opts.clientName !== "there" ? opts.clientName : "You"}</td></tr>
+            ${expiryLine}
+          </table>
+          <!-- CTA button -->
           <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-            <tr><td style="background:#2563eb;border-radius:6px;">
-              <a href="${opts.proposalUrl}" style="display:inline-block;padding:13px 28px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">View Proposal</a>
+            <tr><td style="background:${brand};border-radius:8px;">
+              <a href="${opts.proposalUrl}" style="display:inline-block;padding:15px 36px;color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;letter-spacing:-0.2px;">View Full Proposal →</a>
             </td></tr>
           </table>
-          <p style="margin:0 0 6px;font-size:13px;color:#9ca3af;">Or copy and paste this link into your browser:</p>
-          <p style="margin:0 0 24px;font-size:13px;color:#6b7280;word-break:break-all;">${opts.proposalUrl}</p>
-          <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 20px;"/>
-          <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;">You can review, print, download, accept, or respond to this proposal using the secure link above.</p>
+          <p style="margin:0 0 6px;font-size:12px;color:#9ca3af;">Or copy this link into your browser:</p>
+          <p style="margin:0 0 20px;font-size:12px;color:#6b7280;word-break:break-all;">${opts.proposalUrl}</p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 16px;"/>
+          <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">Use the proposal link above to view, print, download, accept, or respond. Actions must be completed through the secure link.</p>
         </td></tr>
-        <tr><td style="background:#f9fafb;padding:18px 32px;border-top:1px solid #e5e7eb;">
-          <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">Thank you, ${opts.businessName} &bull; Powered by ClockField</p>
+        <!-- Footer -->
+        <tr><td style="background:#f9fafb;padding:18px 36px;border-top:1px solid #e5e7eb;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">${opts.businessName}${contactFooter ? ` &bull; ${contactFooter}` : ""}</p>
+          <p style="margin:4px 0 0;font-size:11px;color:#d1d5db;text-align:center;">Powered by ClockField</p>
         </td></tr>
       </table>
     </td></tr>
@@ -870,12 +901,12 @@ export async function sendProposalEmail(opts: {
 </body>
 </html>`;
 
-  const text = `Hi ${opts.clientName},\n\n${opts.businessName} has prepared a proposal (${opts.proposalNumber}) for your service request.\n\nView it here: ${opts.proposalUrl}\n\nThank you,\n${opts.businessName}`;
+  const text = `Hi ${opts.clientName},\n\n${opts.businessName} has prepared a proposal for you.\n\nProposal: ${opts.proposalTitle} (${opts.proposalNumber})\n${opts.expiryDate ? `Valid until: ${opts.expiryDate}\n` : ""}${opts.customMessage ? `\n${opts.customMessage}\n` : ""}\nView it here:\n${opts.proposalUrl}\n\nThank you,\n${opts.businessName}${opts.businessPhone ? `\n${opts.businessPhone}` : ""}${opts.businessEmail ? `\n${opts.businessEmail}` : ""}`;
 
   await client.messages.create(domain, {
     from,
     to: [opts.to],
-    subject: `Proposal from ${opts.businessName} — ${opts.proposalNumber}`,
+    subject,
     text,
     html,
   });
