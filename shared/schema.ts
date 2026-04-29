@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, boolean, timestamp, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, timestamp, decimal, json } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -1625,6 +1625,12 @@ export const agreements = pgTable("agreements", {
   witnessContact: text("witness_contact").notNull().default(""),
   witnessSignature: text("witness_signature").notNull().default(""),
   witnessSignedAt: text("witness_signed_at"),
+  // Structured sections (JSON)
+  sectionsData: json("sections_data"),
+  // Provider signature
+  providerName: text("provider_name").notNull().default(""),
+  providerSignature: text("provider_signature").notNull().default(""),
+  providerSignedAt: text("provider_signed_at"),
   // Internal
   internalNotes: text("internal_notes").notNull().default(""),
   createdAt: text("created_at").notNull(),

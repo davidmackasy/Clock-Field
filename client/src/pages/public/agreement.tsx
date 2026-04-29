@@ -110,6 +110,123 @@ function SignatureCanvas({ onChange }: { onChange: (dataUrl: string | null) => v
   );
 }
 
+// ── Structured Content Renderer ───────────────────────────────────────────────
+function SectionBlock({ number, title, children }: { number: string; title: string; children: JSX.Element | JSX.Element[] | string | null }) {
+  return (
+    <div className="mb-5">
+      <h3 className="font-bold text-sm text-gray-900 mb-1.5">{number}. {title}</h3>
+      <div className="text-sm text-gray-700 leading-relaxed">{children}</div>
+    </div>
+  );
+}
+
+function StructuredAgreementContent({ sections, agr, business }: { sections: any; agr: any; business: any }) {
+  const p = sections.parties?.provider || {};
+  const c = sections.parties?.client || {};
+  const providerName = p.companyName || business?.name || "Service Provider";
+  const clientName = c.companyName || agr.clientName || "Client";
+  const dateGenerated = agr.createdAt ? new Date(agr.createdAt).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" }) : "";
+
+  const overviewText = sections.overview ||
+    `This Service Agreement is entered into as of ${dateGenerated} between ${providerName} ("Service Provider") and ${clientName} ("Client").`;
+
+  return (
+    <div className="space-y-1 text-sm">
+      {/* Parties */}
+      {(p.companyName || c.companyName) && (
+        <div className="grid grid-cols-2 gap-6 bg-gray-50 rounded-xl p-4 mb-6 text-sm">
+          <div>
+            <p className="text-[10px] font-bold uppercase text-gray-400 mb-1.5">Service Provider</p>
+            {p.companyName && <p className="font-semibold">{p.companyName}</p>}
+            {p.address && <p className="text-gray-600">{p.address}</p>}
+            {(p.city || p.province) && <p className="text-gray-600">{[p.city, p.province, p.postalCode].filter(Boolean).join(", ")}</p>}
+            {p.email && <p className="text-gray-600">{p.email}</p>}
+            {p.phone && <p className="text-gray-600">{p.phone}</p>}
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase text-gray-400 mb-1.5">Client</p>
+            {c.companyName && <p className="font-semibold">{c.companyName}</p>}
+            {c.contactPerson && <p className="text-gray-600">{c.contactPerson}</p>}
+            {c.address && <p className="text-gray-600">{c.address}</p>}
+            {(c.city || c.province) && <p className="text-gray-600">{[c.city, c.province, c.postalCode].filter(Boolean).join(", ")}</p>}
+            {c.email && <p className="text-gray-600">{c.email}</p>}
+          </div>
+        </div>
+      )}
+
+      <SectionBlock number="1" title="Agreement Overview">
+        <p>{overviewText}</p>
+      </SectionBlock>
+
+      {sections.scopeOfWork && (
+        <SectionBlock number="2" title="Scope of Work">
+          <p className="whitespace-pre-wrap">{sections.scopeOfWork}</p>
+        </SectionBlock>
+      )}
+
+      {(sections.schedule?.frequency || sections.schedule?.startDate) && (
+        <SectionBlock number="3" title="Service Schedule">
+          <p>
+            Services will be performed {sections.schedule.frequency}
+            {sections.schedule.daysPerWeek ? `, ${sections.schedule.daysPerWeek}× per week` : ""}
+            {sections.schedule.startDate ? `, starting ${sections.schedule.startDate}` : ""}
+            {sections.schedule.preferredTime ? `. Preferred time: ${sections.schedule.preferredTime}` : ""}.
+          </p>
+        </SectionBlock>
+      )}
+
+      {sections.payment?.monthlyAmount && (
+        <SectionBlock number="4" title="Payment Terms">
+          <p>The Client agrees to pay <strong>${sections.payment.monthlyAmount}</strong> per {sections.payment.billingCycle}
+            {sections.payment.pricePerVisit ? ` ($${sections.payment.pricePerVisit} per visit)` : ""}.</p>
+          <p className="mt-1">Invoices are issued {sections.payment.billingCycle}, due on the {sections.payment.paymentDueDay}
+            {["1","21","31"].includes(sections.payment.paymentDueDay) ? "st" : sections.payment.paymentDueDay === "2" ? "nd" : sections.payment.paymentDueDay === "3" ? "rd" : "th"} of each period.
+            Payment method: {sections.payment.paymentMethod?.replace("_", " ")}. Grace period: {sections.payment.gracePeriod} days.</p>
+          <p className="mt-1">If payment is not received within {sections.payment.gracePeriod} days, the Client must notify the Service Provider. Failure to do so may result in service suspension.</p>
+        </SectionBlock>
+      )}
+
+      {sections.contractTerm?.startDate && (
+        <SectionBlock number="5" title="Contract Term">
+          <p>
+            {sections.contractTerm.contractType === "month-to-month" ? "Month-to-month agreement" : "Fixed term contract"},
+            commencing {sections.contractTerm.startDate}
+            {sections.contractTerm.isOngoing ? ", continuing until terminated by either party" : sections.contractTerm.endDate ? `, expiring ${sections.contractTerm.endDate}` : ""}.
+          </p>
+        </SectionBlock>
+      )}
+
+      <SectionBlock number="6" title="Termination Policy">
+        <p>Either party may terminate this agreement by providing <strong>{sections.termination?.noticePeriod || "30"} days'</strong> written notice to the other party.</p>
+      </SectionBlock>
+
+      {sections.nonPayment && (
+        <SectionBlock number="7" title="Non-Payment & Enforcement">
+          <p>{sections.nonPayment}</p>
+        </SectionBlock>
+      )}
+
+      {sections.confidentiality && (
+        <SectionBlock number="8" title="Confidentiality">
+          <p>{sections.confidentiality}</p>
+        </SectionBlock>
+      )}
+
+      {sections.liability && (
+        <SectionBlock number="9" title="Liability & Responsibilities">
+          <p>{sections.liability}</p>
+        </SectionBlock>
+      )}
+
+      {sections.acceptance && (
+        <SectionBlock number="10" title="Acceptance">
+          <p>{sections.acceptance}</p>
+        </SectionBlock>
+      )}
+    </div>
+  );
+}
+
 // ── Public Agreement Page ─────────────────────────────────────────────────────
 export default function PublicAgreement() {
   const params = useParams<{ token: string }>();
@@ -209,9 +326,13 @@ export default function PublicAgreement() {
         {/* Agreement content */}
         <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
           <div className="p-6 md:p-8">
-            <div className="prose prose-sm max-w-none">
-              <div className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">{agr.content}</div>
-            </div>
+            {agr.sectionsData ? (
+              <StructuredAgreementContent sections={agr.sectionsData} agr={agr} business={business} />
+            ) : (
+              <div className="prose prose-sm max-w-none">
+                <div className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">{agr.content}</div>
+              </div>
+            )}
           </div>
         </div>
 

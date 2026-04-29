@@ -8514,6 +8514,35 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ── Agreement AI Text Improvement ──────────────────────────────────────
+  app.post("/api/admin/agreements/improve-text", requireAuth, async (req, res) => {
+    try {
+      const { text, instruction } = req.body as { text: string; instruction: string };
+      if (!text || !instruction) return res.status(400).json({ message: "text and instruction required" });
+      const instructionMap: Record<string, string> = {
+        improve: "Improve the clarity and professionalism of this text. Keep the same meaning and approximate length.",
+        professional: "Rewrite this text in a formal, legally professional tone suitable for a B2B service contract.",
+        expand: "Expand this text with more detail and context while keeping it professional.",
+        shorten: "Shorten this text to its essential points while keeping the professional tone.",
+        voice_clean: "Clean up this voice-to-text transcription for a service agreement. Fix grammar, capitalize properly, and make it professional.",
+      };
+      const systemPrompt = instructionMap[instruction] || instructionMap.improve;
+      const { OpenAI } = await import("openai");
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: `You are a professional contract writer for cleaning service businesses. ${systemPrompt} Return only the improved text, no preamble or explanation.` },
+          { role: "user", content: text },
+        ],
+        max_tokens: 600,
+        temperature: 0.4,
+      });
+      const result = completion.choices[0]?.message?.content?.trim() || text;
+      res.json({ result });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // ── Public Agreement Routes ─────────────────────────────────────────────
   app.get("/api/public/agreements/:token", async (req, res) => {
     try {

@@ -741,7 +741,7 @@ export default function AdminProposalBuilder() {
             <Mail className="w-3.5 h-3.5 mr-1.5" />
             Send Email
           </Button>
-          <Button variant="outline" size="sm" onClick={() => { window.location.href = `/admin/agreements?proposalId=${id}`; }} data-testid="button-generate-agreement">
+          <Button variant="outline" size="sm" onClick={() => { window.location.href = `/admin/publications?tab=agreements&proposalId=${id}`; }} data-testid="button-generate-agreement">
             <FileSignature className="w-3.5 h-3.5 mr-1.5" />
             Agreement
           </Button>

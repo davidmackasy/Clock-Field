@@ -21,7 +21,7 @@ import {
   DollarSign, Building2,
   Settings, LogOut, Clock, Users2, BookOpen,
   CreditCard, Bell, ShieldAlert, ChevronRight, Package, Newspaper,
-  FileInput, FileText, FileSignature,
+  FileInput, FileText,
 } from "lucide-react";
 
 const navItems = [
@@ -35,7 +35,6 @@ const navItems = [
   { title: "Work Log", url: "/admin/work-log", icon: BookOpen },
   { title: "Forms / Requests", url: "/admin/quote-forms", icon: FileInput },
   { title: "Proposals & Quotes", url: "/admin/proposals", icon: FileText },
-  { title: "Agreements", url: "/admin/agreements", icon: FileSignature },
   { title: "Supplies", url: "/admin/supplies", icon: Package },
   { title: "Publications", url: "/admin/publications", icon: Newspaper },
   { title: "Settings", url: "/admin/settings", icon: Settings },
@@ -79,7 +78,9 @@ export function AdminSidebar() {
               {navItems.map((item) => {
                 const isActive = item.url === "/admin/work-log"
                   ? isWorkLogActive
-                  : location === item.url || (item.url !== "/admin" && location.startsWith(item.url));
+                  : item.url === "/admin/publications"
+                    ? (location === "/admin/publications" || location.startsWith("/admin/publications/") || location.startsWith("/admin/agreements"))
+                    : location === item.url || (item.url !== "/admin" && location.startsWith(item.url));
                 return (
                   <SidebarMenuItem key={item.url}>
                     <SidebarMenuButton asChild isActive={isActive}>

@@ -1,0 +1,362 @@
+DEV NOTE: Upgrade Agreement System + Move Under Publications + Add AI Voice Writing
+
+Goal
+Build a professional B2B cleaning service agreement system that:
+
+Generates strong, detailed contracts
+Supports client + company info
+Handles payment enforcement and terms
+Supports signatures (client + provider + witness)
+Exports clean PDF (proper layout)
+Lives inside Publications (not a separate page)
+Supports voice-to-text AI writing for admins
+
+Do not break anything else in Clockfield.
+Do not change existing Publication logic. Only extend it.
+
+MOVE AGREEMENTS UNDER PUBLICATIONS
+
+Update Publications page:
+
+Add selector at top:
+
+Create:
+
+Publication (existing)
+Agreement (new)
+
+Do NOT create a new sidebar menu item.
+
+Inside Publications:
+Add new type:
+
+Agreement Publication
+
+This type:
+
+Uses structured contract layout
+Supports signatures
+Supports PDF export
+Is NOT a blog post
+AGREEMENT BUILDER (UPGRADE)
+
+Replace basic form with structured sections.
+
+Sections must be modular and editable.
+
+SECTION 1: HEADER
+
+Agreement Title (default: Service Agreement)
+Company logo
+Date generated
+Agreement ID (auto)
+
+SECTION 2: PARTIES INFORMATION
+
+Service Provider:
+
+Company name
+Company address (full)
+City, Province, Postal Code
+Email
+Phone
+
+Client:
+
+Client company name
+Client address (full)
+City, Province, Postal Code
+Contact person name
+Email
+Phone
+
+SECTION 3: AGREEMENT OVERVIEW
+
+Auto-generated paragraph:
+
+“This Service Agreement is entered into between {company_name} (“Service Provider”) and {client_company} (“Client”) as of {date}.”
+
+Editable field.
+
+SECTION 4: SCOPE OF WORK
+
+Rich text field.
+
+Examples:
+
+Cleaning type
+Areas included
+Tasks included
+Frequency reference
+
+Must support voice input (see section 10).
+
+SECTION 5: SERVICE SCHEDULE
+
+Fields:
+
+Frequency (from quote)
+Days per week
+Start date
+Preferred time window
+
+Auto paragraph:
+
+“Services will be performed {frequency_details} starting {start_date}.”
+
+SECTION 6: PAYMENT TERMS (IMPORTANT)
+
+Must be strong and structured.
+
+Fields:
+
+Agreed monthly amount
+Price per visit
+Billing cycle (monthly)
+Payment due day (e.g. 1st of each month)
+Payment method:
+Bank transfer
+Credit card
+Cash
+Other
+
+Auto content:
+
+Client agrees to pay {amount} per {billing_cycle}.
+Invoices will be issued monthly.
+Payment is due on the {due_day}.
+
+Late payment rules:
+
+Grace period (default: 3 days)
+Late notice requirement
+
+Auto clause:
+
+“If payment is not received within {grace_period} days, the Client must notify the Service Provider. Failure to do so may result in service suspension.”
+
+SECTION 7: CONTRACT TERM
+
+Fields:
+
+Start date
+End date OR ongoing
+Contract type:
+Month-to-month
+Fixed term
+
+SECTION 8: TERMINATION POLICY
+
+Fields:
+
+Notice period (default: 30 days)
+
+Auto clause:
+
+“Either party may terminate this agreement with {notice_period} written notice.”
+
+SECTION 9: NON-PAYMENT / ENFORCEMENT
+
+Add strong clause:
+
+“If payment is not made and no communication is received within the agreed timeframe, the Service Provider reserves the right to suspend or terminate services immediately.”
+
+SECTION 10: CONFIDENTIALITY
+
+Editable block.
+
+Default:
+
+“Both parties agree to maintain confidentiality of all sensitive information.”
+
+SECTION 11: LIABILITY & RESPONSIBILITIES
+
+Include:
+
+Client must provide access
+Safe working environment
+Damage reporting
+
+SECTION 12: ACCEPTANCE
+
+Clear legal statement:
+
+“By signing below, both parties confirm that they have read, understood, and agree to the terms of this agreement.”
+
+SECTION 13: SIGNATURE BLOCK (CRITICAL)
+
+Service Provider:
+
+Name
+Signature (canvas)
+Date
+Email
+Phone
+
+Client:
+
+Name
+Signature (canvas)
+Date
+Email
+Phone
+
+Witness (optional toggle):
+
+Name
+Signature
+Contact info
+SIGNATURE SYSTEM
+Canvas-based drawing
+Save as image
+Timestamp
+Lock document after signing
+PDF OUTPUT (VERY IMPORTANT)
+
+Must be clean and professional.
+
+Requirements:
+
+A4 format
+Proper margins
+No cut-off text
+Page numbers
+Section spacing
+Logo header
+
+Fix current issue:
+Text must not overflow or break across pages poorly.
+
+Add print CSS:
+
+page-break-inside: avoid
+consistent padding
+proper header spacing
+AGREEMENT LINK + SHARING
+
+Allow:
+
+Copy link
+Send via email
+Open public signing page
+
+Public page must:
+
+Show clean contract
+Allow scrolling
+Allow signing
+Work on mobile
+INTEGRATION WITH QUOTES
+
+Inside Proposal:
+
+Add button:
+
+Generate Agreement
+
+Auto-fill:
+
+Client info
+Address
+Pricing
+Frequency
+Contract duration
+AI VOICE WRITING (NEW FEATURE)
+
+Inside agreement editor:
+
+Add mic button next to text fields.
+
+Behavior:
+
+Admin clicks mic
+Speaks naturally
+Convert speech to text
+Auto-clean grammar
+Option:
+Improve text
+Summarize
+Expand professionally
+
+Example:
+
+User says:
+“clean kitchen daily include floors and trash”
+
+AI converts:
+“Daily kitchen cleaning including floor maintenance and waste disposal.”
+
+AI TEXT IMPROVEMENT
+
+Add buttons:
+
+Improve wording
+Make more professional
+Expand
+Shorten
+
+Do NOT auto-change content without user action.
+
+DATABASE ADDITIONS
+
+Add:
+
+agreements
+agreement_sections
+agreement_signatures
+agreement_witnesses
+agreement_pdf
+
+Keep company scoped.
+
+UI STRUCTURE
+
+Inside Publications:
+
+Tabs:
+
+Publications
+Agreements
+
+Create Agreement opens:
+
+Left:
+Sections list
+
+Center:
+Editor
+
+Right:
+Live preview
+
+TESTING
+
+Test:
+
+Create agreement
+Edit all sections
+Voice input works
+AI improve works
+Generate from quote
+Sign as client
+Sign as provider
+Add witness
+Download PDF
+Print PDF
+Mobile signing
+Email sending
+Public link
+
+FINAL RULE
+
+Do not break:
+
+Forms
+Quotes
+Pipeline
+Reports
+Publications (existing blog system)
+
+Only extend Publications with Agreement type.
+
+Everything must feel premium, clean, and legally structured.
