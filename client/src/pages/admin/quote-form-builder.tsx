@@ -48,13 +48,25 @@ const VISIBILITY_LABELS: Record<string, string> = {
   commercial_only: "Commercial",
 };
 
-// Determine if a field should be visible for a given preview mode
-function isFieldVisibleInPreview(field: FormField, previewMode: "all" | "residential" | "commercial"): boolean {
-  if (previewMode === "all") return true;
-  const rule = field.visibilityRule ?? "always";
-  if (rule === "always") return true;
-  if (previewMode === "residential") return rule === "residential_only";
-  if (previewMode === "commercial") return rule === "commercial_only";
+// Determine if a field should be visible given the current preview modes
+function isFieldVisibleInPreview(
+  field: FormField,
+  previewMode: "all" | "residential" | "commercial",
+  previewFrequency: string,
+): boolean {
+  // 1. Residential / Commercial rule
+  if (previewMode !== "all") {
+    const rule = field.visibilityRule ?? "always";
+    if (rule === "residential_only" && previewMode !== "residential") return false;
+    if (rule === "commercial_only" && previewMode !== "commercial") return false;
+  }
+  // 2. Frequency show-when rule
+  if (field.showWhenField === "frequencyType" && field.showWhenValues) {
+    if (previewFrequency === "all") return true; // show all in "all frequency" mode
+    return field.showWhenValues.includes(previewFrequency);
+  }
+  // 3. Other showWhenField — just show when in "all" mode
+  if (field.showWhenField) return previewFrequency === "all";
   return true;
 }
 
@@ -117,14 +129,19 @@ function PreviewField({ field }: { field: FormField }) {
   );
 }
 
+const FREQ_OPTIONS = ["all", "One-time", "Weekly", "Bi-weekly", "Monthly", "Custom schedule"] as const;
+type FreqOption = typeof FREQ_OPTIONS[number];
+
 function FormPreview({ config, brandColor }: { config: FormConfig; brandColor?: string }) {
   const [activeStep, setActiveStep] = useState(0);
   const [previewMode, setPreviewMode] = useState<"all" | "residential" | "commercial">("all");
+  const [previewFrequency, setPreviewFrequency] = useState<FreqOption>("all");
   const enabledSteps = config.steps.filter(s => s.enabled);
   const step = enabledSteps[activeStep];
   const color = brandColor || "#6366f1";
 
   const isSmartForm = config.smartMode === "cleaning";
+  const hasFrequencyFields = config.steps.some(s => s.fields.some(f => f.showWhenField === "frequencyType"));
 
   if (!step) return (
     <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
@@ -132,7 +149,7 @@ function FormPreview({ config, brandColor }: { config: FormConfig; brandColor?: 
     </div>
   );
 
-  const visibleFields = step.fields.filter(f => f.enabled && isFieldVisibleInPreview(f, previewMode));
+  const visibleFields = step.fields.filter(f => f.enabled && isFieldVisibleInPreview(f, previewMode, previewFrequency));
   const rows: FormField[][] = [];
   let i = 0;
   while (i < visibleFields.length) {
@@ -148,15 +165,28 @@ function FormPreview({ config, brandColor }: { config: FormConfig; brandColor?: 
 
   return (
     <div className="bg-gray-50 rounded-xl p-4 h-full overflow-y-auto">
-      {/* Preview mode selector */}
+      {/* Res/Com preview mode selector */}
       {isSmartForm && (
-        <div className="flex items-center gap-1 mb-3 bg-white rounded-lg border p-1">
+        <div className="flex items-center gap-1 mb-2 bg-white rounded-lg border p-1">
           {(["all", "residential", "commercial"] as const).map(m => (
             <button key={m}
               className={cn("flex-1 text-[10px] py-1 px-1.5 rounded-md font-medium capitalize transition-all",
                 previewMode === m ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground")}
               onClick={() => setPreviewMode(m)}>
-              {m === "all" ? "All Fields" : m === "residential" ? <><Home className="w-2.5 h-2.5 inline mr-0.5" />Residential</> : <><Building2 className="w-2.5 h-2.5 inline mr-0.5" />Commercial</>}
+              {m === "all" ? "All" : m === "residential" ? <><Home className="w-2.5 h-2.5 inline mr-0.5" />Residential</> : <><Building2 className="w-2.5 h-2.5 inline mr-0.5" />Commercial</>}
+            </button>
+          ))}
+        </div>
+      )}
+      {/* Frequency preview selector */}
+      {hasFrequencyFields && (
+        <div className="flex items-center gap-1 mb-3 bg-white rounded-lg border p-1 flex-wrap">
+          {FREQ_OPTIONS.map(f => (
+            <button key={f}
+              className={cn("text-[9px] py-0.5 px-1.5 rounded-md font-medium whitespace-nowrap transition-all",
+                previewFrequency === f ? "bg-amber-500 text-white" : "text-muted-foreground hover:text-foreground")}
+              onClick={() => setPreviewFrequency(f)}>
+              {f === "all" ? "All Freq." : f}
             </button>
           ))}
         </div>

@@ -7,13 +7,20 @@ import type { FormConfig, FormStep, FormField } from "@shared/schema";
 
 type FormData = { id: string; name: string; config: FormConfig; companyName: string; companyLogo: string | null; brandColor: string | null };
 
-// ── Determine if a field should be visible based on visibilityRule ────────────
+// ── Determine if a field should be visible based on visibilityRule + showWhenField ──
 function isFieldVisible(field: FormField, values: Record<string, any>): boolean {
+  // 1. Residential / Commercial visibility rule
   const rule = field.visibilityRule ?? "always";
-  if (rule === "always") return true;
-  const propType = (values.propertyType ?? "").toLowerCase();
-  if (rule === "residential_only") return propType === "residential";
-  if (rule === "commercial_only") return propType === "commercial";
+  if (rule !== "always") {
+    const propType = (values.propertyType ?? "").toLowerCase();
+    if (rule === "residential_only" && propType !== "residential") return false;
+    if (rule === "commercial_only" && propType !== "commercial") return false;
+  }
+  // 2. Generic showWhenField / showWhenValues check
+  if (field.showWhenField && field.showWhenValues) {
+    const triggerValue = values[field.showWhenField];
+    if (!triggerValue || !field.showWhenValues.includes(triggerValue)) return false;
+  }
   return true;
 }
 

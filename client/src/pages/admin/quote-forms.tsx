@@ -420,12 +420,40 @@ function SubmissionsTab() {
                           <div className="text-center bg-purple-50 border border-purple-200 rounded-lg px-3 py-2">
                             <p className="text-[10px] text-purple-700 font-medium uppercase tracking-wide">Monthly</p>
                             <p className="text-sm font-semibold text-purple-700">{fmtCurrency(r.monthly_total)}</p>
+                            {r.estimated_visits_per_month && <p className="text-[9px] text-purple-500">{r.estimated_visits_per_month} visits/mo</p>}
+                          </div>
+                        );
+                      } catch {}
+                      return null;
+                    })()}
+                    {(() => {
+                      try {
+                        const r = JSON.parse(detail.estimate.rawResponse || "{}");
+                        if (r.contract_total && r.contract_months) return (
+                          <div className="text-center bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                            <p className="text-[10px] text-amber-700 font-medium uppercase tracking-wide">{r.contract_months}-Mo Total</p>
+                            <p className="text-sm font-semibold text-amber-700">{fmtCurrency(r.contract_total)}</p>
                           </div>
                         );
                       } catch {}
                       return null;
                     })()}
                   </div>
+                  {/* Frequency summary row */}
+                  {(() => {
+                    try {
+                      const r = JSON.parse(detail.estimate.rawResponse || "{}");
+                      if (r.frequency_summary) return (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-1.5">
+                          <span className="font-medium text-foreground">Frequency:</span> {r.frequency_summary}
+                          {r.estimated_visits_per_month && r.billing_type === "per_visit" && (
+                            <span className="ml-auto text-[10px]">≈ {r.estimated_visits_per_month} visits/month</span>
+                          )}
+                        </div>
+                      );
+                    } catch {}
+                    return null;
+                  })()}
 
                   {/* Pricing breakdown */}
                   {(() => {

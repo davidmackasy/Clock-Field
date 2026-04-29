@@ -1,0 +1,466 @@
+DEV NOTE: Fix Frequency Details for Accurate Quote Estimates
+Goal:
+Update the Forms / Quote Requests flow so cleaning frequency is more specific and AI Quote Estimator can calculate accurate visit, weekly, monthly, and contract pricing.
+Do not break or change anything else.
+Only update frequency logic for both Residential and Commercial forms.
+
+
+
+Current issue
+
+
+The form only asks:
+How Often?
+Weekly
+This is not enough.
+If client selects weekly, we also need to know:
+How many days per week?
+How long is the service agreement?
+Should the estimate be per visit or monthly?
+
+
+
+Update frequency fields
+
+
+Replace the simple “How Often?” field with a smarter frequency section.
+Main field:
+Cleaning Frequency
+Options:
+
+
+One-time
+
+
+Weekly
+
+
+Bi-weekly
+
+
+Monthly
+
+
+Custom schedule
+
+
+
+
+
+Conditional fields
+
+
+If One-time is selected:
+Show:
+
+
+Preferred cleaning date
+
+
+Preferred time
+
+
+One-time service note
+
+
+AI behavior:
+
+
+Generate one total price
+
+
+Do not multiply into monthly
+
+
+Apply one-time/deep clean pricing logic if service type requires it
+
+
+
+If Weekly is selected:
+Show:
+
+
+Days per week
+
+
+Preferred days
+
+
+Contract length
+
+
+Estimate display preference
+
+
+Days per week options:
+
+
+1 day per week
+
+
+2 days per week
+
+
+3 days per week
+
+
+4 days per week
+
+
+5 days per week
+
+
+6 days per week
+
+
+7 days per week
+
+
+Contract length options:
+
+
+Month-to-month
+
+
+3 months
+
+
+6 months
+
+
+12 months
+
+
+Custom
+
+
+Estimate display preference:
+
+
+Show monthly estimate
+
+
+Show per visit + monthly estimate
+
+
+Calculation logic:
+monthly_visits = days_per_week * 4.33
+monthly_price = per_visit_price * monthly_visits
+
+If Bi-weekly is selected:
+Show:
+
+
+Visits every 2 weeks
+
+
+Preferred days
+
+
+Contract length
+
+
+Estimate display preference
+
+
+Visits every 2 weeks options:
+
+
+1 visit every 2 weeks
+
+
+2 visits every 2 weeks
+
+
+3 visits every 2 weeks
+
+
+Calculation logic:
+monthly_visits = visits_every_2_weeks * 2.17
+monthly_price = per_visit_price * monthly_visits
+
+If Monthly is selected:
+Show:
+
+
+Visits per month
+
+
+Preferred days
+
+
+Contract length
+
+
+Estimate display preference
+
+
+Visits per month options:
+
+
+1 visit per month
+
+
+2 visits per month
+
+
+3 visits per month
+
+
+4 visits per month
+
+
+Custom
+
+
+Calculation logic:
+monthly_visits = visits_per_month
+monthly_price = per_visit_price * visits_per_month
+
+If Custom schedule is selected:
+Show:
+
+
+Schedule description
+
+
+Estimated visits per month
+
+
+Contract length
+
+
+AI should use estimated visits per month for pricing.
+
+
+
+Apply to both Residential and Commercial
+
+
+This must be added to:
+Residential flow
+Commercial flow
+Custom Builder
+Smart Cleaning Form
+Do not only update commercial.
+
+
+
+AI Quote Estimator update
+
+
+Pass these values to AI Quote Estimator:
+
+
+frequency_type
+
+
+days_per_week
+
+
+visits_every_2_weeks
+
+
+visits_per_month
+
+
+estimated_visits_per_month
+
+
+contract_length
+
+
+estimate_display_preference
+
+
+preferred_days
+
+
+preferred_time
+
+
+AI must calculate:
+
+
+Per visit estimate
+
+
+Monthly estimate
+
+
+Contract total if contract length is selected
+
+
+Example:
+Per visit estimate:
+$150
+Frequency:
+3 days per week
+Monthly visits:
+3 × 4.33 = 12.99 visits
+Monthly estimate:
+$150 × 12.99 = $1,948.50/month
+12-month contract estimate:
+$1,948.50 × 12 = $23,382
+
+
+
+Quote output rules
+
+
+For one-time cleaning:
+Show:
+
+
+One-time estimated price
+
+
+For recurring cleaning:
+Show:
+
+
+Estimated price per visit
+
+
+Estimated monthly price
+
+
+Frequency summary
+
+
+Contract length
+
+
+Contract total if applicable
+
+
+Example output:
+Estimated price per visit:
+$180
+Service frequency:
+2 days per week
+Estimated monthly price:
+$1,558.80/month
+Agreement length:
+12 months
+Estimated contract total:
+$18,705.60
+
+
+
+Admin builder controls
+
+
+In builder settings, admin can turn on/off:
+
+
+Frequency field
+
+
+Days per week
+
+
+Visits every 2 weeks
+
+
+Visits per month
+
+
+Contract length
+
+
+Preferred days
+
+
+Monthly estimate display
+
+
+Contract total display
+
+
+Required validation:
+Only validate visible fields.
+Example:
+If One-time is selected, do not require days per week.
+
+
+
+Submission detail view
+
+
+Show frequency clearly:
+Frequency:
+Weekly
+Days:
+3 days per week
+Estimated monthly visits:
+12.99
+Contract length:
+12 months
+Pricing view:
+Per visit + monthly estimate
+
+
+
+Public form UI
+
+
+Keep the form clean.
+Do not overcrowd one section.
+After the client selects frequency, show only the related fields.
+Example:
+Select Weekly → show Days per week + Preferred days + Contract length.
+
+
+
+Testing checklist
+
+
+Test:
+
+
+Residential one-time
+
+
+Residential weekly 1 day/week
+
+
+Residential weekly 3 days/week
+
+
+Residential bi-weekly
+
+
+Residential monthly
+
+
+Commercial one-time
+
+
+Commercial weekly 5 days/week
+
+
+Commercial bi-weekly
+
+
+Commercial monthly
+
+
+Custom schedule
+
+
+AI estimate monthly calculation
+
+
+Contract total calculation
+
+
+Hidden fields do not block submit
+
+
+Mobile layout works
+
+
+Final rule:
+Do not break any existing form, submission, quote, pipeline, or estimator feature.
+Only improve frequency detail and pricing accuracy.

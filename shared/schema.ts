@@ -1113,6 +1113,9 @@ export type FormField = {
   required: boolean; enabled: boolean;
   placeholder?: string; options?: string[]; column: "full" | "half";
   visibilityRule?: "always" | "residential_only" | "commercial_only";
+  // Generic conditional: field shown only when another field has one of the listed values
+  showWhenField?: string;
+  showWhenValues?: string[];
 };
 export type FormStep = { id: string; title: string; enabled: boolean; fields: FormField[] };
 export type FormConfig = { steps: FormStep[]; smartMode?: string };
@@ -1145,12 +1148,27 @@ export const DEFAULT_FORM_CONFIG: FormConfig = {
       fields: [
         { id: "serviceType", label: "Service Type", type: "select", required: false, enabled: true, options: ["Regular Cleaning", "Deep Cleaning", "Move-In / Move-Out", "Post-Construction", "Office Cleaning", "Other"], column: "full" },
         { id: "propertyType", label: "Property Type", type: "select", required: false, enabled: true, options: ["Residential", "Commercial"], column: "full" },
-        { id: "frequency", label: "How Often?", type: "select", required: false, enabled: true, options: ["One-Time", "Weekly", "Bi-Weekly", "Monthly"], column: "full" },
         { id: "sqft", label: "Square Footage", type: "number", required: false, enabled: true, placeholder: "e.g. 1500", column: "half" },
         { id: "rooms", label: "Bedrooms", type: "number", required: false, enabled: true, placeholder: "e.g. 3", column: "half" },
         { id: "bathrooms", label: "Bathrooms", type: "number", required: false, enabled: true, placeholder: "e.g. 2", column: "half" },
-        { id: "preferredDate", label: "Preferred Date", type: "date", required: false, enabled: true, placeholder: "", column: "half" },
-        { id: "preferredTime", label: "Preferred Time", type: "select", required: false, enabled: true, options: ["Morning (8am–12pm)", "Afternoon (12pm–5pm)", "Evening (5pm–8pm)", "Flexible"], column: "full" },
+        // ── Frequency section ──────────────────────────────────────────────
+        { id: "frequencyType", label: "Cleaning Frequency", type: "select", required: false, enabled: true, options: ["One-time", "Weekly", "Bi-weekly", "Monthly", "Custom schedule"], column: "half" },
+        // One-time sub-fields
+        { id: "preferredDate", label: "Preferred Date", type: "date", required: false, enabled: true, placeholder: "", column: "half", showWhenField: "frequencyType", showWhenValues: ["One-time"] },
+        { id: "preferredTime", label: "Preferred Time", type: "select", required: false, enabled: true, options: ["Morning (8am–12pm)", "Afternoon (12pm–5pm)", "Evening (5pm–8pm)", "Flexible"], column: "full", showWhenField: "frequencyType", showWhenValues: ["One-time"] },
+        // Weekly sub-field
+        { id: "daysPerWeek", label: "Days Per Week", type: "select", required: false, enabled: true, options: ["1 day per week", "2 days per week", "3 days per week", "4 days per week", "5 days per week", "6 days per week", "7 days per week"], column: "half", showWhenField: "frequencyType", showWhenValues: ["Weekly"] },
+        // Bi-weekly sub-field
+        { id: "visitsBiweekly", label: "Visits Every 2 Weeks", type: "select", required: false, enabled: true, options: ["1 visit every 2 weeks", "2 visits every 2 weeks", "3 visits every 2 weeks"], column: "half", showWhenField: "frequencyType", showWhenValues: ["Bi-weekly"] },
+        // Monthly sub-field
+        { id: "visitsPerMonth", label: "Visits Per Month", type: "select", required: false, enabled: true, options: ["1 visit per month", "2 visits per month", "3 visits per month", "4 visits per month", "Custom"], column: "half", showWhenField: "frequencyType", showWhenValues: ["Monthly"] },
+        // Custom sub-fields
+        { id: "scheduleDescription", label: "Describe Your Schedule", type: "textarea", required: false, enabled: true, placeholder: "e.g. Twice a week Mon/Thu plus monthly deep clean...", column: "full", showWhenField: "frequencyType", showWhenValues: ["Custom schedule"] },
+        { id: "estimatedVisitsPerMonth", label: "Estimated Visits Per Month", type: "number", required: false, enabled: true, placeholder: "e.g. 8", column: "half", showWhenField: "frequencyType", showWhenValues: ["Custom schedule"] },
+        // Recurring shared sub-fields (Weekly + Bi-weekly + Monthly + Custom)
+        { id: "preferredDays", label: "Preferred Day(s)", type: "text", required: false, enabled: true, placeholder: "e.g. Monday, Wednesday", column: "half", showWhenField: "frequencyType", showWhenValues: ["Weekly", "Bi-weekly", "Monthly"] },
+        { id: "contractLength", label: "Service Agreement Length", type: "select", required: false, enabled: true, options: ["Month-to-month", "3 months", "6 months", "12 months", "Custom"], column: "half", showWhenField: "frequencyType", showWhenValues: ["Weekly", "Bi-weekly", "Monthly", "Custom schedule"] },
+        { id: "estimateDisplayPreference", label: "Show pricing as", type: "select", required: false, enabled: true, options: ["Monthly estimate", "Per visit + monthly estimate"], column: "full", showWhenField: "frequencyType", showWhenValues: ["Weekly", "Bi-weekly", "Monthly", "Custom schedule"] },
       ],
     },
     {
@@ -1182,9 +1200,25 @@ export const SMART_CLEANING_CONFIG: FormConfig = {
       fields: [
         { id: "propertyType", label: "Property Type", type: "select", required: true, enabled: true, options: ["Residential", "Commercial"], column: "full" },
         { id: "serviceType", label: "Service Needed", type: "select", required: true, enabled: true, options: ["Regular Cleaning", "Deep Cleaning", "Move-In / Move-Out", "Post-Construction", "Office Cleaning", "Restaurant Cleaning", "Retail Cleaning", "Other"], column: "full" },
-        { id: "frequency", label: "How Often?", type: "select", required: false, enabled: true, options: ["One-Time", "Weekly", "Bi-Weekly", "Monthly", "Not Sure"], column: "full" },
-        { id: "preferredDate", label: "Preferred Start Date", type: "date", required: false, enabled: true, placeholder: "", column: "half" },
-        { id: "preferredTime", label: "Preferred Time", type: "select", required: false, enabled: true, options: ["Morning (8am–12pm)", "Afternoon (12pm–5pm)", "Evening (5pm–8pm)", "Flexible"], column: "half" },
+        // ── Frequency section ──────────────────────────────────────────────
+        { id: "frequencyType", label: "Cleaning Frequency", type: "select", required: true, enabled: true, options: ["One-time", "Weekly", "Bi-weekly", "Monthly", "Custom schedule"], column: "full" },
+        // One-time sub-fields
+        { id: "preferredDate", label: "Preferred Cleaning Date", type: "date", required: false, enabled: true, placeholder: "", column: "half", showWhenField: "frequencyType", showWhenValues: ["One-time"] },
+        { id: "preferredTime", label: "Preferred Time", type: "select", required: false, enabled: true, options: ["Morning (8am–12pm)", "Afternoon (12pm–5pm)", "Evening (5pm–8pm)", "Flexible"], column: "half", showWhenField: "frequencyType", showWhenValues: ["One-time"] },
+        { id: "oneTimeNote", label: "One-Time Service Note (optional)", type: "textarea", required: false, enabled: true, placeholder: "e.g. Move-out clean, post-renovation deep clean...", column: "full", showWhenField: "frequencyType", showWhenValues: ["One-time"] },
+        // Weekly sub-field
+        { id: "daysPerWeek", label: "Days Per Week", type: "select", required: false, enabled: true, options: ["1 day per week", "2 days per week", "3 days per week", "4 days per week", "5 days per week", "6 days per week", "7 days per week"], column: "half", showWhenField: "frequencyType", showWhenValues: ["Weekly"] },
+        // Bi-weekly sub-field
+        { id: "visitsBiweekly", label: "Visits Every 2 Weeks", type: "select", required: false, enabled: true, options: ["1 visit every 2 weeks", "2 visits every 2 weeks", "3 visits every 2 weeks"], column: "half", showWhenField: "frequencyType", showWhenValues: ["Bi-weekly"] },
+        // Monthly sub-field
+        { id: "visitsPerMonth", label: "Visits Per Month", type: "select", required: false, enabled: true, options: ["1 visit per month", "2 visits per month", "3 visits per month", "4 visits per month", "Custom"], column: "half", showWhenField: "frequencyType", showWhenValues: ["Monthly"] },
+        // Custom schedule sub-fields
+        { id: "scheduleDescription", label: "Describe Your Schedule", type: "textarea", required: false, enabled: true, placeholder: "e.g. Twice a week Mon/Thu plus monthly deep clean...", column: "full", showWhenField: "frequencyType", showWhenValues: ["Custom schedule"] },
+        { id: "estimatedVisitsPerMonth", label: "Estimated Visits Per Month", type: "number", required: false, enabled: true, placeholder: "e.g. 8", column: "half", showWhenField: "frequencyType", showWhenValues: ["Custom schedule"] },
+        // Recurring shared sub-fields
+        { id: "preferredDays", label: "Preferred Day(s)", type: "text", required: false, enabled: true, placeholder: "e.g. Monday, Wednesday", column: "half", showWhenField: "frequencyType", showWhenValues: ["Weekly", "Bi-weekly", "Monthly"] },
+        { id: "contractLength", label: "Service Agreement Length", type: "select", required: false, enabled: true, options: ["Month-to-month", "3 months", "6 months", "12 months", "Custom"], column: "half", showWhenField: "frequencyType", showWhenValues: ["Weekly", "Bi-weekly", "Monthly", "Custom schedule"] },
+        { id: "estimateDisplayPreference", label: "How would you like to see pricing?", type: "select", required: false, enabled: true, options: ["Monthly estimate", "Per visit + monthly estimate"], column: "full", showWhenField: "frequencyType", showWhenValues: ["Weekly", "Bi-weekly", "Monthly", "Custom schedule"] },
       ],
     },
     {

@@ -7283,11 +7283,38 @@ FINAL RULES:
   });
 
   // ── Quote Forms (Admin) ──────────────────────────────────────────────────
+
+  // Migrate old smart cleaning form configs to the new frequency field structure.
+  // Detects forms that have a service step with the old "frequency" field (no "frequencyType")
+  // and replaces the service step with the new SMART_CLEANING_CONFIG service step.
+  async function maybeUpgradeSmartConfig(form: { id: string; config: string }): Promise<string> {
+    try {
+      const { SMART_CLEANING_CONFIG } = await import("@shared/schema");
+      const parsed = JSON.parse(form.config);
+      if (parsed?.smartMode !== "cleaning") return form.config;
+      const serviceStep = parsed.steps?.find((s: any) => s.id === "service");
+      const hasOldFreq = serviceStep?.fields?.some((f: any) => f.id === "frequency");
+      const hasNewFreq = serviceStep?.fields?.some((f: any) => f.id === "frequencyType");
+      if (!hasOldFreq && hasNewFreq) return form.config; // already up-to-date
+      // Replace service step with the new one from SMART_CLEANING_CONFIG
+      const newServiceStep = SMART_CLEANING_CONFIG.steps.find(s => s.id === "service");
+      const newSteps = parsed.steps.map((s: any) => s.id === "service" ? newServiceStep : s);
+      const upgraded = { ...parsed, steps: newSteps };
+      const upgradedStr = JSON.stringify(upgraded);
+      // Persist the upgrade to DB so it doesn't happen on every request
+      await storage.updateQuoteForm(form.id, { config: upgradedStr });
+      return upgradedStr;
+    } catch { return form.config; }
+  }
+
   app.get("/api/admin/quote-forms", requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
       const forms = await storage.getQuoteFormsByCompany(user.companyId);
-      res.json(forms.map(f => ({ ...f, config: JSON.parse(f.config) })));
+      const upgraded = await Promise.all(forms.map(async f => ({
+        ...f, config: JSON.parse(await maybeUpgradeSmartConfig(f)),
+      })));
+      res.json(upgraded);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
@@ -7317,7 +7344,8 @@ FINAL RULES:
       const user = req.user as any;
       const form = await storage.getQuoteForm(req.params.id);
       if (!form || form.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      res.json({ ...form, config: JSON.parse(form.config) });
+      const upgradedConfig = await maybeUpgradeSmartConfig(form);
+      res.json({ ...form, config: JSON.parse(upgradedConfig) });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
@@ -7446,9 +7474,34 @@ FINAL RULES:
 
       // Detect residential vs commercial from submitted data
       const isCommercial = ["Commercial", "Industrial / Warehouse"].includes(data.propertyCategory) ||
+        data.propertyType === "Commercial" ||
         ["Commercial Cleaning", "Office Cleaning"].includes(data.serviceType);
-      const frequency = data.frequency || data.preferredTime || "one-time";
-      const isRecurring = !["One-time", "one-time", "one time"].includes(frequency) && frequency;
+
+      // Resolve frequency details — support new frequencyType field and legacy frequency field
+      const frequencyType = data.frequencyType || data.frequency || "One-time";
+      const isRecurring = !["One-time", "one-time", "one time", "One-Time"].includes(frequencyType);
+
+      // Calculate estimated monthly visits based on frequency details
+      let estimatedVisitsPerMonth = 1;
+      let visitsBiweeklyNum = 1;
+      if (frequencyType === "Weekly" && data.daysPerWeek) {
+        const daysNum = parseInt(data.daysPerWeek) || 1;
+        estimatedVisitsPerMonth = Math.round(daysNum * 4.33 * 10) / 10;
+      } else if (frequencyType === "Bi-weekly" && data.visitsBiweekly) {
+        visitsBiweeklyNum = parseInt(data.visitsBiweekly) || 1;
+        estimatedVisitsPerMonth = Math.round(visitsBiweeklyNum * 2.17 * 10) / 10;
+      } else if (frequencyType === "Monthly" && data.visitsPerMonth) {
+        estimatedVisitsPerMonth = parseInt(data.visitsPerMonth) || 1;
+      } else if (frequencyType === "Custom schedule" && data.estimatedVisitsPerMonth) {
+        estimatedVisitsPerMonth = parseFloat(data.estimatedVisitsPerMonth) || 1;
+      }
+
+      // Contract length in months (for total calculation)
+      const contractLengthRaw = data.contractLength ?? "";
+      const contractMonths = contractLengthRaw.includes("12") ? 12
+        : contractLengthRaw.includes("6") ? 6
+        : contractLengthRaw.includes("3") ? 3
+        : 0; // 0 = month-to-month or not specified
 
       const prompt = `You are an expert cleaning service estimator. Use the pricing rules below to calculate a structured estimate.
 
@@ -7470,7 +7523,19 @@ PRICING RULES:
 ${settings.customRules ? `- Custom rules: ${settings.customRules}` : ""}
 
 JOB TYPE: ${isCommercial ? "COMMERCIAL" : "RESIDENTIAL"}
-FREQUENCY: ${frequency}
+FREQUENCY TYPE: ${frequencyType}
+${isRecurring ? `ESTIMATED MONTHLY VISITS: ${estimatedVisitsPerMonth}` : ""}
+${isRecurring && data.daysPerWeek ? `DAYS PER WEEK: ${data.daysPerWeek}` : ""}
+${isRecurring && data.visitsBiweekly ? `VISITS EVERY 2 WEEKS: ${data.visitsBiweekly}` : ""}
+${isRecurring && data.visitsPerMonth ? `VISITS PER MONTH: ${data.visitsPerMonth}` : ""}
+${isRecurring && data.contractLength ? `SERVICE AGREEMENT: ${data.contractLength} (${contractMonths > 0 ? contractMonths + " months" : "month-to-month"})` : ""}
+${isRecurring && data.preferredDays ? `PREFERRED DAYS: ${data.preferredDays}` : ""}
+
+CALCULATION RULES:
+${frequencyType === "Weekly" && data.daysPerWeek ? `- Monthly visits = ${parseInt(data.daysPerWeek) || 1} days × 4.33 = ${estimatedVisitsPerMonth} visits/month` : ""}
+${frequencyType === "Bi-weekly" && data.visitsBiweekly ? `- Monthly visits = ${parseInt(data.visitsBiweekly) || 1} × 2.17 = ${estimatedVisitsPerMonth} visits/month` : ""}
+- monthly_price = per_visit_price × ${estimatedVisitsPerMonth} monthly visits
+${contractMonths > 0 ? `- contract_total = monthly_price × ${contractMonths} months` : ""}
 
 CLIENT SUBMISSION:
 ${JSON.stringify(data, null, 2)}
@@ -7487,8 +7552,11 @@ Return ONLY a valid JSON object (no extra text):
     { "label": "Base cleaning", "amount": 0 },
     { "label": "Additional item", "amount": 0 }
   ],
-  "weekly_total": ${isRecurring ? "number" : "null"},
-  "monthly_total": ${isRecurring ? "number" : "null"},
+  "estimated_visits_per_month": ${isRecurring ? estimatedVisitsPerMonth : "null"},
+  "monthly_total": ${isRecurring ? "number (recommended_price × " + estimatedVisitsPerMonth + ")" : "null"},
+  "contract_months": ${contractMonths > 0 ? contractMonths : "null"},
+  "contract_total": ${isRecurring && contractMonths > 0 ? "number (monthly_total × " + contractMonths + ")" : "null"},
+  "frequency_summary": "${isRecurring ? frequencyType + (data.daysPerWeek ? " · " + data.daysPerWeek : data.visitsBiweekly ? " · " + data.visitsBiweekly : data.visitsPerMonth ? " · " + data.visitsPerMonth : "") : "One-time service"}",
   "client_summary": "short professional summary for the client (2-3 sentences)",
   "suggested_services": "string describing recommended services",
   "add_ons": "string listing optional add-ons with prices",
@@ -7501,7 +7569,9 @@ Return ONLY a valid JSON object (no extra text):
 RULES:
 - Never return less than the minimum job price ($${settings.minimumJobPrice})
 - Show 3-6 pricing breakdown line items
-- For recurring jobs calculate weekly and monthly totals (monthly = weekly * 4.33)
+- recommended_price = per-visit price for recurring jobs, total for one-time
+- monthly_total = recommended_price × ${estimatedVisitsPerMonth} visits/month
+${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} months` : ""}
 - Recommended price should be between price_min and price_max`;
 
       try {
@@ -8124,10 +8194,11 @@ RULES:
       const form = await storage.getQuoteFormBySlug(req.params.companyId, req.params.slug);
       if (!form || !form.isActive) return res.status(404).json({ message: "Form not found" });
       const company = await storage.getCompany(req.params.companyId);
+      const upgradedConfig = await maybeUpgradeSmartConfig(form);
       res.json({
         id: form.id,
         name: form.name,
-        config: JSON.parse(form.config),
+        config: JSON.parse(upgradedConfig),
         companyName: company?.name ?? "",
         companyLogo: company?.companyLogoUrl ?? null,
         brandColor: company?.brandColor ?? null,
