@@ -69,3 +69,31 @@ The Field Notes system allows employees to capture on-site inspections with phot
 - `PATCH /api/field-notes/entries/:id` — update entry (incl. `isHiddenFromPublic`, `assetIds` reorder)
 - `PATCH /api/field-notes/assets/:id` — update asset (incl. `isHiddenFromPublic`, `caption`, `phase`)
 - `GET /api/public/field-notes/:token` — public view (filters hidden entries + assets)
+
+## Forms / Quote Requests Module
+
+A full CRM pipeline and AI-powered quoting system, accessible at `/admin/quote-forms` (sidebar: "Forms / Requests"). The existing form builder at `/admin/quote-forms/:id` is unchanged.
+
+**6-Tab Admin Hub** (`client/src/pages/admin/quote-forms.tsx`):
+1. **Forms** — create/delete/toggle public forms, copy link, preview
+2. **Submissions** — inbox list (filterable by pipeline stage) + detail pane with AI estimate, form answers, notes, activity timeline
+3. **Pipeline** — 8-column kanban view (New Request → Estimated → Needs Review → Quote Ready → Quote Sent → Follow Up → Won → Lost)
+4. **Estimator Settings** — pricing parameters (hourly rate, sq ft rate, multipliers, crew size, custom rules) used by AI engine
+5. **Email Settings** — configurable templates for Confirmation, Estimate Summary, and Quote Ready emails (with Mailgun)
+6. **Embed** — public link + iframe embed snippet for any website
+
+**New DB tables** (created via raw SQL): `ai_estimates`, `form_quotes`, `estimator_settings`, `form_email_settings`, `lead_activity`
+
+**Extended** `quote_form_submissions` with: `clientName`, `clientEmail`, `clientPhone`, `serviceType`, `serviceAddress`, `pipelineStage`, `estimateStatus`, `adminNotes`, `assignedTo`, `archivedAt`, `emailConfirmationSent`, `emailConfirmationSentAt`, `emailConfirmationMessageId`
+
+**AI Estimate** (`POST /api/admin/submissions/:id/estimate`): Uses OpenAI gpt-4o-mini + estimatorSettings to generate priceMin/priceMax/recommendedPrice/laborHours/crewSize/suggestedServices/riskNotes/confidenceLevel
+
+**Key API routes**:
+- `GET /api/admin/submissions` — all submissions across all company forms
+- `GET /api/admin/submissions/:id` — detail with estimate + quote + activity
+- `PATCH /api/admin/submissions/:id` — update pipelineStage, adminNotes, etc.
+- `POST /api/admin/submissions/:id/estimate` — run AI estimate
+- `POST /api/admin/submissions/:id/activity` — add note/activity event
+- `GET|PUT /api/admin/estimator-settings` — pricing configuration
+- `GET|PUT /api/admin/form-email-settings` — email template configuration
+- Public form submit (`POST /api/forms/:companyId/:slug/submit`) — extracts CRM fields, sends confirmation email

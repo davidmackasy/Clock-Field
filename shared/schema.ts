@@ -1179,14 +1179,142 @@ export const quoteFormSubmissions = pgTable("quote_form_submissions", {
   data: text("data").notNull(),
   status: text("status").notNull().default("new"),
   submittedAt: text("submitted_at").notNull(),
+  // CRM fields (extracted from form data for easy querying)
+  clientName: text("client_name"),
+  clientEmail: text("client_email"),
+  clientPhone: text("client_phone"),
+  serviceType: text("service_type"),
+  serviceAddress: text("service_address"),
+  // Pipeline & estimate tracking
+  pipelineStage: text("pipeline_stage").notNull().default("new_request"),
+  estimateStatus: text("estimate_status").notNull().default("pending"),
+  adminNotes: text("admin_notes"),
+  assignedTo: varchar("assigned_to"),
+  archivedAt: text("archived_at"),
+  // Email tracking
+  confirmationEmailSentAt: text("confirmation_email_sent_at"),
+  estimateEmailSentAt: text("estimate_email_sent_at"),
+  quoteEmailSentAt: text("quote_email_sent_at"),
+});
+
+// ── AI Estimates ───────────────────────────────────────────────────────────
+export const aiEstimates = pgTable("ai_estimates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  submissionId: varchar("submission_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  status: text("status").notNull().default("pending"),
+  priceMin: decimal("price_min", { precision: 10, scale: 2 }),
+  priceMax: decimal("price_max", { precision: 10, scale: 2 }),
+  recommendedPrice: decimal("recommended_price", { precision: 10, scale: 2 }),
+  laborHours: decimal("labor_hours", { precision: 6, scale: 2 }),
+  crewSize: integer("crew_size"),
+  suggestedServices: text("suggested_services"),
+  addOns: text("add_ons"),
+  suppliesNeeded: text("supplies_needed"),
+  riskNotes: text("risk_notes"),
+  followUpQuestions: text("follow_up_questions"),
+  confidenceLevel: text("confidence_level"),
+  confidenceNote: text("confidence_note"),
+  rawResponse: text("raw_response"),
+  errorMessage: text("error_message"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+// ── Form Quotes (auto-generated from AI estimate) ─────────────────────────
+export const formQuotes = pgTable("form_quotes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  submissionId: varchar("submission_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  status: text("status").notNull().default("draft"),
+  price: decimal("price", { precision: 10, scale: 2 }),
+  scopeOfWork: text("scope_of_work"),
+  addOns: text("add_ons"),
+  estimatedDuration: text("estimated_duration"),
+  terms: text("terms"),
+  notes: text("notes"),
+  sentAt: text("sent_at"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+// ── Estimator Settings (per company) ──────────────────────────────────────
+export const estimatorSettings = pgTable("estimator_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().unique(),
+  hourlyRate: decimal("hourly_rate", { precision: 8, scale: 2 }).default("25"),
+  minimumJobPrice: decimal("minimum_job_price", { precision: 8, scale: 2 }).default("80"),
+  pricePerSqft: decimal("price_per_sqft", { precision: 6, scale: 4 }).default("0.08"),
+  pricePerBathroom: decimal("price_per_bathroom", { precision: 8, scale: 2 }).default("15"),
+  pricePerRoom: decimal("price_per_room", { precision: 8, scale: 2 }).default("20"),
+  deepCleanMultiplier: decimal("deep_clean_multiplier", { precision: 4, scale: 2 }).default("1.5"),
+  moveInOutMultiplier: decimal("move_in_out_multiplier", { precision: 4, scale: 2 }).default("1.75"),
+  postConstructionMultiplier: decimal("post_construction_multiplier", { precision: 4, scale: 2 }).default("2.0"),
+  commercialMultiplier: decimal("commercial_multiplier", { precision: 4, scale: 2 }).default("1.2"),
+  afterHoursMultiplier: decimal("after_hours_multiplier", { precision: 4, scale: 2 }).default("1.25"),
+  supplyFee: decimal("supply_fee", { precision: 8, scale: 2 }).default("15"),
+  travelFee: decimal("travel_fee", { precision: 8, scale: 2 }).default("0"),
+  taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("5"),
+  profitMargin: decimal("profit_margin", { precision: 5, scale: 2 }).default("20"),
+  currency: text("currency").notNull().default("CAD"),
+  defaultCrewSize: integer("default_crew_size").default(2),
+  productivityRate: decimal("productivity_rate", { precision: 6, scale: 2 }).default("300"),
+  serviceAreas: text("service_areas"),
+  customRules: text("custom_rules"),
+  updatedAt: text("updated_at").notNull(),
+});
+
+// ── Form Email Settings (per company) ─────────────────────────────────────
+export const formEmailSettings = pgTable("form_email_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().unique(),
+  confirmationEnabled: boolean("confirmation_enabled").notNull().default(true),
+  confirmationSubject: text("confirmation_subject").notNull().default("We received your request!"),
+  confirmationBody: text("confirmation_body").notNull().default("Hi {client_first_name},\n\nThank you for reaching out to {company_name}! We've received your request and will get back to you shortly with a quote.\n\nBest regards,\n{company_name}"),
+  estimateEnabled: boolean("estimate_enabled").notNull().default(false),
+  estimateSubject: text("estimate_subject").notNull().default("Your estimate from {company_name}"),
+  estimateBody: text("estimate_body").notNull().default("Hi {client_first_name},\n\nBased on the details you provided, here is your estimate:\n\nEstimated price: {estimated_price}\nService: {service_type}\nAddress: {service_address}\n\nPlease reply to this email if you have any questions.\n\nBest regards,\n{company_name}"),
+  quoteReadyEnabled: boolean("quote_ready_enabled").notNull().default(false),
+  quoteReadySubject: text("quote_ready_subject").notNull().default("Your quote is ready — {company_name}"),
+  quoteReadyBody: text("quote_ready_body").notNull().default("Hi {client_first_name},\n\nYour quote is ready! Please contact us to review the details.\n\nBest regards,\n{company_name}"),
+  replyTo: text("reply_to"),
+  signature: text("signature"),
+  updatedAt: text("updated_at").notNull(),
+});
+
+// ── Lead Activity Timeline ─────────────────────────────────────────────────
+export const leadActivity = pgTable("lead_activity", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  submissionId: varchar("submission_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  eventType: text("event_type").notNull(),
+  eventData: text("event_data").notNull().default("{}"),
+  createdByUserId: varchar("created_by_user_id"),
+  createdAt: text("created_at").notNull(),
 });
 
 export const insertQuoteFormSchema = createInsertSchema(quoteForms).omit({ id: true });
 export const insertQuoteFormSubmissionSchema = createInsertSchema(quoteFormSubmissions).omit({ id: true });
+export const insertAiEstimateSchema = createInsertSchema(aiEstimates).omit({ id: true });
+export const insertFormQuoteSchema = createInsertSchema(formQuotes).omit({ id: true });
+export const insertEstimatorSettingsSchema = createInsertSchema(estimatorSettings).omit({ id: true });
+export const insertFormEmailSettingsSchema = createInsertSchema(formEmailSettings).omit({ id: true });
+export const insertLeadActivitySchema = createInsertSchema(leadActivity).omit({ id: true });
+
 export type QuoteForm = typeof quoteForms.$inferSelect;
 export type InsertQuoteForm = z.infer<typeof insertQuoteFormSchema>;
 export type QuoteFormSubmission = typeof quoteFormSubmissions.$inferSelect;
 export type InsertQuoteFormSubmission = z.infer<typeof insertQuoteFormSubmissionSchema>;
+export type AiEstimate = typeof aiEstimates.$inferSelect;
+export type InsertAiEstimate = z.infer<typeof insertAiEstimateSchema>;
+export type FormQuote = typeof formQuotes.$inferSelect;
+export type InsertFormQuote = z.infer<typeof insertFormQuoteSchema>;
+export type EstimatorSettings = typeof estimatorSettings.$inferSelect;
+export type InsertEstimatorSettings = z.infer<typeof insertEstimatorSettingsSchema>;
+export type FormEmailSettings = typeof formEmailSettings.$inferSelect;
+export type InsertFormEmailSettings = z.infer<typeof insertFormEmailSettingsSchema>;
+export type LeadActivity = typeof leadActivity.$inferSelect;
+export type InsertLeadActivity = z.infer<typeof insertLeadActivitySchema>;
 
 // ── Proposals & Quotes ─────────────────────────────────────────────────────
 export type ProposalStatus =

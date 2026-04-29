@@ -1,0 +1,966 @@
+DEV NOTE: Advanced Forms + AI Quote Estimator + CRM Pipeline (No Cortex)
+Goal
+Build a full Forms / Quote Requests system with AI Quote Estimation, auto-generated quotes, CRM pipeline, email auto-reply, and website embed.
+This is a NEW feature.
+Do not break or affect anything currently working.
+Do not modify existing modules unless required to safely integrate.
+
+
+
+ADMIN MENU
+
+
+Add new menu item:
+Forms / Quote Requests
+Inside this page, add tabs:
+
+
+Forms
+
+
+Submissions
+
+
+Pipeline
+
+
+Estimator Settings
+
+
+Email Settings
+
+
+Embed
+
+
+Do not change existing navigation structure beyond adding this item.
+
+
+
+FORM BUILDER
+
+
+Admins can create customizable public forms.
+Form settings:
+
+
+Form name
+
+
+Form title
+
+
+Description
+
+
+Company logo upload
+
+
+Button text
+
+
+Thank-you message
+
+
+Active / inactive toggle
+
+
+Public link
+
+
+Embed code
+
+
+Show “Powered by Clockfield” footer toggle
+
+
+UI layout:
+Left panel
+Form settings + steps
+Center panel
+Field configuration
+Right panel
+Live preview (real-time, multi-step preview)
+
+
+
+FORM STRUCTURE (MULTI-STEP)
+
+
+Default steps:
+Step 1: Contact Information
+Step 2: Address / Property
+Step 3: Service Details
+Step 4: Photos / Notes
+Admin can:
+
+
+Add/remove steps
+
+
+Rename steps
+
+
+Move fields between steps
+
+
+Collapse into 1-step form
+
+
+
+
+
+FIELD SYSTEM
+
+
+Each field must support:
+
+
+Show / hide
+
+
+Required toggle
+
+
+Label edit
+
+
+Placeholder
+
+
+Step assignment
+
+
+Order control
+
+
+Field types:
+
+
+Text
+
+
+Email
+
+
+Phone
+
+
+Address
+
+
+Dropdown
+
+
+Checkbox
+
+
+Radio
+
+
+Date
+
+
+Time
+
+
+Number
+
+
+Textarea
+
+
+File upload
+
+
+Multi-select
+
+
+
+
+
+PUBLIC FORM UI
+
+
+Must match premium Jobber-style experience.
+Top:
+
+
+Centered logo
+
+
+Clean header
+
+
+Progress bar (multi-step)
+
+
+Form card:
+
+
+Centered
+
+
+Max width 600px
+
+
+Rounded corners
+
+
+Soft shadow
+
+
+Inputs:
+
+
+Large
+
+
+Mobile friendly
+
+
+Proper spacing
+
+
+Clear labels
+
+
+Navigation:
+
+
+Back button
+
+
+Next button
+
+
+Submit button
+
+
+Validation:
+
+
+Block next step if required fields missing
+
+
+Inline error messages
+
+
+Success screen:
+
+
+Confirmation message
+
+
+Clean UI
+
+
+Optional follow-up message
+
+
+Footer:
+
+
+“Powered by Clockfield” (small, subtle)
+
+
+
+
+
+SUBMISSION FLOW
+
+
+When form is submitted:
+
+
+Save submission
+
+
+Save all answers
+
+
+Save uploaded files
+
+
+Create CRM lead
+
+
+Run AI Quote Estimator
+
+
+Generate draft quote
+
+
+Send email auto-reply (if enabled)
+
+
+Notify admin
+
+
+If AI fails:
+
+
+Still save submission
+
+
+Mark estimate as Failed
+
+
+Allow retry
+
+
+
+
+
+SUBMISSIONS INBOX
+
+
+List view:
+
+
+Client name
+
+
+Email
+
+
+Phone
+
+
+Service type
+
+
+Address
+
+
+Date
+
+
+Status
+
+
+Estimate status
+
+
+Detail view:
+
+
+Full form answers
+
+
+Uploaded photos
+
+
+Notes
+
+
+AI estimate
+
+
+Draft quote
+
+
+Email status
+
+
+Internal notes
+
+
+Activity timeline
+
+
+Actions:
+
+
+Contact client
+
+
+Regenerate estimate
+
+
+Edit quote
+
+
+Send quote
+
+
+Move in pipeline
+
+
+Archive
+
+
+
+
+
+AI QUOTE ESTIMATOR
+
+
+Purpose:
+Use form data to calculate cleaning price and service plan.
+Inputs:
+
+
+Service type
+
+
+Property type
+
+
+Square footage
+
+
+Rooms
+
+
+Bathrooms
+
+
+Frequency
+
+
+Condition
+
+
+Floor type
+
+
+Special instructions
+
+
+Uploaded images (optional)
+
+
+Admin pricing settings
+
+
+Output:
+
+
+Estimated price range
+
+
+Recommended price
+
+
+Labor hours
+
+
+Crew size
+
+
+Suggested services
+
+
+Add-ons
+
+
+Supplies needed
+
+
+Risk notes
+
+
+Follow-up questions
+
+
+Confidence level
+
+
+Important:
+AI must use admin pricing rules first.
+Do not allow AI to guess pricing without rules.
+
+
+
+ESTIMATOR SETTINGS (ADMIN CONTROL)
+
+
+Add Estimator Settings tab.
+Fields:
+
+
+Hourly rate
+
+
+Minimum job price
+
+
+Price per square foot
+
+
+Price per bathroom
+
+
+Price per room
+
+
+Deep clean multiplier
+
+
+Move-in/out multiplier
+
+
+Post-construction multiplier
+
+
+Commercial multiplier
+
+
+After-hours multiplier
+
+
+Supply fee
+
+
+Travel fee
+
+
+Tax rate
+
+
+Profit margin
+
+
+Currency
+
+
+Service areas
+
+
+Default crew size
+
+
+Productivity rate
+
+
+Allow custom pricing rules per service type.
+AI must reference these values when generating estimates.
+
+
+
+AUTO-GENERATED QUOTE
+
+
+After estimation:
+Generate draft quote.
+Quote includes:
+
+
+Company logo
+
+
+Client info
+
+
+Address
+
+
+Service details
+
+
+Scope of work
+
+
+Price
+
+
+Add-ons
+
+
+Estimated duration
+
+
+Terms
+
+
+Notes
+
+
+Status:
+
+
+Draft
+
+
+Ready
+
+
+Sent
+
+
+Accepted
+
+
+Declined
+
+
+Admin must review before sending unless auto-send is enabled.
+Actions:
+
+
+Edit
+
+
+Regenerate
+
+
+Send
+
+
+Convert to job later
+
+
+
+
+
+EMAIL AUTO-REPLY
+
+
+Add Email Settings tab.
+Options:
+
+
+Enable confirmation email
+
+
+Enable estimate summary email
+
+
+Enable quote-ready email
+
+
+Editable:
+
+
+Subject
+
+
+Body
+
+
+Signature
+
+
+Reply-to
+
+
+Timing
+
+
+Variables:
+{client_first_name}
+{client_full_name}
+{company_name}
+{service_type}
+{service_address}
+{estimated_price}
+{submission_date}
+Important:
+Do not send estimate automatically unless enabled.
+
+
+
+CRM PIPELINE
+
+
+Add Pipeline tab.
+Stages:
+
+
+New Request
+
+
+Estimated
+
+
+Needs Review
+
+
+Quote Ready
+
+
+Quote Sent
+
+
+Follow Up
+
+
+Won
+
+
+Lost
+
+
+Archived
+
+
+Each lead:
+
+
+Client info
+
+
+Service type
+
+
+Price
+
+
+Address
+
+
+Date
+
+
+Status
+
+
+Actions:
+
+
+Drag between stages
+
+
+Assign user
+
+
+Add notes
+
+
+Set reminders
+
+
+Link quote
+
+
+Timeline:
+
+
+Submission
+
+
+Estimate
+
+
+Quote creation
+
+
+Email sent
+
+
+Stage changes
+
+
+
+
+
+EMBED FEATURE
+
+
+Each form must generate:
+
+
+Public link
+
+
+Embed iframe code
+
+
+Example:
+<iframe src="https://clockfield.com/public/forms/{formId}" width="100%" height="900"></iframe>
+Requirements:
+
+
+Responsive
+
+
+Mobile friendly
+
+
+No admin data exposure
+
+
+Keeps branding
+
+
+
+
+
+NOTIFICATIONS
+
+
+On submission:
+
+
+Dashboard alert
+
+
+Badge on Forms
+
+
+Optional email notification
+
+
+
+
+
+DATABASE STRUCTURE
+
+
+Add models:
+
+
+forms
+
+
+form_fields
+
+
+form_submissions
+
+
+form_answers
+
+
+form_files
+
+
+ai_estimates
+
+
+quotes
+
+
+crm_leads
+
+
+lead_activity
+
+
+estimator_settings
+
+
+email_templates
+
+
+All data must be company-scoped.
+
+
+
+PERMISSIONS
+
+
+Admins:
+
+
+Full access
+
+
+Assistants:
+
+
+Limited access based on role
+
+
+
+
+
+FAILURE HANDLING
+
+
+If AI fails:
+
+
+Save submission
+
+
+Show “Estimate unavailable”
+
+
+Allow retry
+
+
+
+
+
+TESTING
+
+
+Test:
+
+
+Form creation
+
+
+Field customization
+
+
+Public submission
+
+
+Mobile flow
+
+
+File uploads
+
+
+AI estimation
+
+
+Quote generation
+
+
+Email auto-reply
+
+
+CRM pipeline
+
+
+Embed usage
+
+
+Disabled forms
+
+
+
+FINAL RULE
+This must be built as a fully isolated feature.
+Do not modify:
+
+
+Worklogs
+
+
+Field notes
+
+
+Reports
+
+
+Reviews
+
+
+Scheduling
+
+
+Payroll
+
+
+Attendance
+
+
+Ensure:
+
+
+Responsive UI
+
+
+Fast performance
+
+
+Production-safe
+
+
+Premium feel
+

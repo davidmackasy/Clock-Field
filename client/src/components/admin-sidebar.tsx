@@ -33,7 +33,7 @@ const navItems = [
   { title: "Clients", url: "/admin/clients", icon: Building2 },
   { title: "Management", url: "/admin/management", icon: Users2 },
   { title: "Work Log", url: "/admin/work-log", icon: BookOpen },
-  { title: "Quote Forms", url: "/admin/quote-forms", icon: FileInput },
+  { title: "Forms / Requests", url: "/admin/quote-forms", icon: FileInput },
   { title: "Proposals & Quotes", url: "/admin/proposals", icon: FileText },
   { title: "Supplies", url: "/admin/supplies", icon: Package },
   { title: "Publications", url: "/admin/publications", icon: Newspaper },

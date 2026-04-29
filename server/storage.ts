@@ -54,9 +54,14 @@ import {
   type PublicationMedia, type InsertPublicationMedia,
   type PublicationPricing, type InsertPublicationPricing,
   type PublicationVote, type InsertPublicationVote,
-  quoteForms, quoteFormSubmissions,
+  quoteForms, quoteFormSubmissions, aiEstimates, formQuotes, estimatorSettings, formEmailSettings, leadActivity,
   type QuoteForm, type InsertQuoteForm,
   type QuoteFormSubmission, type InsertQuoteFormSubmission,
+  type AiEstimate, type InsertAiEstimate,
+  type FormQuote, type InsertFormQuote,
+  type EstimatorSettings, type InsertEstimatorSettings,
+  type FormEmailSettings, type InsertFormEmailSettings,
+  type LeadActivity, type InsertLeadActivity,
   proposals, proposalActivityLogs,
   type Proposal, type InsertProposal,
   type ProposalActivityLog, type InsertProposalActivityLog,
@@ -325,8 +330,27 @@ export interface IStorage {
   updateQuoteForm(id: string, data: Partial<InsertQuoteForm>): Promise<QuoteForm | undefined>;
   deleteQuoteForm(id: string): Promise<void>;
   getQuoteFormSubmissions(formId: string): Promise<QuoteFormSubmission[]>;
+  getAllSubmissionsByCompany(companyId: string): Promise<QuoteFormSubmission[]>;
+  getQuoteFormSubmission(id: string): Promise<QuoteFormSubmission | undefined>;
   createQuoteFormSubmission(data: InsertQuoteFormSubmission): Promise<QuoteFormSubmission>;
   updateQuoteFormSubmission(id: string, data: Partial<InsertQuoteFormSubmission>): Promise<QuoteFormSubmission | undefined>;
+  // AI Estimates
+  getAiEstimateBySubmission(submissionId: string): Promise<AiEstimate | undefined>;
+  createAiEstimate(data: InsertAiEstimate): Promise<AiEstimate>;
+  updateAiEstimate(id: string, data: Partial<InsertAiEstimate>): Promise<AiEstimate | undefined>;
+  // Form Quotes
+  getFormQuoteBySubmission(submissionId: string): Promise<FormQuote | undefined>;
+  createFormQuote(data: InsertFormQuote): Promise<FormQuote>;
+  updateFormQuote(id: string, data: Partial<InsertFormQuote>): Promise<FormQuote | undefined>;
+  // Estimator Settings
+  getEstimatorSettings(companyId: string): Promise<EstimatorSettings | undefined>;
+  upsertEstimatorSettings(companyId: string, data: Partial<InsertEstimatorSettings>): Promise<EstimatorSettings>;
+  // Form Email Settings
+  getFormEmailSettings(companyId: string): Promise<FormEmailSettings | undefined>;
+  upsertFormEmailSettings(companyId: string, data: Partial<InsertFormEmailSettings>): Promise<FormEmailSettings>;
+  // Lead Activity
+  getLeadActivity(submissionId: string): Promise<LeadActivity[]>;
+  addLeadActivity(data: InsertLeadActivity): Promise<LeadActivity>;
   // Proposals
   getProposalsByCompany(companyId: string): Promise<Proposal[]>;
   getProposal(id: string): Promise<Proposal | undefined>;
@@ -1603,6 +1627,91 @@ export class DatabaseStorage implements IStorage {
 
   async updateQuoteFormSubmission(id: string, data: Partial<InsertQuoteFormSubmission>): Promise<QuoteFormSubmission | undefined> {
     const [row] = await db.update(quoteFormSubmissions).set(data as any).where(eq(quoteFormSubmissions.id, id)).returning();
+    return row;
+  }
+
+  async getAllSubmissionsByCompany(companyId: string): Promise<QuoteFormSubmission[]> {
+    return db.select().from(quoteFormSubmissions).where(eq(quoteFormSubmissions.companyId, companyId)).orderBy(desc(quoteFormSubmissions.submittedAt));
+  }
+
+  async getQuoteFormSubmission(id: string): Promise<QuoteFormSubmission | undefined> {
+    const [row] = await db.select().from(quoteFormSubmissions).where(eq(quoteFormSubmissions.id, id));
+    return row;
+  }
+
+  // ── AI Estimates ──────────────────────────────────────────────────────────
+  async getAiEstimateBySubmission(submissionId: string): Promise<AiEstimate | undefined> {
+    const [row] = await db.select().from(aiEstimates).where(eq(aiEstimates.submissionId, submissionId)).orderBy(desc(aiEstimates.createdAt));
+    return row;
+  }
+
+  async createAiEstimate(data: InsertAiEstimate): Promise<AiEstimate> {
+    const [row] = await db.insert(aiEstimates).values(data as any).returning();
+    return row;
+  }
+
+  async updateAiEstimate(id: string, data: Partial<InsertAiEstimate>): Promise<AiEstimate | undefined> {
+    const [row] = await db.update(aiEstimates).set(data as any).where(eq(aiEstimates.id, id)).returning();
+    return row;
+  }
+
+  // ── Form Quotes ───────────────────────────────────────────────────────────
+  async getFormQuoteBySubmission(submissionId: string): Promise<FormQuote | undefined> {
+    const [row] = await db.select().from(formQuotes).where(eq(formQuotes.submissionId, submissionId)).orderBy(desc(formQuotes.createdAt));
+    return row;
+  }
+
+  async createFormQuote(data: InsertFormQuote): Promise<FormQuote> {
+    const [row] = await db.insert(formQuotes).values(data as any).returning();
+    return row;
+  }
+
+  async updateFormQuote(id: string, data: Partial<InsertFormQuote>): Promise<FormQuote | undefined> {
+    const [row] = await db.update(formQuotes).set(data as any).where(eq(formQuotes.id, id)).returning();
+    return row;
+  }
+
+  // ── Estimator Settings ────────────────────────────────────────────────────
+  async getEstimatorSettings(companyId: string): Promise<EstimatorSettings | undefined> {
+    const [row] = await db.select().from(estimatorSettings).where(eq(estimatorSettings.companyId, companyId));
+    return row;
+  }
+
+  async upsertEstimatorSettings(companyId: string, data: Partial<InsertEstimatorSettings>): Promise<EstimatorSettings> {
+    const now = new Date().toISOString();
+    const existing = await this.getEstimatorSettings(companyId);
+    if (existing) {
+      const [row] = await db.update(estimatorSettings).set({ ...data, updatedAt: now } as any).where(eq(estimatorSettings.companyId, companyId)).returning();
+      return row;
+    }
+    const [row] = await db.insert(estimatorSettings).values({ companyId, ...data, updatedAt: now } as any).returning();
+    return row;
+  }
+
+  // ── Form Email Settings ───────────────────────────────────────────────────
+  async getFormEmailSettings(companyId: string): Promise<FormEmailSettings | undefined> {
+    const [row] = await db.select().from(formEmailSettings).where(eq(formEmailSettings.companyId, companyId));
+    return row;
+  }
+
+  async upsertFormEmailSettings(companyId: string, data: Partial<InsertFormEmailSettings>): Promise<FormEmailSettings> {
+    const now = new Date().toISOString();
+    const existing = await this.getFormEmailSettings(companyId);
+    if (existing) {
+      const [row] = await db.update(formEmailSettings).set({ ...data, updatedAt: now } as any).where(eq(formEmailSettings.companyId, companyId)).returning();
+      return row;
+    }
+    const [row] = await db.insert(formEmailSettings).values({ companyId, ...data, updatedAt: now } as any).returning();
+    return row;
+  }
+
+  // ── Lead Activity ─────────────────────────────────────────────────────────
+  async getLeadActivity(submissionId: string): Promise<LeadActivity[]> {
+    return db.select().from(leadActivity).where(eq(leadActivity.submissionId, submissionId)).orderBy(asc(leadActivity.createdAt));
+  }
+
+  async addLeadActivity(data: InsertLeadActivity): Promise<LeadActivity> {
+    const [row] = await db.insert(leadActivity).values(data as any).returning();
     return row;
   }
 

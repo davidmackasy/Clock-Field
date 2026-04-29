@@ -7366,6 +7366,276 @@ FINAL RULES:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // All submissions across forms (for Submissions tab)
+  app.get("/api/admin/submissions", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const subs = await storage.getAllSubmissionsByCompany(user.companyId);
+      // Attach form names
+      const forms = await storage.getQuoteFormsByCompany(user.companyId);
+      const formMap: Record<string, string> = {};
+      forms.forEach(f => { formMap[f.id] = f.name; });
+      res.json(subs.map(s => ({ ...s, data: JSON.parse(s.data), formName: formMap[s.formId] || "Unknown Form" })));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Single submission detail
+  app.get("/api/admin/submissions/:id", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getQuoteFormSubmission(req.params.id);
+      if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const [estimate, quote, activity] = await Promise.all([
+        storage.getAiEstimateBySubmission(sub.id),
+        storage.getFormQuoteBySubmission(sub.id),
+        storage.getLeadActivity(sub.id),
+      ]);
+      const forms = await storage.getQuoteFormsByCompany(user.companyId);
+      const form = forms.find(f => f.id === sub.formId);
+      res.json({ ...sub, data: JSON.parse(sub.data), formName: form?.name || "Unknown Form", estimate, quote, activity });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Update submission (notes, stage, etc.)
+  app.patch("/api/admin/submissions/:id", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getQuoteFormSubmission(req.params.id);
+      if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const allowed = ["pipelineStage", "adminNotes", "status", "assignedTo", "archivedAt"] as const;
+      const updates: any = {};
+      allowed.forEach(k => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
+      if (req.body.pipelineStage && req.body.pipelineStage !== sub.pipelineStage) {
+        await storage.addLeadActivity({
+          submissionId: sub.id, companyId: user.companyId,
+          eventType: "stage_changed",
+          eventData: JSON.stringify({ from: sub.pipelineStage, to: req.body.pipelineStage }),
+          createdByUserId: user.id, createdAt: new Date().toISOString(),
+        });
+      }
+      const updated = await storage.updateQuoteFormSubmission(req.params.id, updates);
+      res.json({ ...updated, data: JSON.parse(updated!.data) });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Run AI estimate for a submission
+  app.post("/api/admin/submissions/:id/estimate", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getQuoteFormSubmission(req.params.id);
+      if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+
+      const settings = await storage.getEstimatorSettings(user.companyId);
+      if (!settings) return res.status(400).json({ message: "Configure Estimator Settings first." });
+
+      const now = new Date().toISOString();
+      let data: any = {};
+      try { data = JSON.parse(sub.data); } catch {}
+
+      // Create pending estimate record
+      let estimate = await storage.createAiEstimate({
+        submissionId: sub.id, companyId: user.companyId,
+        status: "running", createdAt: now, updatedAt: now,
+      });
+      await storage.updateQuoteFormSubmission(sub.id, { estimateStatus: "running" });
+
+      const OpenAI = (await import("openai")).default;
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+      const prompt = `You are a professional cleaning service estimator. Use ONLY the pricing rules provided below.
+
+PRICING RULES (must be followed exactly):
+- Hourly rate: $${settings.hourlyRate}/hr
+- Minimum job price: $${settings.minimumJobPrice}
+- Price per sq ft: $${settings.pricePerSqft}
+- Price per bathroom: $${settings.pricePerBathroom}
+- Price per bedroom: $${settings.pricePerRoom}
+- Deep clean multiplier: ${settings.deepCleanMultiplier}x
+- Move-in/out multiplier: ${settings.moveInOutMultiplier}x
+- Post-construction multiplier: ${settings.postConstructionMultiplier}x
+- Commercial multiplier: ${settings.commercialMultiplier}x
+- After-hours multiplier: ${settings.afterHoursMultiplier}x
+- Supply fee: $${settings.supplyFee}
+- Travel fee: $${settings.travelFee}
+- Tax rate: ${settings.taxRate}%
+- Profit margin: ${settings.profitMargin}%
+- Default crew size: ${settings.defaultCrewSize}
+- Productivity rate: ${settings.productivityRate} sq ft/hr/person
+${settings.customRules ? `- Custom rules: ${settings.customRules}` : ""}
+
+CLIENT REQUEST:
+${JSON.stringify(data, null, 2)}
+
+Provide a JSON estimate with these fields:
+{
+  "price_min": number,
+  "price_max": number,
+  "recommended_price": number,
+  "labor_hours": number,
+  "crew_size": number,
+  "suggested_services": "string describing recommended services",
+  "add_ons": "string listing optional add-ons with prices",
+  "supplies_needed": "string listing supplies",
+  "risk_notes": "string describing any risks or special considerations",
+  "follow_up_questions": "string with questions for the client if info is missing",
+  "confidence_level": "high|medium|low",
+  "confidence_note": "string explaining confidence level"
+}`;
+
+      try {
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [{ role: "user", content: prompt }],
+          response_format: { type: "json_object" },
+          temperature: 0.3,
+        });
+        const result = JSON.parse(completion.choices[0].message.content || "{}");
+        estimate = (await storage.updateAiEstimate(estimate.id, {
+          status: "completed",
+          priceMin: String(result.price_min ?? 0),
+          priceMax: String(result.price_max ?? 0),
+          recommendedPrice: String(result.recommended_price ?? 0),
+          laborHours: String(result.labor_hours ?? 0),
+          crewSize: result.crew_size ?? settings.defaultCrewSize,
+          suggestedServices: result.suggested_services ?? "",
+          addOns: result.add_ons ?? "",
+          suppliesNeeded: result.supplies_needed ?? "",
+          riskNotes: result.risk_notes ?? "",
+          followUpQuestions: result.follow_up_questions ?? "",
+          confidenceLevel: result.confidence_level ?? "medium",
+          confidenceNote: result.confidence_note ?? "",
+          rawResponse: completion.choices[0].message.content,
+          updatedAt: new Date().toISOString(),
+        }))!;
+
+        // Update submission + create quote draft
+        await storage.updateQuoteFormSubmission(sub.id, {
+          estimateStatus: "completed",
+          pipelineStage: sub.pipelineStage === "new_request" ? "estimated" : sub.pipelineStage,
+        });
+
+        const existingQuote = await storage.getFormQuoteBySubmission(sub.id);
+        if (!existingQuote) {
+          await storage.createFormQuote({
+            submissionId: sub.id, companyId: user.companyId,
+            status: "draft",
+            price: String(result.recommended_price ?? 0),
+            scopeOfWork: result.suggested_services ?? "",
+            addOns: result.add_ons ?? "",
+            estimatedDuration: `${result.labor_hours ?? 0} hours`,
+            notes: result.risk_notes ?? "",
+            createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+          });
+        }
+
+        await storage.addLeadActivity({
+          submissionId: sub.id, companyId: user.companyId,
+          eventType: "estimate_completed",
+          eventData: JSON.stringify({ priceMin: result.price_min, priceMax: result.price_max, recommended: result.recommended_price }),
+          createdByUserId: user.id, createdAt: new Date().toISOString(),
+        });
+      } catch (aiErr: any) {
+        await storage.updateAiEstimate(estimate.id, {
+          status: "failed", errorMessage: aiErr.message, updatedAt: new Date().toISOString(),
+        });
+        await storage.updateQuoteFormSubmission(sub.id, { estimateStatus: "failed" });
+      }
+
+      const final = await storage.getAiEstimateBySubmission(sub.id);
+      res.json({ estimate: final });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Form Quotes CRUD
+  app.get("/api/admin/submissions/:id/quote", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getQuoteFormSubmission(req.params.id);
+      if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const quote = await storage.getFormQuoteBySubmission(req.params.id);
+      res.json(quote || null);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.put("/api/admin/submissions/:id/quote", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getQuoteFormSubmission(req.params.id);
+      if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const now = new Date().toISOString();
+      let quote = await storage.getFormQuoteBySubmission(req.params.id);
+      if (quote) {
+        quote = (await storage.updateFormQuote(quote.id, { ...req.body, updatedAt: now }))!;
+      } else {
+        quote = await storage.createFormQuote({ submissionId: sub.id, companyId: user.companyId, ...req.body, createdAt: now, updatedAt: now });
+      }
+      if (req.body.status === "ready" || req.body.status === "sent") {
+        await storage.updateQuoteFormSubmission(sub.id, { pipelineStage: req.body.status === "sent" ? "quote_sent" : "quote_ready" });
+      }
+      res.json(quote);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Lead activity
+  app.get("/api/admin/submissions/:id/activity", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getQuoteFormSubmission(req.params.id);
+      if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const activity = await storage.getLeadActivity(req.params.id);
+      res.json(activity);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/admin/submissions/:id/activity", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getQuoteFormSubmission(req.params.id);
+      if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const item = await storage.addLeadActivity({
+        submissionId: sub.id, companyId: user.companyId,
+        eventType: req.body.eventType || "note",
+        eventData: JSON.stringify({ note: req.body.note || "" }),
+        createdByUserId: user.id, createdAt: new Date().toISOString(),
+      });
+      res.json(item);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Estimator Settings
+  app.get("/api/admin/estimator-settings", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const settings = await storage.getEstimatorSettings(user.companyId);
+      res.json(settings || null);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.put("/api/admin/estimator-settings", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const settings = await storage.upsertEstimatorSettings(user.companyId, req.body);
+      res.json(settings);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Form Email Settings
+  app.get("/api/admin/form-email-settings", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const settings = await storage.getFormEmailSettings(user.companyId);
+      res.json(settings || null);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.put("/api/admin/form-email-settings", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const settings = await storage.upsertFormEmailSettings(user.companyId, req.body);
+      res.json(settings);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // ── Proposals & Quotes (Admin) ───────────────────────────────────────────
   app.get("/api/proposals", requireAuth, async (req, res) => {
     try {
@@ -7785,13 +8055,63 @@ FINAL RULES:
     try {
       const form = await storage.getQuoteFormBySlug(req.params.companyId, req.params.slug);
       if (!form || !form.isActive) return res.status(404).json({ message: "Form not found" });
+      const d = req.body as Record<string, any>;
+      const now = new Date().toISOString();
+
+      // Extract CRM fields from submitted data
+      const clientName = [d.firstName, d.lastName].filter(Boolean).join(" ") || d.name || "";
+      const clientEmail = d.email || d.clientEmail || "";
+      const clientPhone = d.phone || d.clientPhone || "";
+      const serviceType = d.serviceType || d.service_type || "";
+      const addressParts = [d.street, d.city, d.province, d.postalCode].filter(Boolean);
+      const serviceAddress = d.address || addressParts.join(", ") || "";
+
       const submission = await storage.createQuoteFormSubmission({
         formId: form.id,
         companyId: req.params.companyId,
-        data: JSON.stringify(req.body),
+        data: JSON.stringify(d),
         status: "new",
-        submittedAt: new Date().toISOString(),
+        submittedAt: now,
+        clientName,
+        clientEmail,
+        clientPhone,
+        serviceType,
+        serviceAddress,
+        pipelineStage: "new_request",
+        estimateStatus: "pending",
       });
+
+      // Log submission activity
+      await storage.addLeadActivity({
+        submissionId: submission.id, companyId: req.params.companyId,
+        eventType: "submitted", eventData: JSON.stringify({ formName: form.name }),
+        createdAt: now,
+      });
+
+      // Send confirmation email if enabled
+      try {
+        const emailSettings = await storage.getFormEmailSettings(req.params.companyId);
+        const company = await storage.getCompany(req.params.companyId);
+        if (emailSettings?.confirmationEnabled && clientEmail) {
+          const companyName = company?.name || "Us";
+          const firstName = d.firstName || clientName.split(" ")[0] || "there";
+          const body = (emailSettings.confirmationBody || "")
+            .replace(/{client_first_name}/g, firstName)
+            .replace(/{client_full_name}/g, clientName)
+            .replace(/{company_name}/g, companyName)
+            .replace(/{service_type}/g, serviceType)
+            .replace(/{service_address}/g, serviceAddress)
+            .replace(/{submission_date}/g, new Date().toLocaleDateString());
+          const subject = (emailSettings.confirmationSubject || "We received your request!")
+            .replace(/{company_name}/g, companyName);
+          const { sendProposalEmail } = await import("./mail");
+          await sendProposalEmail({ to: clientEmail, subject, message: body, sendCopyToSelf: false });
+          await storage.updateQuoteFormSubmission(submission.id, { confirmationEmailSentAt: new Date().toISOString() });
+        }
+      } catch (emailErr) {
+        console.error("[form-submit] Confirmation email failed:", emailErr);
+      }
+
       res.json({ id: submission.id });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
