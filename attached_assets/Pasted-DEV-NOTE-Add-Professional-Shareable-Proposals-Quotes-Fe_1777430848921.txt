@@ -1,0 +1,1097 @@
+DEV NOTE: Add Professional Shareable Proposals & Quotes Feature
+Project: Clockfield
+Area: Admin Panel
+Recommended Feature Name: Proposals & Quotes
+Goal: Let admins create professional branded proposals/quotations, share them by link or email, allow clients to view, print, download PDF, accept, reject, or mark “thinking about it,” and let admins track every response inside Clockfield.
+Critical instruction
+Do not break, remove, rename, or change anything that already works.
+Do not change the existing quote request form unless this new feature is safely connected beside it.
+Do not remove the current quote form.
+Do not change Field Notes.
+Do not change Work Logs.
+Do not change Supplies.
+Do not change Payroll.
+Do not change Schedule.
+Do not change Attendance.
+Do not change Clients.
+Do not change Stripe.
+Do not change authentication.
+Do not change existing public links.
+This must be added as a new professional proposal/quotation system.
+Keep all current flows working exactly the same.
+Feature summary
+Add a professional proposal and quotation feature where an admin can generate a branded quote, send it to a lead or client, and track what happens after the client opens it.
+The proposal must be:
+Shareable by public link
+Sendable by email
+Printable
+Downloadable as PDF
+Viewable like a real paper proposal
+Acceptable from the public link
+Rejectable from the public link
+Trackable inside the admin app
+This should feel like the quote/proposal tools used by professional cleaning service businesses.
+Recommended naming
+Use this name:
+Proposals & Quotes
+Reason:
+Some cleaning businesses send a simple quote. Others send a full proposal with scope, service details, and terms. This name covers both.
+Recommended navigation placement
+Add a new sidebar item:
+Proposals & Quotes
+Or add it under:
+Clients → Proposals & Quotes
+Recommended:
+Add a new sidebar item called Quotes or Proposals & Quotes.
+Inside the page, use tabs:
+All Quotes
+Drafts
+Sent
+Accepted
+Rejected
+Templates
+Settings
+Do not remove the existing quote request form.
+Clear difference between forms and proposals
+Quote Request Form:
+Client fills a form to request pricing.
+Proposal / Quote:
+Admin creates a professional document and sends it to the client or lead.
+This new feature is for the second one.
+Admin workflow
+
+
+Admin creates a proposal
+
+
+Admin clicks:
+Create Proposal
+or
+Create Quote
+The builder should include steps:
+Step 1: Client / Lead Details
+Step 2: Service Details
+Step 3: Scope of Work
+Step 4: Pricing & Taxes
+Step 5: Terms
+Step 6: Preview & Share
+Use steps, tabs, or accordion sections so the page does not become one huge form.
+
+
+Client or lead details
+
+
+Admin should be able to create a proposal for:
+Existing client
+New lead
+Manual client entry
+Fields:
+Client name
+Client company name
+Client email
+Client phone
+Service address
+Billing address if different
+Contact person
+Lead source
+Optional internal notes
+Internal notes must never appear on the public proposal page.
+
+
+Business branding
+
+
+The proposal must use the business branding from admin settings.
+Pull these from Settings where available:
+Business name
+Logo
+Business address
+Phone number
+Email
+Website
+Tax number
+Brand color if available
+Prepared by name
+If no logo exists, show the business name as text.
+Admin should be able to upload the logo in Settings.
+Do not force logo upload on every quote.
+Optional:
+Allow quote-specific logo override later, but it is not required for the first version.
+
+
+Proposal document details
+
+
+Each proposal should include:
+Proposal title
+Quote/proposal number
+Proposal date
+Expiry date
+Prepared by
+Client reference
+Status
+Suggested number format:
+Q-2026-0001
+or
+P-2026-0001
+Auto-generate it, but allow admin to edit if needed.
+Statuses:
+Draft
+Sent
+Viewed
+Accepted
+Rejected
+Thinking About It
+Expired
+Converted to Job
+Cancelled
+Archived
+
+
+Service details
+
+
+Add service detail fields for cleaning businesses.
+Fields:
+Service type
+Commercial cleaning
+Office cleaning
+Restaurant cleaning
+Post-construction cleaning
+Move-in / move-out cleaning
+Deep cleaning
+Floor care
+Janitorial service
+Custom
+Service frequency
+One-time
+Daily
+Weekly
+Bi-weekly
+Monthly
+Custom
+Days per week
+1 day/week
+2 days/week
+3 days/week
+4 days/week
+5 days/week
+6 days/week
+7 days/week
+Custom
+Hours per visit
+Example:
+2 hours per day
+Number of cleaners
+Example:
+1 cleaner
+2 cleaners
+3 cleaners
+Preferred service time
+Morning
+Afternoon
+Evening
+After-hours
+Custom
+Contract length
+One-time
+Monthly
+3 months
+6 months
+12 months
+Custom
+Proposed start date
+Admin can suggest a start date.
+Client can select a preferred start date when accepting.
+
+
+Scope of work
+
+
+Admin must be able to build a professional scope of work.
+The scope should support sections and bullet points.
+Example:
+Scope of Work
+General Cleaning
+Empty garbage and recycling
+Dust accessible surfaces
+Vacuum carpets
+Mop hard floors
+Clean glass doors
+Washrooms
+Clean toilets and sinks
+Disinfect touch points
+Mop floors
+Restock supplies if included
+Kitchen / Breakroom
+Wipe counters
+Clean sinks
+Remove garbage
+Spot clean appliances
+Floor Care
+Sweep floors
+Mop floors
+Auto-scrub if included
+Burnish if included
+Add-ons
+Window cleaning
+Carpet cleaning
+Deep cleaning
+Floor stripping and waxing
+Admin must be able to:
+Add section
+Edit section title
+Delete section
+Reorder section
+Add bullet point
+Edit bullet point
+Delete bullet point
+Reorder bullet points
+Use a saved template
+Add custom text
+
+
+What is included
+
+
+Add a separate section:
+What’s Included
+This section should support included/excluded/extra-cost items.
+Examples:
+Labour: Included
+Basic cleaning supplies: Included
+Garbage bags: Included
+Paper products: Not included
+Floor stripping and waxing: Extra cost
+Window cleaning: Extra cost
+Carpet cleaning: Extra cost
+Admin should be able to edit all items.
+
+
+Pricing and taxes
+
+
+The proposal must show clear pricing.
+Pricing options:
+Flat monthly price
+Per visit price
+Hourly price
+One-time price
+Custom line items
+The admin should be able to add line items.
+Example line items:
+Monthly cleaning service
+Initial deep clean
+Floor care
+Supply fee
+Travel fee
+Discount
+Pricing fields:
+Item name
+Description
+Quantity
+Unit price
+Subtotal
+Taxable yes/no
+Tax rate
+Total
+Monthly pricing fields:
+Rate per hour
+Hours per visit
+Visits per week
+Number of cleaners
+Estimated weekly hours
+Estimated monthly hours
+Monthly subtotal
+Tax amount
+Total monthly amount
+Support tax settings:
+No tax
+GST
+PST
+HST
+Custom tax
+Tax rate should be configurable in Settings.
+Do not hardcode one tax rate.
+For Manitoba businesses, allow GST/PST settings, but keep it flexible for all locations.
+
+
+Pricing calculation rules
+
+
+If using hourly calculation:
+Daily price = hourly rate × hours per visit × number of cleaners
+Weekly price = daily price × visits per week
+Monthly price = weekly price × 4.33
+Tax = subtotal × tax rate
+Total = subtotal + tax
+Admin must be able to manually override subtotal or final price.
+Cleaning quotes often need custom pricing.
+Do not lock admin into one calculation method.
+
+
+Terms and conditions
+
+
+Add an editable terms section.
+Default examples:
+This proposal is valid until the expiry date listed above.
+Service can begin after acceptance and schedule confirmation.
+Additional work outside the listed scope may require a separate quote.
+Pricing may change if site conditions are different from the information provided.
+Payment terms will be confirmed before service begins.
+Admin should be able to edit all terms.
+
+
+Internal admin notes
+
+
+Add internal notes.
+These are only visible inside the admin app.
+They must not show on:
+Public proposal page
+PDF
+Print view
+Client email
+
+
+Public shareable proposal link
+
+
+This is required.
+Each proposal must generate a secure public link.
+Example:
+/public/proposals/:token
+The admin should be able to:
+Copy link
+Open link
+Share link manually
+Send link by email
+The client opens the link and sees the full proposal.
+The public page must not require login.
+The public link must show:
+Business logo
+Business name
+Business contact info
+Proposal number
+Date
+Expiry date
+Client details
+Service address
+Service summary
+Scope of work
+What is included
+Pricing
+Taxes
+Total
+Terms
+Print button
+Download PDF button
+Accept button
+I’m Thinking About It button
+Reject button
+The public link must use a secure token.
+Do not expose private internal IDs as the only identifier.
+
+
+Public proposal page must act like a live PDF page
+
+
+The client should feel like they are viewing a professional document.
+The page should look like a paper proposal.
+Use letter-size styling:
+8.5 × 11 inches
+Clean margins
+White background
+Professional spacing
+Strong header
+Clear pricing table
+Clean terms section
+Readable typography
+The public page should work on desktop and mobile.
+On mobile, it can scale nicely, but still keep the proposal readable.
+
+
+Download PDF
+
+
+Add a Download PDF button.
+The PDF should include:
+Business branding
+Proposal details
+Client details
+Scope of work
+Service details
+What is included
+Pricing
+Taxes
+Total
+Terms
+Acceptance status if needed
+The PDF must not include:
+Accept button
+Reject button
+Thinking button
+Admin controls
+Website navigation
+Internal notes
+The PDF should look like a real printable quote/proposal.
+Recommended:
+Reuse Clockfield’s existing PDF generation system if one already exists for incident reports, field notes, or reports.
+Do not add a heavy new library if the app already has PDF generation.
+
+
+Print proposal
+
+
+Add a Print button.
+Print must use proper print CSS.
+Print should hide:
+Navigation
+Action buttons
+Admin controls
+Public page buttons
+Print should show:
+Only the proposal document
+Use:
+@media print
+White background
+Letter size
+Good margins
+Avoid splitting pricing table across pages
+Avoid separating headings from their content
+
+
+Email sharing
+
+
+Add email sharing.
+Admin should be able to send the proposal link to the client by email.
+Use existing email provider if available.
+If Clockfield already uses Mailgun, use the existing Mailgun system.
+Do not expose API keys on the frontend.
+Email should include:
+Client name
+Business name
+Short message
+Proposal title
+Proposal number
+Public proposal link
+Optional expiry date
+Example email:
+Subject:
+Proposal from [Business Name]
+Body:
+Hi [Client Name],
+[Business Name] has prepared a proposal for your cleaning service request.
+You can review, print, download, accept, or respond to the proposal using the secure link below.
+[View Proposal]
+Thank you,
+[Business Name]
+Admin should also be able to copy the link if email is not configured.
+
+
+Client actions on public link
+
+
+At the bottom of the public proposal, show three main actions:
+Accept Proposal
+I’m Thinking About It
+Reject Proposal
+These actions must save back to the admin app.
+
+
+Accept proposal flow
+
+
+When client clicks Accept Proposal:
+Show confirmation popup.
+Fields:
+Client name
+Client email
+Preferred start date
+Optional note
+Optional digital signature
+Checkbox:
+“I confirm that I have reviewed and accept this proposal.”
+Then client clicks:
+Confirm Acceptance
+After submission:
+Set proposal status to Accepted
+Save accepted_at timestamp
+Save client name
+Save client email
+Save preferred start date
+Save note
+Save signature if included
+Show thank-you message:
+“Thank you. Your proposal has been accepted. The business will contact you to confirm the next steps.”
+Admin should immediately see the accepted status inside Clockfield.
+
+
+Reject proposal flow
+
+
+When client clicks Reject Proposal:
+Show popup:
+“Can you tell us why you are not accepting this proposal?”
+Fields:
+Reason dropdown
+Price is too high
+Scope does not match what I need
+Need more time
+Chose another company
+Timing does not work
+Other
+Additional note textarea
+Client name optional
+Client email optional
+Then client submits.
+After submission:
+Set proposal status to Rejected
+Save rejected_at timestamp
+Save rejection reason
+Save rejection note
+Show message:
+“Thank you for your feedback.”
+Admin should see:
+Rejected status
+Reason
+Note
+Timestamp
+
+
+I’m Thinking About It flow
+
+
+When client clicks I’m Thinking About It:
+Show popup:
+“No problem. Would you like us to follow up?”
+Fields:
+Optional note
+Preferred follow-up date
+Preferred start date if known
+Client name
+Client email
+After submission:
+Set proposal status to Thinking About It
+Save thinking_at timestamp
+Save note
+Save preferred follow-up date
+Save preferred start date
+Admin should see it inside Clockfield.
+
+
+Preferred start date
+
+
+Client should be able to select preferred start date when:
+Accepting
+Marking “I’m Thinking About It”
+Options:
+Date picker
+“I’m not sure yet”
+“Contact me to schedule”
+Save this value to the proposal response.
+Admin should see it clearly.
+
+
+Admin tracking dashboard
+
+
+Inside Proposals & Quotes page, admin should see all proposals.
+Show:
+Proposal number
+Client/company
+Service address
+Total amount
+Status
+Created date
+Sent date
+Viewed date
+Accepted/rejected/thinking date
+Preferred start date
+Actions
+Actions:
+View
+Edit
+Preview public link
+Copy link
+Send email
+Download PDF
+Print
+Duplicate
+Archive
+
+
+Activity tracking
+
+
+Track important proposal events.
+Events:
+Created
+Edited
+Sent by email
+Public link copied if possible
+Viewed by client
+Downloaded as PDF if possible
+Printed if possible
+Accepted
+Rejected
+Marked thinking
+Expired
+Archived
+Show activity timeline inside the proposal details page.
+Example:
+Apr 28, 2:31 PM: Proposal created
+Apr 28, 2:40 PM: Proposal sent to client
+Apr 28, 2:45 PM: Client viewed proposal
+Apr 28, 3:10 PM: Client accepted proposal
+
+
+Admin notifications
+
+
+When client responds, notify admin.
+Use the existing Clockfield notification/message system if available.
+Notifications:
+Accepted:
+“Proposal Q-2026-0001 was accepted by ABC Restaurant.”
+Rejected:
+“Proposal Q-2026-0001 was rejected. Reason: Price is too high.”
+Thinking:
+“ABC Restaurant is thinking about proposal Q-2026-0001 and requested follow-up.”
+Do not build a new notification system if one already exists.
+
+
+Proposal templates
+
+
+Add templates to make proposal creation faster.
+Default templates:
+Office Cleaning Proposal
+Restaurant Cleaning Proposal
+Post-Construction Cleaning Proposal
+Move-In / Move-Out Cleaning Proposal
+Floor Care Proposal
+One-Time Deep Clean Proposal
+Janitorial Service Proposal
+Each template can prefill:
+Scope of work
+Included items
+Terms
+Service type
+Admin can edit everything before saving or sending.
+Templates should not be required.
+
+
+Admin editing rules
+
+
+Before proposal is accepted:
+Admin can edit everything.
+After proposal is accepted:
+Lock major pricing fields by default.
+If admin tries to edit an accepted proposal, show warning:
+“This proposal has already been accepted. Editing it may change the accepted agreement.”
+Admin can still duplicate an accepted proposal to create a revised version.
+Recommended button:
+Create Revised Proposal
+
+
+Expiry behavior
+
+
+If proposal is expired:
+Public page should show:
+“This proposal has expired. Please contact the business for an updated proposal.”
+Admin can:
+Extend expiry date
+Duplicate proposal
+Archive proposal
+Expired proposal should not allow acceptance unless admin reopens or extends it.
+
+
+Lead proposal behavior
+
+
+This feature should support leads, not only existing clients.
+Admin can generate a proposal for a lead.
+The lead clicks the public link.
+Lead views everything.
+Lead accepts, rejects, or says thinking.
+Admin sees the response in Clockfield.
+If lead accepts, admin can later convert the lead into a client if that feature exists.
+Do not force conversion automatically unless already supported.
+
+
+Optional convert to job
+
+
+Optional later feature:
+After a proposal is accepted, show:
+Convert to Job
+Create Schedule
+Create Client
+Do not touch schedule/client logic unless implemented safely.
+For first version, just save the accepted proposal and preferred start date.
+
+
+Data model suggestion
+
+
+Use the project’s existing naming style.
+Possible table:
+proposals
+Fields:
+id
+business_id
+client_id nullable
+lead_id nullable
+client_name
+client_company
+client_email
+client_phone
+service_address
+billing_address
+proposal_number
+title
+status
+proposal_date
+expiry_date
+prepared_by_user_id
+business_snapshot_json
+service_details_json
+scope_json
+included_items_json
+pricing_json
+tax_json
+terms_text
+internal_notes
+public_token
+public_url
+sent_at
+viewed_at
+accepted_at
+rejected_at
+thinking_at
+preferred_start_date
+follow_up_date
+client_response_json
+is_archived
+created_at
+updated_at
+Possible table:
+proposal_activity_logs
+Fields:
+id
+proposal_id
+business_id
+event_type
+event_data_json
+created_by_user_id nullable
+created_at
+Possible table:
+proposal_templates
+Fields:
+id
+business_id nullable
+name
+service_type
+scope_json
+included_items_json
+terms_text
+pricing_defaults_json
+created_at
+updated_at
+Make all new fields safe and nullable where needed.
+Do not break existing data.
+
+
+Business snapshot
+
+
+Save a snapshot of business branding on the proposal.
+Reason:
+If admin changes logo or business address later, old sent proposals should still show the branding used at the time unless admin regenerates it.
+business_snapshot_json should include:
+Business name
+Logo URL
+Address
+Phone
+Email
+Website
+Tax number
+Brand color
+
+
+Public token security
+
+
+Public links must use secure random tokens.
+Do not use predictable IDs only.
+Public route example:
+/public/proposals/:token
+Public API example:
+GET /api/public/proposals/:token
+POST /api/public/proposals/:token/accept
+POST /api/public/proposals/:token/reject
+POST /api/public/proposals/:token/thinking
+GET /api/public/proposals/:token/pdf
+Public users must never see:
+Internal notes
+Admin-only activity
+Private backend IDs
+Other clients’ proposals
+
+
+API routes suggestion
+
+
+Admin routes:
+GET /api/proposals
+POST /api/proposals
+GET /api/proposals/:id
+PATCH /api/proposals/:id
+POST /api/proposals/:id/send-email
+POST /api/proposals/:id/copy-link-event
+POST /api/proposals/:id/duplicate
+POST /api/proposals/:id/archive
+GET /api/proposals/:id/pdf
+GET /api/proposal-templates
+POST /api/proposal-templates
+Public routes:
+GET /api/public/proposals/:token
+POST /api/public/proposals/:token/viewed
+POST /api/public/proposals/:token/accept
+POST /api/public/proposals/:token/reject
+POST /api/public/proposals/:token/thinking
+GET /api/public/proposals/:token/pdf
+Use current backend structure if route naming is different.
+
+
+UI requirements for admin builder
+
+
+The builder should be clean, not confusing.
+Use:
+Step layout
+Progress indicator
+Cards
+Preview panel
+Save Draft button
+Preview Public Page button
+Send Email button
+Copy Link button
+Download PDF button
+Required buttons:
+Save Draft
+Preview
+Copy Share Link
+Send by Email
+Download PDF
+Print
+Do not hide the link sharing function.
+Sharing is a main requirement.
+
+
+UI requirements for public page
+
+
+Public page should look polished and professional.
+Sections:
+Header
+Prepared For
+Service Summary
+Scope of Work
+What’s Included
+Pricing
+Terms
+Client Actions
+Buttons:
+Print
+Download PDF
+Accept Proposal
+I’m Thinking About It
+Reject Proposal
+On mobile:
+Buttons should stack cleanly.
+Pricing table should not overflow.
+Scope should be readable.
+
+
+Example public proposal layout
+
+
+Business Logo
+Business Name
+Address
+Phone
+Email
+Proposal / Quote
+Proposal #: Q-2026-0001
+Date: April 28, 2026
+Valid Until: May 12, 2026
+Prepared For
+ABC Restaurant
+Contact: John Smith
+Service Address: 123 Main Street
+Service Summary
+Service Type: Restaurant Kitchen Cleaning
+Frequency: 5 days per week
+Hours: 2 hours per visit
+Estimated Monthly Hours: 43.3 hours
+Proposed Start Date: May 1, 2026
+Scope of Work
+Kitchen Cleaning
+
+
+Degrease cooking areas
+
+
+Clean high-touch surfaces
+
+
+Mop floors
+
+
+Remove garbage to designated area
+
+
+Washrooms
+
+
+Clean and disinfect toilets and sinks
+
+
+Mop floors
+
+
+Restock supplies if included
+
+
+What’s Included
+
+
+Labour
+
+
+Basic cleaning supplies
+
+
+Garbage removal to designated area
+
+
+Scheduled quality checks
+
+
+Pricing
+Monthly Cleaning Service: $1,200.00
+Initial Deep Clean: $250.00
+Subtotal: $1,450.00
+GST: $72.50
+Total: $1,522.50
+Terms
+This proposal is valid until May 12, 2026.
+Additional work outside the listed scope may require separate approval.
+Client Actions
+Accept Proposal
+I’m Thinking About It
+Reject Proposal
+
+
+Error handling
+
+
+Invalid public link:
+Show clean message:
+“This proposal link is not available.”
+Expired proposal:
+Show:
+“This proposal has expired. Please contact the business for an updated proposal.”
+Already accepted:
+Show:
+“This proposal has already been accepted.”
+Email failed:
+Show:
+“Proposal saved, but the email could not be sent. You can still copy and share the link.”
+PDF failed:
+Show:
+“PDF could not be generated right now. Please try again.”
+Do not show raw backend errors.
+
+
+Testing checklist
+
+
+Admin builder:
+Admin can create proposal
+Admin can create proposal for existing client
+Admin can create proposal for new lead
+Admin can add client email
+Admin can add service address
+Admin can add service type
+Admin can set frequency
+Admin can set hours per visit
+Admin can add scope sections
+Admin can add bullet points
+Admin can edit included items
+Admin can add pricing line items
+Admin can add taxes
+Admin can override pricing
+Admin can edit terms
+Admin can save draft
+Admin can preview public proposal
+Admin can copy share link
+Admin can send proposal by email
+Admin can download PDF
+Admin can print
+Admin can duplicate proposal
+Admin can archive proposal
+Public link:
+Public link opens without login
+Public page shows business branding
+Public page shows client details
+Public page shows scope
+Public page shows pricing
+Public page shows taxes
+Public page shows total
+Public page shows terms
+Client can print
+Client can download PDF
+Client can accept
+Client can reject
+Client can mark thinking
+Acceptance saves preferred start date
+Rejection saves reason
+Thinking saves note and follow-up date
+Admin tracking:
+Admin sees Sent status
+Admin sees Viewed status
+Admin sees Accepted status
+Admin sees Rejected status
+Admin sees Thinking status
+Admin sees preferred start date
+Admin sees rejection reason
+Admin sees client note
+Admin receives notification if existing notification system supports it
+PDF and print:
+PDF looks like a real paper quote
+PDF does not include action buttons
+Print view uses clean paper layout
+Print does not show app navigation
+Safety:
+Existing Quote Form still works
+Existing client pages still work
+Existing Field Notes still work
+Existing Work Logs still work
+Existing Supplies still work
+Existing public links still work
+No auth changes break anything
+No database migration breaks old records
+No admin navigation breaks
+Final instruction
+Build a new Proposals & Quotes feature where admins can generate branded cleaning service proposals, share them by secure link, send them by email, let clients view the proposal like a live PDF, print it, download it as a PDF, accept it, reject it, or mark “I’m thinking about it.”
+Every client action must save back into Clockfield so the admin can track the proposal status.
+Keep everything else in the app working exactly the same.
+Do not break, remove, or affect any existing Clockfield feature.

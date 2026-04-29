@@ -1187,3 +1187,134 @@ export type QuoteForm = typeof quoteForms.$inferSelect;
 export type InsertQuoteForm = z.infer<typeof insertQuoteFormSchema>;
 export type QuoteFormSubmission = typeof quoteFormSubmissions.$inferSelect;
 export type InsertQuoteFormSubmission = z.infer<typeof insertQuoteFormSubmissionSchema>;
+
+// ── Proposals & Quotes ─────────────────────────────────────────────────────
+export type ProposalStatus =
+  | "draft" | "sent" | "viewed" | "accepted" | "rejected"
+  | "thinking" | "expired" | "converted" | "cancelled" | "archived";
+
+export type BusinessSnapshot = {
+  name: string;
+  logoUrl: string | null;
+  address: string | null;
+  city: string | null;
+  province: string | null;
+  postalCode: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  brandColor: string | null;
+};
+
+export type ServiceDetails = {
+  serviceType: string;
+  frequency: string;
+  daysPerWeek: string;
+  hoursPerVisit: string;
+  numCleaners: string;
+  preferredTime: string;
+  contractLength: string;
+  proposedStartDate: string;
+};
+
+export type ScopeBullet = { id: string; text: string };
+export type ScopeSection = { id: string; title: string; items: ScopeBullet[] };
+
+export type IncludedItem = {
+  id: string;
+  label: string;
+  status: "included" | "not_included" | "extra_cost";
+};
+
+export type PricingLineItem = {
+  id: string;
+  name: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  taxable: boolean;
+};
+
+export type TaxConfig = {
+  type: "none" | "gst" | "pst" | "hst" | "custom";
+  rate: number;
+  label: string;
+};
+
+export type PricingConfig = {
+  lineItems: PricingLineItem[];
+  taxConfig: TaxConfig;
+  subtotalOverride: number | null;
+  notes: string;
+};
+
+export type ClientResponse = {
+  name?: string;
+  email?: string;
+  note?: string;
+  preferredStartDate?: string | null;
+  rejectionReason?: string;
+  followUpDate?: string | null;
+  signature?: string | null;
+  confirmedCheckbox?: boolean;
+};
+
+export const proposals = pgTable("proposals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  proposalNumber: text("proposal_number").notNull(),
+  title: text("title").notNull(),
+  status: text("status").notNull().default("draft"),
+  // Client info
+  clientId: varchar("client_id"),
+  clientName: text("client_name").notNull().default(""),
+  clientCompany: text("client_company").notNull().default(""),
+  clientEmail: text("client_email").notNull().default(""),
+  clientPhone: text("client_phone").notNull().default(""),
+  serviceAddress: text("service_address").notNull().default(""),
+  billingAddress: text("billing_address").notNull().default(""),
+  contactPerson: text("contact_person").notNull().default(""),
+  leadSource: text("lead_source").notNull().default(""),
+  // Dates
+  proposalDate: text("proposal_date").notNull(),
+  expiryDate: text("expiry_date").notNull(),
+  preparedByUserId: varchar("prepared_by_user_id"),
+  // JSON content (stored as text, consistent with codebase pattern)
+  businessSnapshot: text("business_snapshot").notNull().default("{}"),
+  serviceDetails: text("service_details").notNull().default("{}"),
+  scopeSections: text("scope_sections").notNull().default("[]"),
+  includedItems: text("included_items").notNull().default("[]"),
+  pricingConfig: text("pricing_config").notNull().default("{}"),
+  termsText: text("terms_text").notNull().default(""),
+  internalNotes: text("internal_notes").notNull().default(""),
+  // Public sharing
+  publicToken: text("public_token").notNull().unique(),
+  // Tracking timestamps
+  sentAt: text("sent_at"),
+  viewedAt: text("viewed_at"),
+  acceptedAt: text("accepted_at"),
+  rejectedAt: text("rejected_at"),
+  thinkingAt: text("thinking_at"),
+  // Client response data
+  clientResponse: text("client_response").notNull().default("{}"),
+  isArchived: boolean("is_archived").notNull().default(false),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const proposalActivityLogs = pgTable("proposal_activity_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  proposalId: varchar("proposal_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  eventType: text("event_type").notNull(),
+  eventData: text("event_data").notNull().default("{}"),
+  createdByUserId: varchar("created_by_user_id"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertProposalSchema = createInsertSchema(proposals).omit({ id: true });
+export const insertProposalActivityLogSchema = createInsertSchema(proposalActivityLogs).omit({ id: true });
+export type Proposal = typeof proposals.$inferSelect;
+export type InsertProposal = z.infer<typeof insertProposalSchema>;
+export type ProposalActivityLog = typeof proposalActivityLogs.$inferSelect;
+export type InsertProposalActivityLog = z.infer<typeof insertProposalActivityLogSchema>;

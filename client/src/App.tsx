@@ -64,6 +64,9 @@ import PublicFieldNote from "@/pages/public/field-note";
 import PublicQuoteForm from "@/pages/public/quote-form";
 import AdminQuoteForms from "@/pages/admin/quote-forms";
 import AdminQuoteFormBuilder from "@/pages/admin/quote-form-builder";
+import AdminProposals from "@/pages/admin/proposals";
+import AdminProposalBuilder from "@/pages/admin/proposal-builder";
+import PublicProposal from "@/pages/public/proposal";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import LandingPage from "@/pages/landing";
@@ -118,6 +121,8 @@ function AdminLayout() {
               <Route path="/admin/requests"><Redirect to="/admin/work-log?tab=requests" /></Route>
               <Route path="/admin/quote-forms/:id" component={AdminQuoteFormBuilder} />
               <Route path="/admin/quote-forms" component={AdminQuoteForms} />
+              <Route path="/admin/proposals/:id" component={AdminProposalBuilder} />
+              <Route path="/admin/proposals" component={AdminProposals} />
               <Route path="/admin/supplies" component={AdminSupplies} />
               <Route path="/admin/publications/:id" component={AdminPublicationEditor} />
               <Route path="/admin/publications" component={AdminPublications} />
@@ -265,6 +270,14 @@ function AppRouter() {
     return (
       <Switch>
         <Route path="/form/:companyId/:slug" component={PublicQuoteForm} />
+      </Switch>
+    );
+  }
+
+  if (location.startsWith("/public/proposals/")) {
+    return (
+      <Switch>
+        <Route path="/public/proposals/:token" component={PublicProposal} />
       </Switch>
     );
   }

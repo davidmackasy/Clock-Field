@@ -12,7 +12,7 @@ import {
   LayoutDashboard, Users, Calendar, ClipboardList,
   DollarSign, Building2, Settings,
   LogOut, MoreHorizontal, Clock, ChevronRight, Users2, BookOpen,
-  CreditCard, Bell, ShieldAlert, Package, Newspaper, FileInput,
+  CreditCard, Bell, ShieldAlert, Package, Newspaper, FileInput, FileText,
 } from "lucide-react";
 
 const primaryTabs = [
@@ -28,6 +28,7 @@ const moreItems = [
   { label: "Management", href: "/admin/management", icon: Users2 },
   { label: "Work Log", href: "/admin/work-log", icon: BookOpen },
   { label: "Quote Forms", href: "/admin/quote-forms", icon: FileInput },
+  { label: "Proposals & Quotes", href: "/admin/proposals", icon: FileText },
   { label: "Supplies", href: "/admin/supplies", icon: Package },
   { label: "Publications", href: "/admin/publications", icon: Newspaper },
   { label: "Settings", href: "/admin/settings", icon: Settings },
@@ -52,6 +53,7 @@ const pageTitles: Record<string, string> = {
   "/admin/work-log": "Work Log",
   "/admin/field-notes": "Work Log",
   "/admin/quote-forms": "Quote Forms",
+  "/admin/proposals": "Proposals & Quotes",
   "/admin/supplies": "Supplies",
   "/admin/publications": "Publications",
   "/admin/settings": "Settings",

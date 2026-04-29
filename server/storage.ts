@@ -57,6 +57,9 @@ import {
   quoteForms, quoteFormSubmissions,
   type QuoteForm, type InsertQuoteForm,
   type QuoteFormSubmission, type InsertQuoteFormSubmission,
+  proposals, proposalActivityLogs,
+  type Proposal, type InsertProposal,
+  type ProposalActivityLog, type InsertProposalActivityLog,
   supplies, supplyUpdates,
   inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses,
   type Supply, type InsertSupply,
@@ -324,6 +327,16 @@ export interface IStorage {
   getQuoteFormSubmissions(formId: string): Promise<QuoteFormSubmission[]>;
   createQuoteFormSubmission(data: InsertQuoteFormSubmission): Promise<QuoteFormSubmission>;
   updateQuoteFormSubmission(id: string, data: Partial<InsertQuoteFormSubmission>): Promise<QuoteFormSubmission | undefined>;
+  // Proposals
+  getProposalsByCompany(companyId: string): Promise<Proposal[]>;
+  getProposal(id: string): Promise<Proposal | undefined>;
+  getProposalByToken(token: string): Promise<Proposal | undefined>;
+  createProposal(data: InsertProposal): Promise<Proposal>;
+  updateProposal(id: string, data: Partial<InsertProposal>): Promise<Proposal | undefined>;
+  getNextProposalNumber(companyId: string): Promise<string>;
+  // Proposal activity logs
+  getProposalActivityLogs(proposalId: string): Promise<ProposalActivityLog[]>;
+  addProposalActivity(data: InsertProposalActivityLog): Promise<ProposalActivityLog>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1590,6 +1603,47 @@ export class DatabaseStorage implements IStorage {
 
   async updateQuoteFormSubmission(id: string, data: Partial<InsertQuoteFormSubmission>): Promise<QuoteFormSubmission | undefined> {
     const [row] = await db.update(quoteFormSubmissions).set(data as any).where(eq(quoteFormSubmissions.id, id)).returning();
+    return row;
+  }
+
+  // ── Proposals ────────────────────────────────────────────────────────────
+  async getProposalsByCompany(companyId: string): Promise<Proposal[]> {
+    return db.select().from(proposals).where(eq(proposals.companyId, companyId)).orderBy(desc(proposals.createdAt));
+  }
+
+  async getProposal(id: string): Promise<Proposal | undefined> {
+    const [row] = await db.select().from(proposals).where(eq(proposals.id, id));
+    return row;
+  }
+
+  async getProposalByToken(token: string): Promise<Proposal | undefined> {
+    const [row] = await db.select().from(proposals).where(eq(proposals.publicToken, token));
+    return row;
+  }
+
+  async createProposal(data: InsertProposal): Promise<Proposal> {
+    const [row] = await db.insert(proposals).values(data as any).returning();
+    return row;
+  }
+
+  async updateProposal(id: string, data: Partial<InsertProposal>): Promise<Proposal | undefined> {
+    const [row] = await db.update(proposals).set(data as any).where(eq(proposals.id, id)).returning();
+    return row;
+  }
+
+  async getNextProposalNumber(companyId: string): Promise<string> {
+    const year = new Date().getFullYear();
+    const rows = await db.select().from(proposals).where(eq(proposals.companyId, companyId));
+    const seq = String(rows.length + 1).padStart(4, "0");
+    return `Q-${year}-${seq}`;
+  }
+
+  async getProposalActivityLogs(proposalId: string): Promise<ProposalActivityLog[]> {
+    return db.select().from(proposalActivityLogs).where(eq(proposalActivityLogs.proposalId, proposalId)).orderBy(proposalActivityLogs.createdAt);
+  }
+
+  async addProposalActivity(data: InsertProposalActivityLog): Promise<ProposalActivityLog> {
+    const [row] = await db.insert(proposalActivityLogs).values(data as any).returning();
     return row;
   }
 }

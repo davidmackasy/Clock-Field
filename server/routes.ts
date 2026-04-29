@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { db, pool } from "./db";
 import { setupAuth, hashPassword, comparePasswords, requireAuth, requireRole } from "./auth";
 import OpenAI from "openai";
-import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail, sendAdminRequestReplyEmail, sendTrialAccountEmail } from "./mail";
+import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail, sendAdminRequestReplyEmail, sendTrialAccountEmail, sendProposalEmail } from "./mail";
 import { createHash } from "crypto";
 import passport from "passport";
 import { randomBytes } from "crypto";
@@ -7363,6 +7363,317 @@ FINAL RULES:
       if (!form || form.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       const updated = await storage.updateQuoteFormSubmission(req.params.id, { status: req.body.status });
       res.json({ ...updated, data: JSON.parse(updated!.data) });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Proposals & Quotes (Admin) ───────────────────────────────────────────
+  app.get("/api/proposals", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const all = await storage.getProposalsByCompany(user.companyId);
+      res.json(all);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/proposals", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const company = await storage.getCompany(user.companyId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      const token = randomBytes(32).toString("hex");
+      const proposalNumber = await storage.getNextProposalNumber(user.companyId);
+      const now = new Date().toISOString();
+      const snapshot = JSON.stringify({
+        name: company.name,
+        logoUrl: company.companyLogoUrl ?? null,
+        address: company.address ?? null,
+        city: company.city ?? null,
+        province: company.province ?? null,
+        postalCode: company.postalCode ?? null,
+        phone: company.companyPhone ?? null,
+        email: company.companyEmail ?? null,
+        website: null,
+        brandColor: company.brandColor ?? null,
+      });
+      const defaultPricing = JSON.stringify({
+        lineItems: [],
+        taxConfig: { type: "none", rate: 0, label: "No Tax" },
+        subtotalOverride: null,
+        notes: "",
+      });
+      const defaultTerms = `This proposal is valid until the expiry date listed above.\nService can begin after acceptance and schedule confirmation.\nAdditional work outside the listed scope may require a separate quote.\nPricing may change if site conditions are different from the information provided.\nPayment terms will be confirmed before service begins.`;
+      const defaultIncluded = JSON.stringify([
+        { id: "labour", label: "Labour", status: "included" },
+        { id: "basic_supplies", label: "Basic cleaning supplies", status: "included" },
+        { id: "garbage_bags", label: "Garbage bags", status: "included" },
+        { id: "paper_products", label: "Paper products", status: "not_included" },
+        { id: "window_cleaning", label: "Window cleaning", status: "extra_cost" },
+      ]);
+      const proposal = await storage.createProposal({
+        companyId: user.companyId,
+        proposalNumber,
+        title: req.body.title || "New Proposal",
+        status: "draft",
+        clientId: req.body.clientId ?? null,
+        clientName: req.body.clientName ?? "",
+        clientCompany: req.body.clientCompany ?? "",
+        clientEmail: req.body.clientEmail ?? "",
+        clientPhone: req.body.clientPhone ?? "",
+        serviceAddress: req.body.serviceAddress ?? "",
+        billingAddress: req.body.billingAddress ?? "",
+        contactPerson: req.body.contactPerson ?? "",
+        leadSource: req.body.leadSource ?? "",
+        proposalDate: now.slice(0, 10),
+        expiryDate: req.body.expiryDate || new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+        preparedByUserId: user.id,
+        businessSnapshot: snapshot,
+        serviceDetails: JSON.stringify({
+          serviceType: "", frequency: "", daysPerWeek: "", hoursPerVisit: "",
+          numCleaners: "1", preferredTime: "", contractLength: "", proposedStartDate: "",
+        }),
+        scopeSections: "[]",
+        includedItems: defaultIncluded,
+        pricingConfig: defaultPricing,
+        termsText: defaultTerms,
+        internalNotes: "",
+        publicToken: token,
+        clientResponse: "{}",
+        isArchived: false,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await storage.addProposalActivity({
+        proposalId: proposal.id,
+        companyId: user.companyId,
+        eventType: "created",
+        eventData: "{}",
+        createdByUserId: user.id,
+        createdAt: now,
+      });
+      res.json(proposal);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/proposals/:id", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const p = await storage.getProposal(req.params.id);
+      if (!p || p.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      res.json(p);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/proposals/:id", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const p = await storage.getProposal(req.params.id);
+      if (!p || p.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const updated = await storage.updateProposal(req.params.id, {
+        ...req.body,
+        updatedAt: new Date().toISOString(),
+      });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/proposals/:id/activity", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const p = await storage.getProposal(req.params.id);
+      if (!p || p.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const logs = await storage.getProposalActivityLogs(req.params.id);
+      res.json(logs);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/proposals/:id/send-email", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const p = await storage.getProposal(req.params.id);
+      if (!p || p.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (!p.clientEmail) return res.status(400).json({ message: "No client email on this proposal" });
+      const snapshot = JSON.parse(p.businessSnapshot) as any;
+      const host = req.headers.host || "app.clockfield.ca";
+      const proto = req.headers["x-forwarded-proto"] || "https";
+      const proposalUrl = `${proto}://${host}/public/proposals/${p.publicToken}`;
+      await sendProposalEmail({
+        to: p.clientEmail,
+        clientName: p.clientName || "there",
+        businessName: snapshot.name || "Your Service Provider",
+        proposalTitle: p.title,
+        proposalNumber: p.proposalNumber,
+        proposalUrl,
+        expiryDate: p.expiryDate,
+      });
+      const now = new Date().toISOString();
+      const updatedStatus = p.status === "draft" ? "sent" : p.status;
+      await storage.updateProposal(p.id, { status: updatedStatus, sentAt: now, updatedAt: now });
+      await storage.addProposalActivity({
+        proposalId: p.id, companyId: user.companyId, eventType: "sent_email",
+        eventData: JSON.stringify({ to: p.clientEmail }), createdByUserId: user.id, createdAt: now,
+      });
+      res.json({ success: true });
+    } catch (e: any) {
+      if (e.message?.includes("Mailgun not configured")) {
+        res.status(200).json({ success: false, emailError: "Mailgun not configured. Copy the link to share manually." });
+      } else {
+        res.status(500).json({ message: e.message });
+      }
+    }
+  });
+
+  app.post("/api/proposals/:id/duplicate", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const p = await storage.getProposal(req.params.id);
+      if (!p || p.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const token = randomBytes(32).toString("hex");
+      const proposalNumber = await storage.getNextProposalNumber(user.companyId);
+      const now = new Date().toISOString();
+      const dup = await storage.createProposal({
+        companyId: p.companyId,
+        proposalNumber,
+        title: `${p.title} (Copy)`,
+        status: "draft",
+        clientId: p.clientId,
+        clientName: p.clientName,
+        clientCompany: p.clientCompany,
+        clientEmail: p.clientEmail,
+        clientPhone: p.clientPhone,
+        serviceAddress: p.serviceAddress,
+        billingAddress: p.billingAddress,
+        contactPerson: p.contactPerson,
+        leadSource: p.leadSource,
+        proposalDate: now.slice(0, 10),
+        expiryDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+        preparedByUserId: user.id,
+        businessSnapshot: p.businessSnapshot,
+        serviceDetails: p.serviceDetails,
+        scopeSections: p.scopeSections,
+        includedItems: p.includedItems,
+        pricingConfig: p.pricingConfig,
+        termsText: p.termsText,
+        internalNotes: p.internalNotes,
+        publicToken: token,
+        clientResponse: "{}",
+        isArchived: false,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await storage.addProposalActivity({
+        proposalId: dup.id, companyId: user.companyId, eventType: "created",
+        eventData: JSON.stringify({ duplicatedFrom: p.id }), createdByUserId: user.id, createdAt: now,
+      });
+      res.json(dup);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/proposals/:id/archive", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const p = await storage.getProposal(req.params.id);
+      if (!p || p.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const now = new Date().toISOString();
+      const updated = await storage.updateProposal(p.id, { isArchived: !p.isArchived, updatedAt: now });
+      await storage.addProposalActivity({
+        proposalId: p.id, companyId: user.companyId,
+        eventType: updated!.isArchived ? "archived" : "unarchived",
+        eventData: "{}", createdByUserId: user.id, createdAt: now,
+      });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Proposals & Quotes (Public) ───────────────────────────────────────────
+  app.get("/api/public/proposals/:token", async (req, res) => {
+    try {
+      const p = await storage.getProposalByToken(req.params.token);
+      if (!p) return res.status(404).json({ message: "This proposal link is not available." });
+      // Never expose internal notes or private fields
+      const { internalNotes: _in, ...safe } = p;
+      res.json(safe);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/public/proposals/:token/viewed", async (req, res) => {
+    try {
+      const p = await storage.getProposalByToken(req.params.token);
+      if (!p) return res.status(404).json({ message: "Not found" });
+      const now = new Date().toISOString();
+      if (!p.viewedAt) {
+        await storage.updateProposal(p.id, {
+          viewedAt: now,
+          status: p.status === "sent" ? "viewed" : p.status,
+          updatedAt: now,
+        });
+        await storage.addProposalActivity({
+          proposalId: p.id, companyId: p.companyId, eventType: "viewed",
+          eventData: "{}", createdByUserId: null, createdAt: now,
+        });
+      }
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/public/proposals/:token/accept", async (req, res) => {
+    try {
+      const p = await storage.getProposalByToken(req.params.token);
+      if (!p) return res.status(404).json({ message: "Not found" });
+      if (p.isArchived) return res.status(400).json({ message: "This proposal is no longer available." });
+      const now = new Date().toISOString();
+      const expiryPassed = p.expiryDate && new Date(p.expiryDate) < new Date();
+      if (expiryPassed) return res.status(400).json({ message: "This proposal has expired." });
+      await storage.updateProposal(p.id, {
+        status: "accepted",
+        acceptedAt: now,
+        clientResponse: JSON.stringify(req.body),
+        updatedAt: now,
+      });
+      await storage.addProposalActivity({
+        proposalId: p.id, companyId: p.companyId, eventType: "accepted",
+        eventData: JSON.stringify(req.body), createdByUserId: null, createdAt: now,
+      });
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/public/proposals/:token/reject", async (req, res) => {
+    try {
+      const p = await storage.getProposalByToken(req.params.token);
+      if (!p) return res.status(404).json({ message: "Not found" });
+      if (p.isArchived) return res.status(400).json({ message: "This proposal is no longer available." });
+      const now = new Date().toISOString();
+      await storage.updateProposal(p.id, {
+        status: "rejected",
+        rejectedAt: now,
+        clientResponse: JSON.stringify(req.body),
+        updatedAt: now,
+      });
+      await storage.addProposalActivity({
+        proposalId: p.id, companyId: p.companyId, eventType: "rejected",
+        eventData: JSON.stringify(req.body), createdByUserId: null, createdAt: now,
+      });
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/public/proposals/:token/thinking", async (req, res) => {
+    try {
+      const p = await storage.getProposalByToken(req.params.token);
+      if (!p) return res.status(404).json({ message: "Not found" });
+      if (p.isArchived) return res.status(400).json({ message: "This proposal is no longer available." });
+      const now = new Date().toISOString();
+      await storage.updateProposal(p.id, {
+        status: "thinking",
+        thinkingAt: now,
+        clientResponse: JSON.stringify(req.body),
+        updatedAt: now,
+      });
+      await storage.addProposalActivity({
+        proposalId: p.id, companyId: p.companyId, eventType: "thinking",
+        eventData: JSON.stringify(req.body), createdByUserId: null, createdAt: now,
+      });
+      res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
