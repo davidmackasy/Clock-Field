@@ -1766,6 +1766,7 @@ export const scheduledFieldNoteAssignments = pgTable("scheduled_field_note_assig
   companyId: varchar("company_id").notNull(),
   cleanerId: varchar("cleaner_id").notNull(),
   clientId: varchar("client_id"),
+  scheduleId: varchar("schedule_id"),
   status: text("status").notNull().default("active"),
   createdAt: text("created_at").notNull(),
 });

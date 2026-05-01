@@ -9073,18 +9073,25 @@ Return ONLY valid JSON:
     try {
       const user = req.user as any;
       const assignments = await storage.getScheduledFieldNoteAssignments(user.companyId);
-      // Enrich with template and cleaner info
       const templates = await storage.getScheduledFieldNoteTemplates(user.companyId);
       const templateMap = Object.fromEntries(templates.map(t => [t.id, t]));
       const employees = await storage.getEmployeesByCompany(user.companyId);
       const employeeMap = Object.fromEntries(employees.map(e => [e.id, e]));
       const clients = await storage.getClientsByCompany(user.companyId);
       const clientMap = Object.fromEntries(clients.map(c => [c.id, c]));
+      const allSchedules = await storage.getRecurringSchedulesByCompany(user.companyId);
+      const scheduleMap = Object.fromEntries(allSchedules.map(s => [s.id, s]));
       res.json(assignments.map(a => ({
         ...a,
         templateName: templateMap[a.templateId]?.name || "Unknown",
         cleanerName: employeeMap[a.cleanerId] ? `${employeeMap[a.cleanerId].firstName} ${employeeMap[a.cleanerId].lastName}` : "Unknown",
         clientName: a.clientId ? (clientMap[a.clientId]?.name || "Unknown") : null,
+        scheduleSummary: a.scheduleId ? (() => {
+          const s = scheduleMap[a.scheduleId];
+          if (!s) return null;
+          const days = (s.repeatDays || []).join(", ");
+          return `${s.shiftLabel || days} ${s.scheduledStartTime}–${s.scheduledEndTime}`;
+        })() : null,
       })));
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -9095,6 +9102,7 @@ Return ONLY valid JSON:
       const assignment = await storage.createScheduledFieldNoteAssignment({
         templateId: req.body.templateId, companyId: user.companyId,
         cleanerId: req.body.cleanerId, clientId: req.body.clientId || null,
+        scheduleId: req.body.scheduleId || null,
         status: "active", createdAt: new Date().toISOString(),
       });
       res.json(assignment);

@@ -1,0 +1,957 @@
+DEV NOTE: Revise Scheduled Notes Template Builder Into Main Step Groups With Multiple Required Photos
+Project: Clockfield
+Area: Work Log → Scheduled Notes
+Feature: Scheduled Field Notes
+Main goal:
+Change the Scheduled Notes template builder mindset.
+Instead of creating a main step first, then manually adding many sub-steps one by one inside it, the admin should create one complete main step group at a time.
+A main step group represents one area or room.
+Example:
+Main Step Group: Women’s Washroom
+Included items: Sink, Mirror, Toilet, Floor, Dispenser
+Reference photos: 5 to 8 photos uploaded at once
+Then cleaner sees that group as one cleaning photo set, with each reference photo becoming one required photo task.
+Do not break or affect anything currently working.
+Do not change regular Field Notes.
+Do not change normal Work Log.
+Do not change clock-in, clock-out, attendance, payroll, clients, auth, Stripe, or public regular Field Notes.
+Only update Scheduled Notes.
+Ask for approval before touching anything outside this module.
+
+1. Current Problem
+Current flow:
+Admin creates template.
+Admin clicks Add Main Step.
+Admin types a main step name.
+Then admin has to go inside that main step and add sub-steps one by one.
+This is too slow and confusing.
+For a large building, admin might need:
+20 offices
+3 washrooms
+Kitchen
+Hallway
+Lobby
+Storage room
+Each area may need 4 to 8 photos.
+The current flow becomes too much clicking.
+
+2. New Builder Mindset
+New flow:
+Admin creates template.
+Template card shows:
+Template name
+Commercial or Residential
+Active
+Clock-out required
+Main step count
+Photo task count
+Assignment count
+Admin opens template.
+Admin clicks:
+Add Main Step
+This opens one full pop-up.
+Inside the pop-up, admin selects:
+Property type context comes from the template:
+Commercial
+Residential
+Main Area
+Example: Washroom
+Specific Area / Room
+Example: Women’s Washroom
+Included Items
+Example: Sink, Mirror, Toilet, Floor, Soap Dispenser
+Main Step Title
+Auto-generated, but editable
+Instruction
+Optional
+Reference Photos
+Upload 1 to 8 photos at once
+Required before finish toggle
+Save Main Step
+Once saved, the system creates:
+One main step group
+Multiple photo tasks inside that group, based on uploaded reference photos and selected included items
+
+3. Main Step Group Definition
+A Main Step Group is one space or area the cleaner needs to document.
+Examples:
+Women’s Washroom
+Men’s Washroom
+Office 1
+Office 2
+Kitchen
+Lobby
+Hallway
+Reception
+Boardroom
+Bedroom 1
+Bathroom 1
+Living Room
+Each Main Step Group can contain up to 8 reference photos.
+Each reference photo becomes a required cleaner photo task.
+Example:
+Main Step Group:
+Women’s Washroom
+Included items:
+Sink
+Mirror
+Toilet
+Floor
+Soap Dispenser
+Reference photos uploaded:
+5
+Cleaner must take:
+5 matching photos
+
+4. Add Main Step Pop-Up
+Replace the current simple Add Main Step flow with a complete grouped setup modal.
+Modal title:
+Add Main Step
+Fields:
+Main Area
+Dropdown
+Specific Area / Room
+Dropdown
+Included Items
+Multi-select dropdown with checkboxes
+Main Step Title
+Auto-generated but editable
+Instruction
+Optional textarea
+Reference Photos
+Multi-upload area
+Allow camera capture if supported
+Required Step Group
+Toggle
+Save Main Step
+Cancel
+
+5. Reference Photo Upload Rules
+Admin should be able to upload or capture multiple reference photos at once.
+Limit:
+Minimum: 1 photo recommended
+Maximum: 8 photos per main step group
+If admin tries to upload more than 8:
+Show message:
+You can upload up to 8 reference photos for one main step. Create another main step for more photos.
+Each uploaded photo should appear as a small square thumbnail in the modal.
+Admin should be able to:
+Preview photo
+Remove photo
+Reorder photos if possible
+Add label per photo if possible
+Photo labels should connect to selected included items when possible.
+Example:
+Photo 1: Sink
+Photo 2: Mirror
+Photo 3: Toilet
+Photo 4: Floor
+Photo 5: Soap Dispenser
+If labels are not manually set, use included items in order.
+Fallback title:
+Women’s Washroom - Photo 1
+Women’s Washroom - Photo 2
+
+6. Included Items Multi-Select
+The Included Items field should be a multi-select.
+Example:
+Main Area: Washroom
+Specific Area: Women’s Washroom
+Included Items options:
+Sink
+Mirror
+Toilet
+Toilet Base
+Urinal
+Floor
+Wall
+Door Handle
+Soap Dispenser
+Paper Towel Dispenser
+Hand Dryer
+Garbage Bin
+Countertop
+Baseboard
+Light Switch
+Custom Item
+Admin can select multiple items.
+Do not show unrelated items.
+Example:
+If Main Area is Washroom, do not show Desk.
+If Main Area is Office, do not show Toilet.
+If Main Area is Kitchen, do not show Bed.
+This must make sense based on Commercial or Residential template type.
+
+7. Commercial Dropdown Logic
+Commercial templates should use commercial areas only.
+Commercial Main Areas:
+Washroom
+Office
+Kitchen
+Lobby
+Hallway
+Retail Floor
+Dining Area
+Front Counter
+Storage Room
+Break Room
+Stairwell
+Entrance
+Back Room
+Garbage Area
+Windows / Glass
+Floor Area
+Commercial Specific Areas:
+For Washroom:
+Women’s Washroom
+Men’s Washroom
+Single-Stall Washroom
+Staff Washroom
+Customer Washroom
+Accessible Washroom
+For Office:
+Office 1
+Office 2
+Office 3
+Office 4
+Main Office
+Private Office
+Manager Office
+Admin Office
+Upstairs Office
+Downstairs Office
+Boardroom
+Reception Office
+For Kitchen:
+Commercial Kitchen
+Prep Area
+Dishwashing Area
+Sink Area
+Cooking Line
+Back Kitchen
+Kitchen Storage
+For Lobby:
+Main Lobby
+Reception Area
+Waiting Area
+Entrance Lobby
+For Hallway:
+Main Hallway
+Hallway 1
+Hallway 2
+Upstairs Hallway
+Downstairs Hallway
+For Retail Floor:
+Main Retail Floor
+Aisle 1
+Aisle 2
+Checkout Area
+Display Area
+For Dining Area:
+Main Dining Area
+Table Section 1
+Table Section 2
+Booth Area
+For Storage Room:
+Storage Room 1
+Storage Room 2
+Supply Room
+Janitor Room
+For Entrance:
+Front Entrance
+Back Entrance
+Side Entrance
+Employee Entrance
+
+8. Commercial Included Items By Main Area
+Washroom items:
+Sink
+Mirror
+Toilet
+Toilet Base
+Toilet Seat
+Urinal
+Floor
+Wall
+Door Handle
+Soap Dispenser
+Paper Towel Dispenser
+Hand Dryer
+Garbage Bin
+Countertop
+Baseboard
+Light Switch
+Partition
+Commercial Office items:
+Desk 1
+Desk 2
+Desk 3
+Keyboard
+Mouse
+Monitor
+Chair 1
+Chair 2
+Chair 3
+Table
+Floor
+Carpet
+Garbage Bin
+Window
+Door Handle
+Light Switch
+Shelf
+Cabinet
+Baseboard
+Phone
+Printer Area
+Boardroom items:
+Table
+Chair 1
+Chair 2
+Chair 3
+Chair 4
+Floor
+Carpet
+Whiteboard
+Window
+Door Handle
+Garbage Bin
+Light Switch
+Kitchen items:
+Sink
+Countertop
+Floor
+Stove Area
+Cooking Line
+Prep Table
+Dishwashing Area
+Appliance Exterior
+Garbage Bin
+Wall Spot
+Baseboard
+Door Handle
+Shelf
+Storage Rack
+Lobby items:
+Floor
+Carpet
+Front Desk
+Chair
+Table
+Glass Door
+Window
+Garbage Bin
+Door Handle
+Baseboard
+Light Switch
+Retail Floor items:
+Floor
+Aisle
+Shelf
+Display Table
+Checkout Counter
+Glass Door
+Window
+Garbage Bin
+Baseboard
+Door Handle
+Dining Area items:
+Table
+Chair
+Booth
+Floor
+Garbage Bin
+Counter
+Window
+Baseboard
+Door Handle
+Storage Room items:
+Floor
+Shelf
+Storage Rack
+Garbage Bin
+Door Handle
+Wall Spot
+Baseboard
+Stairwell items:
+Stairs
+Handrail
+Landing
+Wall Spot
+Floor
+Door Handle
+Garbage Area items:
+Garbage Bin
+Dumpster Area
+Floor
+Wall Spot
+Door Handle
+Windows / Glass items:
+Window
+Glass Door
+Mirror
+Partition Glass
+Frame
+
+9. Residential Dropdown Logic
+Residential templates should use residential areas only.
+Residential Main Areas:
+Bathroom
+Bedroom
+Kitchen
+Living Room
+Dining Room
+Laundry Room
+Basement
+Hallway
+Entrance
+Garage
+Stairs
+Windows / Glass
+Floor Area
+Residential Specific Areas:
+For Bathroom:
+Main Bathroom
+Ensuite Bathroom
+Half Bathroom
+Guest Bathroom
+Basement Bathroom
+Bathroom 1
+Bathroom 2
+For Bedroom:
+Primary Bedroom
+Bedroom 1
+Bedroom 2
+Bedroom 3
+Guest Bedroom
+Kids Bedroom
+For Kitchen:
+Kitchen
+Kitchen Island
+Pantry Area
+Sink Area
+Cooking Area
+For Living Room:
+Living Room
+Family Room
+TV Area
+Sitting Area
+For Dining Room:
+Dining Room
+Dining Table Area
+For Laundry Room:
+Laundry Room
+Washer Area
+Dryer Area
+For Basement:
+Basement Room
+Basement Hallway
+Storage Area
+For Entrance:
+Front Entrance
+Back Entrance
+Mudroom
+For Garage:
+Garage
+Garage Entrance
+Storage Corner
+
+10. Residential Included Items By Main Area
+Bathroom items:
+Sink
+Mirror
+Toilet
+Tub
+Shower
+Floor
+Countertop
+Cabinet
+Garbage Bin
+Door Handle
+Light Switch
+Baseboard
+Wall Spot
+Bedroom items:
+Bed Area
+Nightstand 1
+Nightstand 2
+Dresser
+Closet
+Floor
+Carpet
+Window
+Door Handle
+Garbage Bin
+Light Switch
+Baseboard
+Kitchen items:
+Sink
+Countertop
+Stove
+Fridge Exterior
+Microwave Exterior
+Cabinet
+Kitchen Island
+Floor
+Garbage Bin
+Door Handle
+Light Switch
+Baseboard
+Living Room items:
+Couch Area
+Table
+TV Stand
+Floor
+Carpet
+Window
+Garbage Bin
+Door Handle
+Light Switch
+Baseboard
+Dining Room items:
+Dining Table
+Chair
+Floor
+Carpet
+Window
+Light Switch
+Baseboard
+Laundry Room items:
+Washer Exterior
+Dryer Exterior
+Sink
+Countertop
+Floor
+Garbage Bin
+Shelf
+Door Handle
+Basement items:
+Floor
+Carpet
+Storage Shelf
+Window
+Garbage Bin
+Door Handle
+Light Switch
+Baseboard
+Entrance items:
+Floor
+Door Handle
+Glass Door
+Mat Area
+Closet
+Light Switch
+Baseboard
+Garage items:
+Floor
+Storage Shelf
+Garbage Bin
+Door Handle
+Wall Spot
+Stairs items:
+Stairs
+Handrail
+Landing
+Wall Spot
+Floor
+Windows / Glass items:
+Window
+Glass Door
+Frame
+Mirror
+
+11. Main Step Title Auto-Generation
+The modal should auto-generate the Main Step Title based on:
+Specific Area / Room
+Example:
+Women’s Washroom
+Office 1
+Kitchen
+Bedroom 1
+Admin can edit the title.
+If admin selects:
+Main Area: Washroom
+Specific Area: Women’s Washroom
+Title auto-generates:
+Women’s Washroom
+If admin selects:
+Main Area: Office
+Specific Area: Upstairs Office
+Title auto-generates:
+Upstairs Office
+
+12. Photo Task Title Auto-Generation
+Each uploaded reference photo creates one photo task.
+Photo task title should be generated from:
+Main Step Title + Included Item
+Example:
+Women’s Washroom - Sink
+Women’s Washroom - Mirror
+Women’s Washroom - Toilet
+If there are more photos than selected included items:
+Women’s Washroom - Photo 6
+Women’s Washroom - Photo 7
+If there are more selected included items than photos:
+Create tasks only for uploaded photos in MVP.
+Do not create empty photo tasks unless admin confirms.
+
+13. Template Detail Display After Saving Main Step
+After admin saves a Main Step Group, show it as one collapsible section card.
+Header:
+Women’s Washroom
+5 photos
+Required
+Edit
+Delete
+Collapse icon
+Inside expanded section:
+Compact grid thumbnails.
+Grid rule:
+Desktop:
+10 thumbnails per row
+Large desktop:
+10 to 12 thumbnails per row
+Tablet:
+4 to 6 thumbnails per row
+Mobile:
+2 thumbnails per row
+Each thumbnail card:
+Small square image
+Task title
+Required dot
+Edit icon
+Delete icon
+Click image to preview
+Do not show giant 9:16 images on this page.
+
+14. Cleaner Capture Flow
+Cleaner should see the Main Step Group in a simple step-by-step flow.
+Example:
+Women’s Washroom
+Photo 1 of 5
+Reference image shown
+Task title:
+Women’s Washroom - Sink
+Instruction:
+Take a clear photo matching the reference image.
+Cleaner takes photo.
+Then next:
+Women’s Washroom - Mirror
+Then next:
+Women’s Washroom - Toilet
+After all photos in the main step are completed, move to next main step.
+Example:
+Office 1
+Photo 1 of 6
+The cleaner does not need to understand all the admin setup.
+They just follow reference image → take photo → next.
+
+15. Assignment Must Connect To Existing Schedule
+Important new requirement:
+When assigning a template to a cleaner, admin must also select the cleaner’s schedule.
+Assignment flow should include:
+Template
+Cleaner
+Location
+Schedule
+Required before clock-out
+Active days / frequency if needed
+The schedule must come from the existing Schedule system.
+Do not create a new schedule system.
+Use the existing schedule records.
+When admin selects a cleaner:
+Show that cleaner’s available schedules.
+Admin selects the schedule this Scheduled Note applies to.
+Example:
+Cleaner: David Mackasy
+Schedule:
+MackasyInc - Monday to Friday - 6:00 PM to 10:00 PM
+Assignment rule:
+This Scheduled Note is required when the cleaner clocks in for that selected schedule.
+Do not trigger it for unrelated clock-ins.
+
+16. Clock-In / Clock-Out Connection
+Scheduled Notes should activate based on the selected assignment schedule.
+When cleaner clocks in:
+Check:
+Is this cleaner assigned to a Scheduled Note?
+Is the Scheduled Note active?
+Is this clock-in connected to the selected schedule?
+Is today a valid scheduled day?
+If yes:
+Show required Scheduled Note task.
+If required before clock-out:
+Cleaner cannot clock out until required photos are completed.
+If cleaner clocks in for a different schedule:
+Do not show this Scheduled Note.
+Do not block clock-out.
+This prevents wrong Scheduled Notes from showing at the wrong job.
+
+17. Submissions Flow
+Submissions should receive completed photo tasks by cleaner, schedule, date, and template.
+Submission record should include:
+Cleaner
+Location
+Template
+Schedule
+Clock-in record
+Clock-out record if available
+Date
+Started time
+Completed time
+Main step groups
+Submitted photos
+Completion status
+Admin should be able to find submissions by:
+Cleaner
+Schedule
+Location
+Template
+Date
+Status
+
+18. Submission Review Layout
+Admin submissions should stay compact.
+First page:
+Grid of cleaner cards or location cards.
+Open cleaner/location history.
+Second page:
+Date history.
+Each date card:
+Date
+Cleaner
+Schedule
+Template
+Location
+Status
+Completed photos count
+Open submission
+Third page:
+Submission detail.
+Grouped by Main Step.
+Example:
+Women’s Washroom
+5 / 5 completed
+Grid of 5 submitted photo thumbnails
+Office 1
+6 / 6 completed
+Grid of 6 submitted photo thumbnails
+Photos should be small square thumbnails.
+Click photo to view full size.
+Do not show huge photos in the page.
+
+19. Public Report Rule
+Public report should show submitted final photos only.
+Do not show reference photos to the client.
+Public report should show:
+Company logo
+Company name
+Location
+Template name
+Cleaner name if allowed
+Date
+Schedule if allowed
+Completion status
+Submitted photo grid grouped by Main Step
+Example:
+Women’s Washroom
+5 photos
+Photo grid
+Office 1
+6 photos
+Photo grid
+Public report should not show:
+Reference images
+Internal admin setup
+Internal IDs
+Private notes
+Payroll or attendance details
+
+20. Data Model Adjustments
+Keep this backward compatible.
+Suggested entities:
+scheduled_note_templates
+id
+companyId
+name
+templateType
+status
+requiredBeforeClockOut
+frequency
+createdAt
+updatedAt
+scheduled_note_main_steps
+id
+templateId
+mainArea
+specificArea
+title
+instruction
+isRequired
+sortOrder
+createdAt
+updatedAt
+scheduled_note_photo_tasks
+id
+mainStepId
+templateId
+itemName
+title
+referenceImageUrl
+sortOrder
+isRequired
+createdAt
+updatedAt
+scheduled_note_assignments
+id
+templateId
+cleanerId
+locationId
+scheduleId
+requiredBeforeClockOut
+status
+createdAt
+updatedAt
+scheduled_note_submissions
+id
+templateId
+assignmentId
+cleanerId
+locationId
+scheduleId
+clockInId
+submissionDate
+status
+startedAt
+completedAt
+publicId
+createdAt
+updatedAt
+scheduled_note_photo_submissions
+id
+submissionId
+mainStepId
+photoTaskId
+submittedImageUrl
+submittedAt
+status
+createdAt
+updatedAt
+If current table names are already different, do not rename everything unless needed.
+Map the concept into the existing Scheduled Notes tables safely.
+
+21. Backward Compatibility
+Old templates may already have:
+sections
+steps
+sub-steps
+single reference images
+Do not break them.
+Fallback rule:
+Old section = Main Step
+Old sub-step = Photo Task
+Old referenceImageUrl = Photo Task reference
+If old dropdown fields are missing, use existing title.
+Do not delete old data.
+Do not force migration that removes working submissions.
+
+22. UI Language Update
+Use consistent wording:
+Template
+Main Step
+Photo Tasks
+Do not use too many confusing words.
+Admin view:
+Add Main Step
+Edit Main Step
+Photos inside this main step
+Cleaner view:
+Task
+Photo 1 of 5
+Take Photo
+Public view:
+Report Photos
+Do not overuse “sub-step” on the cleaner side.
+The cleaner should just see what to do.
+
+23. Expected Final Result
+Admin creates a template.
+Template shows:
+Daily
+Commercial
+Active
+Clock-out required
+0 main steps
+0 photo tasks
+Admin opens template.
+Admin clicks Add Main Step.
+Modal opens.
+Admin selects:
+Main Area: Washroom
+Specific Area: Women’s Washroom
+Included Items: Sink, Mirror, Toilet, Floor
+Uploads 4 reference photos
+Saves
+Template now shows:
+1 main step
+4 photo tasks
+Inside template:
+Women’s Washroom section
+4 compact thumbnails
+Admin adds another main step:
+Office 1
+Included items:
+Desk 1, Keyboard, Chair, Garbage Bin
+Uploads 4 photos
+Template now shows:
+2 main steps
+8 photo tasks
+Admin assigns template to cleaner and selects existing schedule.
+Cleaner clocks in for that schedule.
+Cleaner sees required Scheduled Note.
+Cleaner completes each reference photo task.
+Cleaner cannot clock out until required photos are completed.
+Admin receives submission by cleaner, schedule, date, and location.
+Admin can open submission history by date.
+Public report shows final submitted photos only in compact grids.
+Existing Clockfield features continue working.
+
+24. Testing Checklist
+Test creating Commercial template.
+Test creating Residential template.
+Test Add Main Step modal opens.
+Test Main Area dropdown changes Specific Area options.
+Test Main Area dropdown changes Included Items options.
+Test washroom does not show desk.
+Test office does not show toilet unless custom is selected.
+Test residential bathroom does not show office desk.
+Test included items multi-select works.
+Test uploading 1 photo works.
+Test uploading up to 8 photos works.
+Test uploading more than 8 is blocked.
+Test photo task titles auto-generate.
+Test admin can edit Main Step title.
+Test compact thumbnails show after saving.
+Test template count updates:
+main steps
+photo tasks
+Test old templates still open.
+Test old submissions still open.
+Test assignment requires cleaner and schedule.
+Test assignment only triggers for selected schedule.
+Test cleaner clock-in for wrong schedule does not show Scheduled Note.
+Test cleaner clock-in for selected schedule shows Scheduled Note.
+Test clock-out blocking works only for selected schedule.
+Test submission stores scheduleId.
+Test admin can filter submissions by date.
+Test admin can filter submissions by schedule.
+Test public report shows submitted photos only.
+Test public report does not show reference photos.
+Test mobile layout shows compact 2-column photo grid.
+Test regular Field Notes still work.
+Test Work Log still works.
+Final instruction:
+Build this as a focused update to Scheduled Notes only.
+Do not rebuild unrelated systems.
+Do not touch anything outside Scheduled Notes unless required to connect to the existing Schedule record during assignment.
+Do not break anything currently working.

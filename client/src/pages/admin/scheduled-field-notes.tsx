@@ -15,7 +15,7 @@ import {
   Camera, ImagePlus, Users, FileText, BarChart2,
   ChevronDown, ChevronUp, Link2, Link2Off, Eye, Loader2,
   AlertCircle, CheckCircle2, Clock, X, ArrowLeft, Building2,
-  Home, ChevronLeft, ZoomIn, ExternalLink,
+  Home, ChevronLeft, ZoomIn, ExternalLink, Calendar,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -40,8 +40,15 @@ type Step = {
   submission?: StepSubmission | null;
 };
 type Assignment = {
-  id: string; templateId: string; cleanerId: string; clientId: string | null; status: string;
-  templateName: string; cleanerName: string; clientName: string | null; createdAt: string;
+  id: string; templateId: string; cleanerId: string; clientId: string | null;
+  scheduleId: string | null; status: string;
+  templateName: string; cleanerName: string; clientName: string | null;
+  scheduleSummary: string | null; createdAt: string;
+};
+type RecurringSchedule = {
+  id: string; employeeId: string; clientId: string | null; startDate: string;
+  repeatFrequency: string; repeatDays: string[]; scheduledStartTime: string;
+  scheduledEndTime: string; shiftLabel: string | null; status: string;
 };
 type Submission = {
   id: string; templateId: string; assignmentId: string; cleanerId: string;
@@ -64,7 +71,12 @@ const SUB_TABS = [
   { id: "reports", label: "Reports", icon: FileText },
 ];
 
-// ─── Lightbox (single-photo or gallery, 9:16 in modal) ───────────────────────
+function formatSchedule(s: RecurringSchedule): string {
+  const days = (s.repeatDays || []).join(", ");
+  return s.shiftLabel ? `${s.shiftLabel} · ${s.scheduledStartTime}–${s.scheduledEndTime}` : `${days} · ${s.scheduledStartTime}–${s.scheduledEndTime}`;
+}
+
+// ─── Lightbox ────────────────────────────────────────────────────────────────
 function LightboxModal({ images, initialIndex = 0, onClose }: {
   images: LightboxImage[]; initialIndex?: number; onClose: () => void;
 }) {
@@ -79,23 +91,16 @@ function LightboxModal({ images, initialIndex = 0, onClose }: {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [idx, images.length, onClose]);
-
   return (
     <div className="fixed inset-0 z-50 bg-black/92 flex items-center justify-center p-4" onClick={onClose}>
       <div className="relative flex flex-col items-center" onClick={e => e.stopPropagation()}>
         <img src={img.src} alt={img.label} className="max-h-[85vh] max-w-[90vw] w-auto object-contain rounded-xl" />
-        <button onClick={onClose} className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1.5 transition-colors">
-          <X className="w-4 h-4" />
-        </button>
+        <button onClick={onClose} className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1.5 transition-colors"><X className="w-4 h-4" /></button>
         {images.length > 1 && idx > 0 && (
-          <button onClick={() => setIdx(i => i - 1)} className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white rounded-full p-2">
-            <ChevronLeft className="w-5 h-5" />
-          </button>
+          <button onClick={() => setIdx(i => i - 1)} className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white rounded-full p-2"><ChevronLeft className="w-5 h-5" /></button>
         )}
         {images.length > 1 && idx < images.length - 1 && (
-          <button onClick={() => setIdx(i => i + 1)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white rounded-full p-2">
-            <ChevronRight className="w-5 h-5" />
-          </button>
+          <button onClick={() => setIdx(i => i + 1)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white rounded-full p-2"><ChevronRight className="w-5 h-5" /></button>
         )}
         <div className="mt-3 text-center">
           <p className="text-white text-sm font-medium">{img.label}</p>
@@ -107,7 +112,7 @@ function LightboxModal({ images, initialIndex = 0, onClose }: {
   );
 }
 
-// ─── Step Detail Modal (submission comparison: reference + submitted) ──────────
+// ─── Step Detail Modal (ref + submitted side by side) ─────────────────────────
 function StepDetailModal({ step, sectionTitle, cleanerName, onClose }: {
   step: Step; sectionTitle: string; cleanerName: string; onClose: () => void;
 }) {
@@ -144,9 +149,7 @@ function StepDetailModal({ step, sectionTitle, cleanerName, onClose }: {
             )}
           </div>
         </div>
-        {step.description && (
-          <div className="border-t pt-3 text-xs text-muted-foreground leading-relaxed">{step.description}</div>
-        )}
+        {step.description && <div className="border-t pt-3 text-xs text-muted-foreground leading-relaxed">{step.description}</div>}
         <div className="flex items-center gap-4 text-xs text-muted-foreground border-t pt-3">
           {cleanerName && <span><span className="font-medium">Cleaner:</span> {cleanerName}</span>}
           {step.submission?.submittedAt && (
@@ -157,20 +160,6 @@ function StepDetailModal({ step, sectionTitle, cleanerName, onClose }: {
       </DialogContent>
     </Dialog>
   );
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function useImageCapture(onCapture: (base64: string) => void) {
-  const fileRef = useRef<HTMLInputElement>(null);
-  const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => { if (typeof reader.result === "string") onCapture(reader.result); };
-    reader.readAsDataURL(file);
-    e.target.value = "";
-  }, [onCapture]);
-  return { fileRef, handleFile, trigger: () => fileRef.current?.click() };
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -202,201 +191,343 @@ function TypeBadge({ type }: { type: string }) {
   );
 }
 
-// ─── Step Dialog (with dropdowns + custom label) ───────────────────────────────
-function StepDialog({ open, onClose, onSave, initial, templateId, sectionId, templateType }: {
-  open: boolean; onClose: () => void; templateId: string; sectionId: string;
-  templateType: string; onSave: (data: any) => void; initial?: Step | null;
+// ─── Multi-select items checkbox list ─────────────────────────────────────────
+function ItemsMultiSelect({ items, selected, onChange }: {
+  items: string[]; selected: string[]; onChange: (v: string[]) => void;
 }) {
-  const [areaCategory, setAreaCategory] = useState(initial?.areaCategory || "");
-  const [areaName, setAreaName] = useState(initial?.areaName || "");
-  const [itemType, setItemType] = useState(
-    // If customItemType exists and itemType isn't CUSTOM, we still pick the item from dropdown
-    (initial?.itemType && initial.itemType !== CUSTOM_OPTION) ? initial.itemType :
-    initial?.itemType === CUSTOM_OPTION ? CUSTOM_OPTION : ""
+  const toggle = (item: string) => {
+    onChange(selected.includes(item) ? selected.filter(i => i !== item) : [...selected, item]);
+  };
+  return (
+    <div className="border rounded-lg max-h-40 overflow-y-auto p-2 bg-background grid grid-cols-2 gap-1">
+      {[...items, CUSTOM_OPTION].map(item => (
+        <label key={item} className={cn("flex items-center gap-1.5 px-2 py-1 rounded-md cursor-pointer text-xs transition-colors",
+          selected.includes(item) ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted")}>
+          <input type="checkbox" checked={selected.includes(item)} onChange={() => toggle(item)} className="rounded w-3 h-3 accent-primary" />
+          <span className="truncate">{item}</span>
+        </label>
+      ))}
+    </div>
   );
-  const [customAreaName, setCustomAreaName] = useState(initial?.customAreaName || "");
-  const [customLabel, setCustomLabel] = useState(initial?.customItemType || "");
-  const [title, setTitle] = useState(initial?.title || "");
-  const [desc, setDesc] = useState(initial?.description || "");
-  const [refImg, setRefImg] = useState<string | null>(initial?.referenceImageUrl || null);
-  const [isRequired, setIsRequired] = useState(initial?.isRequired ?? true);
-  const [titleManuallyEdited, setTitleManuallyEdited] = useState(!!initial);
-  const { fileRef, handleFile, trigger } = useImageCapture(setRefImg);
+}
 
-  const rooms = areaCategory ? getRooms(templateType, areaCategory) : [];
-  const items = getItems(templateType);
-  const effectiveArea = areaName === CUSTOM_OPTION ? customAreaName : areaName;
-  const effectiveItem = itemType === CUSTOM_OPTION ? customLabel : (customLabel || itemType);
+// ─── Add Main Step Modal (bulk creator) ───────────────────────────────────────
+function AddMainStepModal({ open, onClose, template, onSaved }: {
+  open: boolean; onClose: () => void; template: FullTemplate; onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [mainArea, setMainArea] = useState("");
+  const [specificArea, setSpecificArea] = useState("");
+  const [customSpecificArea, setCustomSpecificArea] = useState("");
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<{ src: string; label: string }[]>([]);
+  const [title, setTitle] = useState("");
+  const [titleEdited, setTitleEdited] = useState(false);
+  const [instruction, setInstruction] = useState("");
+  const [isRequired, setIsRequired] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const templateType = template.templateType || "commercial";
+  const areaCategories = getAreaCategories(templateType);
+  const rooms = mainArea ? getRooms(templateType, mainArea) : [];
+  const items = mainArea ? getItems(templateType, mainArea) : getItems(templateType);
+  const effectiveArea = specificArea === CUSTOM_OPTION ? customSpecificArea : specificArea;
 
   useEffect(() => {
-    if (!titleManuallyEdited) {
-      const generated = buildStepTitle(effectiveArea, effectiveItem);
-      if (generated) setTitle(generated);
-    }
-  }, [effectiveArea, effectiveItem, titleManuallyEdited]);
+    if (!titleEdited && effectiveArea) setTitle(effectiveArea);
+  }, [effectiveArea, titleEdited]);
 
-  const handleAreaCategoryChange = (val: string) => {
-    setAreaCategory(val);
-    setAreaName(""); setItemType(""); setCustomAreaName(""); setCustomLabel("");
-    if (!titleManuallyEdited) setTitle("");
+  // Auto-update photo labels when items or title changes
+  useEffect(() => {
+    setPhotos(prev => prev.map((p, i) => ({
+      ...p,
+      label: buildStepTitle(title || effectiveArea, selectedItems[i] || `Photo ${i + 1}`),
+    })));
+  }, [selectedItems, title, effectiveArea]);
+
+  const handleMainAreaChange = (val: string) => {
+    setMainArea(val); setSpecificArea(""); setCustomSpecificArea(""); setSelectedItems([]);
+    if (!titleEdited) setTitle("");
   };
 
-  const isValid = title.trim().length > 0;
-
-  const handleSave = () => {
-    if (!isValid) return;
-    onSave({
-      title: title.trim(),
-      description: desc,
-      areaCategory: areaCategory || null,
-      areaName: effectiveArea || areaName || null,
-      itemType: itemType || null,
-      customAreaName: areaName === CUSTOM_OPTION ? customAreaName : null,
-      customItemType: customLabel || (itemType === CUSTOM_OPTION ? customLabel : null),
-      referenceImageUrl: refImg,
-      isRequired,
-      templateId,
-      sectionId,
+  const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const remaining = 8 - photos.length;
+    if (files.length > remaining) {
+      toast({ title: `Max 8 photos per main step. Adding ${Math.max(remaining, 0)} of ${files.length}.`, variant: "destructive" });
+    }
+    const toAdd = files.slice(0, Math.max(remaining, 0));
+    toAdd.forEach((file, relIdx) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setPhotos(prev => {
+          const photoIdx = prev.length;
+          const label = buildStepTitle(
+            title || effectiveArea || "Area",
+            selectedItems[photoIdx] || `Photo ${photoIdx + 1}`
+          );
+          return [...prev, { src: reader.result as string, label }];
+        });
+      };
+      reader.readAsDataURL(file);
     });
-    onClose();
+    e.target.value = "";
+  };
+
+  const removePhoto = (idx: number) => setPhotos(prev => prev.filter((_, i) => i !== idx));
+  const updatePhotoLabel = (idx: number, label: string) => setPhotos(prev => prev.map((p, i) => i === idx ? { ...p, label } : p));
+
+  const isValid = title.trim() && photos.length > 0;
+
+  const handleSave = async () => {
+    if (!isValid) return;
+    setSaving(true);
+    try {
+      // Create section (Main Step)
+      const section: any = await apiRequest("POST", `/api/admin/scheduled-field-notes/templates/${template.id}/sections`, {
+        title: title.trim(),
+        description: instruction.trim(),
+      });
+      // Create one step (Photo Task) per photo
+      for (let i = 0; i < photos.length; i++) {
+        await apiRequest("POST", `/api/admin/scheduled-field-notes/sections/${section.id}/steps`, {
+          title: photos[i].label,
+          description: instruction.trim(),
+          referenceImageUrl: photos[i].src,
+          areaCategory: mainArea || null,
+          areaName: effectiveArea || null,
+          itemType: selectedItems[i] || null,
+          customItemType: null,
+          customAreaName: specificArea === CUSTOM_OPTION ? customSpecificArea : null,
+          isRequired,
+          templateId: template.id,
+          sectionId: section.id,
+        });
+      }
+      onSaved();
+      onClose();
+      toast({ title: `"${title}" created with ${photos.length} photo task${photos.length !== 1 ? "s" : ""}` });
+    } catch (err: any) {
+      toast({ title: "Failed to save main step", description: err.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const reset = () => {
+    setMainArea(""); setSpecificArea(""); setCustomSpecificArea(""); setSelectedItems([]);
+    setPhotos([]); setTitle(""); setTitleEdited(false); setInstruction(""); setIsRequired(true);
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>{initial ? "Edit Sub-Step" : "Add Sub-Step"}</DialogTitle></DialogHeader>
-        <div className="space-y-4 py-2">
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { reset(); onClose(); } }}>
+      <DialogContent className="max-w-xl max-h-[92vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Add Main Step</DialogTitle>
+          <p className="text-xs text-muted-foreground">Set up one area or room with its reference photos</p>
+        </DialogHeader>
 
-          {/* Area Category */}
-          <div>
-            <Label>Main Area</Label>
-            <Select value={areaCategory} onValueChange={handleAreaCategoryChange}>
-              <SelectTrigger className="mt-1" data-testid="select-area-category">
-                <SelectValue placeholder="Select area…" />
-              </SelectTrigger>
-              <SelectContent>
-                {getAreaCategories(templateType).map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Room / Specific Area */}
-          {areaCategory && (
+        <div className="space-y-4 py-1">
+          {/* Row 1: Main Area + Specific Area */}
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Room / Specific Area</Label>
-              <Select value={areaName} onValueChange={v => { setAreaName(v); if (!titleManuallyEdited) setTitle(""); }}>
-                <SelectTrigger className="mt-1" data-testid="select-area-name">
-                  <SelectValue placeholder="Select room…" />
+              <Label className="text-xs">Main Area <span className="text-destructive">*</span></Label>
+              <Select value={mainArea} onValueChange={handleMainAreaChange}>
+                <SelectTrigger className="mt-1 h-8 text-xs" data-testid="select-main-area">
+                  <SelectValue placeholder="e.g. Washroom" />
+                </SelectTrigger>
+                <SelectContent>
+                  {areaCategories.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Specific Area / Room</Label>
+              <Select value={specificArea} onValueChange={v => { setSpecificArea(v); if (!titleEdited) setTitle(""); }}>
+                <SelectTrigger className="mt-1 h-8 text-xs" data-testid="select-specific-area">
+                  <SelectValue placeholder="e.g. Women's Washroom" />
                 </SelectTrigger>
                 <SelectContent>
                   {rooms.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                   <SelectItem value={CUSTOM_OPTION}>{CUSTOM_OPTION}</SelectItem>
                 </SelectContent>
               </Select>
-              {areaName === CUSTOM_OPTION && (
-                <Input className="mt-1.5" placeholder="Enter custom room name" value={customAreaName}
-                  onChange={e => setCustomAreaName(e.target.value)} data-testid="input-custom-area" />
+              {specificArea === CUSTOM_OPTION && (
+                <Input className="mt-1 h-8 text-xs" placeholder="Custom room name" value={customSpecificArea}
+                  onChange={e => setCustomSpecificArea(e.target.value)} />
               )}
             </div>
-          )}
-
-          {/* Item / Surface */}
-          <div>
-            <Label>Item / Surface</Label>
-            <Select value={itemType} onValueChange={v => { setItemType(v); setCustomLabel(""); if (!titleManuallyEdited) setTitle(""); }}>
-              <SelectTrigger className="mt-1" data-testid="select-item-type">
-                <SelectValue placeholder="Select item…" />
-              </SelectTrigger>
-              <SelectContent className="max-h-56 overflow-y-auto">
-                {items.map(i => <SelectItem key={i} value={i}>{i}</SelectItem>)}
-                <SelectItem value={CUSTOM_OPTION}>{CUSTOM_OPTION}</SelectItem>
-              </SelectContent>
-            </Select>
-            {/* Custom item name (when Custom selected) */}
-            {itemType === CUSTOM_OPTION && (
-              <Input className="mt-1.5" placeholder="Enter custom item name" value={customLabel}
-                onChange={e => setCustomLabel(e.target.value)} data-testid="input-custom-item" />
-            )}
-            {/* Custom label — allows e.g. "Desk" → "Right side desk" */}
-            {itemType && itemType !== CUSTOM_OPTION && (
-              <Input className="mt-1.5" placeholder="Custom label (optional — e.g. Right side desk)" value={customLabel}
-                onChange={e => { setCustomLabel(e.target.value); setTitleManuallyEdited(false); }}
-                data-testid="input-custom-label"
-              />
-            )}
           </div>
 
-          {/* Step Title */}
+          {/* Included Items multi-select */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <Label>Sub-Step Title <span className="text-destructive">*</span></Label>
-              {!titleManuallyEdited && title && (
-                <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Auto-generated</span>
+              <Label className="text-xs">Included Items (Photo Tasks)</Label>
+              {selectedItems.length > 0 && (
+                <span className="text-[10px] text-primary">{selectedItems.length} selected</span>
               )}
             </div>
-            <Input data-testid="input-step-title" value={title}
-              onChange={e => { setTitle(e.target.value); setTitleManuallyEdited(true); }}
-              placeholder="e.g. Women's Washroom - Sink" />
+            <ItemsMultiSelect items={items} selected={selectedItems} onChange={setSelectedItems} />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Each item pairs with a reference photo to create one photo task. Items in order match photos in order.
+            </p>
+          </div>
+
+          {/* Main Step Title */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <Label className="text-xs">Main Step Title <span className="text-destructive">*</span></Label>
+              {!titleEdited && title && <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Auto</span>}
+            </div>
+            <Input value={title} onChange={e => { setTitle(e.target.value); setTitleEdited(true); }}
+              placeholder="e.g. Women's Washroom" data-testid="input-main-step-title" className="h-8 text-sm" />
           </div>
 
           {/* Instruction */}
           <div>
-            <Label>Instruction (optional)</Label>
-            <Textarea data-testid="input-step-description" value={desc}
-              onChange={e => setDesc(e.target.value)}
-              placeholder="Additional guidance for the cleaner" className="mt-1" rows={2} />
+            <Label className="text-xs">Instruction for Cleaner (optional)</Label>
+            <Textarea value={instruction} onChange={e => setInstruction(e.target.value)}
+              placeholder="e.g. Take clear photos matching each reference image. No blur." rows={2} className="mt-1 text-sm" />
           </div>
 
-          {/* Reference Photo — 1:1 preview in dialog, 9:16 in modal */}
+          {/* Reference Photo Upload */}
           <div>
-            <Label>Reference Photo (optional)</Label>
-            <div className="mt-1">
-              {refImg ? (
-                <div className="relative rounded-lg overflow-hidden border w-24 h-24 shrink-0">
-                  <img src={refImg} alt="reference" className="absolute inset-0 w-full h-full object-cover" />
-                  <button onClick={() => setRefImg(null)} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-0.5 hover:bg-black/70">
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ) : (
-                <button onClick={trigger} data-testid="button-add-ref-photo"
-                  className="w-24 h-24 flex flex-col items-center justify-center gap-1 border-2 border-dashed rounded-lg text-muted-foreground hover:border-primary hover:text-primary transition-colors">
-                  <ImagePlus className="w-5 h-5" />
-                  <span className="text-[10px]">Upload</span>
-                </button>
-              )}
-              <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
-              <p className="text-[10px] text-muted-foreground mt-1.5">Shown to cleaner as reference</p>
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-xs">Reference Photos <span className="text-destructive">*</span></Label>
+              <span className={cn("text-[10px] font-medium", photos.length >= 8 ? "text-destructive" : "text-muted-foreground")}>
+                {photos.length} / 8 photos
+              </span>
             </div>
+
+            {/* Photo thumbnail grid */}
+            {photos.length > 0 && (
+              <div className="grid grid-cols-4 gap-2 mb-2">
+                {photos.map((p, i) => (
+                  <div key={i} className="group relative">
+                    <div className="relative aspect-square rounded-lg overflow-hidden border bg-muted">
+                      <img src={p.src} alt={p.label} className="absolute inset-0 w-full h-full object-cover" />
+                      <button onClick={() => removePhoto(i)}
+                        className="absolute top-0.5 right-0.5 bg-black/60 hover:bg-black/80 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                      <div className="absolute bottom-0.5 left-0.5 w-4 h-4 rounded-full bg-black/60 text-white text-[9px] font-bold flex items-center justify-center">
+                        {i + 1}
+                      </div>
+                    </div>
+                    <Input value={p.label} onChange={e => updatePhotoLabel(i, e.target.value)}
+                      className="mt-1 h-6 text-[10px] px-1.5" placeholder={`Photo ${i + 1} label`} />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {photos.length < 8 && (
+              <button onClick={() => fileRef.current?.click()} data-testid="button-upload-photos"
+                className="w-full border-2 border-dashed rounded-lg p-4 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors text-sm">
+                <ImagePlus className="w-6 h-6" />
+                <span>{photos.length === 0 ? "Upload reference photos" : "Add more photos"}</span>
+                <span className="text-xs opacity-60">Select multiple at once · Max 8 photos</span>
+              </button>
+            )}
+            <input ref={fileRef} type="file" accept="image/*" multiple onChange={handleFiles} className="hidden" />
           </div>
 
           {/* Required toggle */}
           <div className="flex items-center justify-between rounded-lg border p-3">
             <div>
-              <p className="text-sm font-medium">Required sub-step</p>
-              <p className="text-xs text-muted-foreground">Must be completed before finishing</p>
+              <p className="text-sm font-medium">Required before clock-out</p>
+              <p className="text-xs text-muted-foreground">Cleaner must complete all photo tasks</p>
             </div>
-            <Switch data-testid="switch-step-required" checked={isRequired} onCheckedChange={setIsRequired} />
+            <Switch checked={isRequired} onCheckedChange={setIsRequired} />
           </div>
         </div>
+
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button data-testid="button-save-step" onClick={handleSave} disabled={!isValid}>Save Sub-Step</Button>
+          <Button variant="outline" onClick={() => { reset(); onClose(); }}>Cancel</Button>
+          <Button onClick={handleSave} disabled={!isValid || saving} data-testid="button-save-main-step">
+            {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            Save Main Step{photos.length > 0 ? ` (${photos.length} photo${photos.length !== 1 ? "s" : ""})` : ""}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-// ─── Compact Step Card (small square thumbnail, dense grid) ───────────────────
+// ─── Edit Single Step Dialog ───────────────────────────────────────────────────
+function EditStepDialog({ open, onClose, step, templateType, templateId, sectionId, onSave }: {
+  open: boolean; onClose: () => void; step: Step; templateType: string;
+  templateId: string; sectionId: string; onSave: (data: any) => void;
+}) {
+  const [title, setTitle] = useState(step.title);
+  const [desc, setDesc] = useState(step.description || "");
+  const [refImg, setRefImg] = useState<string | null>(step.referenceImageUrl || null);
+  const [isRequired, setIsRequired] = useState(step.isRequired);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setRefImg(reader.result as string);
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>Edit Photo Task</DialogTitle></DialogHeader>
+        <div className="space-y-4 py-2">
+          <div>
+            <Label>Task Title</Label>
+            <Input value={title} onChange={e => setTitle(e.target.value)} className="mt-1" data-testid="input-edit-step-title" />
+          </div>
+          <div>
+            <Label>Instruction (optional)</Label>
+            <Textarea value={desc} onChange={e => setDesc(e.target.value)} className="mt-1" rows={2} />
+          </div>
+          <div>
+            <Label>Reference Photo</Label>
+            <div className="mt-1 flex items-start gap-3">
+              {refImg ? (
+                <div className="relative w-24 h-24 rounded-lg overflow-hidden border shrink-0">
+                  <img src={refImg} alt="ref" className="absolute inset-0 w-full h-full object-cover" />
+                  <button onClick={() => setRefImg(null)} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-0.5">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => fileRef.current?.click()} className="w-24 h-24 border-2 border-dashed rounded-lg flex flex-col items-center justify-center gap-1 text-muted-foreground hover:border-primary hover:text-primary transition-colors">
+                  <ImagePlus className="w-5 h-5" />
+                  <span className="text-[10px]">Upload</span>
+                </button>
+              )}
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
+          </div>
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <p className="text-sm font-medium">Required</p>
+            <Switch checked={isRequired} onCheckedChange={setIsRequired} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={() => { onSave({ title, description: desc, referenceImageUrl: refImg, isRequired }); onClose(); }}>Save</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Compact Step Card ────────────────────────────────────────────────────────
 function StepCard({ step, idx, onEdit, onDelete, onClickImage }: {
   step: Step; idx: number; onEdit: (s: Step) => void;
   onDelete: (id: string) => void; onClickImage: (src: string, label: string) => void;
 }) {
   return (
-    <div className="group border rounded-lg overflow-hidden bg-card hover:border-primary/40 hover:shadow-sm transition-all min-w-0"
-      data-testid={`card-step-${step.id}`}>
-      {/* Square thumbnail */}
+    <div className="group border rounded-lg overflow-hidden bg-card hover:border-primary/40 hover:shadow-sm transition-all min-w-0" data-testid={`card-step-${step.id}`}>
       <div className={cn("relative aspect-square bg-muted", step.referenceImageUrl && "cursor-pointer")}
         onClick={() => step.referenceImageUrl && onClickImage(step.referenceImageUrl, step.title)}>
         {step.referenceImageUrl ? (
@@ -407,91 +538,57 @@ function StepCard({ step, idx, onEdit, onDelete, onClickImage }: {
             </div>
           </>
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Camera className="w-4 h-4 text-muted-foreground/25" />
-          </div>
+          <div className="absolute inset-0 flex items-center justify-center"><Camera className="w-4 h-4 text-muted-foreground/25" /></div>
         )}
-        {/* Step number */}
-        <div className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-background/80 backdrop-blur-sm border text-[9px] font-bold flex items-center justify-center leading-none">
-          {idx + 1}
-        </div>
-        {/* Required dot */}
-        {step.isRequired && (
-          <div className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-primary" title="Required" />
-        )}
+        <div className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-background/80 backdrop-blur-sm border text-[9px] font-bold flex items-center justify-center">{idx + 1}</div>
+        {step.isRequired && <div className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-primary" title="Required" />}
       </div>
-      {/* Title + actions */}
       <div className="px-1 pt-0.5 pb-1 flex items-start gap-0.5 min-w-0">
-        <p className="text-[10px] font-medium flex-1 min-w-0 leading-tight line-clamp-2 break-words" title={step.title}>
-          {step.title}
-        </p>
+        <p className="text-[10px] font-medium flex-1 min-w-0 leading-tight line-clamp-2 break-words" title={step.title}>{step.title}</p>
         <div className="flex flex-col gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={e => { e.stopPropagation(); onEdit(step); }}
-            className="p-0.5 text-muted-foreground hover:text-primary transition-colors"
-            data-testid={`button-edit-step-${step.id}`}>
-            <Edit2 className="w-2.5 h-2.5" />
-          </button>
-          <button onClick={e => { e.stopPropagation(); onDelete(step.id); }}
-            className="p-0.5 text-muted-foreground hover:text-destructive transition-colors"
-            data-testid={`button-delete-step-${step.id}`}>
-            <Trash2 className="w-2.5 h-2.5" />
-          </button>
+          <button onClick={e => { e.stopPropagation(); onEdit(step); }} className="p-0.5 text-muted-foreground hover:text-primary transition-colors" data-testid={`button-edit-step-${step.id}`}><Edit2 className="w-2.5 h-2.5" /></button>
+          <button onClick={e => { e.stopPropagation(); onDelete(step.id); }} className="p-0.5 text-muted-foreground hover:text-destructive transition-colors" data-testid={`button-delete-step-${step.id}`}><Trash2 className="w-2.5 h-2.5" /></button>
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Section / Main Step Card ─────────────────────────────────────────────────
-function SectionCard({ section, sectionIndex, onEditStep, onAddStep, onDeleteStep, onUpdateSection, onDeleteSection, onClickImage, templateType }: {
-  section: Section; sectionIndex: number; templateType: string;
-  onEditStep: (s: Step) => void; onAddStep: () => void;
-  onDeleteStep: (id: string) => void; onUpdateSection: (data: any) => void;
-  onDeleteSection: () => void; onClickImage: (src: string, label: string) => void;
+// ─── Main Step (Section) Card ─────────────────────────────────────────────────
+function MainStepCard({ section, templateType, onEditStep, onDeleteStep, onUpdateSection, onDeleteSection, onClickImage }: {
+  section: Section; templateType: string;
+  onEditStep: (s: Step) => void; onDeleteStep: (id: string) => void;
+  onUpdateSection: (data: any) => void; onDeleteSection: () => void;
+  onClickImage: (src: string, label: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [title, setTitle] = useState(section.title);
+  const [titleVal, setTitleVal] = useState(section.title);
   const [collapsed, setCollapsed] = useState(false);
-  const save = () => { onUpdateSection({ title }); setEditing(false); };
   const steps = (section.steps || []).sort((a, b) => a.sortOrder - b.sortOrder);
+  const save = () => { onUpdateSection({ title: titleVal }); setEditing(false); };
 
   return (
     <div className="border rounded-xl overflow-hidden">
-      {/* Main Step header */}
       <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/40">
         {editing ? (
-          <Input value={title} onChange={e => setTitle(e.target.value)} className="flex-1 h-7 text-sm" autoFocus
-            onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
-            onBlur={save} />
+          <Input value={titleVal} onChange={e => setTitleVal(e.target.value)} className="flex-1 h-7 text-sm" autoFocus
+            onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }} onBlur={save} />
         ) : (
           <span className="flex-1 font-semibold text-sm">{section.title}</span>
         )}
-        <span className="text-xs text-muted-foreground shrink-0 tabular-nums">{steps.length} sub-step{steps.length !== 1 ? "s" : ""}</span>
-        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditing(!editing)}
-          data-testid={`button-edit-section-${section.id}`}><Edit2 className="w-3 h-3" /></Button>
-        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" onClick={onDeleteSection}
-          data-testid={`button-delete-section-${section.id}`}><Trash2 className="w-3 h-3" /></Button>
-        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setCollapsed(!collapsed)}
-          data-testid={`button-collapse-section-${section.id}`}>
+        <span className="text-xs text-muted-foreground shrink-0 tabular-nums">{steps.length} photo task{steps.length !== 1 ? "s" : ""}</span>
+        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditing(!editing)} data-testid={`button-edit-section-${section.id}`}><Edit2 className="w-3 h-3" /></Button>
+        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" onClick={onDeleteSection} data-testid={`button-delete-section-${section.id}`}><Trash2 className="w-3 h-3" /></Button>
+        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setCollapsed(!collapsed)} data-testid={`button-collapse-section-${section.id}`}>
           {collapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
         </Button>
       </div>
-
       {!collapsed && (
         <div className="p-3">
-          {/* Dense sub-step grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12 gap-2">
             {steps.map((step, idx) => (
-              <StepCard key={step.id} step={step} idx={idx}
-                onEdit={onEditStep} onDelete={onDeleteStep}
-                onClickImage={onClickImage} />
+              <StepCard key={step.id} step={step} idx={idx} onEdit={onEditStep} onDelete={onDeleteStep} onClickImage={onClickImage} />
             ))}
-            {/* Add sub-step card — matches compact card size */}
-            <button onClick={onAddStep} data-testid={`button-add-step-section-${section.id}`}
-              className="aspect-square border-2 border-dashed rounded-lg flex flex-col items-center justify-center gap-1 text-muted-foreground hover:border-primary hover:text-primary transition-colors min-w-0">
-              <Plus className="w-5 h-5" />
-              <span className="text-[9px] text-center leading-tight">Add Sub-Step</span>
-            </button>
           </div>
         </div>
       )}
@@ -502,11 +599,10 @@ function SectionCard({ section, sectionIndex, onEditStep, onAddStep, onDeleteSte
 // ─── Template Builder ─────────────────────────────────────────────────────────
 function TemplateBuilder({ template, onBack }: { template: FullTemplate; onBack: () => void }) {
   const { toast } = useToast();
-  const [editingStep, setEditingStep] = useState<{ step?: Step; sectionId: string } | null>(null);
-  const [addingSectionTitle, setAddingSectionTitle] = useState(false);
-  const [newSectionTitle, setNewSectionTitle] = useState("");
-  const [editingTemplateInfo, setEditingTemplateInfo] = useState(false);
+  const [showAddMainStep, setShowAddMainStep] = useState(false);
+  const [editingStep, setEditingStep] = useState<Step | null>(null);
   const [lightbox, setLightbox] = useState<{ src: string; label: string } | null>(null);
+  const [editingTemplateInfo, setEditingTemplateInfo] = useState(false);
   const [templateForm, setTemplateForm] = useState({
     name: template.name, description: template.description,
     templateType: template.templateType || "commercial",
@@ -525,21 +621,12 @@ function TemplateBuilder({ template, onBack }: { template: FullTemplate; onBack:
     mutationFn: (data: any) => apiRequest("PATCH", `/api/admin/scheduled-field-notes/templates/${template.id}`, data),
     onSuccess: () => { refetchTemplate(); toast({ title: "Template updated" }); setEditingTemplateInfo(false); },
   });
-  const addSection = useMutation({
-    mutationFn: () => apiRequest("POST", `/api/admin/scheduled-field-notes/templates/${template.id}/sections`, { title: newSectionTitle || "New Main Step" }),
-    onSuccess: () => { refetchTemplate(); setAddingSectionTitle(false); setNewSectionTitle(""); },
-  });
   const updateSection = useMutation({
     mutationFn: ({ id, data }: { id: string; data: any }) => apiRequest("PATCH", `/api/admin/scheduled-field-notes/sections/${id}`, data),
     onSuccess: () => refetchTemplate(),
   });
   const deleteSection = useMutation({
     mutationFn: (id: string) => apiRequest("DELETE", `/api/admin/scheduled-field-notes/sections/${id}`),
-    onSuccess: () => refetchTemplate(),
-  });
-  const addStep = useMutation({
-    mutationFn: ({ sectionId, data }: { sectionId: string; data: any }) =>
-      apiRequest("POST", `/api/admin/scheduled-field-notes/sections/${sectionId}/steps`, data),
     onSuccess: () => refetchTemplate(),
   });
   const updateStep = useMutation({
@@ -552,13 +639,20 @@ function TemplateBuilder({ template, onBack }: { template: FullTemplate; onBack:
   });
 
   const sections = (template.sections || []).sort((a, b) => a.sortOrder - b.sortOrder);
-  const totalSteps = sections.reduce((acc, s) => acc + (s.steps?.length || 0), 0);
+  const totalPhotoTasks = sections.reduce((acc, s) => acc + (s.steps?.length || 0), 0);
   const currentType = templateForm.templateType || "commercial";
 
   return (
     <div className="p-4 md:p-6 space-y-5">
-      {lightbox && (
-        <LightboxModal images={[{ src: lightbox.src, label: lightbox.label, sublabel: "Reference Photo" }]} onClose={() => setLightbox(null)} />
+      {lightbox && <LightboxModal images={[{ src: lightbox.src, label: lightbox.label, sublabel: "Reference Photo" }]} onClose={() => setLightbox(null)} />}
+      {showAddMainStep && (
+        <AddMainStepModal open={showAddMainStep} onClose={() => setShowAddMainStep(false)}
+          template={{ ...template, templateType: currentType }} onSaved={() => { refetchTemplate(); setShowAddMainStep(false); }} />
+      )}
+      {editingStep && (
+        <EditStepDialog open={!!editingStep} onClose={() => setEditingStep(null)}
+          step={editingStep} templateType={currentType} templateId={template.id} sectionId={editingStep.sectionId}
+          onSave={(data) => updateStep.mutate({ id: editingStep.id, data })} />
       )}
 
       <div className="flex items-center gap-3">
@@ -569,44 +663,42 @@ function TemplateBuilder({ template, onBack }: { template: FullTemplate; onBack:
             <TypeBadge type={currentType} />
             <StatusBadge status={template.status} />
           </div>
-          <p className="text-xs text-muted-foreground">{sections.length} main step{sections.length !== 1 ? "s" : ""} · {totalSteps} sub-step{totalSteps !== 1 ? "s" : ""}</p>
+          <p className="text-xs text-muted-foreground">
+            {sections.length} main step{sections.length !== 1 ? "s" : ""} · {totalPhotoTasks} photo task{totalPhotoTasks !== 1 ? "s" : ""}
+          </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => setEditingTemplateInfo(true)} data-testid="button-edit-template-info">
           <Edit2 className="w-3.5 h-3.5 mr-1.5" />Settings
         </Button>
+        <Button size="sm" onClick={() => setShowAddMainStep(true)} data-testid="button-add-main-step">
+          <Plus className="w-3.5 h-3.5 mr-1.5" />Add Main Step
+        </Button>
       </div>
 
-      <div className="space-y-3">
-        {sections.map((section) => (
-          <SectionCard key={section.id} section={section} sectionIndex={0} templateType={currentType}
-            onEditStep={(step) => setEditingStep({ step, sectionId: section.id })}
-            onAddStep={() => setEditingStep({ sectionId: section.id })}
-            onDeleteStep={(id) => deleteStep.mutate(id)}
-            onUpdateSection={(data) => updateSection.mutate({ id: section.id, data })}
-            onClickImage={(src, label) => setLightbox({ src, label })}
-            onDeleteSection={() => {
-              if (section.steps?.length) toast({ title: "Delete sub-steps first", variant: "destructive" });
-              else deleteSection.mutate(section.id);
-            }}
-          />
-        ))}
-
-        {addingSectionTitle ? (
-          <div className="flex gap-2 items-center border rounded-xl p-3 bg-muted/30">
-            <Input data-testid="input-section-title" value={newSectionTitle}
-              onChange={e => setNewSectionTitle(e.target.value)}
-              placeholder="Main step name (e.g. Washroom, Office 1)"
-              className="flex-1" autoFocus
-              onKeyDown={e => { if (e.key === "Enter") addSection.mutate(); if (e.key === "Escape") setAddingSectionTitle(false); }} />
-            <Button size="sm" onClick={() => addSection.mutate()} disabled={addSection.isPending} data-testid="button-confirm-add-section">Add</Button>
-            <Button size="sm" variant="ghost" onClick={() => setAddingSectionTitle(false)}>Cancel</Button>
-          </div>
-        ) : (
-          <Button variant="outline" className="w-full border-dashed" onClick={() => setAddingSectionTitle(true)} data-testid="button-add-section">
+      {sections.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground border-2 border-dashed rounded-xl">
+          <Camera className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <p className="font-medium">No main steps yet</p>
+          <p className="text-sm mt-1 mb-4">Add a main step to start building this checklist</p>
+          <Button onClick={() => setShowAddMainStep(true)} data-testid="button-add-first-main-step">
             <Plus className="w-4 h-4 mr-2" />Add Main Step
           </Button>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {sections.map((section) => (
+            <MainStepCard key={section.id} section={section} templateType={currentType}
+              onEditStep={(step) => setEditingStep(step)}
+              onDeleteStep={(id) => deleteStep.mutate(id)}
+              onUpdateSection={(data) => updateSection.mutate({ id: section.id, data })}
+              onDeleteSection={() => {
+                if (section.steps?.length) toast({ title: "Delete photo tasks first", variant: "destructive" });
+                else deleteSection.mutate(section.id);
+              }}
+              onClickImage={(src, label) => setLightbox({ src, label })} />
+          ))}
+        </div>
+      )}
 
       {/* Template Settings Dialog */}
       <Dialog open={editingTemplateInfo} onOpenChange={setEditingTemplateInfo}>
@@ -616,8 +708,7 @@ function TemplateBuilder({ template, onBack }: { template: FullTemplate; onBack:
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <Label>Template Name</Label>
-                <Input data-testid="input-template-name" value={templateForm.name}
-                  onChange={e => setTemplateForm(f => ({ ...f, name: e.target.value }))} className="mt-1" />
+                <Input value={templateForm.name} onChange={e => setTemplateForm(f => ({ ...f, name: e.target.value }))} className="mt-1" />
               </div>
               <div>
                 <Label>Template Type</Label>
@@ -683,25 +774,12 @@ function TemplateBuilder({ template, onBack }: { template: FullTemplate; onBack:
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingTemplateInfo(false)}>Cancel</Button>
-            <Button data-testid="button-save-template-settings"
-              onClick={() => updateTemplate.mutate({ ...templateForm, clientId: templateForm.clientId || null })}
-              disabled={updateTemplate.isPending}>
+            <Button onClick={() => updateTemplate.mutate({ ...templateForm, clientId: templateForm.clientId || null })} disabled={updateTemplate.isPending}>
               {updateTemplate.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Save
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {editingStep && (
-        <StepDialog open={!!editingStep} onClose={() => setEditingStep(null)}
-          templateId={template.id} sectionId={editingStep.sectionId} templateType={currentType}
-          initial={editingStep.step}
-          onSave={(data) => {
-            if (editingStep.step) updateStep.mutate({ id: editingStep.step.id, data });
-            else addStep.mutate({ sectionId: editingStep.sectionId, data });
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -733,11 +811,11 @@ function TemplatesTab() {
   });
   const deleteTemplate = useMutation({
     mutationFn: (id: string) => apiRequest("DELETE", `/api/admin/scheduled-field-notes/templates/${id}`),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/scheduled-field-notes/templates"] }); toast({ title: "Template deleted" }); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/scheduled-field-notes/templates"] }); toast({ title: "Deleted" }); },
   });
   const duplicateTemplate = useMutation({
     mutationFn: (id: string) => apiRequest("POST", `/api/admin/scheduled-field-notes/templates/${id}/duplicate`, {}),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/scheduled-field-notes/templates"] }); toast({ title: "Template duplicated" }); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/scheduled-field-notes/templates"] }); toast({ title: "Duplicated" }); },
   });
 
   if (selectedTemplateId && fullTemplate) {
@@ -751,7 +829,7 @@ function TemplatesTab() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h3 className="font-semibold">Checklist Templates</h3>
-          <p className="text-sm text-muted-foreground">Build reusable photo checklists for your team</p>
+          <p className="text-sm text-muted-foreground">Photo checklists for cleaners to complete on each visit</p>
         </div>
         <Button onClick={() => setShowCreateDialog(true)} data-testid="button-create-template">
           <Plus className="w-4 h-4 mr-2" />New Template
@@ -759,7 +837,7 @@ function TemplatesTab() {
       </div>
 
       <div className="relative">
-        <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search templates…" className="pl-8" data-testid="input-search-templates" />
+        <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search templates…" className="pl-8" />
         <span className="absolute left-2.5 top-2.5 text-muted-foreground text-sm">🔍</span>
       </div>
 
@@ -771,7 +849,6 @@ function TemplatesTab() {
         <div className="text-center py-16 text-muted-foreground">
           <ClipboardList className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p className="font-medium">{search ? "No matching templates" : "No templates yet"}</p>
-          <p className="text-sm mt-1">Create your first photo checklist template</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -785,8 +862,8 @@ function TemplatesTab() {
                   {t.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{t.description}</p>}
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" onClick={e => e.stopPropagation()}>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => duplicateTemplate.mutate(t.id)} title="Duplicate" data-testid={`button-duplicate-template-${t.id}`}><Copy className="w-3 h-3" /></Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => deleteTemplate.mutate(t.id)} title="Delete" data-testid={`button-delete-template-${t.id}`}><Trash2 className="w-3 h-3" /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => duplicateTemplate.mutate(t.id)} data-testid={`button-duplicate-template-${t.id}`}><Copy className="w-3 h-3" /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => deleteTemplate.mutate(t.id)} data-testid={`button-delete-template-${t.id}`}><Trash2 className="w-3 h-3" /></Button>
                 </div>
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -801,7 +878,7 @@ function TemplatesTab() {
               <div className="flex items-center gap-3 text-xs text-muted-foreground pt-1 border-t">
                 <span>{t.sectionCount} main step{t.sectionCount !== 1 ? "s" : ""}</span>
                 <span>·</span>
-                <span>{t.stepCount} sub-step{t.stepCount !== 1 ? "s" : ""}</span>
+                <span>{t.stepCount} photo task{t.stepCount !== 1 ? "s" : ""}</span>
                 <span>·</span>
                 <span className="capitalize">{t.frequency}</span>
               </div>
@@ -820,9 +897,9 @@ function TemplatesTab() {
           <div className="space-y-4 py-2">
             <div>
               <Label>Template Name</Label>
-              <Input data-testid="input-new-template-name" value={newName} onChange={e => setNewName(e.target.value)}
-                placeholder="e.g. Daily Clean Walkthrough" className="mt-1"
-                onKeyDown={e => { if (e.key === "Enter" && newName.trim()) createTemplate.mutate({ name: newName.trim(), templateType: newType }); }} />
+              <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Daily Clean Walkthrough" className="mt-1"
+                onKeyDown={e => { if (e.key === "Enter" && newName.trim()) createTemplate.mutate({ name: newName.trim(), templateType: newType }); }}
+                data-testid="input-new-template-name" />
             </div>
             <div>
               <Label>Template Type</Label>
@@ -837,9 +914,8 @@ function TemplatesTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
-            <Button data-testid="button-confirm-create-template"
-              onClick={() => createTemplate.mutate({ name: newName.trim(), templateType: newType })}
-              disabled={!newName.trim() || createTemplate.isPending}>
+            <Button onClick={() => createTemplate.mutate({ name: newName.trim(), templateType: newType })}
+              disabled={!newName.trim() || createTemplate.isPending} data-testid="button-confirm-create-template">
               {createTemplate.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Create
             </Button>
           </DialogFooter>
@@ -849,24 +925,31 @@ function TemplatesTab() {
   );
 }
 
-// ─── Assignments Tab ──────────────────────────────────────────────────────────
+// ─── Assignments Tab ───────────────────────────────────────────────────────────
 function AssignmentsTab() {
   const { toast } = useToast();
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ templateId: "", cleanerId: "", clientId: "" });
+  const [form, setForm] = useState({ templateId: "", cleanerId: "", clientId: "", scheduleId: "" });
   const [search, setSearch] = useState("");
 
   const { data: assignments, isLoading } = useQuery<Assignment[]>({ queryKey: ["/api/admin/scheduled-field-notes/assignments"] });
   const { data: templates } = useQuery<Template[]>({ queryKey: ["/api/admin/scheduled-field-notes/templates"] });
   const { data: cleaners } = useQuery<Cleaner[]>({ queryKey: ["/api/employees"] });
   const { data: clients } = useQuery<Client[]>({ queryKey: ["/api/clients"] });
+  const { data: cleanerSchedules } = useQuery<RecurringSchedule[]>({
+    queryKey: ["/api/recurring-schedules", form.cleanerId],
+    queryFn: () => form.cleanerId
+      ? fetch(`/api/recurring-schedules?employeeId=${form.cleanerId}`, { credentials: "include" }).then(r => r.json())
+      : Promise.resolve([]),
+    enabled: !!form.cleanerId,
+  });
   const activeTemplates = (templates || []).filter(t => t.status === "active");
 
   const createAssignment = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/admin/scheduled-field-notes/assignments", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/scheduled-field-notes/assignments"] });
-      setShowCreate(false); setForm({ templateId: "", cleanerId: "", clientId: "" });
+      setShowCreate(false); setForm({ templateId: "", cleanerId: "", clientId: "", scheduleId: "" });
       toast({ title: "Assignment created" });
     },
   });
@@ -876,19 +959,21 @@ function AssignmentsTab() {
   });
   const deleteAssignment = useMutation({
     mutationFn: (id: string) => apiRequest("DELETE", `/api/admin/scheduled-field-notes/assignments/${id}`),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/scheduled-field-notes/assignments"] }); toast({ title: "Assignment removed" }); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/scheduled-field-notes/assignments"] }); toast({ title: "Removed" }); },
   });
 
   const filtered = (assignments || []).filter(a =>
     !search || [a.templateName, a.cleanerName, a.clientName || ""].some(s => s.toLowerCase().includes(search.toLowerCase()))
   );
 
+  const activeSchedules = (cleanerSchedules || []).filter(s => s.status === "active");
+
   return (
     <div className="p-4 md:p-6 space-y-4">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h3 className="font-semibold">Assignments</h3>
-          <p className="text-sm text-muted-foreground">Assign checklist templates to cleaners</p>
+          <p className="text-sm text-muted-foreground">Assign checklist templates to cleaners and their schedules</p>
         </div>
         <Button onClick={() => setShowCreate(true)} data-testid="button-create-assignment">
           <Plus className="w-4 h-4 mr-2" />Assign Template
@@ -916,6 +1001,9 @@ function AssignmentsTab() {
                 <p className="font-semibold text-sm line-clamp-1">{a.templateName}</p>
                 <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Users className="w-3 h-3" />{a.cleanerName}</p>
                 {a.clientName && <p className="text-xs text-muted-foreground flex items-center gap-1"><Building2 className="w-3 h-3" />{a.clientName}</p>}
+                {a.scheduleSummary && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5"><Calendar className="w-3 h-3" />{a.scheduleSummary}</p>
+                )}
               </div>
               <StatusBadge status={a.status} />
               <p className="text-[11px] text-muted-foreground">Assigned {format(parseISO(a.createdAt), "MMM d, yyyy")}</p>
@@ -935,7 +1023,10 @@ function AssignmentsTab() {
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Assign Template</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Assign Template</DialogTitle>
+            <p className="text-xs text-muted-foreground">Link a checklist to a cleaner and their schedule</p>
+          </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
               <Label>Template</Label>
@@ -946,11 +1037,39 @@ function AssignmentsTab() {
             </div>
             <div>
               <Label>Cleaner</Label>
-              <Select value={form.cleanerId} onValueChange={v => setForm(f => ({ ...f, cleanerId: v }))}>
+              <Select value={form.cleanerId} onValueChange={v => setForm(f => ({ ...f, cleanerId: v, scheduleId: "" }))}>
                 <SelectTrigger className="mt-1" data-testid="select-assignment-cleaner"><SelectValue placeholder="Select cleaner" /></SelectTrigger>
-                <SelectContent>{(cleaners || []).map(c => <SelectItem key={c.id} value={c.id}>{c.firstName} {c.lastName}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  {(cleaners || []).map(c => <SelectItem key={c.id} value={c.id}>{c.firstName} {c.lastName}</SelectItem>)}
+                </SelectContent>
               </Select>
             </div>
+            {/* Schedule — from existing recurring schedules for selected cleaner */}
+            {form.cleanerId && (
+              <div>
+                <Label>
+                  Schedule <span className="text-muted-foreground text-xs font-normal">(optional — triggers on specific shift)</span>
+                </Label>
+                {activeSchedules.length === 0 ? (
+                  <p className="text-xs text-muted-foreground mt-1.5 border rounded-lg p-2">No active schedules for this cleaner. Scheduled Note will trigger on any clock-in.</p>
+                ) : (
+                  <Select value={form.scheduleId || "any"} onValueChange={v => setForm(f => ({ ...f, scheduleId: v === "any" ? "" : v }))}>
+                    <SelectTrigger className="mt-1" data-testid="select-assignment-schedule"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Any clock-in</SelectItem>
+                      {activeSchedules.map(s => (
+                        <SelectItem key={s.id} value={s.id}>
+                          <span className="flex flex-col">
+                            <span>{s.shiftLabel || (s.repeatDays || []).join(", ")}</span>
+                            <span className="text-xs text-muted-foreground">{s.scheduledStartTime}–{s.scheduledEndTime}</span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
             <div>
               <Label>Location (optional)</Label>
               <Select value={form.clientId || "none"} onValueChange={v => setForm(f => ({ ...f, clientId: v === "none" ? "" : v }))}>
@@ -964,9 +1083,8 @@ function AssignmentsTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button data-testid="button-confirm-assignment"
-              onClick={() => createAssignment.mutate({ templateId: form.templateId, cleanerId: form.cleanerId, clientId: form.clientId || null })}
-              disabled={!form.templateId || !form.cleanerId || createAssignment.isPending}>
+            <Button onClick={() => createAssignment.mutate({ templateId: form.templateId, cleanerId: form.cleanerId, clientId: form.clientId || null, scheduleId: form.scheduleId || null })}
+              disabled={!form.templateId || !form.cleanerId || createAssignment.isPending} data-testid="button-confirm-assignment">
               {createAssignment.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Assign
             </Button>
           </DialogFooter>
@@ -1086,10 +1204,8 @@ function SubmissionsTab({ onViewSubmission }: { onViewSubmission: (id: string) =
       templates: [...new Set(c.subs.map(s => s.templateName))],
     }))
     .filter(c => {
-      if (filterStatus !== "all") {
-        if (filterStatus === "completed" && c.completed === 0) return false;
-        if (filterStatus === "in_progress" && c.completed === c.subs.length) return false;
-      }
+      if (filterStatus === "completed" && c.completed === 0) return false;
+      if (filterStatus === "in_progress" && c.completed === c.subs.length) return false;
       if (search) {
         const q = search.toLowerCase();
         return c.name.toLowerCase().includes(q) || c.templates.some(t => t.toLowerCase().includes(q));
@@ -1106,7 +1222,7 @@ function SubmissionsTab({ onViewSubmission }: { onViewSubmission: (id: string) =
       </div>
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <Input data-testid="input-search-submissions" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by cleaner or template…" className="pl-8" />
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by cleaner or template…" className="pl-8" />
           <span className="absolute left-2.5 top-2.5 text-muted-foreground text-sm">🔍</span>
         </div>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -1158,9 +1274,7 @@ function SubmissionsTab({ onViewSubmission }: { onViewSubmission: (id: string) =
 }
 
 // ─── Compact Submission Step Card ─────────────────────────────────────────────
-function SubmissionStepCard({ step, idx, onClick }: {
-  step: Step; idx: number; onClick: () => void;
-}) {
+function SubmissionStepCard({ step, idx, onClick }: { step: Step; idx: number; onClick: () => void }) {
   const hasSub = !!step.submission?.submittedImageUrl;
   const hasRef = !!step.referenceImageUrl;
   return (
@@ -1170,25 +1284,11 @@ function SubmissionStepCard({ step, idx, onClick }: {
         {hasSub ? (
           <img src={step.submission!.submittedImageUrl} alt={step.title} className="absolute inset-0 w-full h-full object-cover" />
         ) : (
-          <div className="absolute inset-0 bg-muted flex items-center justify-center">
-            <Camera className="w-4 h-4 text-muted-foreground/25" />
-          </div>
+          <div className="absolute inset-0 bg-muted flex items-center justify-center"><Camera className="w-4 h-4 text-muted-foreground/25" /></div>
         )}
-        {/* Step number */}
-        <div className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-black/50 text-white text-[9px] font-bold flex items-center justify-center">
-          {idx + 1}
-        </div>
-        {/* Completion */}
-        {hasSub && (
-          <div className="absolute bottom-0.5 right-0.5">
-            <CheckCircle2 className="w-3 h-3 text-green-500 drop-shadow" />
-          </div>
-        )}
-        {/* Reference indicator */}
-        {hasRef && (
-          <div className="absolute top-0.5 right-0.5 bg-blue-500/80 text-white text-[8px] px-1 rounded-full leading-3 py-0.5">REF</div>
-        )}
-        {/* Hover overlay */}
+        <div className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-black/50 text-white text-[9px] font-bold flex items-center justify-center">{idx + 1}</div>
+        {hasSub && <div className="absolute bottom-0.5 right-0.5"><CheckCircle2 className="w-3 h-3 text-green-500 drop-shadow" /></div>}
+        {hasRef && <div className="absolute top-0.5 right-0.5 bg-blue-500/80 text-white text-[8px] px-1 rounded-full leading-3 py-0.5">REF</div>}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
           <ZoomIn className="w-4 h-4 text-white drop-shadow" />
         </div>
@@ -1208,7 +1308,6 @@ function SubmissionDetail({ submissionId, onBack }: { submissionId: string; onBa
     queryKey: ["/api/admin/scheduled-field-notes/submissions", submissionId],
     queryFn: () => fetch(`/api/admin/scheduled-field-notes/submissions/${submissionId}`, { credentials: "include" }).then(r => r.json()),
   });
-
   const generateLink = useMutation({
     mutationFn: () => apiRequest("POST", `/api/admin/scheduled-field-notes/submissions/${submissionId}/generate-link`, {}),
     onSuccess: (data: any) => {
@@ -1229,8 +1328,6 @@ function SubmissionDetail({ submissionId, onBack }: { submissionId: string; onBa
   if (!sub) return <div className="p-6 text-center text-muted-foreground">Submission not found</div>;
 
   const publicUrl = sub.publicId ? `${window.location.origin}/public/scheduled-field-notes/${sub.publicId}` : null;
-
-  // Build sections with steps + their step submissions attached
   const sections = (sub.sections || []).sort((a, b) => a.sortOrder - b.sortOrder).map(section => ({
     ...section,
     steps: (section.steps || []).sort((a, b) => a.sortOrder - b.sortOrder).map(step => ({
@@ -1238,7 +1335,6 @@ function SubmissionDetail({ submissionId, onBack }: { submissionId: string; onBa
       submission: (sub.stepSubmissions || []).find(ss => ss.stepId === step.id) || null,
     })),
   }));
-
   const allSteps = sections.flatMap(s => s.steps);
   const completedCount = allSteps.filter(s => s.submission).length;
 
@@ -1250,7 +1346,7 @@ function SubmissionDetail({ submissionId, onBack }: { submissionId: string; onBa
       )}
 
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={onBack} data-testid="button-back-to-submissions"><ArrowLeft className="w-4 h-4" /></Button>
+        <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="w-4 h-4" /></Button>
         <div className="flex-1 min-w-0">
           <h2 className="font-semibold text-lg truncate">{sub.templateName}</h2>
           <p className="text-xs text-muted-foreground">{sub.cleanerName}{sub.clientName ? ` · ${sub.clientName}` : ""} · {format(parseISO(sub.submissionDate), "MMMM d, yyyy")}</p>
@@ -1258,11 +1354,10 @@ function SubmissionDetail({ submissionId, onBack }: { submissionId: string; onBa
         <StatusBadge status={sub.status} />
       </div>
 
-      {/* Progress */}
       <div className="border rounded-xl p-4 space-y-2">
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">Completion</span>
-          <span className="font-medium">{completedCount}/{allSteps.length} sub-steps</span>
+          <span className="font-medium">{completedCount}/{allSteps.length} photo tasks</span>
         </div>
         <div className="w-full bg-muted rounded-full h-2">
           <div className={cn("h-full rounded-full", sub.status === "completed" ? "bg-green-500" : "bg-primary")}
@@ -1274,28 +1369,22 @@ function SubmissionDetail({ submissionId, onBack }: { submissionId: string; onBa
         </div>
       </div>
 
-      {/* Public Link */}
       <div className="border rounded-xl p-4">
         <div className="flex items-center justify-between mb-2">
           <div>
             <p className="text-sm font-medium">Client Report Link</p>
-            <p className="text-xs text-muted-foreground">Share a public report with the client</p>
+            <p className="text-xs text-muted-foreground">Share with the client</p>
           </div>
           <div className="flex items-center gap-2">
             {sub.publicEnabled && publicUrl ? (
               <>
-                <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(publicUrl).catch(() => {}); toast({ title: "Link copied" }); }} data-testid="button-copy-public-link">
-                  <Copy className="w-3.5 h-3.5 mr-1.5" />Copy
-                </Button>
+                <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(publicUrl).catch(() => {}); toast({ title: "Copied" }); }}><Copy className="w-3.5 h-3.5 mr-1.5" />Copy</Button>
                 <Button size="sm" variant="outline" asChild><a href={publicUrl} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-3.5 h-3.5 mr-1.5" />Open</a></Button>
-                <Button size="sm" variant="outline" className="text-destructive" onClick={() => disableLink.mutate()} data-testid="button-disable-public-link">
-                  <Link2Off className="w-3.5 h-3.5 mr-1.5" />Disable
-                </Button>
+                <Button size="sm" variant="outline" className="text-destructive" onClick={() => disableLink.mutate()}><Link2Off className="w-3.5 h-3.5 mr-1.5" />Disable</Button>
               </>
             ) : (
-              <Button size="sm" onClick={() => generateLink.mutate()} disabled={generateLink.isPending} data-testid="button-generate-public-link">
-                {generateLink.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5 mr-1.5" />}
-                Generate Link
+              <Button size="sm" onClick={() => generateLink.mutate()} disabled={generateLink.isPending}>
+                {generateLink.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5 mr-1.5" />}Generate Link
               </Button>
             )}
           </div>
@@ -1303,7 +1392,6 @@ function SubmissionDetail({ submissionId, onBack }: { submissionId: string; onBa
         {sub.publicEnabled && publicUrl && <p className="text-xs text-muted-foreground truncate">{publicUrl}</p>}
       </div>
 
-      {/* Compact photo grids by section — click to open StepDetailModal */}
       {sections.map(section => {
         const sectionCompleted = section.steps.filter(s => s.submission).length;
         return (
@@ -1355,9 +1443,9 @@ function ReportsTab({ onViewSubmission }: { onViewSubmission: (id: string) => vo
   });
 
   const completed = (submissions || []).filter(s => s.status === "completed");
-  const filtered = completed.filter(s =>
-    !search || [s.templateName, s.cleanerName, s.clientName || ""].some(str => str.toLowerCase().includes(search.toLowerCase()))
-  ).sort((a, b) => b.submissionDate.localeCompare(a.submissionDate));
+  const filtered = completed
+    .filter(s => !search || [s.templateName, s.cleanerName, s.clientName || ""].some(str => str.toLowerCase().includes(search.toLowerCase())))
+    .sort((a, b) => b.submissionDate.localeCompare(a.submissionDate));
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -1395,7 +1483,7 @@ function ReportsTab({ onViewSubmission }: { onViewSubmission: (id: string) => vo
                   <StatusBadge status={s.status} />
                   {s.publicEnabled ? (
                     <span className="inline-flex items-center gap-1 text-[10px] text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
-                      <Link2 className="w-2.5 h-2.5" />Link Active
+                      <Link2 className="w-2.5 h-2.5" />Active
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted border px-2 py-0.5 rounded-full">No Link</span>
@@ -1404,15 +1492,10 @@ function ReportsTab({ onViewSubmission }: { onViewSubmission: (id: string) => vo
                 <div className="flex flex-col gap-1.5 pt-2 border-t">
                   {s.publicEnabled && publicUrl ? (
                     <>
-                      <Button size="sm" variant="outline" className="w-full text-xs justify-start"
-                        onClick={() => { navigator.clipboard.writeText(publicUrl).catch(() => {}); toast({ title: "Link copied" }); }}
-                        data-testid={`button-copy-link-${s.id}`}><Copy className="w-3 h-3 mr-2" />Copy Link</Button>
-                      <Button size="sm" variant="outline" className="w-full text-xs justify-start" asChild>
-                        <a href={publicUrl} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-3 h-3 mr-2" />Open Report</a>
-                      </Button>
-                      <Button size="sm" variant="outline" className="w-full text-xs justify-start text-destructive hover:text-destructive"
-                        onClick={() => disableLink.mutate(s.id)} disabled={disablingId === s.id} data-testid={`button-disable-link-${s.id}`}>
-                        {disablingId === s.id ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : <Link2Off className="w-3 h-3 mr-2" />}Disable Link
+                      <Button size="sm" variant="outline" className="w-full text-xs justify-start" onClick={() => { navigator.clipboard.writeText(publicUrl).catch(() => {}); toast({ title: "Copied" }); }} data-testid={`button-copy-link-${s.id}`}><Copy className="w-3 h-3 mr-2" />Copy Link</Button>
+                      <Button size="sm" variant="outline" className="w-full text-xs justify-start" asChild><a href={publicUrl} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-3 h-3 mr-2" />Open Report</a></Button>
+                      <Button size="sm" variant="outline" className="w-full text-xs justify-start text-destructive hover:text-destructive" onClick={() => disableLink.mutate(s.id)} disabled={disablingId === s.id} data-testid={`button-disable-link-${s.id}`}>
+                        {disablingId === s.id ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : <Link2Off className="w-3 h-3 mr-2" />}Disable
                       </Button>
                     </>
                   ) : (
