@@ -439,24 +439,24 @@ export async function sendAttendanceLateClockInEmail(opts: {
   scheduledStart: string;
   actualClockIn: string;
   minutesLate: number;
-  loginUrl?: string;
+  attendanceUrl?: string;
 }) {
   const { client, domain } = getClient();
   const from = process.env.MAIL_FROM || "Clockfield <noreply@clockfield.ca>";
-  const loginUrl = opts.loginUrl || "https://app.clockfield.com";
+  const attendanceUrl = opts.attendanceUrl || "https://app.clockfield.com/admin/attendance";
 
   const textBody = `Employee Clocked In Late — ClockField Alert
 
 Hi ${opts.adminName},
 
-An employee has clocked in late.
+${opts.employeeName} clocked in late today.
 
 Employee: ${opts.employeeName}
-${opts.locationName ? `Location: ${opts.locationName}\n` : ""}Scheduled Start: ${opts.scheduledStart}
-Actual Clock-In: ${opts.actualClockIn}
-Minutes Late: ${opts.minutesLate}
+${opts.locationName ? `Location: ${opts.locationName}\n` : ""}Scheduled: ${opts.scheduledStart}
+Clocked In: ${opts.actualClockIn}
+Minutes Late: ${opts.minutesLate} min
 
-View attendance: ${loginUrl}/admin/attendance
+View attendance: ${attendanceUrl}
 
 – ClockField`;
 
@@ -473,7 +473,8 @@ View attendance: ${loginUrl}/admin/attendance
         <tr><td style="padding:36px 32px 24px;">
           <p style="margin:0 0 6px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;">Attendance Alert</p>
           <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">Employee Clocked In Late</p>
-          <p style="margin:0 0 20px;font-size:15px;color:#6b7280;">Hi ${opts.adminName}, an employee clocked in late today.</p>
+          <p style="margin:0 0 4px;font-size:15px;color:#374151;">Hi ${opts.adminName},</p>
+          <p style="margin:0 0 20px;font-size:15px;color:#374151;font-weight:600;">${opts.employeeName} clocked in late today.</p>
           <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #fde68a;border-radius:6px;margin-bottom:24px;background:#fffbeb;">
             <tr><td style="padding:16px 20px;">
               <table width="100%" cellpadding="0" cellspacing="6">
@@ -487,7 +488,7 @@ View attendance: ${loginUrl}/admin/attendance
           </table>
           <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
             <tr><td style="background:#d97706;border-radius:6px;">
-              <a href="${loginUrl}/admin/attendance" style="display:inline-block;padding:12px 24px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;">View Attendance</a>
+              <a href="${attendanceUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;">View Attendance</a>
             </td></tr>
           </table>
         </td></tr>

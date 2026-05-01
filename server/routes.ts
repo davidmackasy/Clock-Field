@@ -95,6 +95,38 @@ function todayInTz(tz: string): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: tz || "UTC" });
 }
 
+/**
+ * Format a local time string "YYYY-MM-DDTHH:mm:ss" (already in company timezone)
+ * into a human-readable string like "Apr 27, 2026 at 5:00 PM".
+ * Never re-converts the timezone — the input is already local.
+ */
+function formatLocalTimeStr(localStr: string): string {
+  const m = localStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!m) return localStr;
+  const [, yr, mo, dy, hh, mm] = m;
+  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const monthName = MONTHS[parseInt(mo) - 1] ?? mo;
+  const h = parseInt(hh);
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = (h % 12) || 12;
+  return `${monthName} ${parseInt(dy)}, ${yr} at ${h12}:${mm} ${ampm}`;
+}
+
+/**
+ * Format a UTC ISO string into "Apr 27, 2026 at 5:03 PM" in the given IANA timezone.
+ */
+function formatUtcInTz(utcStr: string, tz: string): string {
+  const d = new Date(utcStr);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    month: "short", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit", hour12: true,
+  }).formatToParts(d);
+  const p: Record<string, string> = {};
+  for (const part of parts) if (part.type !== "literal") p[part.type] = part.value;
+  return `${p.month} ${p.day}, ${p.year} at ${p.hour}:${p.minute} ${p.dayPeriod}`;
+}
+
 const upload = multer({
   dest: UPLOADS_DIR,
   limits: { fileSize: 10 * 1024 * 1024, files: 3 },
@@ -1451,9 +1483,30 @@ Welcome again, and thank you for choosing ClockField.
             const admins = await storage.getAdminsByCompany(user.companyId);
             const primaryAdmin = admins[0];
             if (primaryAdmin?.email) {
-              const scheduledStart = shift.scheduledStartAt ? new Date(shift.scheduledStartAt).toLocaleString() : "N/A";
-              const actualClockIn = new Date(now).toLocaleString();
-              const minutesLate = Math.round((new Date(now).getTime() - new Date(shift.scheduledStartAt).getTime()) / 60000);
+              // Use company timezone as source of truth; fall back to Winnipeg
+              const alertTz = alertCompany.timezone || "America/Winnipeg";
+
+              // scheduledStartAt is stored as a local time string "YYYY-MM-DDTHH:mm:ss"
+              // — format it directly without any timezone re-conversion
+              const scheduledStart = shift.scheduledStartAt
+                ? formatLocalTimeStr(shift.scheduledStartAt)
+                : "N/A";
+
+              // clockInAt (now) is a UTC ISO string — convert to company local time
+              const actualClockIn = formatUtcInTz(now, alertTz);
+
+              // Minutes late: convert both sides to local time strings, then diff.
+              // Appending "Z" to both treats them as UTC so Date arithmetic is consistent.
+              const clockInLocalStr = utcToLocalIso(now, alertTz);
+              const minutesLate = Math.max(0, Math.round(
+                (new Date(clockInLocalStr + "Z").getTime() - new Date(shift.scheduledStartAt + "Z").getTime()) / 60000
+              ));
+
+              // Deep-link to the exact employee + local business date
+              const businessDate = todayInTz(alertTz);
+              const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+              const attendanceUrl = `${appUrl}/admin/attendance?employeeId=${user.id}&date=${businessDate}`;
+
               const location = shift.locationId ? await storage.getLocation(shift.locationId) : null;
               await sendAttendanceLateClockInEmail({
                 to: primaryAdmin.email,
@@ -1463,7 +1516,7 @@ Welcome again, and thank you for choosing ClockField.
                 scheduledStart,
                 actualClockIn,
                 minutesLate,
-                loginUrl: `${process.env.APP_URL || "https://app.clockfield.com"}`,
+                attendanceUrl,
               }).catch(e => console.error("[late-alert] Email failed:", e.message));
             }
           }

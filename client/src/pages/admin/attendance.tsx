@@ -485,18 +485,24 @@ export default function AdminAttendance() {
   const search_ = useSearch();
   const initParams = new URLSearchParams(search_);
 
+  // Support deep-links from late clock-in emails: ?employeeId=X&date=YYYY-MM-DD
+  const initEmployeeId = initParams.get("employeeId") || "all";
+  const initDate = initParams.get("date"); // "YYYY-MM-DD" company local date
+
   const { data: entries, isLoading } = useQuery<any[]>({ queryKey: ["/api/time-entries"] });
   const { data: employees } = useQuery<any[]>({ queryKey: ["/api/employees"] });
   const { data: shifts } = useQuery<any[]>({ queryKey: ["/api/shifts"] });
 
   const [search, setSearch] = useState("");
-  const [dateRange, setDateRange] = useState<string>(initParams.get("dateRange") || "this_week");
+  const [dateRange, setDateRange] = useState<string>(
+    initDate ? "custom" : (initParams.get("dateRange") || "this_week")
+  );
   const [customRange, setCustomRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
-    from: subDays(new Date(), 7),
-    to: new Date(),
+    from: initDate ? new Date(initDate + "T00:00:00") : subDays(new Date(), 7),
+    to: initDate ? new Date(initDate + "T23:59:59") : new Date(),
   });
   const [statusFilter, setStatusFilter] = useState<string>(initParams.get("status") || "all");
-  const [employeeFilter, setEmployeeFilter] = useState<string>("all");
+  const [employeeFilter, setEmployeeFilter] = useState<string>(initEmployeeId);
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
   const [manualClockOutEntry, setManualClockOutEntry] = useState<any>(null);
   const [adjustingEntry, setAdjustingEntry] = useState<any>(null);

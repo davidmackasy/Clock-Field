@@ -1,0 +1,377 @@
+Goal
+
+Fix the late clock-in email alert so it uses the correct local time, correct attendance record, correct schedule time, and correct minutes late for that specific day only.
+
+Do not break or affect anything else.
+
+Do not change the existing attendance flow.
+Do not change the existing clock-in or clock-out process.
+Do not change how cleaners submit attendance.
+Do not change schedule creation.
+Do not delete or migrate existing attendance data unless approved.
+Do not change unrelated notification templates.
+Only fix the late clock-in alert logic, email data mapping, timezone handling, and View Attendance link behavior.
+
+Issue 1: Email is showing the wrong clock-in time
+
+Current problem
+
+The app attendance record shows Fortune clocked in around 17:03 on April 27.
+
+But the email shows:
+
+Scheduled: 4/27/2026, 5:00:00 PM
+Clocked In: 4/27/2026, 10:03:59 PM
+Minutes Late: 304 min
+
+This looks like a timezone conversion issue.
+
+The clock-in time appears to be shifted by about 5 hours.
+
+Required behavior
+
+The email must show the same local time that appears in the attendance page.
+
+Example:
+
+If the attendance page shows:
+
+Clocked in: 17:03
+
+Then the email should show:
+
+Clocked In: Apr 27, 2026 at 5:03 PM
+
+Do not show UTC time in the email.
+Do not show server time in the email.
+Do not convert the same timestamp twice.
+Do not use browser timezone for backend emails unless the company timezone is unavailable.
+
+Use the company or business timezone as the source of truth.
+
+For Clockfield, this should support local Canadian timezones properly, especially Winnipeg / Manitoba time.
+
+Recommended timezone priority
+
+Use this order:
+
+Company/business timezone from company settings
+Location/site timezone if location has its own timezone
+User/admin timezone if company timezone does not exist
+Final fallback: America/Winnipeg
+
+Add a clear helper function if one does not already exist:
+
+getCompanyTimezone(companyId)
+formatInCompanyTimezone(date, companyTimezone)
+getLocalBusinessDate(date, companyTimezone)
+
+Use the same helper for:
+
+scheduled time shown in email
+clocked-in time shown in email
+late minutes calculation
+email send timing check
+attendance lookup date
+
+Issue 2: System thinks the next day starts around 7 PM
+
+Current problem
+
+Around 7 PM local time, the app behaves like it is already the next day.
+
+This usually happens when the backend uses UTC dates directly.
+
+Example:
+
+7 PM in Winnipeg can already be the next UTC date depending on daylight saving/time offset.
+
+Required behavior
+
+Attendance and alerts must use the business local date, not UTC date.
+
+When checking “today,” do not use:
+
+new Date().toISOString().split('T')[0]
+
+Do not use raw UTC date strings for attendance day matching.
+
+Instead use:
+
+localBusinessDate = getLocalBusinessDate(now, companyTimezone)
+
+Example:
+
+If company timezone is America/Winnipeg and local time is Apr 27 at 7:30 PM, the business date must still be Apr 27.
+
+It should not become Apr 28 until midnight in the company timezone.
+
+This fix should apply only to alert lookup and notification timing unless the same helper is already safely used elsewhere.
+
+Issue 3: Minutes late must be calculated only for that specific shift
+
+Current problem
+
+The email appears to show total accumulated late minutes, like 304, 400, or 500 minutes.
+
+That is confusing.
+
+The late clock-in email should only show how late the cleaner was for that specific scheduled shift on that specific day.
+
+Required behavior
+
+Calculate minutes late like this:
+
+scheduledStartLocal = schedule start time for this employee, location, and business date
+clockInLocal = actual clock-in time for that attendance record
+
+minutesLate = max(0, differenceInMinutes(clockInLocal, scheduledStartLocal))
+
+Example:
+
+Scheduled: Apr 27, 2026 at 5:00 PM
+Clocked In: Apr 27, 2026 at 5:03 PM
+Minutes Late: 3 min
+
+Do not use:
+
+monthly late total
+weekly late total
+employee total late minutes
+attendance summary total
+payroll late total
+all-time late total
+
+Only use the current attendance record and matching schedule.
+
+Issue 4: Match the correct attendance record to the correct schedule
+
+Required matching logic
+
+When the late clock-in alert runs, it should match:
+
+companyId
+employeeId
+locationId
+businessLocalDate
+scheduleId if available
+
+Preferred match:
+
+attendance.scheduleId === schedule.id
+
+Fallback match:
+
+same employee
+same location
+same business local date
+clock-in timestamp within a reasonable window around scheduled shift
+
+Do not pull a random schedule from the same day.
+Do not compare UTC date to local attendance date.
+Do not calculate lateness from the wrong shift.
+
+Issue 5: Improve email date format
+
+Current format:
+
+4/27/2026, 5:00:00 PM
+
+Required format:
+
+Apr 27, 2026 at 5:00 PM
+
+Use company timezone formatting.
+
+Example output:
+
+Employee: Fortune Eiwo
+Location: Olympic Building Centre
+Scheduled: Apr 27, 2026 at 5:00 PM
+Clocked In: Apr 27, 2026 at 5:03 PM
+Minutes Late: 3 min
+
+Do not show seconds unless needed.
+
+Issue 6: Send alert only when the cleaner is late for that shift
+
+Required behavior
+
+Only send the alert when:
+
+employee has a scheduled shift
+employee clocked in after the allowed grace period
+alert has not already been sent for this attendance or schedule event
+
+Use a notification lock to avoid duplicate emails.
+
+Recommended unique key:
+
+late-clockin:{companyId}:{employeeId}:{scheduleId}:{businessLocalDate}
+
+If scheduleId is not available:
+
+late-clockin:{companyId}:{employeeId}:{locationId}:{businessLocalDate}:{clockInId}
+
+Do not send repeated late alerts for the same clock-in.
+
+Issue 7: View Attendance button must open the correct place
+
+Current problem
+
+The button should not just open a random page.
+
+Required behavior
+
+When admin clicks View Attendance:
+
+If logged in:
+Take them directly to the Clockfield attendance page.
+
+If not logged in:
+Take them to login first.
+After successful login, redirect them to the attendance page.
+
+Preferred URL format:
+
+/login?redirect=/admin/attendance?employeeId=EMPLOYEE_ID&date=YYYY-MM-DD
+
+Or, if your app already supports protected redirects:
+
+/admin/attendance?employeeId=EMPLOYEE_ID&date=YYYY-MM-DD
+
+The date in the URL must be the company local business date.
+
+Example:
+
+/admin/attendance?employeeId=fortune_id&date=2026-04-27
+
+Make sure the attendance page can use the query params to preselect:
+
+employee
+date
+location if available
+
+Do not create a new attendance page.
+Do not change the attendance page design unless needed to support the query params.
+
+Issue 8: Email copy improvement
+
+Keep the current design.
+
+Update only the wording and variables.
+
+Recommended copy:
+
+Attendance Alert
+
+Employee Clocked In Late
+
+Fortune Eiwo clocked in late today.
+
+Details:
+
+Employee: Fortune Eiwo
+Location: Olympic Building Centre
+Scheduled: Apr 27, 2026 at 5:00 PM
+Clocked In: Apr 27, 2026 at 5:03 PM
+Minutes Late: 3 min
+
+Button:
+
+View Attendance
+
+Avoid confusing copy like:
+
+Hi Henry Delvin, an employee clocked in late today.
+
+Better:
+
+Hi Henry Delvin,
+
+Fortune Eiwo clocked in late today.
+
+Testing checklist
+
+Test with company timezone set to America/Winnipeg.
+
+Test case 1:
+
+Scheduled shift:
+Apr 27, 2026 at 5:00 PM
+
+Clock-in:
+Apr 27, 2026 at 5:03 PM
+
+Expected email:
+
+Scheduled: Apr 27, 2026 at 5:00 PM
+Clocked In: Apr 27, 2026 at 5:03 PM
+Minutes Late: 3 min
+
+Test case 2:
+
+Current local time is 7:30 PM in Winnipeg.
+
+Expected behavior:
+
+Business date still equals today in Winnipeg.
+System must not move to tomorrow until local midnight.
+
+Test case 3:
+
+Employee has 500 total late minutes for the month but is only 6 minutes late today.
+
+Expected email:
+
+Minutes Late: 6 min
+
+Not:
+
+Minutes Late: 500 min
+
+Test case 4:
+
+Admin clicks View Attendance while logged out.
+
+Expected behavior:
+
+Admin goes to login.
+After login, admin lands on the attendance page for the correct employee and date.
+
+Test case 5:
+
+Admin clicks View Attendance while logged in.
+
+Expected behavior:
+
+Admin lands directly on the attendance page for the correct employee and date.
+
+Important final instruction
+
+This is a focused fix.
+
+Only touch:
+
+late clock-in email data mapping
+timezone formatting for this alert
+late minutes calculation for this alert
+attendance alert redirect link
+duplicate alert prevention if needed
+
+Do not touch:
+
+attendance creation
+clock-in button
+clock-out button
+schedule creation
+payroll
+timesheets
+employee app flows
+admin dashboard layout
+other email templates
+database schema unless required and approved
+
+The final result should be simple:
+
+The admin receives a late clock-in alert with the same local time shown inside Clockfield attendance, the correct scheduled time, the correct clock-in time, and only the minutes late for that one shift.
