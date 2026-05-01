@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,41 +34,21 @@ export default function EmployeeScheduledFieldNotesCapture() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
-  // Flat step index across all sections
   const [flatStepIndex, setFlatStepIndex] = useState(0);
   const [showIntro, setShowIntro] = useState(true);
   const [showOutro, setShowOutro] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [retaking, setRetaking] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
-  const { data: submission, isLoading } = useQuery<Submission>({
+  const { data: submission, isLoading, refetch: refetchSubmission } = useQuery<Submission>({
     queryKey: ["/api/employee/scheduled-field-notes/submissions", submissionId],
     queryFn: () => fetch(`/api/employee/scheduled-field-notes/submissions/${submissionId}`, { credentials: "include" }).then(r => r.json()),
     enabled: !!submissionId,
     refetchOnWindowFocus: false,
-  });
-
-  const submitStep = useMutation({
-    mutationFn: ({ stepId, imageUrl }: { stepId: string; imageUrl: string }) =>
-      apiRequest("POST", `/api/employee/scheduled-field-notes/submissions/${submissionId}/steps/${stepId}`, { imageUrl }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/employee/scheduled-field-notes/submissions", submissionId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/employee/scheduled-field-notes/today"] });
-      setCapturedImage(null);
-      setRetaking(false);
-    },
-    onError: () => toast({ title: "Failed to save photo", variant: "destructive" }),
-  });
-
-  const completeSubmission = useMutation({
-    mutationFn: () => apiRequest("POST", `/api/employee/scheduled-field-notes/submissions/${submissionId}/complete`, {}),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/employee/scheduled-field-notes/today"] });
-      setShowOutro(true);
-    },
-    onError: (e: any) => toast({ title: e.message || "Could not complete", variant: "destructive" }),
   });
 
   const handleImageCapture = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -103,11 +83,7 @@ export default function EmployeeScheduledFieldNotesCapture() {
     );
   }
 
-  // Safe template name helper
-  const templateName =
-    submission?.template?.name ||
-    submission?.templateName ||
-    "Scheduled Field Note";
+  const templateName = submission?.template?.name || submission?.templateName || "Scheduled Field Note";
 
   // Build flat steps list
   const allSteps: (Step & { sectionTitle: string; sectionIndex: number })[] = [];
@@ -122,9 +98,78 @@ export default function EmployeeScheduledFieldNotesCapture() {
   const currentStep = allSteps[flatStepIndex];
   const totalRequired = allSteps.filter(s => s.isRequired).length;
   const completedRequired = allSteps.filter(s => s.isRequired && s.submission).length;
-  const allRequiredDone = completedRequired >= totalRequired;
+  // Use backend-computed completion state
+  const allRequiredDone = totalRequired > 0 && completedRequired >= totalRequired;
 
-  // Outro screen
+  // ── Submit photo handler ──────────────────────────────────────────────────
+  const handleSubmitPhoto = async () => {
+    if (!capturedImage || isSubmitting || !currentStep) return;
+    setIsSubmitting(true);
+    try {
+      const res = await apiRequest("POST",
+        `/api/employee/scheduled-field-notes/submissions/${submissionId}/steps/${currentStep.id}`,
+        { imageUrl: capturedImage }
+      );
+      await res.json(); // consume response
+      // Refetch to get updated submission state from backend
+      await refetchSubmission();
+      await queryClient.invalidateQueries({ queryKey: ["/api/employee/scheduled-field-notes/today"] });
+      setCapturedImage(null);
+      setRetaking(false);
+      // Auto-advance to next incomplete required step
+      const nextIncompleteIdx = allSteps.findIndex(
+        (s, i) => i > flatStepIndex && !s.submission
+      );
+      if (nextIncompleteIdx !== -1) {
+        setFlatStepIndex(nextIncompleteIdx);
+      } else {
+        // No more incomplete steps — check if there's a next step at all
+        const nextIdx = flatStepIndex + 1;
+        if (nextIdx < allSteps.length) {
+          setFlatStepIndex(nextIdx);
+        }
+        // else stay on last step — Complete button will appear
+      }
+    } catch (err: any) {
+      toast({ title: "Could not save photo. Please try again.", variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ── Complete submission handler ────────────────────────────────────────────
+  const handleComplete = async () => {
+    if (isCompleting || !allRequiredDone) return;
+    setIsCompleting(true);
+    try {
+      const res = await apiRequest("POST",
+        `/api/employee/scheduled-field-notes/submissions/${submissionId}/complete`,
+        {}
+      );
+      await res.json();
+      await queryClient.invalidateQueries({ queryKey: ["/api/employee/scheduled-field-notes/today"] });
+      setShowOutro(true);
+    } catch (err: any) {
+      // Parse friendly error
+      const msg = err.message || "";
+      if (msg.includes("Not all required") || msg.includes("missing")) {
+        const missing = msg.match(/\d+/)?.[0];
+        toast({
+          title: missing
+            ? `${missing} required photo${Number(missing) !== 1 ? "s" : ""} still missing`
+            : "Some required photos are still missing",
+          description: "Please complete all required steps before finishing the checklist.",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Could not complete checklist. Please try again.", variant: "destructive" });
+      }
+    } finally {
+      setIsCompleting(false);
+    }
+  };
+
+  // ── Outro ──────────────────────────────────────────────────────────────────
   if (showOutro || submission.status === "completed") {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
@@ -145,7 +190,7 @@ export default function EmployeeScheduledFieldNotesCapture() {
     );
   }
 
-  // Intro screen
+  // ── Intro ──────────────────────────────────────────────────────────────────
   if (showIntro) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
@@ -162,45 +207,49 @@ export default function EmployeeScheduledFieldNotesCapture() {
             <p className="text-muted-foreground mb-6 max-w-xs">{submission.template?.introText}</p>
           )}
           <p className="text-sm text-muted-foreground mb-8">
-            {totalRequired} required step{totalRequired !== 1 ? "s" : ""} · Take a photo for each
+            {totalRequired} required photo{totalRequired !== 1 ? "s" : ""} · Match each reference photo
           </p>
 
-          {/* Step overview */}
+          {/* Step overview — grouped by section */}
           <div className="w-full max-w-xs text-left space-y-2 mb-8">
-            {(submission.sections || []).sort((a, b) => a.sortOrder - b.sortOrder).map(section => (
-              <div key={section.id} className="border rounded-xl p-3">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">{section.title}</p>
-                <div className="space-y-1">
-                  {(section.steps || []).sort((a, b) => a.sortOrder - b.sortOrder).map((step, i) => (
-                    <div key={step.id} className="flex items-center gap-2 text-sm">
-                      {step.submission ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" /> : <span className="w-3.5 h-3.5 rounded-full border-2 border-muted-foreground/30 shrink-0" />}
-                      <span className={step.submission ? "text-muted-foreground line-through" : ""}>{step.title}</span>
-                      {!step.isRequired && <span className="text-[10px] text-muted-foreground ml-auto">(optional)</span>}
-                    </div>
-                  ))}
+            {(submission.sections || []).sort((a, b) => a.sortOrder - b.sortOrder).map(section => {
+              const sectionDone = (section.steps || []).filter(s => s.submission).length;
+              const sectionTotal = (section.steps || []).length;
+              return (
+                <div key={section.id} className="border rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs font-medium uppercase tracking-wide">{section.title}</p>
+                    <span className="text-[10px] text-muted-foreground">{sectionDone}/{sectionTotal}</span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-1">
+                    <div className={cn("h-full rounded-full", sectionDone === sectionTotal && sectionTotal > 0 ? "bg-green-500" : "bg-primary")}
+                      style={{ width: sectionTotal > 0 ? `${(sectionDone / sectionTotal) * 100}%` : "0%" }} />
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <Button size="lg" className="w-full max-w-xs" onClick={() => setShowIntro(false)} data-testid="button-sfn-start">
-            <Camera className="w-5 h-5 mr-2" />Start Checklist
+            <Camera className="w-5 h-5 mr-2" />
+            {completedRequired > 0 ? "Continue Checklist" : "Start Checklist"}
           </Button>
         </div>
       </div>
     );
   }
 
+  // ── No current step (all done) ─────────────────────────────────────────────
   if (!currentStep) {
-    // All steps done (or no steps), show complete button
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
         <CheckCircle2 className="w-16 h-16 text-green-500 mb-4" />
-        <h2 className="text-xl font-bold mb-2">All steps completed!</h2>
+        <h2 className="text-xl font-bold mb-2">All photos submitted!</h2>
         <p className="text-muted-foreground mb-8">{completedRequired}/{totalRequired} required steps done</p>
-        <Button size="lg" className="w-full max-w-xs" onClick={() => completeSubmission.mutate()} disabled={completeSubmission.isPending} data-testid="button-sfn-complete">
-          {completeSubmission.isPending ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <ClipboardCheck className="w-5 h-5 mr-2" />}
-          Complete Checklist
+        <Button size="lg" className="w-full max-w-xs" onClick={handleComplete}
+          disabled={isCompleting || !allRequiredDone} data-testid="button-sfn-complete">
+          {isCompleting ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <ClipboardCheck className="w-5 h-5 mr-2" />}
+          {isCompleting ? "Completing..." : "Complete Checklist"}
         </Button>
       </div>
     );
@@ -210,41 +259,62 @@ export default function EmployeeScheduledFieldNotesCapture() {
   const canGoBack = flatStepIndex > 0;
   const canGoNext = flatStepIndex < allSteps.length - 1;
 
+  // The main display title is the section (main step) title
+  const displayTitle = currentStep.sectionTitle;
+  // The photo task detail label (shown smaller, for context)
+  const taskLabel = currentStep.title !== currentStep.sectionTitle ? currentStep.title : null;
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <div className="border-b px-4 py-3 flex items-center gap-3 sticky top-0 bg-background z-10">
         <Button variant="ghost" size="icon" onClick={() => setShowIntro(true)} data-testid="button-sfn-back-capture"><ChevronLeft className="w-5 h-5" /></Button>
         <div className="flex-1 min-w-0">
-          <p className="text-xs text-muted-foreground">{currentStep.sectionTitle}</p>
           <p className="font-medium text-sm truncate">{templateName}</p>
         </div>
-        <span className="text-sm text-muted-foreground shrink-0">{flatStepIndex + 1}/{allSteps.length}</span>
+        <span className="text-sm text-muted-foreground shrink-0 tabular-nums">{flatStepIndex + 1}/{allSteps.length}</span>
       </div>
 
       {/* Progress bar */}
       <div className="h-1 bg-muted">
-        <div className="h-full bg-primary transition-all" style={{ width: `${allSteps.length > 0 ? ((flatStepIndex) / allSteps.length) * 100 : 0}%` }} />
+        <div className="h-full bg-primary transition-all duration-300"
+          style={{ width: `${allSteps.length > 0 ? ((completedRequired / totalRequired) * 100) : 0}%` }} />
       </div>
 
       <div className="flex-1 overflow-y-auto">
         <div className="p-4 max-w-lg mx-auto space-y-4">
-          {/* Step title */}
+
+          {/* Step title — main area name as heading */}
           <div className="pt-2">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Step {flatStepIndex + 1}</span>
-              {!currentStep.isRequired && <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full">Optional</span>}
-              {currentStep.submission && !retaking && <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />Submitted</span>}
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Step {flatStepIndex + 1}
+              </span>
+              {!currentStep.isRequired && (
+                <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full">Optional</span>
+              )}
+              {alreadySubmitted && (
+                <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" />Done
+                </span>
+              )}
             </div>
-            <h2 className="text-xl font-bold">{currentStep.title}</h2>
-            {currentStep.description && <p className="text-sm text-muted-foreground mt-1">{currentStep.description}</p>}
+            {/* Main heading: section/area title only */}
+            <h2 className="text-xl font-bold">{displayTitle}</h2>
+            {/* Smaller label: photo task detail if different from section title */}
+            {taskLabel && (
+              <p className="text-sm text-muted-foreground mt-0.5">{taskLabel}</p>
+            )}
+            {currentStep.description && (
+              <p className="text-sm text-muted-foreground mt-1">{currentStep.description}</p>
+            )}
           </div>
 
           {/* Reference photo */}
           {currentStep.referenceImageUrl && (
             <div className="rounded-2xl overflow-hidden border">
               <div className="px-3 py-2 bg-muted/50 flex items-center gap-2">
-                <span className="text-xs font-medium text-muted-foreground">Reference Photo</span>
+                <span className="text-xs font-medium text-muted-foreground">Reference — take a matching photo</span>
               </div>
               <img src={currentStep.referenceImageUrl} alt="Reference" className="w-full object-cover max-h-52" />
             </div>
@@ -257,7 +327,8 @@ export default function EmployeeScheduledFieldNotesCapture() {
                 <img src={currentStep.submission.submittedImageUrl} alt="Your photo" className="w-full object-cover max-h-64" />
                 <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/50 to-transparent p-3 flex items-center justify-between">
                   <span className="text-white text-xs">Submitted {format(parseISO(currentStep.submission.submittedAt), "h:mm a")}</span>
-                  <Button size="sm" variant="secondary" onClick={() => setRetaking(true)} data-testid={`button-retake-${currentStep.id}`} className="text-xs h-7">
+                  <Button size="sm" variant="secondary" onClick={() => setRetaking(true)}
+                    data-testid={`button-retake-${currentStep.id}`} className="text-xs h-7">
                     <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Retake
                   </Button>
                 </div>
@@ -265,7 +336,8 @@ export default function EmployeeScheduledFieldNotesCapture() {
             ) : capturedImage ? (
               <div className="rounded-2xl overflow-hidden border-2 border-primary/30 relative">
                 <img src={capturedImage} alt="Captured" className="w-full object-cover max-h-64" />
-                <button onClick={() => { setCapturedImage(null); setRetaking(false); }} className="absolute top-2 right-2 bg-black/50 text-white rounded-full p-1.5 hover:bg-black/70">
+                <button onClick={() => { setCapturedImage(null); setRetaking(false); }}
+                  className="absolute top-2 right-2 bg-black/50 text-white rounded-full p-1.5 hover:bg-black/70">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -284,12 +356,17 @@ export default function EmployeeScheduledFieldNotesCapture() {
             )}
 
             {/* Camera inputs */}
-            <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleImageCapture} className="hidden" data-testid={`input-camera-${currentStep.id}`} />
-            <input ref={fileRef} type="file" accept="image/*" onChange={handleImageCapture} className="hidden" />
+            <input ref={cameraRef} type="file" accept="image/*" capture="environment"
+              onChange={handleImageCapture} className="hidden"
+              data-testid={`input-camera-${currentStep.id}`} />
+            <input ref={fileRef} type="file" accept="image/*"
+              onChange={handleImageCapture} className="hidden" />
 
-            {/* Upload from gallery fallback */}
+            {/* Gallery fallback */}
             {!capturedImage && !alreadySubmitted && (
-              <Button variant="outline" size="sm" className="w-full text-muted-foreground" onClick={() => fileRef.current?.click()} data-testid={`button-upload-photo-${currentStep.id}`}>
+              <Button variant="outline" size="sm" className="w-full text-muted-foreground"
+                onClick={() => fileRef.current?.click()}
+                data-testid={`button-upload-photo-${currentStep.id}`}>
                 <ImagePlus className="w-4 h-4 mr-2" />Choose from Gallery
               </Button>
             )}
@@ -298,54 +375,89 @@ export default function EmployeeScheduledFieldNotesCapture() {
           {/* Action buttons */}
           <div className="flex gap-3 pt-2">
             {capturedImage ? (
+              // Submit photo — one click, locked while uploading
               <Button
                 className="flex-1"
-                onClick={() => submitStep.mutate({ stepId: currentStep.id, imageUrl: capturedImage })}
-                disabled={submitStep.isPending}
+                onClick={handleSubmitPhoto}
+                disabled={isSubmitting}
                 data-testid={`button-submit-step-${currentStep.id}`}
               >
-                {submitStep.isPending ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <CheckCircle2 className="w-5 h-5 mr-2" />}
-                Submit Photo
+                {isSubmitting
+                  ? <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Submitting...</>
+                  : <><CheckCircle2 className="w-5 h-5 mr-2" />Submit Photo</>}
               </Button>
             ) : alreadySubmitted ? (
               canGoNext ? (
-                <Button className="flex-1" onClick={() => setFlatStepIndex(i => i + 1)} data-testid="button-next-step">
+                // Next step
+                <Button className="flex-1"
+                  onClick={() => { setFlatStepIndex(i => i + 1); setCapturedImage(null); setRetaking(false); }}
+                  data-testid="button-next-step">
                   Next Step <ChevronRight className="w-5 h-5 ml-2" />
                 </Button>
               ) : (
-                <Button className="flex-1" onClick={() => completeSubmission.mutate()} disabled={completeSubmission.isPending || !allRequiredDone} data-testid="button-sfn-finish">
-                  {completeSubmission.isPending ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <ClipboardCheck className="w-5 h-5 mr-2" />}
-                  Complete Checklist
+                // Last step submitted — complete
+                <Button className="flex-1" onClick={handleComplete}
+                  disabled={isCompleting || !allRequiredDone}
+                  data-testid="button-sfn-finish">
+                  {isCompleting
+                    ? <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Completing...</>
+                    : <><ClipboardCheck className="w-5 h-5 mr-2" />Complete Checklist</>}
                 </Button>
               )
             ) : (
+              // No photo yet — optional skip
               <>
                 {!currentStep.isRequired && canGoNext && (
-                  <Button variant="outline" className="flex-1" onClick={() => setFlatStepIndex(i => i + 1)} data-testid="button-skip-step">
+                  <Button variant="outline" className="flex-1"
+                    onClick={() => { setFlatStepIndex(i => i + 1); setCapturedImage(null); }}
+                    data-testid="button-skip-step">
                     Skip (Optional)
                   </Button>
                 )}
                 {!currentStep.isRequired && !canGoNext && (
-                  <Button variant="outline" className="flex-1" onClick={() => completeSubmission.mutate()} disabled={completeSubmission.isPending || !allRequiredDone} data-testid="button-sfn-skip-and-finish">
-                    Skip & Finish
+                  <Button variant="outline" className="flex-1" onClick={handleComplete}
+                    disabled={isCompleting || !allRequiredDone}
+                    data-testid="button-sfn-skip-and-finish">
+                    {isCompleting ? "Completing..." : "Skip & Finish"}
                   </Button>
                 )}
               </>
             )}
           </div>
 
-          {/* Bottom navigation */}
+          {/* Completion progress hint */}
+          {allRequiredDone && !alreadySubmitted && !capturedImage && (
+            <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              All required photos submitted — you can complete the checklist.
+            </div>
+          )}
+          {!allRequiredDone && (
+            <p className="text-xs text-muted-foreground text-center">
+              {completedRequired}/{totalRequired} required photos submitted
+            </p>
+          )}
+
+          {/* Bottom navigation dots */}
           <div className="flex items-center justify-between pt-2 pb-6">
-            <Button variant="ghost" size="sm" onClick={() => { setFlatStepIndex(i => i - 1); setCapturedImage(null); setRetaking(false); }} disabled={!canGoBack} data-testid="button-prev-step" className="text-muted-foreground">
+            <Button variant="ghost" size="sm"
+              onClick={() => { setFlatStepIndex(i => i - 1); setCapturedImage(null); setRetaking(false); }}
+              disabled={!canGoBack} data-testid="button-prev-step" className="text-muted-foreground">
               <ChevronLeft className="w-4 h-4 mr-1" />Previous
             </Button>
-            <div className="flex gap-1">
-              {allSteps.map((s, i) => (
-                <button key={s.id} onClick={() => { setFlatStepIndex(i); setCapturedImage(null); setRetaking(false); }}
-                  className={cn("w-2 h-2 rounded-full transition-all", i === flatStepIndex ? "bg-primary w-4" : s.submission ? "bg-green-400" : "bg-muted-foreground/30")} />
-              ))}
+            <div className="flex gap-1 max-w-[160px] overflow-hidden">
+              {allSteps.slice(Math.max(0, flatStepIndex - 4), flatStepIndex + 5).map((s, relIdx) => {
+                const absIdx = Math.max(0, flatStepIndex - 4) + relIdx;
+                return (
+                  <button key={s.id} onClick={() => { setFlatStepIndex(absIdx); setCapturedImage(null); setRetaking(false); }}
+                    className={cn("h-2 rounded-full transition-all shrink-0",
+                      absIdx === flatStepIndex ? "bg-primary w-4" : s.submission ? "bg-green-400 w-2" : "bg-muted-foreground/30 w-2")} />
+                );
+              })}
             </div>
-            <Button variant="ghost" size="sm" onClick={() => { setFlatStepIndex(i => i + 1); setCapturedImage(null); setRetaking(false); }} disabled={!canGoNext} data-testid="button-next-step-bottom" className="text-muted-foreground">
+            <Button variant="ghost" size="sm"
+              onClick={() => { setFlatStepIndex(i => i + 1); setCapturedImage(null); setRetaking(false); }}
+              disabled={!canGoNext} data-testid="button-next-step-bottom" className="text-muted-foreground">
               Next<ChevronRight className="w-4 h-4 ml-1" />
             </Button>
           </div>

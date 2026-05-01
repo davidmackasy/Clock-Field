@@ -9269,20 +9269,18 @@ Return ONLY valid JSON:
         storage.getScheduledFieldNoteTemplate(sub.templateId),
         storage.getScheduledFieldNoteStepSubmissions(sub.id),
       ]);
-      let sections: any[] = [], steps: any[] = [];
+      let sections: any[] = [];
       if (template) {
-        [sections, steps] = await Promise.all([
-          storage.getScheduledFieldNoteSections(template.id),
-          storage.getScheduledFieldNoteSteps(template.id),
-        ]);
+        sections = await storage.getScheduledFieldNoteSections(template.id);
       }
-      const sectionsWithSteps = sections.map(s => ({
+      // Query steps per-section (avoids templateId mismatch issues)
+      const sectionsWithSteps = await Promise.all(sections.map(async s => ({
         ...s,
-        steps: steps.filter(st => st.sectionId === s.id).map(st => ({
+        steps: (await storage.getScheduledFieldNoteStepsBySection(s.id)).map(st => ({
           ...st,
           submission: stepSubs.find(ss => ss.stepId === st.id) || null,
         })),
-      }));
+      })));
       res.json({ ...sub, template, sections: sectionsWithSteps });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -9302,9 +9300,8 @@ Return ONLY valid JSON:
       if (existing) {
         stepSub = await storage.updateScheduledFieldNoteStepSubmission(existing.id, { submittedImageUrl: imageUrl, submittedAt: now });
       } else {
-        // Find section for this step
-        const allSteps = await storage.getScheduledFieldNoteSteps(sub.templateId);
-        const stepInfo = allSteps.find(s => s.id === req.params.stepId);
+        // Look up step directly by ID — avoids templateId mismatch issues
+        const stepInfo = await storage.getScheduledFieldNoteStepById(req.params.stepId);
         stepSub = await storage.createScheduledFieldNoteStepSubmission({
           submissionId: sub.id, templateId: sub.templateId,
           sectionId: stepInfo?.sectionId || "", stepId: req.params.stepId,
@@ -9312,6 +9309,9 @@ Return ONLY valid JSON:
           submittedImageUrl: imageUrl, submittedAt: now, createdAt: now,
         });
         // Update completed steps count (only for required steps, and only on first submission)
+        const sections = await storage.getScheduledFieldNoteSections(sub.templateId);
+        const allStepsNested = await Promise.all(sections.map(s => storage.getScheduledFieldNoteStepsBySection(s.id)));
+        const allSteps = allStepsNested.flat();
         const allStepSubs = await storage.getScheduledFieldNoteStepSubmissions(sub.id);
         const completedRequiredCount = allStepSubs.filter(ss => {
           const s = allSteps.find(st => st.id === ss.stepId);
@@ -9333,12 +9333,18 @@ Return ONLY valid JSON:
       const sub = await storage.getScheduledFieldNoteSubmission(req.params.id);
       if (!sub || sub.cleanerId !== user.id) return res.status(403).json({ message: "Forbidden" });
       const now = new Date().toISOString();
-      const allSteps = await storage.getScheduledFieldNoteSteps(sub.templateId);
+      // Use section-based step query to avoid templateId mismatch issues
+      const sections = await storage.getScheduledFieldNoteSections(sub.templateId);
+      const allStepsNested = await Promise.all(sections.map(s => storage.getScheduledFieldNoteStepsBySection(s.id)));
+      const allSteps = allStepsNested.flat();
       const requiredSteps = allSteps.filter(s => s.isRequired);
       const stepSubs = await storage.getScheduledFieldNoteStepSubmissions(sub.id);
       const completedRequiredIds = stepSubs.map(ss => ss.stepId).filter(id => requiredSteps.some(s => s.id === id));
       if (completedRequiredIds.length < requiredSteps.length) {
-        return res.status(400).json({ message: "Not all required steps are complete", missing: requiredSteps.length - completedRequiredIds.length });
+        return res.status(400).json({
+          message: "Not all required steps are complete",
+          missing: requiredSteps.length - completedRequiredIds.length,
+        });
       }
       const updated = await storage.updateScheduledFieldNoteSubmission(sub.id, {
         status: "completed", completedAt: now, completedSteps: requiredSteps.length, updatedAt: now,

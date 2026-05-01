@@ -1934,6 +1934,10 @@ export class DatabaseStorage implements IStorage {
   async getScheduledFieldNoteStepsBySection(sectionId: string): Promise<ScheduledFieldNoteStep[]> {
     return db.select().from(scheduledFieldNoteSteps).where(eq(scheduledFieldNoteSteps.sectionId, sectionId)).orderBy(asc(scheduledFieldNoteSteps.sortOrder));
   }
+  async getScheduledFieldNoteStepById(id: string): Promise<ScheduledFieldNoteStep | undefined> {
+    const [row] = await db.select().from(scheduledFieldNoteSteps).where(eq(scheduledFieldNoteSteps.id, id));
+    return row;
+  }
   async updateScheduledFieldNoteStep(id: string, data: Partial<InsertScheduledFieldNoteStep>): Promise<ScheduledFieldNoteStep | undefined> {
     const [row] = await db.update(scheduledFieldNoteSteps).set(data as any).where(eq(scheduledFieldNoteSteps.id, id)).returning();
     return row;
