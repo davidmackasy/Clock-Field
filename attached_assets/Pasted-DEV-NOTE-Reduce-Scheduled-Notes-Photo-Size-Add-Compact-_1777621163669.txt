@@ -1,0 +1,609 @@
+DEV NOTE: Reduce Scheduled Notes Photo Size, Add Compact Grids, Improve Main Steps / Sub-Steps, Keep 9:16 Only On Click
+Project: Clockfield
+Area: Work Log → Scheduled Notes
+Feature: Scheduled Field Notes
+Main goal:
+The Scheduled Notes feature is working better now, but the photo cards are too large. This will not work when a cleaning company has large locations with 20 offices, 3 washrooms, 100+ checklist photos, and daily submissions.
+We need to make the admin template builder, submission detail view, and final report much more compact.
+Do not break or affect anything currently working.
+Do not change regular Field Notes.
+Do not change Work Log outside Scheduled Notes.
+Do not change clock-in, clock-out, payroll, attendance, clients, auth, Stripe, or existing public Field Notes.
+Only improve Scheduled Notes layout, step structure, dropdowns, and photo display.
+
+1. Main UI Problem
+Right now, the image cards are too big.
+The reference photos are being displayed like large 9:16 cards directly inside the page.
+That is not what we need.
+Important rule:
+9:16 should only apply when the user clicks the image and opens the full preview modal.
+The normal template view, submission view, and report view should use small compact thumbnails.
+Default thumbnail ratio should be:
+1:1 square
+or compact horizontal card if needed
+The page view should not show giant vertical images.
+
+2. New Photo Display Rule
+Use this rule everywhere inside Scheduled Notes:
+Normal page view:
+Small 1:1 thumbnail
+Compact card
+Grid layout
+Many photos visible at once
+Click preview:
+Open image in modal
+Show full 9:16 image preview
+Allow zoom / larger view if existing modal supports it
+Use object-fit: cover for thumbnails.
+Use object-fit: contain for the full modal preview.
+Do not stretch images.
+Do not crop the modal preview.
+
+3. Template Builder Must Be Compact
+Current problem:
+The template builder shows big cards.
+A template with 50 to 100 steps will become impossible to manage.
+Required improvement:
+Inside each section, show sub-step cards in a compact grid.
+Desktop:
+10 cards per row if screen width allows.
+Large desktop:
+10 to 12 cards per row.
+Medium screens:
+6 to 8 cards per row.
+Tablet:
+4 cards per row.
+Mobile:
+2 cards per row.
+Each step card should be small.
+Example card size:
+Width: around 96px to 120px
+Image: square 1:1
+Text: max 1 to 2 lines
+Use ellipsis for long titles.
+Do not show long instructions on the card.
+Show instructions only when editing or opening detail.
+
+4. Template Step Card Design
+Each compact step card should show:
+Step number
+Small square reference photo thumbnail
+Step title
+Required badge or dot
+Edit icon
+Delete icon
+Example:
+[photo thumbnail]
+1
+Women’s Washroom - Sink
+Required dot
+Edit / Delete icons
+Do not show the full instruction on the card.
+Do not show large text blocks.
+Do not show large 9:16 cards in the builder.
+When admin clicks a card:
+Open step detail modal or image preview.
+If they click image:
+Open 9:16 preview.
+If they click edit:
+Open edit step modal.
+
+5. Add Step Card Must Also Be Compact
+The Add Step box is currently too large.
+Change it to match the compact step card size.
+It should look like a small square card inside the grid.
+Card content:
+Plus icon
+Add Step
+Same width and height as the other step cards.
+Do not make Add Step a giant empty box.
+
+6. Main Step and Sub-Step Structure
+Use this wording and structure:
+Main Step = Section / Area
+Sub-Step = Photo checklist item inside that section
+Example:
+Main Step:
+Washroom
+Sub-Steps:
+Women’s Washroom - Sink
+Women’s Washroom - Toilet
+Women’s Washroom - Mirror
+Women’s Washroom - Floor
+Main Step:
+Office 1
+Sub-Steps:
+Office 1 - Desk 1
+Office 1 - Desk 2
+Office 1 - Chair 1
+Office 1 - Keyboard
+Office 1 - Garbage Bin
+Main Step:
+Office 2
+Sub-Steps:
+Office 2 - Desk 1
+Office 2 - Desk 2
+Office 2 - Chair 1
+Office 2 - Keyboard
+Office 2 - Floor
+Admin should be able to add many sub-steps inside one main step.
+Main steps should remain collapsible.
+When collapsed, show:
+Main step name
+Number of sub-steps
+Completion count if available
+Expand icon
+Example:
+Washroom
+12 sub-steps
+Office 1
+8 sub-steps
+Office 2
+7 sub-steps
+This saves space.
+
+7. Add More Dropdown Support For Steps
+Typing every step manually is not good enough.
+The Add Step modal must use dropdowns.
+When creating a template, admin should have:
+Template Type:
+Commercial
+Residential
+Then when adding a sub-step, show dropdowns based on template type.
+Commercial dropdowns should include:
+Main Area / Section:
+Office
+Washroom
+Kitchen
+Lobby
+Hallway
+Retail Floor
+Storage Room
+Break Room
+Stairwell
+Entrance
+Back Room
+Dining Area
+Front Counter
+Garbage Area
+Floor Area
+Windows / Glass
+Room / Specific Area:
+Office 1
+Office 2
+Office 3
+Main Office
+Private Office
+Manager Office
+Boardroom
+Reception Area
+Women’s Washroom
+Men’s Washroom
+Single Washroom
+Kitchen Area
+Lunch Room
+Main Entrance
+Back Entrance
+Hallway 1
+Hallway 2
+Storage Room 1
+Storage Room 2
+Item / Surface:
+Desk 1
+Desk 2
+Desk 3
+Keyboard
+Mouse
+Monitor
+Chair 1
+Chair 2
+Chair 3
+Table
+Counter
+Sink
+Toilet
+Toilet Base
+Toilet Seat
+Urinal
+Mirror
+Soap Dispenser
+Paper Towel Dispenser
+Hand Dryer
+Door Handle
+Light Switch
+Garbage Bin
+Floor
+Carpet
+Baseboard
+Window
+Glass Door
+Shelf
+Appliance
+Wall Spot
+Custom
+Residential dropdowns should include:
+Main Area / Section:
+Bedroom
+Bathroom
+Kitchen
+Living Room
+Dining Room
+Laundry Room
+Basement
+Hallway
+Entrance
+Garage
+Stairs
+Windows / Glass
+Floor Area
+Room / Specific Area:
+Primary Bedroom
+Bedroom 1
+Bedroom 2
+Bedroom 3
+Guest Bedroom
+Main Bathroom
+Ensuite Bathroom
+Half Bathroom
+Kitchen
+Living Room
+Dining Area
+Laundry Room
+Basement Room
+Front Entrance
+Back Entrance
+Garage
+Stairs
+Item / Surface:
+Bed Area
+Nightstand 1
+Nightstand 2
+Dresser
+Closet
+Sink
+Toilet
+Tub
+Shower
+Mirror
+Countertop
+Stove
+Fridge
+Microwave
+Cabinet
+Table
+Chair
+Couch Area
+Floor
+Carpet
+Baseboard
+Window
+Door Handle
+Garbage Bin
+Light Switch
+Custom
+
+8. Allow Repeated Items
+Important:
+Do not block duplicate items.
+Some offices have multiple desks, chairs, keyboards, garbage bins, and surfaces.
+Admin must be able to add:
+Desk 1
+Desk 2
+Desk 3
+Chair 1
+Chair 2
+Chair 3
+Keyboard 1
+Keyboard 2
+Garbage Bin 1
+Garbage Bin 2
+Also allow custom label.
+Example:
+Room: Office 4
+Item: Desk
+Custom label: Right side desk
+Generated title:
+Office 4 - Right side desk
+Another example:
+Room: Boardroom
+Item: Chair
+Custom label: Chair near window
+Generated title:
+Boardroom - Chair near window
+Do not force every item to be unique.
+Do not prevent duplicated sub-steps.
+
+9. Auto-Generated Title
+Use the selected dropdowns to auto-generate the title.
+Format:
+Room / Specific Area - Item / Surface
+Examples:
+Women’s Washroom - Sink
+Women’s Washroom - Toilet Base
+Office 1 - Desk 1
+Office 1 - Keyboard
+Boardroom - Chair near window
+Kitchen Area - Sink
+Admin can still edit the final title manually.
+
+10. Submission Detail Must Be Compact
+Current problem:
+Submission photos are too big.
+This will not work with 100+ daily photos.
+Required improvement:
+Submission detail page must use compact grid thumbnails.
+Desktop:
+10 cards per row if space allows.
+Large desktop:
+10 to 12 cards per row.
+Medium:
+6 to 8 cards per row.
+Tablet:
+4 cards per row.
+Mobile:
+2 cards per row.
+Each submitted step card should show:
+Step number
+Small square submitted photo thumbnail
+Step title
+Completed status
+Submitted time
+Optional reference indicator
+Do not show giant reference and submitted images side by side by default.
+Instead:
+Show the submitted photo thumbnail as the main thumbnail.
+Show a small icon or label if reference photo exists.
+When admin clicks the card:
+Open detail modal showing:
+Reference photo
+Submitted photo
+Step title
+Instruction
+Submitted time
+Cleaner name
+Section name
+In the modal:
+Show images larger.
+Use 9:16 preview if image is vertical.
+Do not make the page itself huge.
+
+11. Submission Date Organization
+Submissions must be easy to find by date.
+When admin opens submissions:
+First level:
+Show cleaner cards or location cards in grid.
+Each card:
+Cleaner name
+Location
+Template name
+Latest submission date
+Total submissions
+Open History
+Second level:
+Submission history by date.
+Show date cards.
+Each date card:
+Date
+Status
+Completion count
+Started time
+Completed time
+Open
+Add filters:
+Date picker
+Date range
+Cleaner
+Location
+Template
+Status
+This is important because the same cleaner may complete the same template every day.
+Admin must be able to find a submission from two weeks ago quickly.
+Do not always open only the most recent submission.
+
+12. Reports Tab Must Stay Compact
+The Reports tab layout is good with Copy and Open buttons.
+Keep that idea.
+But inside the report view, reduce image size.
+Report page should use compact grid thumbnails.
+Desktop:
+10 cards per row if possible.
+Medium:
+6 to 8 cards per row.
+Tablet:
+4 cards per row.
+Mobile:
+2 cards per row.
+Clicking a photo opens full preview.
+Do not show giant photos directly inside the report page.
+
+13. Public Client Report Rule
+Important change:
+For the public client report, do not show reference photos.
+The public report should show final submitted photos only.
+Reference photos are for admin/template/submission review.
+Client-facing public report should show:
+Final taken photo
+Step title
+Section name
+Submitted time
+Completion status
+Do not show:
+Reference photos
+Admin setup photos
+Internal checklist setup details
+Private admin notes
+Internal IDs
+This keeps the public report clean and focused on proof of work.
+
+14. Public Report Photo Layout
+Public report should also use compact thumbnails.
+Normal public report view:
+Square 1:1 thumbnails
+Grid layout
+Many photos visible at once
+Click photo:
+Open full preview modal
+Show full photo in 9:16 if vertical
+Use object-fit: contain in modal
+Desktop public grid:
+8 to 10 photos per row if space allows.
+Tablet:
+4 photos per row.
+Mobile:
+2 photos per row.
+Public report section example:
+Washroom
+12 photos
+Grid of submitted photo thumbnails
+Office 1
+8 photos
+Grid of submitted photo thumbnails
+Office 2
+8 photos
+Grid of submitted photo thumbnails
+Do not make the public report one long page of huge photos.
+
+15. Public Report Completion Count Bug
+From the screenshot, public report shows:
+0 of 2 steps completed
+Even though the status says Complete.
+Fix this.
+The public report must calculate completion correctly.
+If 2 submitted photos exist for 2 required steps:
+Show:
+2 of 2 steps completed
+Progress:
+100%
+If completedAt exists and all required steps are submitted, show complete progress.
+Do not show 0% on a completed report.
+Check the data mapping between:
+submission step records
+completed step count
+required step count
+public report progress bar
+
+16. Image Preview Modal Requirements
+Use one shared preview modal if possible.
+Applies to:
+Template reference thumbnails
+Submission thumbnails
+Report thumbnails
+Public report thumbnails
+Modal should show:
+Large image
+Step title
+Section name
+Image type if admin side
+Reference Photo or Submitted Photo
+Submitted time if available
+Close button
+Next / Previous if viewing a section gallery
+Admin side:
+Can show reference and submitted side by side inside modal.
+Public side:
+Only show submitted photo.
+
+17. Keep 9:16 In Modal Only
+This is the main instruction:
+Do not show 9:16 images as the default grid card.
+Grid cards should be square and small.
+9:16 should only be used when the image is clicked and opened.
+This applies to:
+Template detail page
+Submission detail page
+Report detail page
+Public report page
+Cleaner capture flow can stay as it is unless needed.
+
+18. Mobile UI Requirements
+Mobile must stay clean.
+Template builder mobile:
+2 compact cards per row
+Main steps collapsible
+Add Step compact card
+Submission mobile:
+2 cards per row
+Photo preview opens full screen
+Public report mobile:
+2 cards per row
+No horizontal scrolling
+Tabs must remain usable
+Buttons must not overlap
+
+19. Do Not Break Existing Data
+Existing steps may only have:
+title
+instructions
+referenceImageUrl
+They may not have:
+areaCategory
+roomName
+itemType
+customLabel
+Handle this safely.
+Fallback display:
+Use existing step title.
+If no reference image:
+Show placeholder.
+If no section name:
+Show “Section”.
+Do not crash if old fields are missing.
+
+20. Implementation Targets
+Likely files to update:
+Admin Scheduled Notes template detail page
+Admin Add Step modal
+Admin Submissions list page
+Admin Submission detail page
+Admin Reports page
+Public Scheduled Field Note report page
+Shared image thumbnail component
+Shared image preview modal
+Possible component names may differ.
+Search for Scheduled Field Notes files and update only those.
+Do not touch unrelated modules.
+
+21. CSS / Layout Guidance
+Use CSS grid.
+Template step grid concept:
+grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3
+For very wide admin layouts:
+2xl:grid-cols-12
+Card thumbnail:
+aspect-square object-cover rounded-md
+Card text:
+text-xs truncate
+Card size:
+min-w-0
+Modal image:
+max-h-[85vh] object-contain
+Do not use giant fixed heights for grid thumbnails.
+Do not use 9:16 aspect ratio for grid cards.
+
+22. Expected Final Result
+Template builder:
+Compact.
+Can hold many sub-steps.
+Photos are small square thumbnails.
+Admin can create 100+ steps without the page becoming impossible.
+Main steps collapse.
+Sub-steps show 10+ per row on desktop.
+Add step uses dropdowns.
+Repeated items are allowed.
+Submission detail:
+Photos are compact.
+Admin can review many photos quickly.
+Admin can click any photo to see full 9:16 preview.
+Submissions are organized by cleaner and date.
+Reports:
+Compact grid.
+Copy and Open buttons remain.
+Photos do not take over the page.
+Public report:
+Shows final submitted photos only.
+Does not show reference photos.
+Uses compact grid.
+Clicking photo opens full preview.
+Completion count shows correctly.
+Everything remains mobile-friendly.
+No unrelated Clockfield feature is changed.
