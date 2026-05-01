@@ -1,0 +1,1283 @@
+DEV NOTE: Add Scheduled Daily Field Notes Under Work Log
+
+Project: Clockfield
+Feature name: Scheduled Daily Field Notes
+Placement: Work Log → Field Notes → Scheduled Field Notes
+
+Main goal:
+Build a new Scheduled Daily Field Notes system that works like the current Field Notes workflow, but with admin-created photo steps for each location. Cleaners must follow the required photo checklist before clocking out.
+
+Do not break or affect anything currently working.
+
+Do not change the existing Field Notes system.
+
+Do not change the current Work Log system.
+
+Do not change the current clock-in, clock-out, attendance, payroll, reports, auth, Stripe, or existing public Field Note flow.
+
+This is a new feature that should reuse the Field Notes concept, but it must be separate from regular Field Notes.
+
+Ask for approval before touching anything outside this feature.
+
+1. Feature Concept
+
+We already have Field Notes for site visits, walkthroughs, maintenance, and general notes.
+
+Now we need a new version called:
+
+Scheduled Daily Field Notes
+
+This is for daily cleaning proof.
+
+The admin creates a location-based photo checklist.
+
+Example:
+
+Location: ABC Restaurant
+Scheduled Field Note: Daily Closing Cleaning Photos
+Assigned Cleaner: Mary
+Frequency: Daily
+Required before clock-out: Yes
+
+The admin uploads reference photos and names each photo step.
+
+Example sections:
+
+Women’s Washroom
+
+Top of toilet
+
+Bottom of toilet
+
+Sink
+
+Mirror
+
+Floor
+
+Garbage area
+
+Men’s Washroom
+
+Urinal
+
+Toilet
+
+Sink
+
+Mirror
+
+Floor
+
+Office Area
+
+Desk area
+
+Carpet
+
+Garbage bin
+
+Windows
+
+Kitchen
+
+Sink
+
+Counter
+
+Floor
+
+Equipment area
+
+Each step has:
+
+Step name
+
+Section name
+
+Optional reference image uploaded by admin
+
+Cleaner photo submission
+
+Timestamp
+
+Cleaner name
+
+Location
+
+Date
+
+Completion status
+
+The cleaner does not need to type anything.
+
+The cleaner does not need to write notes.
+
+The cleaner only follows the steps and takes photos.
+
+Voice recording can stay similar to Field Notes if the current Field Note system already supports it, but do not force extra typing.
+
+2. Where This Should Live
+
+Add this under the existing Work Log area.
+
+Navigation structure:
+
+Work Log
+→ Field Notes
+→ Regular Field Notes
+→ Scheduled Field Notes
+
+Do not remove or rename the current Field Notes.
+
+Do not mix regular Field Notes submissions with Scheduled Field Notes.
+
+Scheduled Field Notes should have its own page, own database records, and own admin flow.
+
+Suggested routes:
+
+Admin:
+
+/admin/worklog/field-notes
+
+/admin/worklog/scheduled-field-notes
+
+/admin/worklog/scheduled-field-notes/templates
+
+/admin/worklog/scheduled-field-notes/:templateId
+
+/admin/worklog/scheduled-field-notes/submissions
+
+/admin/worklog/scheduled-field-notes/submissions/:submissionId
+
+Cleaner:
+
+/cleaner/scheduled-field-notes
+
+/cleaner/scheduled-field-notes/:assignmentId/start
+
+Public:
+
+/public/scheduled-field-note/:publicId
+
+3. Admin Flow
+
+Admin should be able to create Scheduled Daily Field Note templates per location.
+
+Admin page title:
+
+Scheduled Field Notes
+
+Main admin actions:
+
+Create Scheduled Field Note
+
+View all Scheduled Field Notes
+
+Filter by location
+
+Filter by cleaner
+
+Filter by date
+
+View submissions by day
+
+Generate public link
+
+Download or share report if existing report flow supports this
+
+4. Create Scheduled Field Note Template
+
+Admin clicks:
+
+Create Scheduled Field Note
+
+Fields:
+
+Template Name
+Example: Daily Restaurant Cleaning Proof
+
+Location
+Select from existing locations.
+
+Assigned Cleaner or Cleaners
+Allow one or multiple cleaners.
+
+Frequency
+Options:
+
+Daily
+
+Specific days
+
+Weekly
+
+Custom
+
+Required before clock-out
+Toggle: Yes / No
+
+Default should be Yes.
+
+Description for cleaner
+Short instruction shown before starting.
+
+Example:
+
+Please complete all required photos before clocking out. Follow each step and take a clear photo of the matching area.
+
+Admin Intro for Public Report
+This appears at the top of the public scheduled field note report.
+
+Example:
+
+This report shows the required daily cleaning photo checklist completed for this location.
+
+Admin Outro for Public Report
+This appears at the bottom of the public report.
+
+Example:
+
+This scheduled field note was completed as part of the daily cleaning verification process.
+
+Status
+Active / Inactive
+
+5. Section and Step Builder
+
+Inside the template, admin should be able to build sections.
+
+Example:
+
+Section: Women’s Washroom
+
+Inside that section, admin adds photo steps.
+
+Each step should include:
+
+Step title
+Example: Take photo of sink
+
+Step description
+Optional short instruction.
+
+Reference image
+Admin uploads a sample photo showing what the cleaner should capture.
+
+Required toggle
+Default: Required
+
+Sort order
+Admin can drag and drop steps.
+
+Section order
+Admin can drag and drop sections.
+
+Example structure:
+
+Scheduled Field Note Template
+
+Women’s Washroom
+
+Step 1: Top of toilet
+
+Step 2: Bottom of toilet
+
+Step 3: Sink
+
+Step 4: Mirror
+
+Step 5: Floor
+
+Office Area
+
+Step 1: Desk area
+
+Step 2: Carpet
+
+Step 3: Garbage bin
+
+Step 4: Door entrance
+
+The cleaner should see these steps one by one.
+
+Do not show all steps in a confusing long page unless there is also a clear progress view.
+
+6. Cleaner Experience
+
+Cleaner should see Scheduled Field Notes only when:
+
+They are assigned to that location
+
+They are clocked in
+
+The scheduled field note is active for that day
+
+The scheduled field note has not been completed yet
+
+Cleaner page should show:
+
+Today’s Required Scheduled Field Notes
+
+Example card:
+
+ABC Restaurant
+Daily Cleaning Photos
+Required before clock-out
+0 / 42 photos completed
+Start
+
+When cleaner starts:
+
+Show the section name.
+
+Show the reference image at the top.
+
+Show the step title clearly.
+
+Show camera button in the middle.
+
+Show progress at the bottom.
+
+Example:
+
+Women’s Washroom
+Step 3 of 42
+
+Reference image: Sink
+
+Instruction: Take a clear photo of the sink in the women’s washroom.
+
+Button:
+
+Take Photo
+
+After cleaner takes the photo:
+
+Save the photo
+
+Save timestamp
+
+Save location
+
+Save cleaner ID
+
+Move automatically to next step
+
+Next step loads with the next reference image and instruction
+
+Cleaner should not need to manually choose where to upload the image.
+
+The system already knows which step the photo belongs to.
+
+7. Required Before Clock-Out
+
+If a Scheduled Field Note is marked as Required before clock-out, the cleaner should not be able to clock out until it is completed.
+
+When cleaner tries to clock out without completing it, show a friendly blocking message:
+
+You still need to complete today’s scheduled cleaning photos before clocking out.
+
+Show button:
+
+Complete Scheduled Field Note
+
+Do not change the clock-out system globally.
+
+Only add this check for cleaners who:
+
+Are clocked in
+
+Are assigned to an active scheduled field note
+
+Have an incomplete required scheduled field note for that location and date
+
+Important:
+
+Do not affect cleaners who do not have a scheduled field note.
+
+Do not affect locations without scheduled field notes.
+
+Do not affect existing clock-in/out logic beyond this required validation.
+
+8. Completion Rules
+
+A Scheduled Field Note is completed when all required steps have submitted photos.
+
+Optional steps do not block completion.
+
+Completion status:
+
+Not Started
+
+In Progress
+
+Completed
+
+Missed
+
+Admin Override Completed
+
+Missed should apply when the day ends and the cleaner did not complete the required scheduled field note.
+
+Admin should be able to view missed submissions.
+
+Optional admin action:
+
+Mark as reviewed
+
+Add internal admin note
+
+Do not allow cleaners to edit submitted photos after completion unless the current app already supports safe editing.
+
+9. Admin Submission View
+
+Admin should be able to view Scheduled Field Notes by:
+
+Location
+
+Cleaner
+
+Date
+
+Template
+
+Completion status
+
+Example page:
+
+Scheduled Field Notes
+
+Location cards:
+
+ABC Restaurant
+
+Daily Cleaning Photos
+
+Assigned cleaners
+
+Today: Completed / In Progress / Missed
+
+Last completed date
+
+Open
+
+When admin opens a location:
+
+Show date-based history.
+
+Example:
+
+ABC Restaurant
+Scheduled Daily Field Notes
+
+Monday, April 27, 2026
+Cleaner: Mary
+Status: Completed
+42 / 42 photos
+Open
+
+Tuesday, April 28, 2026
+Cleaner: Mary
+Status: Completed
+42 / 42 photos
+Open
+
+Wednesday, April 29, 2026
+Cleaner: Mary
+Status: In Progress
+27 / 42 photos
+Open
+
+When admin opens a day:
+
+Show grouped sections.
+
+Women’s Washroom
+
+Top of toilet photo
+
+Bottom of toilet photo
+
+Sink photo
+
+Mirror photo
+
+Office Area
+
+Desk area photo
+
+Carpet photo
+
+Garbage bin photo
+
+Each photo should show:
+
+Step name
+
+Cleaner submitted photo
+
+Reference photo thumbnail
+
+Timestamp
+
+Cleaner name
+
+Status
+
+Admin should be able to compare the admin reference photo with the cleaner submitted photo.
+
+Do not make the page too heavy.
+
+Use collapsible sections.
+
+10. Public Scheduled Field Note Report
+
+Admin should be able to generate a public link for a completed Scheduled Field Note.
+
+This public report should follow the same professional concept as current public Field Notes, but it must be built for scheduled daily cleaning proof.
+
+Public page should include:
+
+Company logo
+
+Company name
+
+Location name
+
+Cleaner name if allowed
+
+Date completed
+
+Completion status
+
+Intro description
+
+Grouped photo sections
+
+Outro description
+
+Clockfield watermark or soft CTA if existing public report branding supports this
+
+Example intro:
+
+This scheduled field note shows the daily cleaning photo checklist completed for this location. Each section includes the required areas captured after service.
+
+Example section:
+
+Women’s Washroom
+
+Top of toilet
+
+Submitted photo
+
+Timestamp
+
+Sink
+
+Submitted photo
+
+Timestamp
+
+Mirror
+
+Submitted photo
+
+Timestamp
+
+Example outro:
+
+This report was generated from the Scheduled Field Notes system to confirm daily cleaning completion and provide clear photo documentation.
+
+Important:
+
+Do not expose private admin-only notes.
+
+Do not expose internal IDs.
+
+Do not expose payroll, attendance, or private cleaner details.
+
+Only show the report information needed for client-facing proof.
+
+11. Data Model Suggestion
+
+Create new database tables or collections.
+
+Do not mix these records directly into the existing regular Field Notes table unless the current architecture already supports clean type separation.
+
+Suggested structure:
+
+scheduled_field_note_templates
+
+id
+
+companyId
+
+locationId
+
+name
+
+description
+
+frequency
+
+requiredBeforeClockOut
+
+introText
+
+outroText
+
+status
+
+createdBy
+
+createdAt
+
+updatedAt
+
+scheduled_field_note_sections
+
+id
+
+templateId
+
+title
+
+description
+
+sortOrder
+
+createdAt
+
+updatedAt
+
+scheduled_field_note_steps
+
+id
+
+templateId
+
+sectionId
+
+title
+
+description
+
+referenceImageUrl
+
+isRequired
+
+sortOrder
+
+createdAt
+
+updatedAt
+
+scheduled_field_note_assignments
+
+id
+
+templateId
+
+locationId
+
+cleanerId
+
+frequency
+
+activeDays
+
+status
+
+createdAt
+
+updatedAt
+
+scheduled_field_note_submissions
+
+id
+
+templateId
+
+assignmentId
+
+companyId
+
+locationId
+
+cleanerId
+
+worklogId
+
+clockInId
+
+submissionDate
+
+status
+
+startedAt
+
+completedAt
+
+publicId
+
+createdAt
+
+updatedAt
+
+scheduled_field_note_step_submissions
+
+id
+
+submissionId
+
+templateId
+
+sectionId
+
+stepId
+
+cleanerId
+
+submittedImageUrl
+
+submittedAt
+
+status
+
+createdAt
+
+updatedAt
+
+scheduled_field_note_public_links
+
+id
+
+submissionId
+
+publicId
+
+isActive
+
+createdAt
+
+expiresAt optional
+
+createdBy
+
+12. Important Connection to Work Log
+
+Scheduled Field Notes should connect to Work Log.
+
+When a cleaner completes a scheduled field note while clocked in:
+
+Attach the scheduled field note submission to that day’s work log.
+
+Admin should be able to see it from Work Log.
+
+Example:
+
+Work Log → Location → Cleaner → Date
+
+Show:
+
+Clock-in time
+
+Clock-out time
+
+Photos submitted through Scheduled Field Note
+
+Completion status
+
+Link to Scheduled Field Note report
+
+Do not replace the normal Work Log.
+
+Just add the scheduled field note as a connected proof record.
+
+13. Cleaner UI Requirements
+
+Keep it mobile-first.
+
+The cleaner will likely use a phone while walking around the building.
+
+The UI must be simple.
+
+Cleaner screen should include:
+
+Large section title
+
+Reference photo shown at top
+
+Step name
+
+Short instruction
+
+Camera button
+
+Progress count
+
+Back button
+
+Skip button only if the step is optional
+
+Submit and finish button only when all required steps are done
+
+Example:
+
+Women’s Washroom
+Step 6 of 42
+
+Take a picture of the sink.
+
+Reference photo appears here.
+
+Button:
+
+Take Photo
+
+After photo:
+
+Show preview
+
+Buttons:
+
+Retake
+
+Use Photo
+
+Then move to next step.
+
+Do not make the cleaner search for the step manually.
+
+Do not allow typing unless it is added later as a separate optional admin setting.
+
+14. Admin UI Requirements
+
+Admin page should be clear and not complicated.
+
+Use simple tabs:
+
+Templates
+
+Assignments
+
+Submissions
+
+Public Reports
+
+Templates tab:
+
+Create and manage scheduled field note templates.
+
+Assignments tab:
+
+Assign templates to locations and cleaners.
+
+Submissions tab:
+
+Review daily completed submissions.
+
+Public Reports tab:
+
+Manage generated client links.
+
+Admin should be able to duplicate a template.
+
+This is important because locations might have similar cleaning requirements.
+
+Example:
+
+Duplicate “Restaurant Daily Cleaning Checklist”
+
+Rename it for another location
+
+Update reference photos
+
+Assign cleaner
+
+15. Location-Based Setup
+
+Each location can have its own Scheduled Field Note template.
+
+Do not force one template across all locations.
+
+Examples:
+
+Restaurant A might need 100 photos daily.
+
+Office B might need 25 photos daily.
+
+School C might need 150 photos daily.
+
+Admin should be able to create different templates for each location.
+
+Also allow template reuse:
+
+Admin can duplicate a template and assign it to another location.
+
+16. Photo Upload and Storage
+
+Reference photos:
+
+Uploaded by admin
+
+Attached to each step
+
+Stored separately from cleaner submissions
+
+Cleaner submitted photos:
+
+Captured from cleaner phone camera
+
+Attached to exact step
+
+Stored with timestamp and cleaner information
+
+Use the existing photo upload/storage system if possible.
+
+Do not break existing Field Notes photo storage.
+
+Do not change existing photo upload behavior for regular Field Notes.
+
+Add a new storage folder/path if needed.
+
+Example:
+
+scheduled-field-notes/reference-images/
+
+scheduled-field-notes/submissions/
+
+17. Notifications and Reminders
+
+Add simple reminders only if the app already supports notifications.
+
+Do not overbuild this first version.
+
+Suggested reminders:
+
+When cleaner is clocked in and assigned a scheduled field note:
+
+Show banner:
+
+Scheduled Field Note required before clock-out.
+
+Before clock-out:
+
+If incomplete, block clock-out and send cleaner to the checklist.
+
+Admin dashboard:
+
+Show incomplete scheduled field notes for today.
+
+Optional later:
+
+Push/email reminders
+
+Missed report summary
+
+Client auto-send report
+
+18. Public Link Layout
+
+Public report should be professional and client-ready.
+
+Suggested layout:
+
+Header:
+
+Company logo
+
+Company name
+
+Report title
+
+Location
+
+Date
+
+Completion status
+
+Intro text:
+
+Admin-controlled intro description
+
+Summary cards:
+
+Total required photos
+
+Total submitted photos
+
+Cleaner
+
+Completed time
+
+Sections:
+
+Women’s Washroom
+
+Photo grid
+
+Office Area
+
+Photo grid
+
+Kitchen
+
+Photo grid
+
+Outro text:
+
+Admin-controlled closing message
+
+Footer:
+
+Generated by Clockfield
+
+Optional soft watermark:
+
+Want cleaning reports like this for your business? Powered by Clockfield.
+
+Do not make the watermark block the report.
+
+Do not make it distracting.
+
+19. Permissions
+
+Admin can:
+
+Create templates
+
+Upload reference photos
+
+Assign cleaners
+
+View all submissions
+
+Generate public links
+
+Deactivate templates
+
+Review missed/incomplete submissions
+
+Cleaner can:
+
+View only assigned scheduled field notes
+
+Start assigned checklist
+
+Take photos
+
+Retake before submitting
+
+Complete checklist
+
+View their own current submission if needed
+
+Cleaner cannot:
+
+Edit template
+
+Change steps
+
+Delete required steps
+
+View other cleaners’ submissions
+
+Generate public links unless already allowed in current permissions
+
+Client/public user can:
+
+View public report only through public link
+
+Cannot edit anything
+
+Cannot see private admin data
+
+20. Edge Cases
+
+Handle these safely:
+
+Cleaner loses internet
+
+Save draft locally if possible.
+
+Allow retry upload when connection returns.
+
+Cleaner accidentally closes page
+
+When they return, continue from the last incomplete step.
+
+Cleaner clocks in at wrong location
+
+Only show scheduled field notes for the location they are clocked into.
+
+Cleaner has multiple scheduled field notes
+
+Show them clearly as separate cards.
+
+Admin changes template during active submission
+
+Do not change the active submission already in progress.
+
+Apply template changes to future submissions only.
+
+Cleaner needs to retake a photo before final completion
+
+Allow retake before they submit that step.
+
+After completion, prevent editing unless admin has a controlled reopen option.
+
+Photo upload fails
+
+Show clear retry button.
+
+Do not move to next step until upload succeeds.
+
+Required photos not completed
+
+Clock-out should be blocked only if requiredBeforeClockOut is enabled.
+
+21. Do Not Complicate First Version
+
+Do not add AI scoring in the first version.
+
+Do not add automatic image quality judging in the first version.
+
+Do not add complicated map tracking in the first version.
+
+Do not add cleaner text notes in the first version.
+
+Do not change the existing Field Notes page.
+
+Do not change existing public Field Notes.
+
+Do not rebuild Work Log.
+
+Build the simplest working version first:
+
+Admin creates template
+
+Admin adds sections and photo steps
+
+Admin uploads reference photos
+
+Admin assigns cleaner and location
+
+Cleaner completes required photos while clocked in
+
+System attaches submission to Work Log
+
+Admin reviews by location, cleaner, and date
+
+Admin generates public report
+
+22. Suggested MVP Build Order
+
+Step 1: Database
+
+Add new scheduled field note tables.
+
+Keep data separate from current Field Notes.
+
+Step 2: Admin template builder
+
+Allow admin to create a template, add sections, add steps, upload reference images, and assign to location/cleaner.
+
+Step 3: Cleaner mobile flow
+
+Show assigned scheduled field note when cleaner is clocked in.
+
+Build step-by-step photo capture flow.
+
+Save photos to the correct step.
+
+Step 4: Clock-out validation
+
+If requiredBeforeClockOut is enabled and today’s scheduled field note is incomplete, block clock-out and send cleaner to complete it.
+
+Step 5: Admin submission review
+
+Show submissions grouped by location, cleaner, and date.
+
+Allow admin to open each day and review all submitted photos.
+
+Step 6: Work Log connection
+
+Attach completed scheduled field note submission to the daily work log.
+
+Step 7: Public report
+
+Generate public scheduled field note report with intro, sections, submitted photos, timestamps, and outro.
+
+Step 8: Testing
+
+Test with one location, one cleaner, and one 10-step checklist before testing 100+ photos.
+
+23. Testing Checklist
+
+Test admin can create Scheduled Field Note template.
+
+Test admin can add sections.
+
+Test admin can add steps inside sections.
+
+Test admin can upload reference photos.
+
+Test admin can assign cleaner.
+
+Test cleaner only sees assigned scheduled field note.
+
+Test cleaner only sees it when clocked in.
+
+Test cleaner can take photo for each step.
+
+Test photo attaches to correct step.
+
+Test progress updates correctly.
+
+Test cleaner can continue after closing the page.
+
+Test clock-out is blocked when required photos are incomplete.
+
+Test clock-out works after all required photos are completed.
+
+Test admin can view completed submission by date.
+
+Test admin can filter by location.
+
+Test admin can filter by cleaner.
+
+Test admin can generate public link.
+
+Test public link shows correct grouped sections.
+
+Test regular Field Notes still work.
+
+Test normal Work Log still works.
+
+Test locations without scheduled field notes still work.
+
+Test cleaners without scheduled field notes are not affected.
+
+24. Final Expected Result
+
+After this is implemented:
+
+Admin can create a daily photo checklist for each location.
+
+Admin can upload reference photos showing cleaners what to capture.
+
+Cleaner follows the checklist step by step while clocked in.
+
+Cleaner must complete the required photos before clocking out.
+
+Every photo is saved under the correct section and step.
+
+Admin can view submissions by location, cleaner, and date.
+
+Scheduled Field Notes are connected to Work Log.
+
+Admin can generate a professional public report for the client.
+
+Existing Field Notes, Work Log, clock-in/out, public reports, and other app features must continue working exactly as they do now.

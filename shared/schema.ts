@@ -1714,3 +1714,105 @@ export type QuoteRequestWalkthroughPhoto = typeof quoteRequestWalkthroughPhotos.
 export type InsertQuoteRequestWalkthroughPhoto = z.infer<typeof insertQuoteRequestWalkthroughPhotoSchema>;
 export type QuoteRequestWalkthroughSection = typeof quoteRequestWalkthroughSections.$inferSelect;
 export type InsertQuoteRequestWalkthroughSection = z.infer<typeof insertQuoteRequestWalkthroughSectionSchema>;
+
+// ── Scheduled Field Notes Module ─────────────────────────────────────────────
+export const scheduledFieldNoteTemplates = pgTable("scheduled_field_note_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  clientId: varchar("client_id"),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  frequency: text("frequency").notNull().default("daily"),
+  requiredBeforeClockOut: boolean("required_before_clock_out").notNull().default(true),
+  introText: text("intro_text").notNull().default(""),
+  outroText: text("outro_text").notNull().default(""),
+  status: text("status").notNull().default("active"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const scheduledFieldNoteSections = pgTable("scheduled_field_note_sections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
+export const scheduledFieldNoteSteps = pgTable("scheduled_field_note_steps", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").notNull(),
+  sectionId: varchar("section_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  referenceImageUrl: text("reference_image_url"),
+  isRequired: boolean("is_required").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
+export const scheduledFieldNoteAssignments = pgTable("scheduled_field_note_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  cleanerId: varchar("cleaner_id").notNull(),
+  clientId: varchar("client_id"),
+  status: text("status").notNull().default("active"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const scheduledFieldNoteSubmissions = pgTable("scheduled_field_note_submissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").notNull(),
+  assignmentId: varchar("assignment_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  clientId: varchar("client_id"),
+  cleanerId: varchar("cleaner_id").notNull(),
+  clockInId: varchar("clock_in_id"),
+  submissionDate: text("submission_date").notNull(),
+  status: text("status").notNull().default("in_progress"),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"),
+  totalSteps: integer("total_steps").notNull().default(0),
+  completedSteps: integer("completed_steps").notNull().default(0),
+  publicId: varchar("public_id").unique(),
+  publicEnabled: boolean("public_enabled").notNull().default(false),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const scheduledFieldNoteStepSubmissions = pgTable("scheduled_field_note_step_submissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  submissionId: varchar("submission_id").notNull(),
+  templateId: varchar("template_id").notNull(),
+  sectionId: varchar("section_id").notNull(),
+  stepId: varchar("step_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  cleanerId: varchar("cleaner_id").notNull(),
+  submittedImageUrl: text("submitted_image_url").notNull(),
+  submittedAt: text("submitted_at").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertScheduledFieldNoteTemplateSchema = createInsertSchema(scheduledFieldNoteTemplates).omit({ id: true });
+export const insertScheduledFieldNoteSectionSchema = createInsertSchema(scheduledFieldNoteSections).omit({ id: true });
+export const insertScheduledFieldNoteStepSchema = createInsertSchema(scheduledFieldNoteSteps).omit({ id: true });
+export const insertScheduledFieldNoteAssignmentSchema = createInsertSchema(scheduledFieldNoteAssignments).omit({ id: true });
+export const insertScheduledFieldNoteSubmissionSchema = createInsertSchema(scheduledFieldNoteSubmissions).omit({ id: true });
+export const insertScheduledFieldNoteStepSubmissionSchema = createInsertSchema(scheduledFieldNoteStepSubmissions).omit({ id: true });
+
+export type ScheduledFieldNoteTemplate = typeof scheduledFieldNoteTemplates.$inferSelect;
+export type InsertScheduledFieldNoteTemplate = z.infer<typeof insertScheduledFieldNoteTemplateSchema>;
+export type ScheduledFieldNoteSection = typeof scheduledFieldNoteSections.$inferSelect;
+export type InsertScheduledFieldNoteSection = z.infer<typeof insertScheduledFieldNoteSectionSchema>;
+export type ScheduledFieldNoteStep = typeof scheduledFieldNoteSteps.$inferSelect;
+export type InsertScheduledFieldNoteStep = z.infer<typeof insertScheduledFieldNoteStepSchema>;
+export type ScheduledFieldNoteAssignment = typeof scheduledFieldNoteAssignments.$inferSelect;
+export type InsertScheduledFieldNoteAssignment = z.infer<typeof insertScheduledFieldNoteAssignmentSchema>;
+export type ScheduledFieldNoteSubmission = typeof scheduledFieldNoteSubmissions.$inferSelect;
+export type InsertScheduledFieldNoteSubmission = z.infer<typeof insertScheduledFieldNoteSubmissionSchema>;
+export type ScheduledFieldNoteStepSubmission = typeof scheduledFieldNoteStepSubmissions.$inferSelect;
+export type InsertScheduledFieldNoteStepSubmission = z.infer<typeof insertScheduledFieldNoteStepSubmissionSchema>;

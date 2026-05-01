@@ -19,6 +19,8 @@ export default function EmployeeHome() {
   const [elapsed, setElapsed] = useState(0);
   const [blockClockOutOpen, setBlockClockOutOpen] = useState(false);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [blockSfnClockOutOpen, setBlockSfnClockOutOpen] = useState(false);
+  const [pendingSfnItems, setPendingSfnItems] = useState<any[]>([]);
   const [paDismissed, setPaDismissed] = useState(false);
   const [paClockInDialogOpen, setPaClockInDialogOpen] = useState(false);
   const [paLightbox, setPaLightbox] = useState<{ photoIds: string[]; idx: number } | null>(null);
@@ -40,6 +42,13 @@ export default function EmployeeHome() {
 
   const { data: clockOutCheck } = useQuery<{ hasPending: boolean; count: number; requests: any[] }>({
     queryKey: ["/api/employee/cleaner-requests/clock-out-check"],
+    enabled: !!activeEntry,
+    staleTime: 30_000,
+    refetchInterval: activeEntry ? 60_000 : false,
+  });
+
+  const { data: sfnClockOutCheck } = useQuery<{ hasIncomplete: boolean; count: number; items: any[] }>({
+    queryKey: ["/api/employee/scheduled-field-notes/clock-out-check"],
     enabled: !!activeEntry,
     staleTime: 30_000,
     refetchInterval: activeEntry ? 60_000 : false,
@@ -95,7 +104,10 @@ export default function EmployeeHome() {
   };
 
   const handleClockOutAttempt = () => {
-    if (clockOutCheck?.hasPending && clockOutCheck.requests?.length > 0) {
+    if (sfnClockOutCheck?.hasIncomplete && sfnClockOutCheck.items?.length > 0) {
+      setPendingSfnItems(sfnClockOutCheck.items);
+      setBlockSfnClockOutOpen(true);
+    } else if (clockOutCheck?.hasPending && clockOutCheck.requests?.length > 0) {
       setPendingRequests(clockOutCheck.requests);
       setBlockClockOutOpen(true);
     } else {
@@ -148,6 +160,50 @@ export default function EmployeeHome() {
                 {clockOutMut.isPending ? "Clocking out..." : "Clock Out Anyway"}
               </Button>
               <Button variant="ghost" className="w-full text-sm" onClick={() => setBlockClockOutOpen(false)} data-testid="button-cancel-clock-out">
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Scheduled Field Notes clock-out blocker modal */}
+      <Dialog open={blockSfnClockOutOpen} onOpenChange={setBlockSfnClockOutOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-700">
+              <ShieldAlert className="w-5 h-5" />
+              Checklist Required Before Clocking Out
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              You have {pendingSfnItems.length} required photo checklist{pendingSfnItems.length > 1 ? "s" : ""} that must be completed before clocking out.
+            </p>
+            <div className="space-y-2">
+              {pendingSfnItems.map((item: any) => (
+                <div key={item.assignmentId} className="rounded-lg border border-orange-200 bg-orange-50 p-3">
+                  <p className="text-sm font-semibold">{item.templateName}</p>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-col gap-2">
+              <Link href="/employee/scheduled-field-notes" onClick={() => setBlockSfnClockOutOpen(false)}>
+                <Button className="w-full" data-testid="button-go-to-checklists-from-blocker">
+                  <ChevronRight className="w-4 h-4 mr-1.5" />
+                  Complete Checklists Now
+                </Button>
+              </Link>
+              <Button
+                variant="outline"
+                className="w-full text-destructive border-destructive/30 hover:bg-destructive/5"
+                onClick={() => { setBlockSfnClockOutOpen(false); clockOutMut.mutate(); }}
+                disabled={clockOutMut.isPending}
+                data-testid="button-sfn-clock-out-anyway"
+              >
+                {clockOutMut.isPending ? "Clocking out..." : "Clock Out Anyway"}
+              </Button>
+              <Button variant="ghost" className="w-full text-sm" onClick={() => setBlockSfnClockOutOpen(false)} data-testid="button-sfn-cancel-clock-out">
                 Cancel
               </Button>
             </div>

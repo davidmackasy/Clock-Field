@@ -1,4 +1,4 @@
-import { Home, Calendar, User, FolderOpen, FileText, NotebookPen } from "lucide-react";
+import { Home, Calendar, User, FolderOpen, FileText, NotebookPen, ClipboardList } from "lucide-react";
 
 export const employeeNavItems = [
   { label: "Home", href: "/employee", icon: Home },
@@ -23,6 +23,12 @@ export const employeeCenterAction = {
         description: "Record voice and photos for a site note or walkthrough",
         icon: NotebookPen,
         href: "/employee/field-notes",
+      },
+      {
+        label: "Scheduled Notes",
+        description: "Complete your daily photo checklists",
+        icon: ClipboardList,
+        href: "/employee/scheduled-field-notes",
       },
     ],
   },

@@ -1,16 +1,18 @@
 import { useSearch, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { FileText, BookOpen, NotebookPen, MessageSquare } from "lucide-react";
+import { FileText, BookOpen, NotebookPen, MessageSquare, ClipboardList } from "lucide-react";
 import AdminWorkLog from "./work-log";
 import AdminReports from "./reports";
 import AdminFieldNotes from "./field-notes";
 import AdminRequests from "./requests";
+import AdminScheduledFieldNotes from "./scheduled-field-notes";
 
 const TABS = [
   { id: "submissions", label: "Submissions", icon: BookOpen },
   { id: "reports", label: "Reports", icon: FileText },
   { id: "field-notes", label: "Field Notes", icon: NotebookPen },
   { id: "requests", label: "Requests", icon: MessageSquare },
+  { id: "scheduled-notes", label: "Scheduled Notes", icon: ClipboardList },
 ];
 
 export default function AdminWorkLogHub() {
@@ -60,6 +62,7 @@ export default function AdminWorkLogHub() {
         {activeTab === "reports" && <AdminReports />}
         {activeTab === "field-notes" && <AdminFieldNotes />}
         {activeTab === "requests" && <AdminRequests />}
+        {activeTab === "scheduled-notes" && <AdminScheduledFieldNotes />}
       </div>
     </div>
   );

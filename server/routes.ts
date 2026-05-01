@@ -8884,6 +8884,517 @@ Return ONLY valid JSON:
     }
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // ── Scheduled Field Notes ────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── Admin: Templates ──────────────────────────────────────────────────────
+  app.get("/api/admin/scheduled-field-notes/templates", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const templates = await storage.getScheduledFieldNoteTemplates(user.companyId);
+      // For each template, get step count
+      const withCounts = await Promise.all(templates.map(async t => {
+        const [sections, steps] = await Promise.all([
+          storage.getScheduledFieldNoteSections(t.id),
+          storage.getScheduledFieldNoteSteps(t.id),
+        ]);
+        const assignments = await storage.getScheduledFieldNoteAssignmentsByTemplate(t.id);
+        return { ...t, sectionCount: sections.length, stepCount: steps.length, assignmentCount: assignments.filter(a => a.status === "active").length };
+      }));
+      res.json(withCounts);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/admin/scheduled-field-notes/templates", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const now = new Date().toISOString();
+      const template = await storage.createScheduledFieldNoteTemplate({
+        companyId: user.companyId, clientId: req.body.clientId || null,
+        name: req.body.name || "Untitled Checklist", description: req.body.description || "",
+        frequency: req.body.frequency || "daily", requiredBeforeClockOut: req.body.requiredBeforeClockOut ?? true,
+        introText: req.body.introText || "", outroText: req.body.outroText || "",
+        status: "active", createdAt: now, updatedAt: now,
+      });
+      res.json(template);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/admin/scheduled-field-notes/templates/:id", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const template = await storage.getScheduledFieldNoteTemplate(req.params.id);
+      if (!template || template.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const [sections, steps, assignments] = await Promise.all([
+        storage.getScheduledFieldNoteSections(template.id),
+        storage.getScheduledFieldNoteSteps(template.id),
+        storage.getScheduledFieldNoteAssignmentsByTemplate(template.id),
+      ]);
+      // Attach steps to sections
+      const sectionsWithSteps = sections.map(s => ({
+        ...s, steps: steps.filter(step => step.sectionId === s.id),
+      }));
+      res.json({ ...template, sections: sectionsWithSteps, assignments });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/admin/scheduled-field-notes/templates/:id", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const template = await storage.getScheduledFieldNoteTemplate(req.params.id);
+      if (!template || template.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const updated = await storage.updateScheduledFieldNoteTemplate(req.params.id, { ...req.body, updatedAt: new Date().toISOString() });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/admin/scheduled-field-notes/templates/:id", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const template = await storage.getScheduledFieldNoteTemplate(req.params.id);
+      if (!template || template.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      await storage.deleteScheduledFieldNoteTemplate(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/admin/scheduled-field-notes/templates/:id/duplicate", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const template = await storage.getScheduledFieldNoteTemplate(req.params.id);
+      if (!template || template.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const now = new Date().toISOString();
+      const newTemplate = await storage.createScheduledFieldNoteTemplate({
+        companyId: user.companyId, clientId: template.clientId,
+        name: `${template.name} (Copy)`, description: template.description,
+        frequency: template.frequency, requiredBeforeClockOut: template.requiredBeforeClockOut,
+        introText: template.introText, outroText: template.outroText,
+        status: "inactive", createdAt: now, updatedAt: now,
+      });
+      // Duplicate sections and steps
+      const sections = await storage.getScheduledFieldNoteSections(template.id);
+      for (const section of sections) {
+        const newSection = await storage.createScheduledFieldNoteSection({
+          templateId: newTemplate.id, companyId: user.companyId,
+          title: section.title, description: section.description,
+          sortOrder: section.sortOrder, createdAt: now,
+        });
+        const steps = await storage.getScheduledFieldNoteStepsBySection(section.id);
+        for (const step of steps) {
+          await storage.createScheduledFieldNoteStep({
+            templateId: newTemplate.id, sectionId: newSection.id, companyId: user.companyId,
+            title: step.title, description: step.description,
+            referenceImageUrl: step.referenceImageUrl,
+            isRequired: step.isRequired, sortOrder: step.sortOrder, createdAt: now,
+          });
+        }
+      }
+      res.json({ id: newTemplate.id, name: newTemplate.name });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Admin: Sections ───────────────────────────────────────────────────────
+  app.post("/api/admin/scheduled-field-notes/templates/:id/sections", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const template = await storage.getScheduledFieldNoteTemplate(req.params.id);
+      if (!template || template.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const now = new Date().toISOString();
+      const existingSections = await storage.getScheduledFieldNoteSections(template.id);
+      const section = await storage.createScheduledFieldNoteSection({
+        templateId: template.id, companyId: user.companyId,
+        title: req.body.title || "New Section", description: req.body.description || "",
+        sortOrder: existingSections.length, createdAt: now,
+      });
+      res.json(section);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/admin/scheduled-field-notes/sections/:id", requireRole("admin"), async (req, res) => {
+    try {
+      const updated = await storage.updateScheduledFieldNoteSection(req.params.id, req.body);
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/admin/scheduled-field-notes/sections/:id", requireRole("admin"), async (req, res) => {
+    try {
+      await storage.deleteScheduledFieldNoteSection(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Admin: Steps ──────────────────────────────────────────────────────────
+  app.post("/api/admin/scheduled-field-notes/sections/:sectionId/steps", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const now = new Date().toISOString();
+      const existingSteps = await storage.getScheduledFieldNoteStepsBySection(req.params.sectionId);
+      const step = await storage.createScheduledFieldNoteStep({
+        templateId: req.body.templateId, sectionId: req.params.sectionId, companyId: user.companyId,
+        title: req.body.title || "Take a photo", description: req.body.description || "",
+        referenceImageUrl: req.body.referenceImageUrl || null,
+        isRequired: req.body.isRequired ?? true,
+        sortOrder: req.body.sortOrder ?? existingSteps.length, createdAt: now,
+      });
+      res.json(step);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/admin/scheduled-field-notes/steps/:id", requireRole("admin"), async (req, res) => {
+    try {
+      const updated = await storage.updateScheduledFieldNoteStep(req.params.id, req.body);
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/admin/scheduled-field-notes/steps/:id", requireRole("admin"), async (req, res) => {
+    try {
+      await storage.deleteScheduledFieldNoteStep(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Admin: Assignments ────────────────────────────────────────────────────
+  app.get("/api/admin/scheduled-field-notes/assignments", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const assignments = await storage.getScheduledFieldNoteAssignments(user.companyId);
+      // Enrich with template and cleaner info
+      const templates = await storage.getScheduledFieldNoteTemplates(user.companyId);
+      const templateMap = Object.fromEntries(templates.map(t => [t.id, t]));
+      const employees = await storage.getEmployeesByCompany(user.companyId);
+      const employeeMap = Object.fromEntries(employees.map(e => [e.id, e]));
+      const clients = await storage.getClientsByCompany(user.companyId);
+      const clientMap = Object.fromEntries(clients.map(c => [c.id, c]));
+      res.json(assignments.map(a => ({
+        ...a,
+        templateName: templateMap[a.templateId]?.name || "Unknown",
+        cleanerName: employeeMap[a.cleanerId] ? `${employeeMap[a.cleanerId].firstName} ${employeeMap[a.cleanerId].lastName}` : "Unknown",
+        clientName: a.clientId ? (clientMap[a.clientId]?.name || "Unknown") : null,
+      })));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/admin/scheduled-field-notes/assignments", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const assignment = await storage.createScheduledFieldNoteAssignment({
+        templateId: req.body.templateId, companyId: user.companyId,
+        cleanerId: req.body.cleanerId, clientId: req.body.clientId || null,
+        status: "active", createdAt: new Date().toISOString(),
+      });
+      res.json(assignment);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/admin/scheduled-field-notes/assignments/:id", requireRole("admin"), async (req, res) => {
+    try {
+      const updated = await storage.updateScheduledFieldNoteAssignment(req.params.id, req.body);
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/admin/scheduled-field-notes/assignments/:id", requireRole("admin"), async (req, res) => {
+    try {
+      await storage.deleteScheduledFieldNoteAssignment(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Admin: Submissions ────────────────────────────────────────────────────
+  app.get("/api/admin/scheduled-field-notes/submissions", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const submissions = await storage.getScheduledFieldNoteSubmissions(user.companyId);
+      const templates = await storage.getScheduledFieldNoteTemplates(user.companyId);
+      const templateMap = Object.fromEntries(templates.map(t => [t.id, t]));
+      const employees = await storage.getEmployeesByCompany(user.companyId);
+      const employeeMap = Object.fromEntries(employees.map(e => [e.id, e]));
+      const clients = await storage.getClientsByCompany(user.companyId);
+      const clientMap = Object.fromEntries(clients.map(c => [c.id, c]));
+      res.json(submissions.map(s => ({
+        ...s,
+        templateName: templateMap[s.templateId]?.name || "Unknown",
+        cleanerName: employeeMap[s.cleanerId] ? `${employeeMap[s.cleanerId].firstName} ${employeeMap[s.cleanerId].lastName}` : "Unknown",
+        clientName: s.clientId ? (clientMap[s.clientId]?.name || "Unknown") : null,
+      })));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/admin/scheduled-field-notes/submissions/:id", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getScheduledFieldNoteSubmission(req.params.id);
+      if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const [template, stepSubs] = await Promise.all([
+        storage.getScheduledFieldNoteTemplate(sub.templateId),
+        storage.getScheduledFieldNoteStepSubmissions(sub.id),
+      ]);
+      let sections: any[] = [], steps: any[] = [];
+      if (template) {
+        [sections, steps] = await Promise.all([
+          storage.getScheduledFieldNoteSections(template.id),
+          storage.getScheduledFieldNoteSteps(template.id),
+        ]);
+      }
+      const employees = await storage.getEmployeesByCompany(user.companyId);
+      const cleaner = employees.find(e => e.id === sub.cleanerId);
+      const clients = await storage.getClientsByCompany(user.companyId);
+      const client = clients.find(c => c.id === sub.clientId);
+      const sectionsWithSteps = sections.map(s => ({
+        ...s,
+        steps: steps.filter(st => st.sectionId === s.id).map(st => ({
+          ...st,
+          submission: stepSubs.find(ss => ss.stepId === st.id) || null,
+        })),
+      }));
+      res.json({ ...sub, template, sections: sectionsWithSteps, stepSubmissions: stepSubs, cleanerName: cleaner ? `${cleaner.firstName} ${cleaner.lastName}` : "Unknown", clientName: client?.name || null });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/admin/scheduled-field-notes/submissions/:id/generate-link", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getScheduledFieldNoteSubmission(req.params.id);
+      if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      let publicId = sub.publicId;
+      if (!publicId) {
+        publicId = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
+        await storage.updateScheduledFieldNoteSubmission(sub.id, { publicId, publicEnabled: true, updatedAt: new Date().toISOString() });
+      } else {
+        await storage.updateScheduledFieldNoteSubmission(sub.id, { publicEnabled: true, updatedAt: new Date().toISOString() });
+      }
+      res.json({ publicId, url: `/public/scheduled-field-notes/${publicId}` });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/admin/scheduled-field-notes/submissions/:id/disable-link", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getScheduledFieldNoteSubmission(req.params.id);
+      if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      await storage.updateScheduledFieldNoteSubmission(sub.id, { publicEnabled: false, updatedAt: new Date().toISOString() });
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Employee: Scheduled Field Notes ──────────────────────────────────────
+  app.get("/api/employee/scheduled-field-notes/today", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      // user.id IS the cleaner/employee ID in this system
+      const assignments = await storage.getScheduledFieldNoteAssignmentsByCleaner(user.id);
+      if (assignments.length === 0) return res.json([]);
+      const today = new Date().toISOString().split("T")[0];
+      const result = [];
+      for (const assignment of assignments) {
+        const template = await storage.getScheduledFieldNoteTemplate(assignment.templateId);
+        if (!template || template.status !== "active") continue;
+        // Get or check today's submission
+        const existing = await storage.getScheduledFieldNoteSubmissionByAssignmentAndDate(assignment.id, today);
+        const steps = await storage.getScheduledFieldNoteSteps(template.id);
+        const clients = await storage.getClientsByCompany(template.companyId);
+        const client = clients.find(c => c.id === (assignment.clientId || template.clientId));
+        result.push({
+          assignment,
+          template: { ...template, stepCount: steps.length, requiredStepCount: steps.filter(s => s.isRequired).length },
+          submission: existing || null,
+          clientName: client?.name || null,
+          today,
+        });
+      }
+      res.json(result);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/employee/scheduled-field-notes/start", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { assignmentId } = req.body;
+      const myAssignments = await storage.getScheduledFieldNoteAssignmentsByCleaner(user.id);
+      const found = myAssignments.find(a => a.id === assignmentId);
+      if (!found) return res.status(403).json({ message: "Not your assignment" });
+      const template = await storage.getScheduledFieldNoteTemplate(found.templateId);
+      if (!template) return res.status(404).json({ message: "Template not found" });
+      const today = new Date().toISOString().split("T")[0];
+      // Check if submission already exists
+      const existing = await storage.getScheduledFieldNoteSubmissionByAssignmentAndDate(assignmentId, today);
+      if (existing) return res.json(existing);
+      // Get active clock entry
+      const clockEntry = await storage.getActiveTimeEntry(user.id);
+      const steps = await storage.getScheduledFieldNoteSteps(template.id);
+      const requiredSteps = steps.filter(s => s.isRequired);
+      const now = new Date().toISOString();
+      const submission = await storage.createScheduledFieldNoteSubmission({
+        templateId: template.id, assignmentId, companyId: user.companyId,
+        clientId: found.clientId || template.clientId,
+        cleanerId: user.id, clockInId: clockEntry?.id || null,
+        submissionDate: today, status: "in_progress",
+        startedAt: now, completedAt: null,
+        totalSteps: requiredSteps.length, completedSteps: 0,
+        publicId: null, publicEnabled: false,
+        createdAt: now, updatedAt: now,
+      });
+      res.json(submission);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/employee/scheduled-field-notes/submissions/:id", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getScheduledFieldNoteSubmission(req.params.id);
+      if (!sub || sub.cleanerId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      const [template, stepSubs] = await Promise.all([
+        storage.getScheduledFieldNoteTemplate(sub.templateId),
+        storage.getScheduledFieldNoteStepSubmissions(sub.id),
+      ]);
+      let sections: any[] = [], steps: any[] = [];
+      if (template) {
+        [sections, steps] = await Promise.all([
+          storage.getScheduledFieldNoteSections(template.id),
+          storage.getScheduledFieldNoteSteps(template.id),
+        ]);
+      }
+      const sectionsWithSteps = sections.map(s => ({
+        ...s,
+        steps: steps.filter(st => st.sectionId === s.id).map(st => ({
+          ...st,
+          submission: stepSubs.find(ss => ss.stepId === st.id) || null,
+        })),
+      }));
+      res.json({ ...sub, template, sections: sectionsWithSteps });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/employee/scheduled-field-notes/submissions/:id/steps/:stepId", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getScheduledFieldNoteSubmission(req.params.id);
+      if (!sub || sub.cleanerId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      if (sub.status === "completed") return res.status(400).json({ message: "Submission already completed" });
+      const { imageUrl } = req.body;
+      if (!imageUrl || !imageUrl.startsWith("data:image/")) return res.status(400).json({ message: "Invalid image" });
+      const now = new Date().toISOString();
+      // Check if already submitted — allow retake
+      const existing = await storage.getScheduledFieldNoteStepSubmissionByStep(sub.id, req.params.stepId);
+      let stepSub: any;
+      if (existing) {
+        stepSub = await storage.updateScheduledFieldNoteStepSubmission(existing.id, { submittedImageUrl: imageUrl, submittedAt: now });
+      } else {
+        // Find section for this step
+        const allSteps = await storage.getScheduledFieldNoteSteps(sub.templateId);
+        const stepInfo = allSteps.find(s => s.id === req.params.stepId);
+        stepSub = await storage.createScheduledFieldNoteStepSubmission({
+          submissionId: sub.id, templateId: sub.templateId,
+          sectionId: stepInfo?.sectionId || "", stepId: req.params.stepId,
+          companyId: sub.companyId, cleanerId: user.id,
+          submittedImageUrl: imageUrl, submittedAt: now, createdAt: now,
+        });
+        // Update completed steps count (only for required steps, and only on first submission)
+        const allStepSubs = await storage.getScheduledFieldNoteStepSubmissions(sub.id);
+        const completedRequiredCount = allStepSubs.filter(ss => {
+          const s = allSteps.find(st => st.id === ss.stepId);
+          return s?.isRequired;
+        }).length + (stepInfo?.isRequired ? 1 : 0);
+        await storage.updateScheduledFieldNoteSubmission(sub.id, {
+          completedSteps: completedRequiredCount, updatedAt: now,
+        });
+      }
+      // Re-fetch submission for updated counts
+      const updated = await storage.getScheduledFieldNoteSubmission(sub.id);
+      res.json({ stepSubmission: stepSub, submission: updated });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/employee/scheduled-field-notes/submissions/:id/complete", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getScheduledFieldNoteSubmission(req.params.id);
+      if (!sub || sub.cleanerId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      const now = new Date().toISOString();
+      const allSteps = await storage.getScheduledFieldNoteSteps(sub.templateId);
+      const requiredSteps = allSteps.filter(s => s.isRequired);
+      const stepSubs = await storage.getScheduledFieldNoteStepSubmissions(sub.id);
+      const completedRequiredIds = stepSubs.map(ss => ss.stepId).filter(id => requiredSteps.some(s => s.id === id));
+      if (completedRequiredIds.length < requiredSteps.length) {
+        return res.status(400).json({ message: "Not all required steps are complete", missing: requiredSteps.length - completedRequiredIds.length });
+      }
+      const updated = await storage.updateScheduledFieldNoteSubmission(sub.id, {
+        status: "completed", completedAt: now, completedSteps: requiredSteps.length, updatedAt: now,
+      });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Clock-out check: are there any incomplete required scheduled field notes today?
+  app.get("/api/employee/scheduled-field-notes/clock-out-check", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const assignments = await storage.getScheduledFieldNoteAssignmentsByCleaner(user.id);
+      const today = new Date().toISOString().split("T")[0];
+      const incomplete = [];
+      for (const assignment of assignments) {
+        const template = await storage.getScheduledFieldNoteTemplate(assignment.templateId);
+        if (!template || template.status !== "active" || !template.requiredBeforeClockOut) continue;
+        const submission = await storage.getScheduledFieldNoteSubmissionByAssignmentAndDate(assignment.id, today);
+        if (!submission || submission.status !== "completed") {
+          incomplete.push({ assignmentId: assignment.id, templateName: template.name, submissionId: submission?.id || null });
+        }
+      }
+      res.json({ hasIncomplete: incomplete.length > 0, count: incomplete.length, items: incomplete });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Public: Scheduled Field Note Report ──────────────────────────────────
+  app.get("/api/public/scheduled-field-notes/:publicId", async (req, res) => {
+    try {
+      const sub = await storage.getScheduledFieldNoteSubmissionByPublicId(req.params.publicId);
+      if (!sub || !sub.publicEnabled) return res.status(404).json({ message: "Report not found or not public" });
+      const [template, stepSubs] = await Promise.all([
+        storage.getScheduledFieldNoteTemplate(sub.templateId),
+        storage.getScheduledFieldNoteStepSubmissions(sub.id),
+      ]);
+      let sections: any[] = [], steps: any[] = [];
+      if (template) {
+        [sections, steps] = await Promise.all([
+          storage.getScheduledFieldNoteSections(template.id),
+          storage.getScheduledFieldNoteSteps(template.id),
+        ]);
+      }
+      const company = await storage.getCompany(sub.companyId);
+      const employees = await storage.getEmployeesByCompany(sub.companyId);
+      const cleaner = employees.find(e => e.id === sub.cleanerId);
+      const clients = await storage.getClientsByCompany(sub.companyId);
+      const client = clients.find(c => c.id === sub.clientId);
+      const sectionsWithSteps = sections.map(s => ({
+        id: s.id, title: s.title, sortOrder: s.sortOrder,
+        steps: steps.filter(st => st.sectionId === s.id).map(st => ({
+          id: st.id, title: st.title, description: st.description,
+          isRequired: st.isRequired, sortOrder: st.sortOrder,
+          submission: stepSubs.find(ss => ss.stepId === st.id) || null,
+        })),
+      }));
+      res.json({
+        companyName: company?.name || "Unknown Company",
+        companyLogo: company?.logoUrl || null,
+        templateName: template?.name || "Scheduled Field Note",
+        introText: template?.introText || "",
+        outroText: template?.outroText || "",
+        clientName: client?.name || null,
+        cleanerName: cleaner ? `${cleaner.firstName} ${cleaner.lastName}` : null,
+        submissionDate: sub.submissionDate,
+        status: sub.status,
+        startedAt: sub.startedAt,
+        completedAt: sub.completedAt,
+        totalSteps: sub.totalSteps,
+        completedSteps: sub.completedSteps,
+        sections: sectionsWithSteps,
+      });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   return httpServer;
 }
 

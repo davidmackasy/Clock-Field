@@ -73,6 +73,14 @@ import {
   type QuoteRequestWalkthrough, type InsertQuoteRequestWalkthrough,
   type QuoteRequestWalkthroughPhoto, type InsertQuoteRequestWalkthroughPhoto,
   type QuoteRequestWalkthroughSection, type InsertQuoteRequestWalkthroughSection,
+  scheduledFieldNoteTemplates, scheduledFieldNoteSections, scheduledFieldNoteSteps,
+  scheduledFieldNoteAssignments, scheduledFieldNoteSubmissions, scheduledFieldNoteStepSubmissions,
+  type ScheduledFieldNoteTemplate, type InsertScheduledFieldNoteTemplate,
+  type ScheduledFieldNoteSection, type InsertScheduledFieldNoteSection,
+  type ScheduledFieldNoteStep, type InsertScheduledFieldNoteStep,
+  type ScheduledFieldNoteAssignment, type InsertScheduledFieldNoteAssignment,
+  type ScheduledFieldNoteSubmission, type InsertScheduledFieldNoteSubmission,
+  type ScheduledFieldNoteStepSubmission, type InsertScheduledFieldNoteStepSubmission,
   supplies, supplyUpdates,
   inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses,
   type Supply, type InsertSupply,
@@ -1879,6 +1887,129 @@ export class DatabaseStorage implements IStorage {
   async updateQuoteRequestWalkthroughSection(id: string, data: Partial<InsertQuoteRequestWalkthroughSection>): Promise<QuoteRequestWalkthroughSection | undefined> {
     const [row] = await db.update(quoteRequestWalkthroughSections).set(data as any).where(eq(quoteRequestWalkthroughSections.id, id)).returning();
     return row;
+  }
+
+  // ── Scheduled Field Notes ────────────────────────────────────────────────
+  async createScheduledFieldNoteTemplate(data: InsertScheduledFieldNoteTemplate): Promise<ScheduledFieldNoteTemplate> {
+    const [row] = await db.insert(scheduledFieldNoteTemplates).values(data as any).returning();
+    return row;
+  }
+  async getScheduledFieldNoteTemplates(companyId: string): Promise<ScheduledFieldNoteTemplate[]> {
+    return db.select().from(scheduledFieldNoteTemplates).where(eq(scheduledFieldNoteTemplates.companyId, companyId)).orderBy(desc(scheduledFieldNoteTemplates.createdAt));
+  }
+  async getScheduledFieldNoteTemplate(id: string): Promise<ScheduledFieldNoteTemplate | undefined> {
+    const [row] = await db.select().from(scheduledFieldNoteTemplates).where(eq(scheduledFieldNoteTemplates.id, id));
+    return row;
+  }
+  async updateScheduledFieldNoteTemplate(id: string, data: Partial<InsertScheduledFieldNoteTemplate>): Promise<ScheduledFieldNoteTemplate | undefined> {
+    const [row] = await db.update(scheduledFieldNoteTemplates).set(data as any).where(eq(scheduledFieldNoteTemplates.id, id)).returning();
+    return row;
+  }
+  async deleteScheduledFieldNoteTemplate(id: string): Promise<void> {
+    await db.delete(scheduledFieldNoteTemplates).where(eq(scheduledFieldNoteTemplates.id, id));
+  }
+
+  async createScheduledFieldNoteSection(data: InsertScheduledFieldNoteSection): Promise<ScheduledFieldNoteSection> {
+    const [row] = await db.insert(scheduledFieldNoteSections).values(data as any).returning();
+    return row;
+  }
+  async getScheduledFieldNoteSections(templateId: string): Promise<ScheduledFieldNoteSection[]> {
+    return db.select().from(scheduledFieldNoteSections).where(eq(scheduledFieldNoteSections.templateId, templateId)).orderBy(asc(scheduledFieldNoteSections.sortOrder));
+  }
+  async updateScheduledFieldNoteSection(id: string, data: Partial<InsertScheduledFieldNoteSection>): Promise<ScheduledFieldNoteSection | undefined> {
+    const [row] = await db.update(scheduledFieldNoteSections).set(data as any).where(eq(scheduledFieldNoteSections.id, id)).returning();
+    return row;
+  }
+  async deleteScheduledFieldNoteSection(id: string): Promise<void> {
+    await db.delete(scheduledFieldNoteSections).where(eq(scheduledFieldNoteSections.id, id));
+  }
+
+  async createScheduledFieldNoteStep(data: InsertScheduledFieldNoteStep): Promise<ScheduledFieldNoteStep> {
+    const [row] = await db.insert(scheduledFieldNoteSteps).values(data as any).returning();
+    return row;
+  }
+  async getScheduledFieldNoteSteps(templateId: string): Promise<ScheduledFieldNoteStep[]> {
+    return db.select().from(scheduledFieldNoteSteps).where(eq(scheduledFieldNoteSteps.templateId, templateId)).orderBy(asc(scheduledFieldNoteSteps.sortOrder));
+  }
+  async getScheduledFieldNoteStepsBySection(sectionId: string): Promise<ScheduledFieldNoteStep[]> {
+    return db.select().from(scheduledFieldNoteSteps).where(eq(scheduledFieldNoteSteps.sectionId, sectionId)).orderBy(asc(scheduledFieldNoteSteps.sortOrder));
+  }
+  async updateScheduledFieldNoteStep(id: string, data: Partial<InsertScheduledFieldNoteStep>): Promise<ScheduledFieldNoteStep | undefined> {
+    const [row] = await db.update(scheduledFieldNoteSteps).set(data as any).where(eq(scheduledFieldNoteSteps.id, id)).returning();
+    return row;
+  }
+  async deleteScheduledFieldNoteStep(id: string): Promise<void> {
+    await db.delete(scheduledFieldNoteSteps).where(eq(scheduledFieldNoteSteps.id, id));
+  }
+
+  async createScheduledFieldNoteAssignment(data: InsertScheduledFieldNoteAssignment): Promise<ScheduledFieldNoteAssignment> {
+    const [row] = await db.insert(scheduledFieldNoteAssignments).values(data as any).returning();
+    return row;
+  }
+  async getScheduledFieldNoteAssignments(companyId: string): Promise<ScheduledFieldNoteAssignment[]> {
+    return db.select().from(scheduledFieldNoteAssignments).where(eq(scheduledFieldNoteAssignments.companyId, companyId));
+  }
+  async getScheduledFieldNoteAssignmentsByTemplate(templateId: string): Promise<ScheduledFieldNoteAssignment[]> {
+    return db.select().from(scheduledFieldNoteAssignments).where(eq(scheduledFieldNoteAssignments.templateId, templateId));
+  }
+  async getScheduledFieldNoteAssignmentsByCleaner(cleanerId: string): Promise<ScheduledFieldNoteAssignment[]> {
+    return db.select().from(scheduledFieldNoteAssignments)
+      .where(and(eq(scheduledFieldNoteAssignments.cleanerId, cleanerId), eq(scheduledFieldNoteAssignments.status, "active")));
+  }
+  async updateScheduledFieldNoteAssignment(id: string, data: Partial<InsertScheduledFieldNoteAssignment>): Promise<ScheduledFieldNoteAssignment | undefined> {
+    const [row] = await db.update(scheduledFieldNoteAssignments).set(data as any).where(eq(scheduledFieldNoteAssignments.id, id)).returning();
+    return row;
+  }
+  async deleteScheduledFieldNoteAssignment(id: string): Promise<void> {
+    await db.delete(scheduledFieldNoteAssignments).where(eq(scheduledFieldNoteAssignments.id, id));
+  }
+
+  async createScheduledFieldNoteSubmission(data: InsertScheduledFieldNoteSubmission): Promise<ScheduledFieldNoteSubmission> {
+    const [row] = await db.insert(scheduledFieldNoteSubmissions).values(data as any).returning();
+    return row;
+  }
+  async getScheduledFieldNoteSubmissions(companyId: string): Promise<ScheduledFieldNoteSubmission[]> {
+    return db.select().from(scheduledFieldNoteSubmissions).where(eq(scheduledFieldNoteSubmissions.companyId, companyId)).orderBy(desc(scheduledFieldNoteSubmissions.createdAt));
+  }
+  async getScheduledFieldNoteSubmission(id: string): Promise<ScheduledFieldNoteSubmission | undefined> {
+    const [row] = await db.select().from(scheduledFieldNoteSubmissions).where(eq(scheduledFieldNoteSubmissions.id, id));
+    return row;
+  }
+  async getScheduledFieldNoteSubmissionByPublicId(publicId: string): Promise<ScheduledFieldNoteSubmission | undefined> {
+    const [row] = await db.select().from(scheduledFieldNoteSubmissions).where(eq(scheduledFieldNoteSubmissions.publicId, publicId));
+    return row;
+  }
+  async getScheduledFieldNoteSubmissionByAssignmentAndDate(assignmentId: string, submissionDate: string): Promise<ScheduledFieldNoteSubmission | undefined> {
+    const [row] = await db.select().from(scheduledFieldNoteSubmissions)
+      .where(and(eq(scheduledFieldNoteSubmissions.assignmentId, assignmentId), eq(scheduledFieldNoteSubmissions.submissionDate, submissionDate)));
+    return row;
+  }
+  async getScheduledFieldNoteSubmissionsByCleaner(cleanerId: string): Promise<ScheduledFieldNoteSubmission[]> {
+    return db.select().from(scheduledFieldNoteSubmissions).where(eq(scheduledFieldNoteSubmissions.cleanerId, cleanerId)).orderBy(desc(scheduledFieldNoteSubmissions.createdAt));
+  }
+  async updateScheduledFieldNoteSubmission(id: string, data: Partial<InsertScheduledFieldNoteSubmission>): Promise<ScheduledFieldNoteSubmission | undefined> {
+    const [row] = await db.update(scheduledFieldNoteSubmissions).set(data as any).where(eq(scheduledFieldNoteSubmissions.id, id)).returning();
+    return row;
+  }
+
+  async createScheduledFieldNoteStepSubmission(data: InsertScheduledFieldNoteStepSubmission): Promise<ScheduledFieldNoteStepSubmission> {
+    const [row] = await db.insert(scheduledFieldNoteStepSubmissions).values(data as any).returning();
+    return row;
+  }
+  async getScheduledFieldNoteStepSubmissions(submissionId: string): Promise<ScheduledFieldNoteStepSubmission[]> {
+    return db.select().from(scheduledFieldNoteStepSubmissions).where(eq(scheduledFieldNoteStepSubmissions.submissionId, submissionId)).orderBy(asc(scheduledFieldNoteStepSubmissions.createdAt));
+  }
+  async getScheduledFieldNoteStepSubmissionByStep(submissionId: string, stepId: string): Promise<ScheduledFieldNoteStepSubmission | undefined> {
+    const [row] = await db.select().from(scheduledFieldNoteStepSubmissions)
+      .where(and(eq(scheduledFieldNoteStepSubmissions.submissionId, submissionId), eq(scheduledFieldNoteStepSubmissions.stepId, stepId)));
+    return row;
+  }
+  async updateScheduledFieldNoteStepSubmission(id: string, data: Partial<InsertScheduledFieldNoteStepSubmission>): Promise<ScheduledFieldNoteStepSubmission | undefined> {
+    const [row] = await db.update(scheduledFieldNoteStepSubmissions).set(data as any).where(eq(scheduledFieldNoteStepSubmissions.id, id)).returning();
+    return row;
+  }
+  async deleteScheduledFieldNoteStepSubmission(id: string): Promise<void> {
+    await db.delete(scheduledFieldNoteStepSubmissions).where(eq(scheduledFieldNoteStepSubmissions.id, id));
   }
 }
 

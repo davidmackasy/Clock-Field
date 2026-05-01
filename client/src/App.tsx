@@ -72,6 +72,9 @@ import PublicAgreement from "@/pages/public/agreement";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import LandingPage from "@/pages/landing";
+import EmployeeScheduledFieldNotesList from "@/pages/employee/scheduled-field-notes-list";
+import EmployeeScheduledFieldNotesCapture from "@/pages/employee/scheduled-field-notes-capture";
+import PublicScheduledFieldNoteReport from "@/pages/public/scheduled-field-note-report";
 
 function LoadingScreen() {
   return (
@@ -207,6 +210,8 @@ function EmployeeLayout() {
           <Route path="/employee/field-notes/capture" component={AdminFieldNotesCapture} />
           <Route path="/employee/field-notes/session/:id" component={AdminFieldNotesSession} />
           <Route path="/employee/field-notes" component={EmployeeFieldNotes} />
+          <Route path="/employee/scheduled-field-notes/:id" component={EmployeeScheduledFieldNotesCapture} />
+          <Route path="/employee/scheduled-field-notes" component={EmployeeScheduledFieldNotesList} />
           <Route path="/employee/profile" component={EmployeeProfile} />
           <Route component={NotFound} />
         </Switch>
@@ -266,6 +271,14 @@ function AppRouter() {
     return (
       <Switch>
         <Route path="/public/field-notes/:token" component={PublicFieldNote} />
+      </Switch>
+    );
+  }
+
+  if (location.startsWith("/public/scheduled-field-notes/")) {
+    return (
+      <Switch>
+        <Route path="/public/scheduled-field-notes/:publicId" component={PublicScheduledFieldNoteReport} />
       </Switch>
     );
   }
