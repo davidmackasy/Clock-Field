@@ -37,16 +37,14 @@ const navItems = [
   { title: "Clients", url: "/admin/clients", icon: Building2 },
   { title: "Management", url: "/admin/management", icon: Users2 },
   { title: "Work Log", url: "/admin/work-log", icon: BookOpen },
-  { title: "Forms / Requests", url: "/admin/quote-forms", icon: FileInput },
+  { title: "Forms", url: "/admin/quote-forms", icon: FileInput },
   { title: "Supplies", url: "/admin/supplies", icon: Package },
   { title: "Settings", url: "/admin/settings", icon: Settings },
 ];
 
 const publicationsSubItems = [
   { title: "Publications", url: "/admin/publications" },
-  { title: "Agreements", url: "/admin/agreements" },
   { title: "Proposals", url: "/admin/proposals" },
-  { title: "Quotes", url: "/admin/quote-forms" },
 ];
 
 export function AdminSidebar() {
@@ -66,8 +64,8 @@ export function AdminSidebar() {
   const workLogPaths = ["/admin/work-log", "/admin/reports", "/admin/field-notes", "/admin/requests"];
   const isWorkLogActive = workLogPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
 
-  // Publications group is active for publications, agreements, proposals, quote-forms
-  const publicationsPaths = ["/admin/publications", "/admin/agreements", "/admin/proposals", "/admin/quote-forms"];
+  // Publications group is active for publications and proposals only
+  const publicationsPaths = ["/admin/publications", "/admin/proposals"];
   const isPublicationsActive = publicationsPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
 
   return (
@@ -135,6 +133,19 @@ export function AdminSidebar() {
                   </CollapsibleContent>
                 </SidebarMenuItem>
               </Collapsible>
+
+              {/* ── Agreements (separate top-level item) ── */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/admin/agreements" || location.startsWith("/admin/agreements/")}
+                >
+                  <Link href="/admin/agreements" data-testid="nav-agreements">
+                    <FileText className="w-4 h-4" />
+                    <span>Agreements</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
