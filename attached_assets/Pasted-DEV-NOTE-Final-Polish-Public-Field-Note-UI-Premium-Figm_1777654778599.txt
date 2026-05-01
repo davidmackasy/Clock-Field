@@ -1,0 +1,257 @@
+DEV NOTE: Final Polish – Public Field Note UI (Premium / Figma-Level Upgrade)
+
+Goal:
+Upgrade the current public link UI to feel premium, clean, and modern while fixing layout issues.
+Do not break or affect any existing logic, data, or flows.
+
+1. Fix Image Viewer (CRITICAL)
+
+Current issue:
+
+Arrows and close (X) are inside the image container
+Looks cheap and unprofessional
+
+Required fix:
+
+Move controls OUTSIDE the image
+
+New behavior:
+
+Image centered on screen
+Dark blurred backdrop behind image
+Controls float outside the image
+
+Layout:
+
+Top-right (outside image):
+
+Close (X)
+
+Left side (vertically centered):
+
+Previous arrow
+
+Right side (vertically centered):
+
+Next arrow
+
+Add:
+
+Subtle circular background for arrows (semi-transparent black)
+Hover effect (slight scale + brighter opacity)
+
+Image container:
+
+Rounded corners (12px–16px)
+Soft shadow
+No UI elements overlapping image
+
+Optional upgrade:
+
+Add slight zoom-in animation on open
+Smooth fade transition
+2. Remove Ugly White Containers (IMPORTANT)
+
+Current issue:
+
+“Daily Proof of Work” and “Questions or concerns” are inside boxed containers
+Feels like a form, not a premium report
+
+Required change:
+
+Remove ALL background boxes for text sections
+
+Replace with:
+
+Clean spacing layout:
+
+Section: Daily Proof of Work
+
+Title: bold
+Description: muted gray text
+No border
+No background
+Just spacing (margin top/bottom)
+
+Section: Questions or concerns
+
+Same treatment
+Centered text
+No container
+No border
+
+Spacing guideline:
+
+32px–48px vertical spacing between sections
+3. Header Upgrade (Make it Premium)
+
+Add company logo properly:
+
+Left side:
+
+Company logo (image, not icon)
+If no logo, fallback to initials avatar
+
+Right side:
+
+Keep clean spacing, no clutter
+
+Typography hierarchy:
+
+Company Name (small label)
+Location / Job Name (big bold title)
+Meta row:
+
+Date
+Client name
+Completed by
+
+Below that:
+
+Started time
+Completed time
+
+Make it feel like:
+Stripe / Notion / Linear style
+
+4. Improve Grid Cards (Make them feel premium)
+
+Current:
+
+Basic cards
+
+Upgrade:
+
+Each card:
+
+Rounded corners (12–16px)
+Soft shadow
+Slight hover lift (translateY -2px)
+
+Thumbnail:
+
+Fill container properly (object-fit: cover)
+Add subtle overlay gradient (bottom fade)
+
+Overlay content:
+Bottom-left:
+
+Area name (bold white text)
+
+Top-right:
+
+“8 photos” badge
+pill shape
+semi-transparent dark background
+white text
+
+Below card (optional):
+
+Time range in small gray text
+5. Footer Fix (IMPORTANT)
+
+Current issue:
+
+Duplicate messaging:
+“Powered by Clockfield”
+“Generated using Clockfield”
+
+Fix:
+
+Keep ONLY ONE:
+
+Example:
+
+Powered by Clockfield
+
+Make “Clockfield” clickable:
+
+Add hyperlink → your main site
+Open in new tab
+
+Style:
+
+Subtle
+Small text
+Slight opacity
+6. Make It Feel “Figma / Fintech”
+
+Apply across entire page:
+
+Background:
+
+Very light gray (#F8FAFC or similar)
+Not pure white
+
+Content container:
+
+Max width centered
+Plenty of padding
+
+Spacing:
+
+Generous spacing everywhere
+No cramped layout
+
+Typography:
+
+Title: bold, large
+Labels: small, muted
+Body: clean and readable
+
+Colors:
+
+Avoid heavy blacks
+Use soft grays
+
+Shadows:
+
+Very soft
+No harsh borders
+
+No unnecessary borders anywhere
+
+7. Micro-Interactions (Small but powerful)
+
+Add:
+
+Card hover effect
+Smooth expand/collapse animation
+Image viewer fade-in
+Button hover feedback
+
+Keep everything subtle
+
+8. Keep Everything Else Intact
+
+DO NOT TOUCH:
+
+Data structure
+Photo grouping logic
+Public link routing
+Permissions
+Upload system
+Field note creation flow
+Admin logic
+
+ONLY UI / UX improvements
+
+9. Final Expected Result
+
+When a client opens the link:
+
+They should feel:
+
+This is clean
+This is professional
+This is premium
+This company is organized
+
+They should:
+
+Instantly understand what the report is
+Easily click into areas
+View photos smoothly
+Not feel overwhelmed
+
+If done correctly, this turns your public link into a showcase product, not just a report.

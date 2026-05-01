@@ -1,0 +1,624 @@
+DEV FIX: Scheduled Notes Cleaner Capture Title, Submit Flow, and Missing Required Step Error
+
+Project: Clockfield
+Area: Employee App → Scheduled Notes Capture
+Related Admin Area: Work Log → Scheduled Notes
+
+Do not break or affect anything currently working.
+
+Do not touch regular Field Notes.
+
+Do not touch normal Work Log.
+
+Do not touch payroll, attendance, clients, auth, Stripe, reports, or unrelated pages.
+
+Only fix Scheduled Notes capture display and submit behavior.
+
+1. Cleaner Capture Screen Title Should Show Main Step Only
+
+Current issue:
+
+Cleaner capture screen shows:
+
+Office 2 - Window
+
+This is too specific and can confuse the cleaner.
+
+The reference photo already explains exactly what they need to take a picture of.
+
+Required change:
+
+On the cleaner capture screen, show the Main Step title only.
+
+Example:
+
+Office 2
+
+Women’s Washroom
+
+Men’s Washroom
+
+Kitchen
+
+Do not show the photo task item in the big title.
+
+Current:
+
+Office 2 - Window
+
+Change to:
+
+Office 2
+
+For washroom:
+
+Current:
+
+Women’s Washroom - Sink
+
+Change to:
+
+Women’s Washroom
+
+The reference photo will guide what exact photo they need to take.
+
+2. Keep Step Counter The Same
+
+Do not change the step counter.
+
+Keep:
+
+Step 1
+
+Step 2
+
+Step 3
+
+11/11
+
+Progress bar
+
+Bottom dots
+
+Previous button
+
+Next button
+
+Only change the main display title.
+
+The cleaner should still know what step they are on.
+
+3. Optional Small Label For Internal Item
+
+Do not show item name as the main title.
+
+If needed, show it as a small muted label under the main title.
+
+Example:
+
+Office 2
+Reference photo task
+
+or
+
+Office 2
+Photo 3 of 8
+
+Do not show:
+
+Office 2 - Window
+
+as the main heading.
+
+Best default:
+
+Show only the main step title.
+
+4. Use Correct Data Mapping
+
+The capture screen likely has access to:
+
+photoTask.title = Office 2 - Window
+
+mainStep.title = Office 2
+
+Use:
+
+const displayTitle =
+  currentTask?.mainStep?.title ||
+  currentTask?.mainStepTitle ||
+  currentTask?.sectionTitle ||
+  currentTask?.roomName ||
+  currentTask?.title?.split(" - ")?.[0] ||
+  "Scheduled Note";
+
+Then render:
+
+<h1>{displayTitle}</h1>
+
+Do not render:
+
+<h1>{currentTask.title}</h1>
+
+for the main cleaner heading.
+
+5. Fix Submit Photo Needing Multiple Clicks
+
+Current issue:
+
+Cleaner selects or takes a photo.
+
+Cleaner clicks Submit Photo.
+
+The UI does not move forward right away.
+
+Cleaner has to click submit multiple times.
+
+Sometimes it eventually says submitted.
+
+This is not acceptable.
+
+Required behavior:
+
+Cleaner takes/selects photo.
+
+Cleaner taps Submit Photo once.
+
+Button enters loading state.
+
+Photo uploads.
+
+Submission saves.
+
+Current step marks completed.
+
+UI automatically moves to next incomplete step.
+
+If it is the last step, show Complete Checklist button.
+
+Cleaner should not need to tap Submit Photo multiple times.
+
+6. Prevent Double Submit
+
+Add submit lock.
+
+When Submit Photo is clicked:
+
+Disable the button immediately.
+
+Show loading text:
+
+Uploading...
+
+or
+
+Submitting...
+
+Do not allow repeated clicks while the request is pending.
+
+Example:
+
+const [isSubmittingPhoto, setIsSubmittingPhoto] = useState(false);
+
+async function handleSubmitPhoto() {
+  if (isSubmittingPhoto) return;
+  if (!selectedPhoto) return;
+
+  setIsSubmittingPhoto(true);
+
+  try {
+    await submitPhotoMutation.mutateAsync({
+      taskId: currentTask.id,
+      image: selectedPhoto,
+    });
+
+    await queryClient.invalidateQueries({
+      queryKey: ["employee-scheduled-note-submission", submissionId],
+    });
+
+    moveToNextStepOrFinish();
+  } catch (error) {
+    showFriendlyError(error);
+  } finally {
+    setIsSubmittingPhoto(false);
+  }
+}
+
+Button:
+
+<Button disabled={!selectedPhoto || isSubmittingPhoto}>
+  {isSubmittingPhoto ? "Submitting..." : "Submit Photo"}
+</Button>
+7. Auto Move To Next Step After Save
+
+After successful photo save:
+
+If there is another required step:
+
+Move automatically to the next step.
+
+If current step is last required step:
+
+Show Complete Checklist button.
+
+Do not make cleaner manually press Next after a successful submit unless the current app already intentionally does that.
+
+Expected flow:
+
+Take photo
+
+Submit Photo
+
+Next step loads automatically
+
+Take photo
+
+Submit Photo
+
+Next step loads automatically
+
+Last step
+
+Submit Photo
+
+Complete Checklist appears
+
+8. Fix Completion Error: Missing Required Steps
+
+Current error:
+
+400: {"message":"Not all required steps are complete","missing":7}
+
+This happens even after the cleaner submitted photos.
+
+Likely causes:
+
+The frontend is marking local state as complete, but backend has not saved all photo submissions yet.
+
+The completion endpoint is called before the final upload save finishes.
+
+The backend is checking different task IDs than the frontend submitted.
+
+Some uploaded photos are saved without the correct photoTaskId.
+
+The detail endpoint says 11/11 visually, but backend still sees missing records.
+
+Required fix:
+
+Make sure each submitted photo is saved with:
+
+submissionId
+
+mainStepId
+
+photoTaskId
+
+cleanerId
+
+submittedImageUrl
+
+submittedAt
+
+status: completed
+
+When calling Complete Checklist, verify the backend sees the saved photo submissions.
+
+Do not call complete checklist until the last photo submission mutation has fully completed.
+
+9. Complete Checklist Button Logic
+
+Only show or enable Complete Checklist when backend data confirms all required tasks are completed.
+
+Do not rely only on local UI dots.
+
+Use computed backend state:
+
+const requiredTasks = tasks.filter(task => task.isRequired);
+const completedRequiredTasks = requiredTasks.filter(task =>
+  task.submission?.submittedImageUrl || task.submittedImageUrl
+);
+
+const canComplete = completedRequiredTasks.length === requiredTasks.length;
+
+Button:
+
+<Button disabled={!canComplete || isCompleting}>
+  {isCompleting ? "Completing..." : "Complete Checklist"}
+</Button>
+
+If the cleaner is on the last step but backend has not refreshed yet, show:
+
+Finalizing upload...
+
+Then enable Complete Checklist after refetch confirms all tasks are complete.
+
+10. Backend Completion Check Must Match Photo Task Records
+
+Check the complete checklist endpoint.
+
+It should count required photo tasks from the same template/submission assignment being used in capture.
+
+Example concept:
+
+const requiredTasks = await db.photoTasks.findMany({
+  where: {
+    templateId: submission.templateId,
+    isRequired: true,
+  },
+});
+
+const completed = await db.photoSubmissions.findMany({
+  where: {
+    submissionId,
+    photoTaskId: { in: requiredTasks.map(t => t.id) },
+    submittedImageUrl: { not: null },
+  },
+});
+
+Then:
+
+if (completed.length < requiredTasks.length) {
+  return res.status(400).json({
+    message: "Not all required steps are complete",
+    missing: requiredTasks.length - completed.length,
+  });
+}
+
+Important:
+
+Do not count old sub-step IDs if the new system uses photoTaskId.
+
+Do not check sectionId only.
+
+Do not check mainStepId only.
+
+The completion check must use photoTaskId.
+
+11. Fix Task Mapping Between Frontend and Backend
+
+Each photo task on the capture screen must include the real backend ID.
+
+Required fields per task:
+
+{
+  id: string;
+  photoTaskId: string;
+  mainStepId: string;
+  mainStepTitle: string;
+  title: string;
+  referenceImageUrl: string;
+  isRequired: boolean;
+  submittedImageUrl?: string;
+  submittedAt?: string;
+}
+
+When submitting photo, send:
+
+{
+  submissionId,
+  photoTaskId: currentTask.photoTaskId || currentTask.id,
+  mainStepId: currentTask.mainStepId,
+  image
+}
+
+Do not send only the step index.
+
+Do not send only the title.
+
+Do not send only the main step ID.
+
+12. Fix Template Images Still Not Showing
+
+Previous issue still matters:
+
+Template list shows photo tasks count, but opening template may not show uploaded images.
+
+Make sure this is still fixed.
+
+Template detail must load:
+
+Main steps
+
+Photo tasks
+
+Reference images
+
+If template card says:
+
+1 main step · 7 photo tasks
+
+Opening it must show:
+
+Main step: Women’s Washroom
+
+7 compact photo thumbnails
+
+Do not let detail page say 0 photo tasks if the list says 7.
+
+This must be consistent.
+
+13. Admin Submission View Title Rule
+
+In admin submission review, group by Main Step.
+
+Show:
+
+Women’s Washroom
+
+Office 2
+
+Kitchen
+
+Inside each group, show compact photo thumbnails.
+
+Do not make the large heading:
+
+Office 2 - Window
+
+That can be used only as a small internal tooltip or detail label if needed.
+
+Admin group title:
+
+Office 2
+
+Photo thumbnail title can show:
+
+Window
+
+or
+
+Photo 3
+
+But do not make the whole report harder to read.
+
+14. Public Report Title Rule
+
+Public report should also group by Main Step.
+
+Show:
+
+Women’s Washroom
+
+Office 2
+
+Kitchen
+
+Inside each group, show final submitted photo thumbnails only.
+
+Do not show reference photos to clients.
+
+Do not show overly technical titles like:
+
+Office 2 - Window
+
+Use clean labels:
+
+Photo 1
+
+Photo 2
+
+Photo 3
+
+or simple item label if available.
+
+15. Friendly Error Message
+
+Do not show raw red developer error like:
+
+400: {"message":"Not all required steps are complete","missing":7}
+
+Show a friendly cleaner message:
+
+Some required photos are still missing. Please finish all required photos before completing the checklist.
+
+If possible, show:
+
+7 photos remaining
+
+But do not show raw JSON.
+
+16. Expected Cleaner Flow
+
+Cleaner opens Scheduled Note.
+
+Top shows:
+
+Office 2
+
+Step 11
+
+11/11
+
+Reference photo appears.
+
+Cleaner takes matching photo.
+
+Cleaner taps Submit Photo once.
+
+Button says:
+
+Submitting...
+
+Photo saves.
+
+If another step exists:
+
+Next step opens automatically.
+
+If this was the last step:
+
+Complete Checklist button appears.
+
+Cleaner taps Complete Checklist.
+
+Checklist completes successfully.
+
+No raw 400 error.
+
+No repeated submit clicks.
+
+No confusing title.
+
+17. Testing Checklist
+
+Test a template with 1 main step and 7 photo tasks.
+
+Open template detail.
+
+Confirm 7 images show.
+
+Assign to cleaner and schedule.
+
+Clock in as cleaner.
+
+Open Scheduled Note.
+
+Confirm title shows main step only.
+
+Submit first photo.
+
+Confirm one click submits.
+
+Confirm auto moves to next step.
+
+Submit all photos.
+
+Confirm Complete Checklist appears only when all are saved.
+
+Click Complete Checklist.
+
+Confirm no missing required steps error.
+
+Test slow upload.
+
+Confirm button disables while submitting.
+
+Test double click submit.
+
+Confirm it does not create duplicate submissions.
+
+Test last photo.
+
+Confirm complete button waits for backend save.
+
+Test admin submission.
+
+Confirm photos group under main step.
+
+Test public report.
+
+Confirm public report shows final submitted photos only.
+
+Test regular Field Notes.
+
+Confirm unchanged.
+
+Test Work Log.
+
+Confirm unchanged.
+
+Final instruction:
+
+Fix only the Scheduled Notes capture title, photo submit flow, required completion check, and template detail missing images if still broken.
+
+Do not touch anything else.
