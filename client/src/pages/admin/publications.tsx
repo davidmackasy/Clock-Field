@@ -677,6 +677,12 @@ export default function AdminPublications() {
             <Newspaper className="w-4 h-4" /> Publications
           </button>
           <button
+            onClick={() => setActiveTab("agreements")}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 transition-colors ${activeTab === "agreements" ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            data-testid="tab-agreements">
+            <FileSignature className="w-4 h-4" /> Agreements
+          </button>
+          <button
             onClick={() => setActiveTab("proposals")}
             className={`flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 transition-colors ${activeTab === "proposals" ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
             data-testid="tab-proposals">
@@ -685,11 +691,9 @@ export default function AdminPublications() {
         </div>
 
         <div className="pt-2">
-          {activeTab === "publications" ? (
-            <PublicationsSubPage />
-          ) : (
-            <AdminProposals />
-          )}
+          {activeTab === "publications" && <PublicationsSubPage />}
+          {activeTab === "agreements" && <AgreementsSubPage />}
+          {activeTab === "proposals" && <AdminProposals />}
         </div>
       </div>
     </div>

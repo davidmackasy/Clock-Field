@@ -10,13 +10,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubItem,
-  SidebarMenuSubButton,
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +21,7 @@ import {
   DollarSign, Building2,
   Settings, LogOut, Clock, Users2, BookOpen,
   CreditCard, Bell, ShieldAlert, ChevronRight, Package, Newspaper,
-  FileInput, FileText,
+  FileInput,
 } from "lucide-react";
 
 const navItems = [
@@ -42,10 +38,6 @@ const navItems = [
   { title: "Settings", url: "/admin/settings", icon: Settings },
 ];
 
-const publicationsSubItems = [
-  { title: "Publications", url: "/admin/publications" },
-  { title: "Proposals", url: "/admin/proposals" },
-];
 
 export function AdminSidebar() {
   const [location] = useLocation();
@@ -64,8 +56,8 @@ export function AdminSidebar() {
   const workLogPaths = ["/admin/work-log", "/admin/reports", "/admin/field-notes", "/admin/requests"];
   const isWorkLogActive = workLogPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
 
-  // Publications group is active for publications and proposals only
-  const publicationsPaths = ["/admin/publications", "/admin/proposals"];
+  // Publications is active for all publication-related paths
+  const publicationsPaths = ["/admin/publications", "/admin/proposals", "/admin/agreements"];
   const isPublicationsActive = publicationsPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
 
   return (
@@ -102,47 +94,16 @@ export function AdminSidebar() {
                 );
               })}
 
-              {/* ── Publications (collapsible with sub-items) ── */}
-              <Collapsible defaultOpen={isPublicationsActive} className="group/pub">
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      isActive={isPublicationsActive}
-                      data-testid="nav-publications-group"
-                    >
-                      <Newspaper className="w-4 h-4" />
-                      <span>Publications</span>
-                      <ChevronRight className="w-3.5 h-3.5 ml-auto transition-transform group-data-[state=open]/pub:rotate-90" />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {publicationsSubItems.map(sub => {
-                        const isSubActive = location === sub.url || location.startsWith(sub.url + "/");
-                        return (
-                          <SidebarMenuSubItem key={sub.url}>
-                            <SidebarMenuSubButton asChild isActive={isSubActive}>
-                              <Link href={sub.url} data-testid={`nav-${sub.title.toLowerCase()}`}>
-                                {sub.title}
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        );
-                      })}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
-
-              {/* ── Agreements (separate top-level item) ── */}
+              {/* ── Publications (single item — tabs inside page) ── */}
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
-                  isActive={location === "/admin/agreements" || location.startsWith("/admin/agreements/")}
+                  isActive={isPublicationsActive}
+                  data-testid="nav-publications"
                 >
-                  <Link href="/admin/agreements" data-testid="nav-agreements">
-                    <FileText className="w-4 h-4" />
-                    <span>Agreements</span>
+                  <Link href="/admin/publications">
+                    <Newspaper className="w-4 h-4" />
+                    <span>Publications</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
