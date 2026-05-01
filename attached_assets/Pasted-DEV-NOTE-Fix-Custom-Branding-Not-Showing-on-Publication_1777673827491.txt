@@ -1,0 +1,172 @@
+DEV NOTE: Fix Custom Branding Not Showing on Publication Public Page
+
+Issue
+The publication editor shows custom branding:
+
+Custom name:
+Mavens Sales LTD.
+
+Custom logo:
+Mavens Sales LTD. logo
+
+But the public publication page still shows the default company branding:
+
+MASTER COMMERCIAL CLEANING SERVICES
+
+This means the custom branding is saving in the editor UI but not being used on the public publication page.
+
+Objective
+Make custom branding apply only to Publications, without affecting company settings, reports, forms, field notes, or any other page.
+
+Do not break or affect:
+
+Company settings branding
+Work log reports
+Field notes
+Forms
+Quote requests
+Proposals
+Agreements
+Existing publication links
+Existing publication content
+Public page routing
+
+Required fix:
+
+Check saved publication branding fields
+
+Confirm the publication record saves:
+
+publicationBrandingMode:
+
+company
+custom
+
+customPublicationName
+
+customLogoUrl or customLogoPath
+
+customLogoAltText if available
+
+Fix public publication page branding logic
+
+On the public publication page only, update the header branding logic:
+
+If publicationBrandingMode === "custom":
+
+show customPublicationName
+show customLogoUrl
+
+Else:
+
+show company name
+show company logo from company settings
+
+Do not pull company branding if custom branding is selected.
+
+Make preview match public page
+
+The editor preview and the public publication link must use the same branding resolver.
+
+Create one helper function:
+
+getPublicationBranding(publication, companySettings)
+
+Return:
+
+{
+displayName,
+logoUrl,
+brandingMode
+}
+
+Use it in:
+
+editor preview
+public publication page
+generated publication preview modal if used
+Do not change global business branding
+
+Custom branding is publication-specific only.
+
+Example:
+A cleaning company can publish under:
+Mavens Sales LTD.
+
+But the main account should still stay:
+Master Commercial Cleaning Services
+
+Header layout fix
+
+The header should fit cleanly:
+
+Logo left
+Publication brand name right
+
+Rules:
+
+Logo max width: 40px
+Logo max height: 40px
+Brand name max width: 70%
+Text should not overflow
+Use ellipsis on mobile if too long
+
+CSS guidance:
+
+.logo {
+width: 40px;
+height: 40px;
+object-fit: contain;
+border-radius: 8px;
+}
+
+.brandName {
+font-size: 14px;
+font-weight: 600;
+letter-spacing: 0.03em;
+white-space: nowrap;
+overflow: hidden;
+text-overflow: ellipsis;
+}
+
+Save behavior
+
+When user selects “Use Custom Branding” and saves/publishes:
+
+persist custom branding fields on the publication record
+public link must immediately reflect custom branding
+no refresh issue
+no fallback to company branding unless custom fields are empty
+Fallback rules
+
+If custom branding is selected but custom name is missing:
+
+use company name
+
+If custom logo is missing:
+
+use company logo
+
+If both exist:
+
+use both custom values
+Testing checklist
+
+Test these cases:
+
+Company branding selected → public page shows company name/logo
+Custom branding selected → public page shows custom name/logo
+Custom name only → public page shows custom name + company logo
+Custom logo only → public page shows company name + custom logo
+Existing old publication → still works
+Mobile header → no overflow
+Desktop header → logo and name align properly
+
+Expected result
+The public publication page should show:
+
+Mavens Sales LTD.
+
+with the Mavens logo when custom branding is selected.
+
+This fix must be scoped only to Publications.

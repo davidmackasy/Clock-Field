@@ -202,24 +202,29 @@ export default function PublicPublication() {
 
       {/* ── Header ───────────────────────────────────────────────────────── */}
       <header className="border-b border-gray-100 bg-white">
-        <div className="max-w-3xl mx-auto px-4 py-5 flex items-center gap-4">
+        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3 overflow-hidden">
           {branding?.logoUrl ? (
             <img
               src={branding.logoUrl}
               alt={branding.name || ""}
-              className="h-10 w-10 object-contain rounded-lg border border-gray-100"
+              className="shrink-0 object-contain rounded-lg border border-gray-100"
+              style={{ width: 40, height: 40 }}
             />
           ) : (
-            <div className="h-10 w-10 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-lg shrink-0">
+            <div className="shrink-0 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-lg"
+              style={{ width: 40, height: 40 }}>
               {branding?.name?.[0] || "B"}
             </div>
           )}
-          <div>
+          <div className="min-w-0 flex-1">
             {branding?.name && (
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{branding.name}</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest whitespace-nowrap overflow-hidden text-ellipsis"
+                style={{ maxWidth: "70%" }}>
+                {branding.name}
+              </p>
             )}
             {pub.category && (
-              <p className="text-xs text-gray-400">{pub.category}</p>
+              <p className="text-xs text-gray-400 truncate">{pub.category}</p>
             )}
           </div>
         </div>

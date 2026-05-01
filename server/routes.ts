@@ -6964,7 +6964,7 @@ FINAL RULES:
   app.post("/api/publications", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
-      const { title, subtitle, slug: rawSlug, category, introText, seoTitle, seoDescription, coverImageData, helpfulVotingEnabled, contactCtaEnabled, publicationFormat } = req.body;
+      const { title, subtitle, slug: rawSlug, category, introText, seoTitle, seoDescription, coverImageData, helpfulVotingEnabled, contactCtaEnabled, publicationFormat, brandingSource, customBrandName, customBrandLogoUrl } = req.body;
       if (!title) return res.status(400).json({ message: "Title is required" });
 
       let slug = rawSlug ? slugify(rawSlug) : slugify(title);
@@ -6992,6 +6992,9 @@ FINAL RULES:
         helpfulVotingEnabled: helpfulVotingEnabled !== false,
         contactCtaEnabled: contactCtaEnabled !== false,
         publicationFormat: publicationFormat || "standard",
+        brandingSource: brandingSource === "custom" ? "custom" : "company",
+        customBrandName: brandingSource === "custom" ? (customBrandName || null) : null,
+        customBrandLogoUrl: brandingSource === "custom" ? (customBrandLogoUrl || null) : null,
         createdBy: user.id,
         publishedAt: null,
         createdAt: now,
@@ -7055,6 +7058,9 @@ FINAL RULES:
         ...(b.contactCtaText !== undefined && { contactCtaText: b.contactCtaText }),
         ...(b.contactCtaLink !== undefined && { contactCtaLink: b.contactCtaLink }),
         ...(b.publicationFormat !== undefined && { publicationFormat: b.publicationFormat }),
+        ...(b.brandingSource !== undefined && { brandingSource: b.brandingSource === "custom" ? "custom" : "company" }),
+        ...(b.customBrandName !== undefined && { customBrandName: b.brandingSource === "custom" ? (b.customBrandName || null) : null }),
+        ...(b.customBrandLogoUrl !== undefined && { customBrandLogoUrl: b.brandingSource === "custom" ? (b.customBrandLogoUrl || null) : null }),
       };
 
       if (b.status === "published" && !pub.publishedAt) {
