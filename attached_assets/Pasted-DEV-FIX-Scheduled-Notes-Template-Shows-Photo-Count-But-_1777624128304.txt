@@ -1,0 +1,535 @@
+DEV FIX: Scheduled Notes Template Shows Photo Count But Opens Empty
+
+Project: Clockfield
+Area: Work Log → Scheduled Notes → Templates
+Issue: Template card shows photo tasks, but template detail page shows 0 photo tasks and no uploaded images.
+
+Do not break or affect anything currently working.
+
+Do not touch regular Field Notes.
+
+Do not touch normal Work Log.
+
+Do not touch clock-in/out, attendance, payroll, clients, auth, Stripe, reports, or unrelated pages.
+
+Only fix Scheduled Notes template detail loading and display.
+
+Problem
+
+On the template list page, the card shows:
+
+daily
+1 main step
+7 photo tasks
+
+That means the system knows the template has data.
+
+But when opening the template, the detail page shows:
+
+daily
+1 main step
+0 photo tasks
+
+Inside the main step:
+
+Women’s Washroom
+0 photo tasks
+
+No uploaded images show.
+
+This means the creation flow is saving the photo tasks or counting them somewhere, but the template detail page is not loading or mapping those photo tasks correctly.
+
+Most likely causes:
+
+The template list endpoint includes photo task count.
+
+The template detail endpoint only returns main steps, but not nested photo tasks.
+
+The frontend detail page expects a different field name than the backend returns.
+
+The uploaded reference images are saved, but not attached to the main step response.
+
+The query cache is stale after saving the main step.
+
+The main step exists, but its photoTasks array is empty on the detail page.
+
+Required Fix
+
+When admin opens a template, the detail page must show:
+
+Correct main step count
+
+Correct photo task count
+
+Each main step
+
+All uploaded photo tasks inside that main step
+
+Small square thumbnails
+
+Photo task titles
+
+Edit/delete controls
+
+Click image preview
+
+Example:
+
+daily
+1 main step · 7 photo tasks
+
+Women’s Washroom
+7 photo tasks
+
+Grid:
+
+Photo 1
+Women’s Washroom - Sink
+
+Photo 2
+Women’s Washroom - Mirror
+
+Photo 3
+Women’s Washroom - Toilet
+
+Photo 4
+Women’s Washroom - Floor
+
+Photo 5
+Women’s Washroom - Soap Dispenser
+
+Photo 6
+Women’s Washroom - Photo 6
+
+Photo 7
+Women’s Washroom - Photo 7
+
+1. Check Template Detail API Response
+
+Find the endpoint used when opening one Scheduled Notes template.
+
+Likely route examples:
+
+GET /api/scheduled-notes/templates/:id
+GET /api/scheduled-field-notes/templates/:id
+GET /api/worklog/scheduled-notes/templates/:id
+
+Make sure this endpoint returns nested data like:
+
+{
+  id: string;
+  name: string;
+  templateType: "commercial" | "residential";
+  status: "active" | "inactive";
+  mainSteps: [
+    {
+      id: string;
+      title: string;
+      mainArea: string;
+      specificArea: string;
+      instruction?: string;
+      sortOrder: number;
+      photoTasks: [
+        {
+          id: string;
+          title: string;
+          itemName: string;
+          referenceImageUrl: string;
+          sortOrder: number;
+          isRequired: boolean;
+        }
+      ]
+    }
+  ]
+}
+
+If the endpoint only returns this:
+
+{
+  id: string;
+  name: string;
+  mainSteps: [
+    {
+      id: string;
+      title: string;
+      photoTasksCount: 7
+    }
+  ]
+}
+
+That is not enough.
+
+Fix it to include the actual photo task records.
+
+2. Backend Must Include Photo Tasks
+
+Update the backend query for the single template detail endpoint.
+
+Use the existing ORM style in the app.
+
+Concept:
+
+const template = await db.scheduledNoteTemplate.findFirst({
+  where: {
+    id: templateId,
+    companyId: currentUser.companyId,
+  },
+  include: {
+    mainSteps: {
+      orderBy: { sortOrder: "asc" },
+      include: {
+        photoTasks: {
+          orderBy: { sortOrder: "asc" },
+        },
+      },
+    },
+  },
+});
+
+If using Drizzle or raw SQL, join:
+
+scheduled_note_templates
+
+scheduled_note_main_steps
+
+scheduled_note_photo_tasks
+
+Then group the result into:
+
+template.mainSteps[].photoTasks[]
+
+Important:
+
+Do not create new tables if data is already being saved.
+
+Do not rename tables unless absolutely required.
+
+Just make sure the detail endpoint returns the same saved photo tasks that the list count is using.
+
+3. Check Field Name Mismatch
+
+The frontend may expect:
+
+mainStep.photoTasks
+
+But backend may return:
+
+mainStep.tasks
+mainStep.steps
+mainStep.subSteps
+mainStep.photos
+mainStep.photo_tasks
+
+Fix by normalizing the response in one place.
+
+Frontend safe mapper example:
+
+const normalizedMainSteps = (template?.mainSteps || template?.sections || []).map((step: any) => ({
+  ...step,
+  photoTasks:
+    step.photoTasks ||
+    step.tasks ||
+    step.steps ||
+    step.subSteps ||
+    step.photos ||
+    [],
+}));
+
+Preferred fix:
+
+Make backend return one consistent field:
+
+photoTasks
+
+Then update frontend to read:
+
+mainStep.photoTasks
+
+Do not keep multiple random field names long term.
+
+4. Fix Template Header Count
+
+The template detail header should not say 0 photo tasks when photo tasks exist.
+
+Calculate from nested photo tasks:
+
+const mainStepCount = template?.mainSteps?.length || 0;
+
+const photoTaskCount =
+  template?.mainSteps?.reduce((total, mainStep) => {
+    return total + (mainStep.photoTasks?.length || 0);
+  }, 0) || 0;
+
+Use this for the header:
+
+{mainStepCount} main step{mainStepCount === 1 ? "" : "s"} · {photoTaskCount} photo task{photoTaskCount === 1 ? "" : "s"}
+
+Also use the same count inside each main step:
+
+{mainStep.photoTasks?.length || 0} photo tasks
+5. Fix Save Main Step Flow
+
+When the admin creates a main step with multiple images:
+
+The save action must create:
+
+1 main step record
+
+7 photo task records if 7 images were uploaded
+
+Each photo task must have:
+
+mainStepId
+
+templateId
+
+title
+
+itemName if available
+
+referenceImageUrl
+
+sortOrder
+
+isRequired
+
+createdAt
+
+If only the main step is created but the photo task creation fails, show an error and do not pretend the template has saved correctly.
+
+Use a transaction if possible.
+
+Concept:
+
+await db.transaction(async (tx) => {
+  const mainStep = await tx.createMainStep(...);
+
+  for (const [index, photo] of uploadedPhotos.entries()) {
+    await tx.createPhotoTask({
+      templateId,
+      mainStepId: mainStep.id,
+      title: generatedTitles[index],
+      itemName: selectedItems[index] || `Photo ${index + 1}`,
+      referenceImageUrl: photo.url,
+      sortOrder: index,
+      isRequired: true,
+    });
+  }
+});
+
+After save succeeds, invalidate/refetch:
+
+queryClient.invalidateQueries({ queryKey: ["scheduled-note-template", templateId] });
+queryClient.invalidateQueries({ queryKey: ["scheduled-note-templates"] });
+
+This prevents stale UI where the list count updates but the detail page stays empty.
+
+6. Compact Grid Display Inside Template Detail
+
+Once the data loads correctly, display photo tasks in compact grid.
+
+Do not show big images.
+
+Inside each main step:
+
+<div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
+  {photoTasks.map((task) => (
+    <PhotoTaskCard key={task.id} task={task} />
+  ))}
+</div>
+
+Each card:
+
+Small square thumbnail
+
+Task number badge
+
+Task title
+
+Required dot
+
+Edit/delete icons
+
+Example card styling:
+
+<div className="rounded-lg border bg-white p-1.5">
+  <div className="relative aspect-square overflow-hidden rounded-md bg-muted">
+    <img
+      src={task.referenceImageUrl}
+      alt={task.title}
+      className="h-full w-full object-cover"
+    />
+    <span className="absolute left-1 top-1 rounded-full bg-white px-1.5 text-[10px]">
+      {index + 1}
+    </span>
+  </div>
+
+  <p className="mt-1 truncate text-[11px] font-medium">
+    {task.title}
+  </p>
+</div>
+
+Do not use 9:16 in this grid.
+
+9:16 should only show in the preview modal when the image is clicked.
+
+7. Empty State Should Be Accurate
+
+Only show “0 photo tasks” if the main step truly has no photo tasks.
+
+If data is still loading, show:
+
+Loading photo tasks...
+
+Do not show 0 while loading.
+
+Use:
+
+if (isLoading) {
+  return <TemplateDetailSkeleton />;
+}
+
+Then show real count after data loads.
+
+If the endpoint fails, show:
+
+Could not load template details.
+
+Do not silently show empty data.
+
+8. Add Debug Logging During Development Only
+
+Temporarily log the single template response during development:
+
+console.log("Scheduled template detail response", template);
+
+Check if photo tasks are present in the browser console.
+
+Remove this log before production.
+
+What to verify:
+
+Does template.mainSteps exist?
+
+Does mainSteps[0].photoTasks exist?
+
+Does photoTasks length equal 7?
+
+Does each photo task have referenceImageUrl?
+
+If the data is missing from the response, fix backend.
+
+If the data exists but is not showing, fix frontend mapping.
+
+9. Public/Submission Should Not Be Changed For This Fix
+
+This specific fix is only for:
+
+Template detail page showing uploaded main step photos properly.
+
+Do not touch:
+
+Public report
+
+Submission capture
+
+Cleaner flow
+
+Clock-out logic
+
+Assignment logic
+
+Regular Field Notes
+
+Only touch them if the same missing photoTasks field is reused and directly causing the same bug.
+
+10. Expected Result
+
+After creating template “daily”:
+
+Template list shows:
+
+daily
+1 main step · 7 photo tasks
+
+When opening daily:
+
+Header shows:
+
+daily
+1 main step · 7 photo tasks
+
+Main step card shows:
+
+Women’s Washroom
+7 photo tasks
+
+Inside the expanded main step:
+
+7 compact square thumbnails appear in a grid.
+
+Each thumbnail shows the uploaded reference image.
+
+Clicking any thumbnail opens full image preview.
+
+No giant images.
+
+No empty main step.
+
+No false 0 photo task count.
+
+No unrelated feature is changed.
+
+11. Testing Checklist
+
+Test with existing template that already says 7 photo tasks.
+
+Open it.
+
+Confirm 7 images display.
+
+Refresh the page.
+
+Confirm 7 images still display.
+
+Go back to template list.
+
+Open again.
+
+Confirm images still display.
+
+Create a new template.
+
+Add one main step with 3 uploaded photos.
+
+Confirm list says 3 photo tasks.
+
+Open detail.
+
+Confirm 3 photo tasks display.
+
+Create one main step with 8 photos.
+
+Confirm all 8 display.
+
+Try more than 8 photos.
+
+Confirm it blocks or warns correctly.
+
+Confirm old templates still open.
+
+Confirm template with 0 photo tasks shows accurate empty state.
+
+Confirm regular Field Notes still work.
+
+Confirm Scheduled Notes assignments still work.
+
+Confirm cleaner capture flow still works.
+
+Final instruction:
+
+Fix the mismatch between the template list count and the template detail display.
+
+The uploaded reference images must show inside the opened template as compact grid photo tasks.
+
+Do not break or touch anything else.

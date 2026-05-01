@@ -8927,15 +8927,14 @@ Return ONLY valid JSON:
       const user = req.user as any;
       const template = await storage.getScheduledFieldNoteTemplate(req.params.id);
       if (!template || template.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      const [sections, steps, assignments] = await Promise.all([
+      const [sections, assignments] = await Promise.all([
         storage.getScheduledFieldNoteSections(template.id),
-        storage.getScheduledFieldNoteSteps(template.id),
         storage.getScheduledFieldNoteAssignmentsByTemplate(template.id),
       ]);
-      // Attach steps to sections
-      const sectionsWithSteps = sections.map(s => ({
-        ...s, steps: steps.filter(step => step.sectionId === s.id),
-      }));
+      // Fetch steps per section directly (most reliable — avoids templateId mismatch issues)
+      const sectionsWithSteps = await Promise.all(sections.map(async s => ({
+        ...s, steps: await storage.getScheduledFieldNoteStepsBySection(s.id),
+      })));
       res.json({ ...template, sections: sectionsWithSteps, assignments });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });

@@ -284,14 +284,17 @@ function AddMainStepModal({ open, onClose, template, onSaved }: {
     if (!isValid) return;
     setSaving(true);
     try {
-      // Create section (Main Step)
-      const section: any = await apiRequest("POST", `/api/admin/scheduled-field-notes/templates/${template.id}/sections`, {
+      // Create section (Main Step) — must parse .json() since apiRequest returns Response
+      const sectionRes = await apiRequest("POST", `/api/admin/scheduled-field-notes/templates/${template.id}/sections`, {
         title: title.trim(),
         description: instruction.trim(),
       });
+      const section = await sectionRes.json();
+      if (!section?.id) throw new Error("Section creation did not return a valid ID");
+
       // Create one step (Photo Task) per photo
       for (let i = 0; i < photos.length; i++) {
-        await apiRequest("POST", `/api/admin/scheduled-field-notes/sections/${section.id}/steps`, {
+        const stepRes = await apiRequest("POST", `/api/admin/scheduled-field-notes/sections/${section.id}/steps`, {
           title: photos[i].label,
           description: instruction.trim(),
           referenceImageUrl: photos[i].src,
@@ -304,6 +307,7 @@ function AddMainStepModal({ open, onClose, template, onSaved }: {
           templateId: template.id,
           sectionId: section.id,
         });
+        await stepRes.json(); // consume / validate
       }
       onSaved();
       onClose();
@@ -618,23 +622,23 @@ function TemplateBuilder({ template, onBack }: { template: FullTemplate; onBack:
   };
 
   const updateTemplate = useMutation({
-    mutationFn: (data: any) => apiRequest("PATCH", `/api/admin/scheduled-field-notes/templates/${template.id}`, data),
+    mutationFn: (data: any) => apiRequest("PATCH", `/api/admin/scheduled-field-notes/templates/${template.id}`, data).then(r => r.json()),
     onSuccess: () => { refetchTemplate(); toast({ title: "Template updated" }); setEditingTemplateInfo(false); },
   });
   const updateSection = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => apiRequest("PATCH", `/api/admin/scheduled-field-notes/sections/${id}`, data),
+    mutationFn: ({ id, data }: { id: string; data: any }) => apiRequest("PATCH", `/api/admin/scheduled-field-notes/sections/${id}`, data).then(r => r.json()),
     onSuccess: () => refetchTemplate(),
   });
   const deleteSection = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", `/api/admin/scheduled-field-notes/sections/${id}`),
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/admin/scheduled-field-notes/sections/${id}`).then(r => r.json()),
     onSuccess: () => refetchTemplate(),
   });
   const updateStep = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => apiRequest("PATCH", `/api/admin/scheduled-field-notes/steps/${id}`, data),
+    mutationFn: ({ id, data }: { id: string; data: any }) => apiRequest("PATCH", `/api/admin/scheduled-field-notes/steps/${id}`, data).then(r => r.json()),
     onSuccess: () => refetchTemplate(),
   });
   const deleteStep = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", `/api/admin/scheduled-field-notes/steps/${id}`),
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/admin/scheduled-field-notes/steps/${id}`).then(r => r.json()),
     onSuccess: () => refetchTemplate(),
   });
 
@@ -801,20 +805,20 @@ function TemplatesTab() {
   });
 
   const createTemplate = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/admin/scheduled-field-notes/templates", data),
+    mutationFn: (data: any) => apiRequest("POST", "/api/admin/scheduled-field-notes/templates", data).then(r => r.json()),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/scheduled-field-notes/templates"] });
       setShowCreateDialog(false); setNewName(""); setNewType("commercial");
-      setSelectedTemplateId(data.id);
+      if (data?.id) setSelectedTemplateId(data.id);
       toast({ title: "Template created" });
     },
   });
   const deleteTemplate = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", `/api/admin/scheduled-field-notes/templates/${id}`),
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/admin/scheduled-field-notes/templates/${id}`).then(r => r.json()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/scheduled-field-notes/templates"] }); toast({ title: "Deleted" }); },
   });
   const duplicateTemplate = useMutation({
-    mutationFn: (id: string) => apiRequest("POST", `/api/admin/scheduled-field-notes/templates/${id}/duplicate`, {}),
+    mutationFn: (id: string) => apiRequest("POST", `/api/admin/scheduled-field-notes/templates/${id}/duplicate`, {}).then(r => r.json()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/scheduled-field-notes/templates"] }); toast({ title: "Duplicated" }); },
   });
 
@@ -946,7 +950,7 @@ function AssignmentsTab() {
   const activeTemplates = (templates || []).filter(t => t.status === "active");
 
   const createAssignment = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/admin/scheduled-field-notes/assignments", data),
+    mutationFn: (data: any) => apiRequest("POST", "/api/admin/scheduled-field-notes/assignments", data).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/scheduled-field-notes/assignments"] });
       setShowCreate(false); setForm({ templateId: "", cleanerId: "", clientId: "", scheduleId: "" });
@@ -954,11 +958,11 @@ function AssignmentsTab() {
     },
   });
   const updateAssignment = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => apiRequest("PATCH", `/api/admin/scheduled-field-notes/assignments/${id}`, data),
+    mutationFn: ({ id, data }: { id: string; data: any }) => apiRequest("PATCH", `/api/admin/scheduled-field-notes/assignments/${id}`, data).then(r => r.json()),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/admin/scheduled-field-notes/assignments"] }),
   });
   const deleteAssignment = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", `/api/admin/scheduled-field-notes/assignments/${id}`),
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/admin/scheduled-field-notes/assignments/${id}`).then(r => r.json()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/scheduled-field-notes/assignments"] }); toast({ title: "Removed" }); },
   });
 
@@ -1309,15 +1313,15 @@ function SubmissionDetail({ submissionId, onBack }: { submissionId: string; onBa
     queryFn: () => fetch(`/api/admin/scheduled-field-notes/submissions/${submissionId}`, { credentials: "include" }).then(r => r.json()),
   });
   const generateLink = useMutation({
-    mutationFn: () => apiRequest("POST", `/api/admin/scheduled-field-notes/submissions/${submissionId}/generate-link`, {}),
+    mutationFn: () => apiRequest("POST", `/api/admin/scheduled-field-notes/submissions/${submissionId}/generate-link`, {}).then(r => r.json()),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/scheduled-field-notes/submissions", submissionId] });
-      navigator.clipboard.writeText(`${window.location.origin}${data.url}`).catch(() => {});
+      if (data?.url) navigator.clipboard.writeText(`${window.location.origin}${data.url}`).catch(() => {});
       toast({ title: "Public link generated & copied" });
     },
   });
   const disableLink = useMutation({
-    mutationFn: () => apiRequest("PATCH", `/api/admin/scheduled-field-notes/submissions/${submissionId}/disable-link`, {}),
+    mutationFn: () => apiRequest("PATCH", `/api/admin/scheduled-field-notes/submissions/${submissionId}/disable-link`, {}).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/scheduled-field-notes/submissions", submissionId] });
       toast({ title: "Public link disabled" });
@@ -1423,17 +1427,17 @@ function ReportsTab({ onViewSubmission }: { onViewSubmission: (id: string) => vo
   const { data: submissions, isLoading } = useQuery<Submission[]>({ queryKey: ["/api/admin/scheduled-field-notes/submissions"] });
 
   const generateLink = useMutation({
-    mutationFn: (id: string) => { setGeneratingId(id); return apiRequest("POST", `/api/admin/scheduled-field-notes/submissions/${id}/generate-link`, {}); },
+    mutationFn: (id: string) => { setGeneratingId(id); return apiRequest("POST", `/api/admin/scheduled-field-notes/submissions/${id}/generate-link`, {}).then(r => r.json()); },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/scheduled-field-notes/submissions"] });
-      navigator.clipboard.writeText(`${window.location.origin}${data.url}`).catch(() => {});
+      if (data?.url) navigator.clipboard.writeText(`${window.location.origin}${data.url}`).catch(() => {});
       toast({ title: "Link generated & copied" });
       setGeneratingId(null);
     },
     onError: () => setGeneratingId(null),
   });
   const disableLink = useMutation({
-    mutationFn: (id: string) => { setDisablingId(id); return apiRequest("PATCH", `/api/admin/scheduled-field-notes/submissions/${id}/disable-link`, {}); },
+    mutationFn: (id: string) => { setDisablingId(id); return apiRequest("PATCH", `/api/admin/scheduled-field-notes/submissions/${id}/disable-link`, {}).then(r => r.json()); },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/scheduled-field-notes/submissions"] });
       toast({ title: "Link disabled" });
