@@ -1,0 +1,178 @@
+DEV NOTE: Sync Mobile “More” Menu with Desktop Navigation
+
+Objective
+Make mobile menu match desktop sidebar exactly. Same structure. Same naming. Same order.
+
+Do not break:
+
+Routing
+Existing pages
+Permissions
+Navigation logic
+Desktop UI
+
+Only update mobile menu UI + mapping.
+
+Source of Truth (IMPORTANT)
+
+Desktop sidebar becomes the source of truth.
+
+Current desktop order:
+
+Dashboard
+Employees
+Schedule
+Attendance
+Payroll
+Clients
+Management
+Work Log
+Forms
+Supplies
+Settings
+Publications
+
+Account:
+
+Subscription
+Messages
+Fix Mobile Menu Structure
+
+REPLACE current mobile “More” list with:
+
+Main Section:
+
+Dashboard
+Employees
+Schedule
+Attendance
+Payroll
+Clients
+Management
+Work Log
+Forms (NOT “Quote Forms”)
+Supplies
+Settings
+Publications
+
+Account Section (separate visually):
+
+Subscription
+Messages
+Remove Incorrect / Duplicate Items
+
+REMOVE:
+
+“Quote Forms” (rename to Forms)
+“Proposals & Quotes” (this now lives inside Publications)
+Any duplicate routes
+Naming Consistency (CRITICAL)
+
+Use EXACT same labels as desktop:
+
+Forms → NOT “Quote Forms”
+Publications → NOT split
+Work Log → keep same
+Management → keep same
+
+No variations allowed
+
+Order Must Match Desktop
+
+Do NOT rearrange based on assumptions
+Mobile order must mirror desktop 1:1
+
+UI Layout (Mobile)
+
+Update bottom sheet:
+
+Section 1:
+Navigation
+
+Section 2:
+Account
+
+Design:
+
+[Navigation]
+Dashboard
+Employees
+Schedule
+Attendance
+Payroll
+Clients
+Management
+Work Log
+Forms
+Supplies
+Settings
+Publications
+
+[Account]
+Subscription
+Messages
+
+Interaction
+
+Each item:
+
+Full row clickable
+Right arrow icon
+Close modal after click
+Navigate normally
+Highlight Active Page (IMPORTANT)
+
+If user is on:
+
+Schedule → highlight Schedule
+Forms → highlight Forms
+
+Use:
+
+subtle background
+or bold text
+Optional UX Upgrade (DO THIS IF EASY)
+
+Add top quick access (above “More” list):
+
+Show:
+
+Dashboard
+Schedule
+Work Log
+
+Then rest under “More”
+
+Code Approach (SAFE)
+
+DO NOT hardcode separate lists
+
+Create shared config:
+
+navItems = [
+{ name: "Dashboard", route: "/dashboard" },
+...
+]
+
+Use same config for:
+
+Desktop sidebar
+Mobile menu
+
+This prevents future mismatch
+
+Testing Checklist
+All items match desktop
+No duplicates
+Navigation works
+Modal closes on click
+Active state works
+No broken routes
+
+End Result
+
+Before:
+Confusing, duplicated, inconsistent mobile nav
+
+After:
+Clean, consistent, predictable navigation across all devices

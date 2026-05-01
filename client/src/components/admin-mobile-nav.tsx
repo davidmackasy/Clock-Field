@@ -12,7 +12,7 @@ import {
   LayoutDashboard, Users, Calendar, ClipboardList,
   DollarSign, Building2, Settings,
   LogOut, MoreHorizontal, Clock, ChevronRight, Users2, BookOpen,
-  CreditCard, Bell, ShieldAlert, Package, Newspaper, FileInput, FileText,
+  CreditCard, Bell, ShieldAlert, Package, Newspaper, FileInput,
 } from "lucide-react";
 
 const primaryTabs = [
@@ -22,44 +22,58 @@ const primaryTabs = [
   { label: "Attendance", href: "/admin/attendance", icon: ClipboardList },
 ];
 
-const moreItems = [
-  { label: "Payroll", href: "/admin/payroll", icon: DollarSign },
-  { label: "Clients", href: "/admin/clients", icon: Building2 },
-  { label: "Management", href: "/admin/management", icon: Users2 },
-  { label: "Work Log", href: "/admin/work-log", icon: BookOpen },
-  { label: "Quote Forms", href: "/admin/quote-forms", icon: FileInput },
-  { label: "Proposals & Quotes", href: "/admin/proposals", icon: FileText },
-  { label: "Supplies", href: "/admin/supplies", icon: Package },
+const navMoreItems = [
+  { label: "Payroll",      href: "/admin/payroll",      icon: DollarSign },
+  { label: "Clients",      href: "/admin/clients",      icon: Building2 },
+  { label: "Management",   href: "/admin/management",   icon: Users2 },
+  { label: "Work Log",     href: "/admin/work-log",     icon: BookOpen },
+  { label: "Forms",        href: "/admin/quote-forms",  icon: FileInput },
+  { label: "Supplies",     href: "/admin/supplies",     icon: Package },
+  { label: "Settings",     href: "/admin/settings",     icon: Settings },
   { label: "Publications", href: "/admin/publications", icon: Newspaper },
-  { label: "Settings", href: "/admin/settings", icon: Settings },
-  { label: "Subscription", href: "/admin/subscription", icon: CreditCard },
-  { label: "Messages", href: "/admin/platform-messages", icon: Bell },
 ];
 
-const workLogPaths = ["/admin/work-log", "/admin/reports", "/admin/field-notes", "/admin/requests"];
+const accountMoreItems = [
+  { label: "Subscription", href: "/admin/subscription",       icon: CreditCard },
+  { label: "Messages",     href: "/admin/platform-messages",  icon: Bell },
+];
+
+const workLogPaths       = ["/admin/work-log", "/admin/reports", "/admin/field-notes", "/admin/requests"];
+const publicationsPaths  = ["/admin/publications", "/admin/proposals", "/admin/agreements"];
 
 const pageTitles: Record<string, string> = {
-  "/admin": "Dashboard",
-  "/admin/employees": "Employees",
-  "/admin/schedule": "Schedule",
-  "/admin/attendance": "Attendance",
-  "/admin/payroll": "Payroll",
-  "/admin/timesheets": "Timesheets",
-  "/admin/clients": "Clients",
-  "/admin/management": "Management",
-  "/admin/admins": "Management",
-  "/admin/requests": "Work Log",
-  "/admin/reports": "Work Log",
-  "/admin/work-log": "Work Log",
-  "/admin/field-notes": "Work Log",
-  "/admin/quote-forms": "Quote Forms",
-  "/admin/proposals": "Proposals & Quotes",
-  "/admin/supplies": "Supplies",
-  "/admin/publications": "Publications",
-  "/admin/settings": "Settings",
-  "/admin/subscription": "Subscription",
-  "/admin/platform-messages": "Messages",
+  "/admin":                    "Dashboard",
+  "/admin/employees":          "Employees",
+  "/admin/schedule":           "Schedule",
+  "/admin/attendance":         "Attendance",
+  "/admin/payroll":            "Payroll",
+  "/admin/timesheets":         "Timesheets",
+  "/admin/clients":            "Clients",
+  "/admin/management":         "Management",
+  "/admin/admins":             "Management",
+  "/admin/requests":           "Work Log",
+  "/admin/reports":            "Work Log",
+  "/admin/work-log":           "Work Log",
+  "/admin/field-notes":        "Work Log",
+  "/admin/quote-forms":        "Forms",
+  "/admin/proposals":          "Publications",
+  "/admin/agreements":         "Publications",
+  "/admin/supplies":           "Supplies",
+  "/admin/publications":       "Publications",
+  "/admin/settings":           "Settings",
+  "/admin/subscription":       "Subscription",
+  "/admin/platform-messages":  "Messages",
 };
+
+function isItemActive(href: string, location: string): boolean {
+  if (href === "/admin/work-log") {
+    return workLogPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
+  }
+  if (href === "/admin/publications") {
+    return publicationsPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
+  }
+  return location === href || location.startsWith(href + "/");
+}
 
 export function AdminMobileNav() {
   const [location, navigate] = useLocation();
@@ -84,18 +98,44 @@ export function AdminMobileNav() {
   };
   const pageTitle = getPageTitle();
 
-  const isMoreActive = moreItems.some(
-    (item) => {
-      if (item.href === "/admin/work-log") {
-        return workLogPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
-      }
-      return location === item.href || location.startsWith(item.href + "/");
-    }
-  );
+  const allMoreItems = [...navMoreItems, ...accountMoreItems];
+  const isMoreActive = allMoreItems.some(item => isItemActive(item.href, location));
 
   const handleMoreNav = (href: string) => {
     setMoreOpen(false);
     navigate(href);
+  };
+
+  const renderMoreRow = (item: typeof navMoreItems[0]) => {
+    const active = isItemActive(item.href, location);
+    const isMessages = item.href === "/admin/platform-messages";
+    return (
+      <button
+        key={item.href}
+        onClick={() => handleMoreNav(item.href)}
+        className={cn(
+          "w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-colors",
+          active ? "bg-primary/10 text-primary" : "hover:bg-muted text-foreground"
+        )}
+        data-testid={`mobile-more-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+      >
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <item.icon className="w-5 h-5" />
+            {isMessages && unreadMessages > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-primary rounded-full" />
+            )}
+          </div>
+          <span className="font-medium text-sm">{item.label}</span>
+          {isMessages && unreadMessages > 0 && (
+            <Badge className="bg-primary text-primary-foreground text-[10px] h-4 px-1 rounded-full">
+              {unreadMessages}
+            </Badge>
+          )}
+        </div>
+        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+      </button>
+    );
   };
 
   return (
@@ -229,43 +269,22 @@ export function AdminMobileNav() {
       {/* More sheet */}
       <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
         <SheetContent side="bottom" className="md:hidden rounded-t-2xl pb-8" data-testid="mobile-more-sheet">
-          <SheetHeader className="text-left mb-4">
+          <SheetHeader className="text-left mb-3">
             <SheetTitle>More</SheetTitle>
           </SheetHeader>
-          <div className="space-y-1">
-            {moreItems.map((item) => {
-              const isActive = item.href === "/admin/work-log"
-                ? workLogPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"))
-                : location === item.href || location.startsWith(item.href + "/");
-              const isMessages = item.href === "/admin/platform-messages";
-              return (
-                <button
-                  key={item.href}
-                  onClick={() => handleMoreNav(item.href)}
-                  className={cn(
-                    "w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-colors",
-                    isActive ? "bg-primary/10 text-primary" : "hover:bg-muted text-foreground"
-                  )}
-                  data-testid={`mobile-more-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <item.icon className="w-5 h-5" />
-                      {isMessages && unreadMessages > 0 && (
-                        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-primary rounded-full" />
-                      )}
-                    </div>
-                    <span className="font-medium text-sm">{item.label}</span>
-                    {isMessages && unreadMessages > 0 && (
-                      <Badge className="bg-primary text-primary-foreground text-[10px] h-4 px-1 rounded-full">
-                        {unreadMessages}
-                      </Badge>
-                    )}
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                </button>
-              );
-            })}
+
+          {/* Navigation section */}
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 mb-1">Navigation</p>
+          <div className="space-y-0.5 mb-3">
+            {navMoreItems.map(renderMoreRow)}
+          </div>
+
+          <Separator className="mb-3" />
+
+          {/* Account section */}
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 mb-1">Account</p>
+          <div className="space-y-0.5">
+            {accountMoreItems.map(renderMoreRow)}
           </div>
         </SheetContent>
       </Sheet>
