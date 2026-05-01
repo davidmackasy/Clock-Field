@@ -1043,6 +1043,9 @@ export const publications = pgTable("publications", {
   contactCtaLink: text("contact_cta_link"),
   createdBy: varchar("created_by").notNull(),
   publishedAt: text("published_at"),
+  brandingSource: text("branding_source").notNull().default("company"),
+  customBrandName: text("custom_brand_name"),
+  customBrandLogoUrl: text("custom_brand_logo_url"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 });

@@ -172,6 +172,8 @@ export default function PublicPublication() {
 
   const pub = data;
   const company = data.company;
+  // Use branding (custom or company fallback) for the header logo/name
+  const branding = data.branding || data.company;
   const contactInfo = data.contactInfo;
   const sections: any[] = data.sections || [];
   const pricing: any[] = data.pricing || [];
@@ -194,27 +196,27 @@ export default function PublicPublication() {
   return (
     <div className="min-h-screen bg-white">
       {(() => {
-        document.title = `${pub.seoTitle || pub.title} | ${company?.name || "Publication"}`;
+        document.title = `${pub.seoTitle || pub.title} | ${branding?.name || company?.name || "Publication"}`;
         return null;
       })()}
 
       {/* ── Header ───────────────────────────────────────────────────────── */}
       <header className="border-b border-gray-100 bg-white">
         <div className="max-w-3xl mx-auto px-4 py-5 flex items-center gap-4">
-          {company?.logoUrl ? (
+          {branding?.logoUrl ? (
             <img
-              src={company.logoUrl}
-              alt={company.name}
+              src={branding.logoUrl}
+              alt={branding.name || ""}
               className="h-10 w-10 object-contain rounded-lg border border-gray-100"
             />
           ) : (
             <div className="h-10 w-10 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-lg shrink-0">
-              {company?.name?.[0] || "B"}
+              {branding?.name?.[0] || "B"}
             </div>
           )}
           <div>
-            {company?.name && (
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{company.name}</p>
+            {branding?.name && (
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{branding.name}</p>
             )}
             {pub.category && (
               <p className="text-xs text-gray-400">{pub.category}</p>
@@ -250,7 +252,7 @@ export default function PublicPublication() {
             <p className="text-lg text-gray-500 mb-3" data-testid="text-pub-subtitle">{pub.subtitle}</p>
           )}
           <div className="flex items-center gap-3 text-xs text-gray-400 flex-wrap">
-            {company?.name && <span>{company.name}</span>}
+            {branding?.name && <span>{branding.name}</span>}
             {publishedDate && (
               <>
                 <span>·</span>

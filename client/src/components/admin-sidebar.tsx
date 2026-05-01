@@ -10,9 +10,13 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -34,10 +38,15 @@ const navItems = [
   { title: "Management", url: "/admin/management", icon: Users2 },
   { title: "Work Log", url: "/admin/work-log", icon: BookOpen },
   { title: "Forms / Requests", url: "/admin/quote-forms", icon: FileInput },
-  { title: "Proposals & Quotes", url: "/admin/proposals", icon: FileText },
   { title: "Supplies", url: "/admin/supplies", icon: Package },
-  { title: "Publications", url: "/admin/publications", icon: Newspaper },
   { title: "Settings", url: "/admin/settings", icon: Settings },
+];
+
+const publicationsSubItems = [
+  { title: "Publications", url: "/admin/publications" },
+  { title: "Agreements", url: "/admin/agreements" },
+  { title: "Proposals", url: "/admin/proposals" },
+  { title: "Quotes", url: "/admin/quote-forms" },
 ];
 
 export function AdminSidebar() {
@@ -56,6 +65,10 @@ export function AdminSidebar() {
   // Work Log tab is active for work-log, reports, field-notes, requests sub-paths
   const workLogPaths = ["/admin/work-log", "/admin/reports", "/admin/field-notes", "/admin/requests"];
   const isWorkLogActive = workLogPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
+
+  // Publications group is active for publications, agreements, proposals, quote-forms
+  const publicationsPaths = ["/admin/publications", "/admin/agreements", "/admin/proposals", "/admin/quote-forms"];
+  const isPublicationsActive = publicationsPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
 
   return (
     <Sidebar>
@@ -78,9 +91,7 @@ export function AdminSidebar() {
               {navItems.map((item) => {
                 const isActive = item.url === "/admin/work-log"
                   ? isWorkLogActive
-                  : item.url === "/admin/publications"
-                    ? (location === "/admin/publications" || location.startsWith("/admin/publications/") || location.startsWith("/admin/agreements"))
-                    : location === item.url || (item.url !== "/admin" && location.startsWith(item.url));
+                  : location === item.url || (item.url !== "/admin" && location.startsWith(item.url));
                 return (
                   <SidebarMenuItem key={item.url}>
                     <SidebarMenuButton asChild isActive={isActive}>
@@ -92,6 +103,38 @@ export function AdminSidebar() {
                   </SidebarMenuItem>
                 );
               })}
+
+              {/* ── Publications (collapsible with sub-items) ── */}
+              <Collapsible defaultOpen={isPublicationsActive} className="group/pub">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      isActive={isPublicationsActive}
+                      data-testid="nav-publications-group"
+                    >
+                      <Newspaper className="w-4 h-4" />
+                      <span>Publications</span>
+                      <ChevronRight className="w-3.5 h-3.5 ml-auto transition-transform group-data-[state=open]/pub:rotate-90" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      {publicationsSubItems.map(sub => {
+                        const isSubActive = location === sub.url || location.startsWith(sub.url + "/");
+                        return (
+                          <SidebarMenuSubItem key={sub.url}>
+                            <SidebarMenuSubButton asChild isActive={isSubActive}>
+                              <Link href={sub.url} data-testid={`nav-${sub.title.toLowerCase()}`}>
+                                {sub.title}
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        );
+                      })}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

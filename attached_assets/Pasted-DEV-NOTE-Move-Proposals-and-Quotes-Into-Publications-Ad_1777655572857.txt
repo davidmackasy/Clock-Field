@@ -1,0 +1,152 @@
+DEV NOTE: Move Proposals and Quotes Into Publications + Add Custom Publication Branding
+
+Goal:
+Reduce menu clutter and give admins more control over publication branding.
+
+Do not break or affect anything currently working.
+Do not change how proposals, quotes, agreements, or publications are generated.
+Only change navigation placement and add custom branding options for publications.
+
+Navigation change
+
+Move these pages inside Publications:
+
+Proposals
+Quotes / Quotations
+Agreements
+Publications
+
+New menu structure:
+
+Publications
+
+Publications
+Agreements
+Proposals
+Quotes
+
+Remove Proposals and Quotes from the main sidebar/top-level menu after they are added under Publications.
+
+Keep all existing routes, data, generation logic, PDF logic, and workflows working.
+
+Add branding options to Publication editor
+
+Inside the publication create/edit page, add a new section:
+
+Publication Branding
+
+Fields:
+
+Branding source:
+
+Use company settings
+Use custom branding
+
+Default:
+Use company settings
+
+When “Use company settings” is selected:
+
+Use existing admin company name
+Use existing admin company logo
+No behavior change
+
+When “Use custom branding” is selected:
+Show:
+
+Custom publication name
+Custom publication logo upload
+
+This lets the admin publish under a different business name or logo.
+
+Preview must update with custom branding
+
+The live preview and public published page must use the selected branding.
+
+If custom branding is selected:
+
+Replace company logo with custom logo
+Replace company name with custom publication name
+
+Example:
+Instead of:
+Master Commercial Cleaning Services
+
+Allow:
+Mavens Sales LTD.
+or any custom name the admin enters.
+
+Published page must use saved branding
+
+When the publication is published, save the selected branding with that publication.
+
+Important:
+The published page should not change later if the admin changes their main company settings.
+
+Store publication-specific branding fields, such as:
+
+brandingSource
+customBrandName
+customBrandLogoUrl
+
+Cover image stays separate
+
+Do not confuse:
+
+Publication cover image
+Company/publication logo
+
+They are different.
+
+Logo:
+Used in header branding.
+
+Cover image:
+Used as the publication/article image.
+
+Apply branding to these views
+
+Custom branding must appear on:
+
+Publication editor preview
+Public live publication page
+Published article header
+Any share/SEO preview if already supported
+
+Keep existing proposal and quote logic untouched
+
+Do not rebuild proposals.
+Do not change quote generation.
+Do not change proposal templates.
+Do not change PDF/export logic unless needed for navigation.
+
+Only move them under the Publications menu.
+
+UI requirement
+
+Make the Publication Branding section clean:
+
+Use a toggle or segmented control:
+
+Use Company Settings | Use Custom Branding
+
+When custom branding is enabled:
+
+Show logo upload box
+Show custom name input
+Show small preview row showing logo + name
+Safety requirements
+
+Do not touch:
+
+Auth
+Stripe
+Company settings
+Existing proposal creation
+Existing quote creation
+Existing agreement creation
+Existing publication routes
+Existing public link behavior outside branding display
+
+Final result:
+Admins can manage Publications, Agreements, Proposals, and Quotes from one menu. They can also publish articles under their default company branding or custom branding with a different logo and name.

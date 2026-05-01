@@ -575,6 +575,10 @@ export default function AdminPublicationEditor() {
   const [contactCtaLink, setContactCtaLink] = useState("");
   const [contactOpen, setContactOpen] = useState(false);
   const [coverImageData, setCoverImageData] = useState<string | null>(null);
+  const [brandingSource, setBrandingSource] = useState<"company" | "custom">("company");
+  const [customBrandName, setCustomBrandName] = useState("");
+  const [customBrandLogoUrl, setCustomBrandLogoUrl] = useState<string | null>(null);
+  const brandLogoRef = useRef<HTMLInputElement>(null);
   const [seoOpen, setSeoOpen] = useState(false);
   const [sections, setSections] = useState<any[]>([]);
   const [pricing, setPricing] = useState<any[]>([]);
@@ -613,6 +617,9 @@ export default function AdminPublicationEditor() {
       setContactCtaText(pubData.contactCtaText || "");
       setContactCtaLink(pubData.contactCtaLink || "");
       setCoverImageData(pubData.coverImageData || null);
+      setBrandingSource(pubData.brandingSource === "custom" ? "custom" : "company");
+      setCustomBrandName(pubData.customBrandName || "");
+      setCustomBrandLogoUrl(pubData.customBrandLogoUrl || null);
       setSections(pubData.sections || []);
       setPricing(pubData.pricing || []);
       setStatus(pubData.status || "draft");
@@ -642,13 +649,19 @@ export default function AdminPublicationEditor() {
         contactCtaLink: contactCtaLink || null,
       };
 
+      const brandingPayload = {
+        brandingSource,
+        customBrandName: brandingSource === "custom" ? (customBrandName || null) : null,
+        customBrandLogoUrl: brandingSource === "custom" ? (customBrandLogoUrl || null) : null,
+      };
+
       if (isNew || !pubId) {
         const resp = await apiRequest("POST", "/api/publications", {
           title, subtitle: subtitle || null, slug: slug || autoSlug(title),
           introText: introText || null, category: category || null,
           seoTitle: seoTitle || null, seoDescription: seoDescription || null,
           coverImageData: coverImageData || null,
-          helpfulVotingEnabled, ...contactPayload,
+          helpfulVotingEnabled, ...contactPayload, ...brandingPayload,
           ...overrides,
         });
         if (!resp.ok) {
@@ -669,7 +682,7 @@ export default function AdminPublicationEditor() {
           introText: introText || null, category: category || null,
           seoTitle: seoTitle || null, seoDescription: seoDescription || null,
           coverImageData: coverImageData || null,
-          helpfulVotingEnabled, ...contactPayload,
+          helpfulVotingEnabled, ...contactPayload, ...brandingPayload,
           ...overrides,
         });
         if (!resp.ok) {
@@ -953,6 +966,114 @@ export default function AdminPublicationEditor() {
                 onChange={e => e.target.files?.[0] && handleCoverImage(e.target.files[0])}
               />
             </div>
+          </CardContent>
+        </Card>
+
+        {/* ── Publication Branding ────────────────────────────────────────── */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold">Publication Branding</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Toggle */}
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
+              <button
+                type="button"
+                onClick={() => setBrandingSource("company")}
+                className={`flex-1 py-2 px-3 font-medium transition-colors ${brandingSource === "company" ? "bg-gray-900 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
+                data-testid="button-branding-company"
+              >
+                Use Company Settings
+              </button>
+              <button
+                type="button"
+                onClick={() => setBrandingSource("custom")}
+                className={`flex-1 py-2 px-3 font-medium transition-colors ${brandingSource === "custom" ? "bg-gray-900 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
+                data-testid="button-branding-custom"
+              >
+                Use Custom Branding
+              </button>
+            </div>
+
+            {brandingSource === "company" && (
+              <p className="text-xs text-gray-400">
+                The publication will display your company name and logo from Settings.
+              </p>
+            )}
+
+            {brandingSource === "custom" && (
+              <div className="space-y-4">
+                <p className="text-xs text-gray-400">
+                  Override the company branding for this publication only. Useful for publishing under a different brand or partner name.
+                </p>
+                <div className="space-y-1">
+                  <Label className="text-xs">Custom Publication Name</Label>
+                  <Input
+                    value={customBrandName}
+                    onChange={e => setCustomBrandName(e.target.value)}
+                    placeholder="e.g. Mavens Sales LTD."
+                    data-testid="input-custom-brand-name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Custom Logo <span className="text-gray-400">(optional)</span></Label>
+                  {customBrandLogoUrl ? (
+                    <div className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg">
+                      <img src={customBrandLogoUrl} alt="Custom logo" className="w-10 h-10 object-contain rounded-md border border-gray-100" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{customBrandName || "Custom logo"}</p>
+                        <p className="text-xs text-gray-400">Click × to remove</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCustomBrandLogoUrl(null)}
+                        className="text-gray-400 hover:text-destructive"
+                        data-testid="button-remove-brand-logo"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => brandLogoRef.current?.click()}
+                      className="w-full border-2 border-dashed border-gray-200 rounded-xl py-6 flex flex-col items-center gap-2 text-gray-400 hover:border-blue-300 hover:text-blue-400 transition-colors"
+                      data-testid="button-upload-brand-logo"
+                    >
+                      <ImagePlus className="w-5 h-5" />
+                      <span className="text-xs">Click to upload logo</span>
+                    </button>
+                  )}
+                  <input
+                    ref={brandLogoRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async e => {
+                      const file = e.target.files?.[0];
+                      if (file) setCustomBrandLogoUrl(await fileToBase64(file));
+                    }}
+                  />
+                </div>
+
+                {/* Live preview row */}
+                {(customBrandName || customBrandLogoUrl) && (
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                    {customBrandLogoUrl ? (
+                      <img src={customBrandLogoUrl} alt="Preview" className="w-9 h-9 object-contain rounded-md border border-gray-200" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-md bg-blue-600 flex items-center justify-center text-white font-bold text-base shrink-0">
+                        {(customBrandName || "B")[0]}
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Preview</p>
+                      <p className="text-sm font-semibold text-gray-800">{customBrandName || "Custom Brand"}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 

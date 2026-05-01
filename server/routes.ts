@@ -7246,6 +7246,17 @@ FINAL RULES:
             }
         : null;
 
+      // Resolve branding — custom overrides company if set
+      const branding = pub.brandingSource === "custom"
+        ? {
+            name: pub.customBrandName || company?.name || null,
+            logoUrl: pub.customBrandLogoUrl || company?.companyLogoUrl || null,
+          }
+        : {
+            name: company?.name || null,
+            logoUrl: company?.companyLogoUrl || null,
+          };
+
       res.json({
         ...pub,
         sections: sectionsWithMedia,
@@ -7258,6 +7269,7 @@ FINAL RULES:
           email: company.companyEmail,
           address: company.address,
         } : null,
+        branding,
         contactInfo,
       });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
