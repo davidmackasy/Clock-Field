@@ -1,0 +1,102 @@
+The error means this line is loading before submission.template exists:
+{submission.template.name}
+So the page has submission, but submission.template is undefined.
+Fix it safely without changing the feature logic.
+
+DEV FIX: Scheduled Field Notes Capture Runtime Error
+File:
+client/src/pages/employee/scheduled-field-notes-capture.tsx
+Error:
+Cannot read properties of undefined (reading 'name')
+Problem line:
+<span className="font-semibold text-base">{submission.template.name}</span>
+The capture page is trying to read submission.template.name, but the backend response does not always include the full template object.
+This can happen when:
+
+
+The page loads before the full submission data is ready
+
+
+The API returns templateId but not template
+
+
+The query is still loading
+
+
+The submission exists, but the relation was not included from the backend
+
+
+
+Required Fix
+Do not touch anything else.
+Do not change the Scheduled Field Notes flow.
+Do not change Field Notes.
+Do not change Work Log.
+Only fix this runtime crash.
+
+1. Add Safe Fallback For Template Name
+Replace this:
+<span className="font-semibold text-base">{submission.template.name}</span>
+With this:
+<span className="font-semibold text-base">  {submission?.template?.name || submission?.templateName || "Scheduled Field Note"}</span>
+This prevents the page from crashing if template is missing.
+
+2. Check Other Unsafe Template References
+In the same file, search for:
+submission.template
+Replace unsafe usage like this:
+submission.template.name
+With:
+submission?.template?.name || submission?.templateName || "Scheduled Field Note"
+If there are other nested fields, protect them too.
+Example:
+submission.template.description
+Should become:
+submission?.template?.description || ""
+
+3. Add Proper Loading and Missing Data Guard
+Near the top of the component render, make sure this exists:
+if (isLoading) {  return (    <div className="min-h-screen flex items-center justify-center">      <p className="text-sm text-muted-foreground">Loading scheduled field note...</p>    </div>  );}
+Then add a missing submission guard:
+if (!submission) {  return (    <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">      <h2 className="text-lg font-semibold">Scheduled field note not found</h2>      <p className="text-sm text-muted-foreground mt-2">        This scheduled field note could not be loaded.      </p>      <Button        className="mt-4"        onClick={() => navigate("/employee/scheduled-field-notes")}      >        Go back      </Button>    </div>  );}
+
+4. Backend Should Include Template Data
+Also check the API that returns the scheduled field note submission.
+The response should include the template relation.
+Expected response shape:
+{  id: string;  templateId: string;  template: {    id: string;    name: string;    description?: string;  };  sections: [];  steps: [];}
+If the backend currently only returns this:
+{  id: string;  templateId: string;}
+Then update the backend query to include the template.
+Example concept:
+const submission = await db.scheduledFieldNoteSubmission.findFirst({  where: {    id: submissionId,    cleanerId: currentUser.id,  },  include: {    template: true,    stepSubmissions: true,  },});
+Use the correct ORM/query style already used in the app.
+Do not rewrite the backend system.
+Only include the missing template data.
+
+5. Best Safe Frontend Fix
+Use a small helper variable before the return:
+const templateName =  submission?.template?.name ||  submission?.templateName ||  "Scheduled Field Note";
+Then use:
+<span className="font-semibold text-base">{templateName}</span>
+This keeps the JSX cleaner and avoids repeated crashes.
+
+Final Instruction For Agent
+Fix the crash on:
+client/src/pages/employee/scheduled-field-notes-capture.tsx
+The page must not crash when submission.template is missing or still loading.
+Add optional chaining and fallback text.
+Also confirm the backend endpoint returns the related template data if available.
+Do not touch anything else.
+Do not change the Scheduled Field Notes workflow.
+Do not modify regular Field Notes.
+Do not modify Work Log.
+Do not modify clock-in/out except where this page already connects.
+Expected result:
+The capture page opens normally.
+The header shows the scheduled field note name when available.
+If the name is not available, it shows:
+Scheduled Field Note
+No white screen.
+No runtime overlay.
+No broken employee capture page.

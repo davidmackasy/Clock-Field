@@ -22,9 +22,9 @@ type Step = {
   submission: { id: string; submittedImageUrl: string; submittedAt: string } | null;
 };
 type Submission = {
-  id: string; templateId: string; status: string;
+  id: string; templateId: string; templateName?: string; status: string;
   submissionDate: string; totalSteps: number; completedSteps: number;
-  template: { name: string; introText: string; outroText: string };
+  template?: { name: string; introText?: string; outroText?: string };
   sections: Section[];
 };
 
@@ -103,6 +103,12 @@ export default function EmployeeScheduledFieldNotesCapture() {
     );
   }
 
+  // Safe template name helper
+  const templateName =
+    submission?.template?.name ||
+    submission?.templateName ||
+    "Scheduled Field Note";
+
   // Build flat steps list
   const allSteps: (Step & { sectionTitle: string; sectionIndex: number })[] = [];
   (submission.sections || [])
@@ -127,7 +133,7 @@ export default function EmployeeScheduledFieldNotesCapture() {
         </div>
         <h2 className="text-2xl font-bold mb-2">All Done!</h2>
         {submission.template?.outroText && (
-          <p className="text-muted-foreground mb-6 max-w-xs">{submission.template.outroText}</p>
+          <p className="text-muted-foreground mb-6 max-w-xs">{submission.template?.outroText}</p>
         )}
         <p className="text-sm text-muted-foreground mb-8">
           {completedRequired}/{totalRequired} required steps completed · {format(parseISO(submission.submissionDate), "MMMM d, yyyy")}
@@ -145,15 +151,15 @@ export default function EmployeeScheduledFieldNotesCapture() {
       <div className="min-h-screen bg-background flex flex-col">
         <div className="border-b px-4 py-4 flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate("/employee/scheduled-field-notes")} data-testid="button-sfn-back-intro"><ChevronLeft className="w-5 h-5" /></Button>
-          <span className="font-semibold text-base">{submission.template?.name || "Checklist"}</span>
+          <span className="font-semibold text-base">{templateName}</span>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
           <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-6">
             <Camera className="w-10 h-10 text-primary" />
           </div>
-          <h2 className="text-2xl font-bold mb-2">{submission.template?.name || "Checklist"}</h2>
+          <h2 className="text-2xl font-bold mb-2">{templateName}</h2>
           {submission.template?.introText && (
-            <p className="text-muted-foreground mb-6 max-w-xs">{submission.template.introText}</p>
+            <p className="text-muted-foreground mb-6 max-w-xs">{submission.template?.introText}</p>
           )}
           <p className="text-sm text-muted-foreground mb-8">
             {totalRequired} required step{totalRequired !== 1 ? "s" : ""} · Take a photo for each
@@ -211,7 +217,7 @@ export default function EmployeeScheduledFieldNotesCapture() {
         <Button variant="ghost" size="icon" onClick={() => setShowIntro(true)} data-testid="button-sfn-back-capture"><ChevronLeft className="w-5 h-5" /></Button>
         <div className="flex-1 min-w-0">
           <p className="text-xs text-muted-foreground">{currentStep.sectionTitle}</p>
-          <p className="font-medium text-sm truncate">{submission.template?.name || "Checklist"}</p>
+          <p className="font-medium text-sm truncate">{templateName}</p>
         </div>
         <span className="text-sm text-muted-foreground shrink-0">{flatStepIndex + 1}/{allSteps.length}</span>
       </div>
