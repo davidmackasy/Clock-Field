@@ -8913,6 +8913,7 @@ Return ONLY valid JSON:
       const template = await storage.createScheduledFieldNoteTemplate({
         companyId: user.companyId, clientId: req.body.clientId || null,
         name: req.body.name || "Untitled Checklist", description: req.body.description || "",
+        templateType: req.body.templateType || "commercial",
         frequency: req.body.frequency || "daily", requiredBeforeClockOut: req.body.requiredBeforeClockOut ?? true,
         introText: req.body.introText || "", outroText: req.body.outroText || "",
         status: "active", createdAt: now, updatedAt: now,
@@ -8968,6 +8969,7 @@ Return ONLY valid JSON:
       const newTemplate = await storage.createScheduledFieldNoteTemplate({
         companyId: user.companyId, clientId: template.clientId,
         name: `${template.name} (Copy)`, description: template.description,
+        templateType: (template as any).templateType || "commercial",
         frequency: template.frequency, requiredBeforeClockOut: template.requiredBeforeClockOut,
         introText: template.introText, outroText: template.outroText,
         status: "inactive", createdAt: now, updatedAt: now,
@@ -8985,6 +8987,11 @@ Return ONLY valid JSON:
           await storage.createScheduledFieldNoteStep({
             templateId: newTemplate.id, sectionId: newSection.id, companyId: user.companyId,
             title: step.title, description: step.description,
+            areaCategory: (step as any).areaCategory || null,
+            areaName: (step as any).areaName || null,
+            itemType: (step as any).itemType || null,
+            customAreaName: (step as any).customAreaName || null,
+            customItemType: (step as any).customItemType || null,
             referenceImageUrl: step.referenceImageUrl,
             isRequired: step.isRequired, sortOrder: step.sortOrder, createdAt: now,
           });
@@ -9034,6 +9041,11 @@ Return ONLY valid JSON:
       const step = await storage.createScheduledFieldNoteStep({
         templateId: req.body.templateId, sectionId: req.params.sectionId, companyId: user.companyId,
         title: req.body.title || "Take a photo", description: req.body.description || "",
+        areaCategory: req.body.areaCategory || null,
+        areaName: req.body.areaName || null,
+        itemType: req.body.itemType || null,
+        customAreaName: req.body.customAreaName || null,
+        customItemType: req.body.customItemType || null,
         referenceImageUrl: req.body.referenceImageUrl || null,
         isRequired: req.body.isRequired ?? true,
         sortOrder: req.body.sortOrder ?? existingSteps.length, createdAt: now,
@@ -9372,6 +9384,7 @@ Return ONLY valid JSON:
         id: s.id, title: s.title, sortOrder: s.sortOrder,
         steps: steps.filter(st => st.sectionId === s.id).map(st => ({
           id: st.id, title: st.title, description: st.description,
+          referenceImageUrl: st.referenceImageUrl || null,
           isRequired: st.isRequired, sortOrder: st.sortOrder,
           submission: stepSubs.find(ss => ss.stepId === st.id) || null,
         })),

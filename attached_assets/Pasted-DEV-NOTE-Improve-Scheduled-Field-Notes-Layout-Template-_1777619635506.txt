@@ -1,0 +1,835 @@
+DEV NOTE: Improve Scheduled Field Notes Layout, Template Builder, Submissions, Reports, Public Link, Photo Viewing
+Project: Clockfield
+Feature: Scheduled Field Notes
+Area: Admin Work Log → Scheduled Notes
+Main goal:
+Improve the Scheduled Field Notes system so it is easier to manage, more professional, more organized, and better for long-term daily cleaning records.
+Do not break or affect anything currently working.
+Do not change regular Field Notes.
+Do not change Work Log behavior outside Scheduled Notes.
+Do not change clock-in, clock-out, payroll, attendance, clients, reports, auth, Stripe, or existing public Field Notes.
+Only improve the Scheduled Field Notes module.
+Ask for approval before touching anything outside this feature.
+Current issue:
+The Scheduled Notes system works, but the layout is too narrow and too vertical.
+Templates, assignments, submissions, reports, and public reports are showing too much information in single rows.
+This will not work when a location has 50, 100, or 150 required photos.
+We need a cleaner grid-based layout that saves space and makes photos easier to review.
+
+
+
+Improve Template Detail Page Layout
+
+
+Current problem:
+When opening a template, the content is too narrow and centered.
+The steps show as long horizontal rows.
+The reference image thumbnails are too small.
+The layout does not use the available screen space.
+Required improvement:
+Expand the template detail page width.
+Use more of the page container.
+Do not keep the template content squeezed in the middle.
+Use a responsive grid layout for sections and steps.
+Desktop layout:
+Use max-width around 1200px to 1400px.
+Section cards should display in a grid.
+Use 3 or 4 columns where possible.
+For large screens:
+4 cards per row.
+For medium screens:
+2 or 3 cards per row.
+For mobile:
+1 card per row.
+Example:
+Washroom section card
+Office section card
+Kitchen section card
+Hallway section card
+Each section card should show:
+Section name
+Number of steps
+Edit section button
+Delete section button
+Collapse / expand option
+Grid of step cards inside the section
+
+
+
+Make Step Display More Professional
+
+
+Current problem:
+Steps look like simple list rows.
+This does not feel professional enough.
+Required improvement:
+Show each step as a compact card instead of a plain row.
+Each step card should include:
+Step number
+Area type
+Item type
+Step title
+Short instruction
+Reference photo thumbnail
+Required badge
+Edit button
+Delete button
+Click to preview image
+Example card:
+Step 1
+Area: Washroom
+Item: Sink
+Instruction: Clean and capture the sink area.
+Reference photo thumbnail
+Required
+Each card should be clickable for viewing details.
+Do not make the whole UI feel like a spreadsheet.
+Make it feel like a checklist builder.
+
+
+
+Add Template Type: Residential or Commercial
+
+
+When creating a template, admin should choose the template type.
+Add field:
+Template Type
+Options:
+Commercial
+Residential
+This choice controls the dropdown options shown when creating sections and steps.
+Do not remove custom typing.
+Admin should still be able to create custom areas if the dropdown does not fit.
+
+
+
+Add Dropdowns When Creating Steps
+
+
+Current problem:
+Admin must manually type every step name.
+This is slow and not good when creating large checklists.
+Required improvement:
+When admin adds a step, use structured dropdowns.
+Add these fields:
+Area Category
+Area / Room
+Item / Surface
+Instruction
+Reference Photo
+Required Step toggle
+Example for Commercial:
+Area Category:
+Washroom
+Office
+Kitchen
+Lobby
+Hallway
+Retail Floor
+Storage Room
+Break Room
+Stairwell
+Entrance
+Glass / Windows
+Floor Area
+Garbage Area
+Area / Room:
+Women’s Washroom
+Men’s Washroom
+Single-Stall Washroom
+Main Office
+Manager Office
+Front Desk
+Lunch Room
+Kitchen
+Main Floor
+Entrance Door
+Back Door
+Item / Surface:
+Toilet
+Urinal
+Sink
+Mirror
+Countertop
+Desk
+Table
+Chair
+Garbage Bin
+Floor
+Carpet
+Door Handle
+Glass Door
+Window
+Baseboard
+Wall Spot
+Dispenser
+Paper Towel Holder
+Soap Dispenser
+Light Switch
+Appliance
+Shelf
+Instruction:
+Admin can type a short custom instruction.
+Example:
+Take a clear photo after cleaning the sink and counter.
+Reference Photo:
+Admin uploads a reference photo.
+Required Step:
+Default ON.
+
+
+
+Residential Dropdown Options
+
+
+For Residential templates, add dropdown options like:
+Area Category:
+Bedroom
+Bathroom
+Kitchen
+Living Room
+Dining Room
+Basement
+Laundry Room
+Hallway
+Entrance
+Garage
+Stairs
+Windows
+Floor Area
+Area / Room:
+Primary Bedroom
+Guest Bedroom
+Kids Bedroom
+Main Bathroom
+Ensuite Bathroom
+Kitchen
+Living Room
+Dining Area
+Laundry Room
+Basement Room
+Front Entrance
+Back Entrance
+Item / Surface:
+Bed Area
+Nightstand
+Dresser
+Closet
+Sink
+Toilet
+Tub
+Shower
+Mirror
+Countertop
+Stove
+Fridge
+Microwave
+Cabinet
+Table
+Chair
+Couch Area
+Floor
+Carpet
+Baseboard
+Window
+Door Handle
+Garbage Bin
+Light Switch
+Instruction:
+Admin can still add custom instruction.
+
+
+
+Keep Custom Option Available
+
+
+Each dropdown should include:
+Other / Custom
+When selected, show a text field.
+This allows admin to create steps that are not in the default dropdown list.
+Do not make dropdowns too strict.
+The app should guide the admin, not trap them.
+
+
+
+Step Title Auto-Generation
+
+
+After admin selects dropdowns, auto-generate the step title.
+Example:
+Area Category: Washroom
+Area / Room: Women’s Washroom
+Item / Surface: Sink
+Auto title:
+Women’s Washroom - Sink
+Example:
+Area Category: Office
+Area / Room: Main Office
+Item / Surface: Desk
+Auto title:
+Main Office - Desk
+Admin can still edit the title if needed.
+
+
+
+Reference Photo Upload Format
+
+
+Reference photos should be displayed in 9:16 format.
+This should feel like a phone camera format, similar to TikTok vertical style.
+Image display rule:
+Use 9:16 aspect ratio.
+Use object-cover.
+Do not stretch the image.
+Do not crop too aggressively where the image becomes useless.
+Allow click to open full image preview.
+In the upload modal, show preview in 9:16.
+Example CSS concept:
+aspect-ratio: 9 / 16
+object-fit: cover
+border-radius: 12px
+
+
+
+Improve Assignments Page Layout
+
+
+Current problem:
+Assignments are shown as one long row.
+Required improvement:
+Show assignments in a grid format.
+Desktop:
+4 cards per row.
+Medium:
+2 or 3 cards per row.
+Mobile:
+1 card per row.
+Each assignment card should show:
+Template name
+Cleaner name
+Location name
+Status
+Assigned date
+Frequency
+Required before clock-out badge
+Deactivate button
+Delete button
+Open button
+Example card:
+Daily Cleaning Checklist
+Cleaner: David Mackasy
+Location: MackasyInc
+Status: Active
+Assigned: May 1, 2026
+Frequency: Daily
+Open
+Deactivate
+Delete
+This will make assignments easier to scan when there are many cleaners.
+
+
+
+Improve Submissions Page Organization
+
+
+Current problem:
+The submissions page opens the recent submission directly.
+This is not good for long-term records.
+Admin needs to find submissions from days or weeks ago.
+Required improvement:
+Submissions should be organized by cleaner first, then date.
+Submissions page should show employee cards in a grid.
+Desktop:
+4 employee cards per row.
+Medium:
+2 or 3 cards per row.
+Mobile:
+1 card per row.
+Each employee submission card should show:
+Cleaner name
+Location name
+Template name
+Latest submission date
+Completion count
+Status summary
+Open History button
+Example:
+David Mackasy
+MackasyInc
+Daily Cleaning Checklist
+Latest: May 1, 2026
+Completed: 2 / 2 steps
+Open History
+When admin opens an employee card:
+Show a date-based history page.
+
+
+
+Add Date-Based Submission History
+
+
+Inside the employee submission history page, show submissions by date.
+Add filters:
+Date picker
+Date range
+Template filter
+Location filter
+Status filter
+Search
+View options:
+Calendar view
+List view
+Grid view
+Default view:
+Grid by date.
+Each date card should show:
+Date
+Cleaner name
+Template name
+Location
+Status
+Completion progress
+Started time
+Completed time
+Open Submission button
+Example:
+May 1, 2026
+Daily Cleaning Checklist
+Completed
+2 / 2 steps
+Started 1:55 AM
+Completed 1:58 AM
+Open
+This allows admin to find submissions from two weeks ago without scrolling through random recent entries.
+
+
+
+Improve Submission Detail Photo Layout
+
+
+Current problem:
+Submission details show each step vertically.
+This wastes space.
+Required improvement:
+Group photos by section and show them in a grid.
+Example:
+Washroom
+Show step cards in a grid.
+Desktop:
+4 or 5 cards per row.
+Medium:
+3 cards per row.
+Mobile:
+1 or 2 cards per row.
+Each submitted step card should show:
+Step title
+Reference photo
+Cleaner submitted photo
+Timestamp
+Status
+Click to view full images
+Best layout inside each card:
+Top: Step title
+Middle: Two images side by side
+Left: Reference
+Right: Submitted
+Bottom: Submitted time
+If screen is too small, stack reference and submitted image vertically.
+
+
+
+Make Photos Clickable Everywhere
+
+
+All photos should be clickable.
+This applies to:
+Template reference photos
+Admin submission reference photos
+Admin submitted photos
+Report photos
+Public report photos
+When clicked:
+Open a lightbox / modal preview.
+Modal should include:
+Large image
+Close button
+Image label
+Step title
+Reference or submitted label
+Timestamp if available
+Next / previous arrows if inside a gallery
+Do not open image in a new browser tab unless the app already uses that pattern.
+Use a clean modal.
+
+
+
+Improve Reports Tab Layout
+
+
+Current problem:
+Reports tab shows one long row.
+Required improvement:
+Show report cards in a grid.
+Desktop:
+4 cards per row.
+Medium:
+2 or 3 cards per row.
+Mobile:
+1 card per row.
+Each report card should show:
+Template name
+Cleaner name
+Location name
+Date
+Status
+Public link status
+Open Report button
+Copy Link button if link exists
+Generate Link button if no link exists
+Disable Link button if active link exists
+Example:
+Daily Cleaning Checklist
+David Mackasy
+MackasyInc
+May 1, 2026
+Completed
+Public link: Active
+Open Report
+Copy Link
+Disable
+
+
+
+Public Link Must Show Reference Photo
+
+
+Current problem:
+The public link only shows the cleaner’s submitted photo.
+It does not show the admin reference photo.
+Required fix:
+Public Scheduled Field Note report must show both:
+Reference photo
+Cleaner submitted photo
+Each step should show:
+Step title
+Reference photo
+Submitted photo
+Submitted timestamp
+Section name
+Example:
+Washroom
+Sink
+Reference photo
+Submitted photo
+Submitted at 1:56 AM
+This is important because the client can compare what was expected with what was submitted.
+
+
+
+Public Report Grid Format
+
+
+Current problem:
+Public report is too vertical.
+Required improvement:
+Use grid layout on the public page.
+Section layout:
+Washroom
+Grid of step cards.
+Desktop:
+4 cards per row.
+Large screens can support 5 if space allows.
+Tablet:
+2 or 3 cards per row.
+Mobile:
+1 card per row or 2 compact cards if readable.
+Each public step card should include:
+Step title
+Reference photo
+Submitted photo
+Timestamp
+Completed badge
+Image click preview
+Keep the public report clean and client-friendly.
+Do not make it look like an admin dashboard.
+
+
+
+Public Report Structure
+
+
+Public report should include:
+Header:
+Company logo
+Company name
+Report title
+Location name
+Cleaner name if allowed
+Date
+Completion status
+Intro:
+Short text explaining the report.
+Example:
+This report shows the scheduled daily cleaning photos completed for this location. Each item includes the reference photo and the submitted cleaning photo for review.
+Summary cards:
+Total required steps
+Total completed steps
+Started time
+Completed time
+Sections:
+Washroom
+Office
+Kitchen
+Lobby
+Each section shows step cards in a grid.
+Outro:
+Example:
+This report was generated from Clockfield Scheduled Notes to document daily cleaning completion and provide clear proof of work.
+Footer:
+Generated by Clockfield
+Do not expose private admin notes.
+Do not expose internal IDs.
+Do not expose payroll or private employee information.
+
+
+
+Better Card Design For Step Cards
+
+
+Use a professional card layout.
+Each card should have:
+Rounded corners
+Light border
+Image area
+Clear labels
+Small status badge
+Clean spacing
+Example card structure:
+Card header:
+Step title
+Required badge
+Card body:
+Reference photo
+Submitted photo
+Card footer:
+Submitted 1:56 AM
+Completed
+The images should not be too tiny.
+Use enough size for review.
+Do not make cards too tall unless needed.
+
+
+
+Add View Toggle Where Useful
+
+
+For Admin Submissions and Reports, add a view toggle.
+Options:
+Grid
+List
+Calendar
+Default should be Grid.
+Calendar is helpful for daily records.
+Calendar does not need to be complicated.
+It can be simple:
+Month view
+Days with completed submissions show a green dot
+Missed submissions show red/orange dot
+Click a day to open submissions for that date
+This helps the admin find older submissions quickly.
+
+
+
+Keep Mobile Responsive
+
+
+All improvements must work on mobile.
+Mobile behavior:
+Cards stack cleanly.
+Tabs remain usable.
+Photo previews open full screen.
+Buttons are not too small.
+No horizontal overflow.
+The admin should be able to review reports from a phone.
+The cleaner flow should remain mobile-first.
+Do not break the cleaner capture flow.
+
+
+
+Do Not Change Existing Capture Logic
+
+
+Do not change how cleaners submit photos unless required for layout fixes.
+Do not change:
+Photo capture
+Step order
+Required step logic
+Clock-out blocking logic
+Submission save logic
+Assignment logic
+Only improve display, organization, dropdown creation, photo preview, and public report layout.
+
+
+
+Backend/Data Changes Needed
+
+
+Add fields if they do not exist:
+templateType
+areaCategory
+areaName
+itemType
+customAreaName
+customItemType
+generatedStepTitle
+referenceImageUrl
+These should connect to scheduled field note steps.
+Do not break existing steps that only have title and instructions.
+Migration must be backward compatible.
+If old steps do not have dropdown fields, show them normally using the existing title.
+Fallback:
+areaCategory: null
+areaName: null
+itemType: null
+title: existing step title
+
+
+
+Update Add Step Modal
+
+
+Current modal should be improved.
+New Add Step modal fields:
+Template Type is already selected at template level.
+Area Category dropdown
+Area / Room dropdown
+Item / Surface dropdown
+Auto-generated Step Title
+Instruction textarea
+Reference Photo upload
+Required Step toggle
+Save Step
+Cancel
+The Save Step button should stay disabled until the required fields are valid.
+Required fields:
+Area Category
+Area / Room or custom room
+Item / Surface or custom item
+Reference photo can stay optional, but recommended.
+
+
+
+Suggested Dropdown Data File
+
+
+Create a simple config file for dropdown options.
+Example:
+client/src/lib/scheduled-field-note-options.ts
+Include:
+commercialOptions
+residentialOptions
+Each should include:
+areaCategories
+roomsByCategory
+itemsByCategory
+Do not hardcode random dropdown arrays inside the component if avoidable.
+Keep it clean and reusable.
+
+
+
+Search and Filter Improvements
+
+
+Submissions page should allow search by:
+Cleaner name
+Template name
+Location name
+Date
+Status
+Reports page should allow search by:
+Cleaner name
+Template name
+Location name
+Date
+Public link status
+Templates page should allow search by:
+Template name
+Template type
+Location
+Status
+
+
+
+Expected Final Behavior
+
+
+Admin template page:
+Expanded layout.
+Sections and steps show in clean grids.
+Step cards look professional.
+Reference photos are bigger and clickable.
+Add step modal uses dropdowns.
+Admin can choose Commercial or Residential template type.
+Assignments page:
+Assignment cards appear in grid rows.
+Easy to scan multiple cleaners.
+Submissions page:
+Shows cleaner cards first.
+Admin opens a cleaner to view submission history by date.
+Admin can find old submissions easily.
+Submission detail page:
+Photos are grouped by section.
+Step photos show in grid.
+Reference and submitted photos are both visible.
+Photos are clickable.
+Reports page:
+Reports are shown in grid cards.
+Public link can be copied, generated, disabled, or opened.
+Public report:
+Shows both reference photo and submitted photo.
+Uses grid layout.
+Photos are clickable.
+Looks professional for clients.
+Existing Scheduled Field Notes still work.
+Regular Field Notes still work.
+Work Log still works.
+Clock-in and clock-out still work.
+No unrelated system should be changed.
+
+
+
+Testing Checklist
+
+
+Test template page opens without errors.
+Test old templates still display.
+Test new templates can be created as Commercial.
+Test new templates can be created as Residential.
+Test dropdowns change based on template type.
+Test custom option works.
+Test step title auto-generates.
+Test admin can upload 9:16 reference photo.
+Test reference photo preview works.
+Test clicking reference photo opens modal.
+Test assignment cards show in grid.
+Test submissions show employee cards in grid.
+Test opening employee card shows date history.
+Test date filter works.
+Test old submission can be opened.
+Test submission detail groups by section.
+Test submission photos show in grid.
+Test reference and submitted photos both show.
+Test image modal works on admin side.
+Test report cards show in grid.
+Test public report shows reference photo and submitted photo.
+Test public report images are clickable.
+Test public report works on mobile.
+Test cleaner capture flow still works.
+Test clock-out required validation still works.
+Test regular Field Notes still work.
+Test existing Work Log still works.
+Final instruction:
+Improve only the Scheduled Field Notes UI, organization, dropdown step builder, photo grids, report grids, and public report photo display.
+Do not rebuild the feature.
+Do not touch unrelated modules.
+Do not change anything currently working unless it is directly required for this Scheduled Field Notes improvement.
