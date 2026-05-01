@@ -51,7 +51,7 @@ import EmployeePayStubs from "@/pages/employee/pay-stubs";
 import EmployeeSupplies from "@/pages/employee/supplies";
 import SetPasswordPage from "@/pages/employee/set-password";
 import AdminSupplies from "@/pages/admin/supplies";
-import AdminPublications from "@/pages/admin/publications";
+import AdminPublications, { AdminAgreementsPage } from "@/pages/admin/publications";
 import AdminPublicationEditor from "@/pages/admin/publication-editor";
 import PublicPublication from "@/pages/public/publication";
 import ClientDashboard from "@/pages/client/dashboard";
@@ -129,7 +129,7 @@ function AdminLayout() {
               <Route path="/admin/proposals/:id" component={AdminProposalBuilder} />
               <Route path="/admin/proposals" component={AdminProposals} />
               <Route path="/admin/agreements/:id" component={AdminAgreementBuilder} />
-              <Route path="/admin/agreements" component={AdminPublications} />
+              <Route path="/admin/agreements" component={AdminAgreementsPage} />
               <Route path="/admin/supplies" component={AdminSupplies} />
               <Route path="/admin/publications/:id" component={AdminPublicationEditor} />
               <Route path="/admin/publications" component={AdminPublications} />

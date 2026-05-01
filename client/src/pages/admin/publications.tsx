@@ -29,6 +29,7 @@ import {
   LayoutTemplate,
 } from "lucide-react";
 import type { Agreement, AgreementTemplate } from "@shared/schema";
+import AdminProposals from "@/pages/admin/proposals";
 
 // ── Publication helpers ───────────────────────────────────────────────────────
 const PUB_STATUS_META: Record<string, { label: string; color: string }> = {
@@ -293,7 +294,7 @@ function TemplateEditorDialog({ template, open, onClose }: { template: Agreement
 }
 
 // ── Agreements Sub-Page ───────────────────────────────────────────────────────
-function AgreementsSubPage({ proposalId }: { proposalId?: string }) {
+export function AgreementsSubPage({ proposalId }: { proposalId?: string }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [, navigate] = useLocation();
@@ -663,18 +664,7 @@ function PublicationsSubPage() {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function AdminPublications() {
-  const [location] = useLocation();
-  const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
-  const proposalId = searchParams.get("proposalId") || undefined;
-  const tabParam = searchParams.get("tab");
-
-  const isAgreementsPath = location.startsWith("/admin/agreements");
-  const defaultTab = (isAgreementsPath || tabParam === "agreements") ? "agreements" : "publications";
-  const [activeTab, setActiveTab] = useState(defaultTab);
-
-  useEffect(() => {
-    if (isAgreementsPath || tabParam === "agreements") setActiveTab("agreements");
-  }, [location]);
+  const [activeTab, setActiveTab] = useState("publications");
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
@@ -687,10 +677,10 @@ export default function AdminPublications() {
             <Newspaper className="w-4 h-4" /> Publications
           </button>
           <button
-            onClick={() => setActiveTab("agreements")}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 transition-colors ${activeTab === "agreements" ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
-            data-testid="tab-agreements">
-            <FileSignature className="w-4 h-4" /> Agreements
+            onClick={() => setActiveTab("proposals")}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 transition-colors ${activeTab === "proposals" ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            data-testid="tab-proposals">
+            <FileText className="w-4 h-4" /> Proposals
           </button>
         </div>
 
@@ -698,9 +688,22 @@ export default function AdminPublications() {
           {activeTab === "publications" ? (
             <PublicationsSubPage />
           ) : (
-            <AgreementsSubPage proposalId={proposalId} />
+            <AdminProposals />
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Standalone Agreements Page (for /admin/agreements route) ──────────────────
+export function AdminAgreementsPage() {
+  const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+  const proposalId = searchParams.get("proposalId") || undefined;
+  return (
+    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
+      <div className="max-w-5xl mx-auto w-full px-4 py-6 space-y-6">
+        <AgreementsSubPage proposalId={proposalId} />
       </div>
     </div>
   );
