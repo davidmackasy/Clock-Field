@@ -238,7 +238,7 @@ function FormsTab() {
 }
 
 // ── Submissions Tab ───────────────────────────────────────────────────────────
-function SubmissionsTab() {
+function SubmissionsTab({ onGoToEstimator }: { onGoToEstimator: () => void }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -254,6 +254,8 @@ function SubmissionsTab() {
   const [editSectionDesc, setEditSectionDesc] = useState("");
   const [editSectionNotes, setEditSectionNotes] = useState("");
   const [respondSelectedPhotoIds, setRespondSelectedPhotoIds] = useState<string[]>([]);
+  const [estimatorNotConfigured, setEstimatorNotConfigured] = useState(false);
+  const [learnOpen, setLearnOpen] = useState(false);
 
   const { data: submissions = [], isLoading } = useQuery<Submission[]>({ queryKey: ["/api/admin/submissions"] });
   const { data: detail } = useQuery<Submission>({
@@ -264,8 +266,14 @@ function SubmissionsTab() {
 
   const estimateMutation = useMutation({
     mutationFn: (id: string) => apiRequest("POST", `/api/admin/submissions/${id}/estimate`, {}).then(r => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/submissions"] }); qc.invalidateQueries({ queryKey: ["/api/admin/submissions", selectedId] }); },
-    onError: (e: any) => toast({ title: "Estimate failed", description: e.message, variant: "destructive" }),
+    onSuccess: () => { setEstimatorNotConfigured(false); qc.invalidateQueries({ queryKey: ["/api/admin/submissions"] }); qc.invalidateQueries({ queryKey: ["/api/admin/submissions", selectedId] }); },
+    onError: (e: any) => {
+      if (e.message?.includes("Configure Estimator Settings")) {
+        setEstimatorNotConfigured(true);
+      } else {
+        toast({ title: "Estimate failed", description: e.message, variant: "destructive" });
+      }
+    },
   });
 
   const stageMutation = useMutation({
@@ -414,16 +422,78 @@ function SubmissionsTab() {
             <div className="rounded-xl border bg-card p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold flex items-center gap-1.5"><Zap className="w-4 h-4 text-purple-500" /> AI Estimate</h3>
-                <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5"
-                  data-testid="button-run-estimate"
-                  disabled={estimateMutation.isPending}
-                  onClick={() => estimateMutation.mutate(detail.id)}>
-                  {estimateMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCw className="w-3.5 h-3.5" />}
-                  {detail.estimate ? "Re-run" : "Run Estimate"}
-                </Button>
+                {!estimatorNotConfigured && (
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5"
+                    data-testid="button-run-estimate"
+                    disabled={estimateMutation.isPending}
+                    onClick={() => estimateMutation.mutate(detail.id)}>
+                    {estimateMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCw className="w-3.5 h-3.5" />}
+                    {detail.estimate ? "Re-run" : "Run Estimate"}
+                  </Button>
+                )}
               </div>
-              {!detail.estimate ? (
+              {estimatorNotConfigured ? (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 space-y-3" data-testid="card-estimator-not-configured">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-amber-900">Estimator setup required</p>
+                      <p className="text-xs text-amber-700 mt-0.5">You need to set up your pricing before generating estimates.</p>
+                      <p className="text-xs text-amber-600 mt-0.5 italic">Takes less than 1 minute.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pl-7">
+                    <Button size="sm" className="h-7 text-xs gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
+                      data-testid="button-setup-estimator"
+                      onClick={onGoToEstimator}>
+                      <Zap className="w-3.5 h-3.5" /> Set Up Estimator
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs text-amber-700 hover:text-amber-900 hover:bg-amber-100"
+                      data-testid="button-learn-estimator"
+                      onClick={() => setLearnOpen(true)}>
+                      Learn how it works
+                    </Button>
+                  </div>
+                  <Dialog open={learnOpen} onOpenChange={setLearnOpen}>
+                    <DialogContent className="max-w-sm">
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2"><Zap className="w-4 h-4 text-purple-500" /> How AI Estimating Works</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-3 text-sm text-muted-foreground">
+                        <p>The AI estimator uses your pricing rules to automatically calculate a price range for each quote request.</p>
+                        <p className="font-medium text-foreground">You'll need to define:</p>
+                        <ul className="space-y-1.5 list-none">
+                          <li className="flex items-start gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 mt-0.5 shrink-0" /> Pricing type (per visit, per hour, or per sq ft)</li>
+                          <li className="flex items-start gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 mt-0.5 shrink-0" /> Base price for residential and/or commercial jobs</li>
+                          <li className="flex items-start gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 mt-0.5 shrink-0" /> Any add-ons or room-based adjustments</li>
+                        </ul>
+                        <p>Once set up, click "Run Estimate" on any submission and the AI will suggest a price instantly.</p>
+                      </div>
+                      <Button className="w-full gap-1.5 bg-amber-600 hover:bg-amber-700 text-white mt-2" onClick={() => { setLearnOpen(false); onGoToEstimator(); }}>
+                        <Zap className="w-3.5 h-3.5" /> Set Up Estimator Now
+                      </Button>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              ) : !detail.estimate ? (
                 <p className="text-xs text-muted-foreground">No estimate yet. Click "Run Estimate" to use AI pricing.</p>
+              ) : detail.estimate.status === "failed" && detail.estimate.errorMessage?.includes("Configure Estimator Settings") ? (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 space-y-3" data-testid="card-estimator-not-configured-saved">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-amber-900">Estimator setup required</p>
+                      <p className="text-xs text-amber-700 mt-0.5">You need to set up your pricing before generating estimates.</p>
+                      <p className="text-xs text-amber-600 mt-0.5 italic">Takes less than 1 minute.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pl-7">
+                    <Button size="sm" className="h-7 text-xs gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
+                      onClick={onGoToEstimator}>
+                      <Zap className="w-3.5 h-3.5" /> Set Up Estimator
+                    </Button>
+                  </div>
+                </div>
               ) : detail.estimate.status === "failed" ? (
                 <p className="text-xs text-red-500 flex items-center gap-1.5"><XCircle className="w-3.5 h-3.5" /> {detail.estimate.errorMessage || "Estimate failed"}</p>
               ) : detail.estimate.status === "running" ? (
@@ -1240,6 +1310,7 @@ function EmbedTab() {
 export default function AdminQuoteForms() {
   const { data: submissions = [] } = useQuery<Submission[]>({ queryKey: ["/api/admin/submissions"] });
   const newCount = submissions.filter(s => s.pipelineStage === "new_request" && !s.archivedAt).length;
+  const [activeTab, setActiveTab] = useState("forms");
 
   return (
     <div className="flex flex-col h-full">
@@ -1255,7 +1326,7 @@ export default function AdminQuoteForms() {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        <Tabs defaultValue="forms" className="h-full flex flex-col">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
           <div className="border-b bg-background px-4 md:px-6">
             <TabsList className="h-9 bg-transparent border-0 p-0 gap-1">
               {[
@@ -1278,7 +1349,7 @@ export default function AdminQuoteForms() {
 
           <div className="flex-1 overflow-y-auto px-4 md:px-6 py-5">
             <TabsContent value="forms" className="mt-0"><FormsTab /></TabsContent>
-            <TabsContent value="submissions" className="mt-0 h-full"><SubmissionsTab /></TabsContent>
+            <TabsContent value="submissions" className="mt-0 h-full"><SubmissionsTab onGoToEstimator={() => setActiveTab("estimator")} /></TabsContent>
             <TabsContent value="pipeline" className="mt-0"><PipelineTab /></TabsContent>
             <TabsContent value="estimator" className="mt-0"><EstimatorSettingsTab /></TabsContent>
             <TabsContent value="email" className="mt-0"><EmailSettingsTab /></TabsContent>

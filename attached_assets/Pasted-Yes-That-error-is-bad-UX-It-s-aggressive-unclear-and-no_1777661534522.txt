@@ -1,0 +1,139 @@
+Yes. That error is bad UX. It’s aggressive, unclear, and not helpful.
+
+Here’s a clean fix that improves clarity and keeps your UI premium.
+
+DEV NOTE: Improve Estimator Error Message UX (First-Time Setup)
+
+Objective
+Replace the red error block with a guided, friendly, actionable experience.
+
+Do not break:
+
+Estimator logic
+API response handling
+Existing settings page
+Form submission flow
+Replace Current Error Message
+
+REMOVE:
+“Estimate failed 400: Configure Estimator Settings first.”
+
+REPLACE WITH:
+
+Title:
+“Estimator setup required”
+
+Message:
+“You need to set up your pricing before generating estimates.”
+
+Subtext:
+“Takes less than 1 minute.”
+
+Add Primary Action Button (CRITICAL)
+
+Button:
+“Set Up Estimator”
+
+Action:
+
+Redirect to: Estimator Settings page
+OR open modal (preferred for better UX)
+Add Secondary Option
+
+Text button:
+“Learn how it works”
+
+Action:
+
+Opens small tooltip or modal explaining:
+You need pricing rules
+Example: per visit, per sq ft, per room
+UI Component Design (IMPORTANT)
+
+Replace the big red block with:
+
+Style:
+
+Soft warning card (NOT error)
+Background: light yellow or soft neutral
+Icon: warning icon (not error X)
+
+Layout:
+
+[Icon] Estimator setup required
+You need to set up your pricing before generating estimates
+Takes less than 1 minute
+
+[ Set Up Estimator ]
+[ Learn how it works ]
+
+Smart Behavior (IMPORTANT)
+
+Only show this message if:
+
+No estimator settings exist
+User clicks “Generate Estimate”
+
+Do NOT show:
+
+On page load
+Randomly in UI
+Optional Upgrade (HIGH VALUE)
+
+Instead of blocking completely:
+
+Allow user to click “Generate Estimate” → then show modal:
+
+Modal Title:
+“Quick setup required”
+
+Fields (inline quick setup):
+
+Pricing type:
+Per visit
+Per hour
+Per sq ft
+Base price input
+
+Buttons:
+
+Save & Generate
+Cancel
+
+This removes friction completely
+
+Tone Guidelines
+
+All messaging must be:
+
+Clear
+Calm
+Actionable
+
+Avoid:
+
+“failed”
+“error 400”
+technical language
+Developer Notes
+
+Backend:
+
+Keep returning error code
+Frontend intercepts and maps to UI state
+
+Frontend:
+
+Create new state: “estimator_not_configured”
+Render warning card instead of error toast
+
+End Result
+
+Instead of:
+Confusing red error → user stuck
+
+You get:
+Clear guidance → one click → problem solved
+
+If you want next:
+I can design the quick setup modal so users can generate estimates without ever leaving the page.
