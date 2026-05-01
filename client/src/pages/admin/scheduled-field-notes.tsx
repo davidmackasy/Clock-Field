@@ -1297,7 +1297,10 @@ function SubmissionStepCard({ step, idx, onClick }: { step: Step; idx: number; o
           <ZoomIn className="w-4 h-4 text-white drop-shadow" />
         </div>
       </div>
-      <p className="text-[10px] font-medium truncate mt-0.5 leading-tight" title={step.title}>{step.title}</p>
+      <p className="text-[10px] font-medium truncate mt-0.5 leading-tight" title={step.title}>
+        {/* Show short label: strip the "Section - " prefix if present (e.g. "Office 2 - Window" → "Window") */}
+        {step.title.includes(" - ") ? step.title.split(" - ").slice(1).join(" - ") : `Photo ${idx + 1}`}
+      </p>
       {hasSub && <p className="text-[9px] text-muted-foreground">{format(parseISO(step.submission!.submittedAt), "h:mm a")}</p>}
     </div>
   );

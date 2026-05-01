@@ -111,24 +111,36 @@ export default function EmployeeScheduledFieldNotesCapture() {
         { imageUrl: capturedImage }
       );
       await res.json(); // consume response
-      // Refetch to get updated submission state from backend
-      await refetchSubmission();
+      // Refetch and use the UPDATED data for auto-advance (avoids stale-closure bug)
+      const refetchResult = await refetchSubmission();
       await queryClient.invalidateQueries({ queryKey: ["/api/employee/scheduled-field-notes/today"] });
       setCapturedImage(null);
       setRetaking(false);
-      // Auto-advance to next incomplete required step
-      const nextIncompleteIdx = allSteps.findIndex(
+
+      // Rebuild the flat steps list from the fresh refetch data
+      const updatedSub = refetchResult.data;
+      const updatedAllSteps: typeof allSteps = [];
+      (updatedSub?.sections || [])
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .forEach((section, si) => {
+          (section.steps || [])
+            .sort((a, b) => a.sortOrder - b.sortOrder)
+            .forEach(step => updatedAllSteps.push({ ...step, sectionTitle: section.title, sectionIndex: si }));
+        });
+
+      // Auto-advance to next incomplete step using fresh data
+      const nextIncompleteIdx = updatedAllSteps.findIndex(
         (s, i) => i > flatStepIndex && !s.submission
       );
       if (nextIncompleteIdx !== -1) {
         setFlatStepIndex(nextIncompleteIdx);
       } else {
-        // No more incomplete steps — check if there's a next step at all
+        // No more incomplete steps ahead — stay on current (Complete button will appear)
+        // but advance past current if it was already submitted before this step
         const nextIdx = flatStepIndex + 1;
-        if (nextIdx < allSteps.length) {
+        if (nextIdx < updatedAllSteps.length) {
           setFlatStepIndex(nextIdx);
         }
-        // else stay on last step — Complete button will appear
       }
     } catch (err: any) {
       toast({ title: "Could not save photo. Please try again.", variant: "destructive" });
@@ -150,13 +162,19 @@ export default function EmployeeScheduledFieldNotesCapture() {
       await queryClient.invalidateQueries({ queryKey: ["/api/employee/scheduled-field-notes/today"] });
       setShowOutro(true);
     } catch (err: any) {
-      // Parse friendly error
+      // apiRequest throws "STATUS: BODY" — extract JSON body from the message
       const msg = err.message || "";
-      if (msg.includes("Not all required") || msg.includes("missing")) {
-        const missing = msg.match(/\d+/)?.[0];
+      let parsedBody: { message?: string; missing?: number } = {};
+      try {
+        const jsonMatch = msg.match(/\{[\s\S]*\}/);
+        if (jsonMatch) parsedBody = JSON.parse(jsonMatch[0]);
+      } catch { /* ignore parse errors */ }
+
+      const missing = parsedBody.missing;
+      if (parsedBody.message?.includes("required") || missing != null) {
         toast({
-          title: missing
-            ? `${missing} required photo${Number(missing) !== 1 ? "s" : ""} still missing`
+          title: missing != null
+            ? `${missing} required photo${missing !== 1 ? "s" : ""} still missing`
             : "Some required photos are still missing",
           description: "Please complete all required steps before finishing the checklist.",
           variant: "destructive",
@@ -259,10 +277,14 @@ export default function EmployeeScheduledFieldNotesCapture() {
   const canGoBack = flatStepIndex > 0;
   const canGoNext = flatStepIndex < allSteps.length - 1;
 
-  // The main display title is the section (main step) title
+  // The main display title is the section (main step) title — "Office 2", "Women's Washroom"
   const displayTitle = currentStep.sectionTitle;
-  // The photo task detail label (shown smaller, for context)
-  const taskLabel = currentStep.title !== currentStep.sectionTitle ? currentStep.title : null;
+  // Show "Photo X of Y" as a small subtitle (cleaner than showing the full step title)
+  const sectionSteps = allSteps.filter(s => s.sectionTitle === currentStep.sectionTitle);
+  const stepInSection = sectionSteps.findIndex(s => s.id === currentStep.id);
+  const taskLabel = sectionSteps.length > 1
+    ? `Photo ${stepInSection + 1} of ${sectionSteps.length}`
+    : null;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

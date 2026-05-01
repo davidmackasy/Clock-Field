@@ -190,9 +190,12 @@ export default function PublicScheduledFieldNoteReport() {
     const submitted = [...(section.steps || [])]
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .filter(s => s.submission?.submittedImageUrl);
-    const photos = submitted.map(s => ({
+    const photos = submitted.map((s, photoIdx) => ({
       src: s.submission!.submittedImageUrl,
-      label: s.title,
+      // Clean label: strip "Section - " prefix, or fall back to "Photo X"
+      label: s.title.includes(" - ")
+        ? s.title.split(" - ").slice(1).join(" - ")
+        : `Photo ${photoIdx + 1}`,
       time: format(parseISO(s.submission!.submittedAt), "h:mm a"),
     }));
     const thumbnailSrc = photos[0]?.src || null;
