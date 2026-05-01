@@ -659,24 +659,42 @@ function TemplateBuilder({ template, onBack }: { template: FullTemplate; onBack:
           onSave={(data) => updateStep.mutate({ id: editingStep.id, data })} />
       )}
 
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={onBack} data-testid="button-back-to-templates"><ArrowLeft className="w-4 h-4" /></Button>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="font-semibold text-lg truncate">{template.name}</h2>
-            <TypeBadge type={currentType} />
-            <StatusBadge status={template.status} />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {sections.length} main step{sections.length !== 1 ? "s" : ""} · {totalPhotoTasks} photo task{totalPhotoTasks !== 1 ? "s" : ""}
-          </p>
+      {/* ── Template header: two-row on mobile, single row on desktop ── */}
+      <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-3">
+        {/* Row 1: back + title + badges */}
+        <div className="flex items-center gap-2 min-w-0">
+          <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0" data-testid="button-back-to-templates">
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <h2 className="font-semibold text-lg truncate min-w-0">{template.name}</h2>
+          <TypeBadge type={currentType} />
+          <StatusBadge status={template.status} />
         </div>
-        <Button variant="outline" size="sm" onClick={() => setEditingTemplateInfo(true)} data-testid="button-edit-template-info">
-          <Edit2 className="w-3.5 h-3.5 mr-1.5" />Settings
-        </Button>
-        <Button size="sm" onClick={() => setShowAddMainStep(true)} data-testid="button-add-main-step">
-          <Plus className="w-3.5 h-3.5 mr-1.5" />Add Main Step
-        </Button>
+
+        {/* Row 2: summary + action buttons */}
+        <div className="flex items-center gap-2 pl-11 md:pl-0 md:flex-1">
+          <p className="text-xs text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis flex-1 md:flex-none">
+            <span className="md:hidden">
+              {sections.length} step{sections.length !== 1 ? "s" : ""} · {totalPhotoTasks} task{totalPhotoTasks !== 1 ? "s" : ""}
+            </span>
+            <span className="hidden md:inline">
+              {sections.length} main step{sections.length !== 1 ? "s" : ""} · {totalPhotoTasks} photo task{totalPhotoTasks !== 1 ? "s" : ""}
+            </span>
+          </p>
+          <div className="flex items-center gap-2 ml-auto md:ml-0 shrink-0">
+            <Button variant="outline" size="sm" onClick={() => setEditingTemplateInfo(true)} data-testid="button-edit-template-info"
+              className="gap-1.5">
+              <Edit2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Settings</span>
+            </Button>
+            <Button size="sm" onClick={() => setShowAddMainStep(true)} data-testid="button-add-main-step"
+              className="gap-1.5">
+              <Plus className="w-3.5 h-3.5" />
+              <span className="sm:hidden">Add Step</span>
+              <span className="hidden sm:inline">Add Main Step</span>
+            </Button>
+          </div>
+        </div>
       </div>
 
       {sections.length === 0 ? (
