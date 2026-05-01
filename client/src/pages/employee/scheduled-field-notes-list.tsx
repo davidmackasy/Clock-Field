@@ -26,7 +26,10 @@ export default function EmployeeScheduledFieldNotesList() {
   });
 
   const startSubmission = useMutation({
-    mutationFn: (assignmentId: string) => apiRequest("POST", "/api/employee/scheduled-field-notes/start", { assignmentId }),
+    mutationFn: async (assignmentId: string) => {
+      const res = await apiRequest("POST", "/api/employee/scheduled-field-notes/start", { assignmentId });
+      return res.json();
+    },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/employee/scheduled-field-notes/today"] });
       navigate(`/employee/scheduled-field-notes/${data.id}`);

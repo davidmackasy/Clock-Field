@@ -587,8 +587,10 @@ export default function AdminPublicationEditor() {
   const coverRef = useRef<HTMLInputElement>(null);
   const sectionRefs = useRef<Map<string, SectionCardHandle>>(new Map());
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [pubId, setPubId] = useState<string | null>(isNew ? null : params?.id || null);
   const [status, setStatus] = useState("draft");
+  const [publicationFormat, setPublicationFormat] = useState<"standard" | "blog" | "walkthrough" | "tutorial">("standard");
   const [loadedPub, setLoadedPub] = useState<any>(null);
 
   const { data: pubData, isLoading } = useQuery<any>({
@@ -623,6 +625,7 @@ export default function AdminPublicationEditor() {
       setSections(pubData.sections || []);
       setPricing(pubData.pricing || []);
       setStatus(pubData.status || "draft");
+      setPublicationFormat((pubData.publicationFormat || "standard") as any);
     }
   }, [pubData, loadedPub]);
 
@@ -661,7 +664,7 @@ export default function AdminPublicationEditor() {
           introText: introText || null, category: category || null,
           seoTitle: seoTitle || null, seoDescription: seoDescription || null,
           coverImageData: coverImageData || null,
-          helpfulVotingEnabled, ...contactPayload, ...brandingPayload,
+          helpfulVotingEnabled, publicationFormat, ...contactPayload, ...brandingPayload,
           ...overrides,
         });
         if (!resp.ok) {
@@ -682,7 +685,7 @@ export default function AdminPublicationEditor() {
           introText: introText || null, category: category || null,
           seoTitle: seoTitle || null, seoDescription: seoDescription || null,
           coverImageData: coverImageData || null,
-          helpfulVotingEnabled, ...contactPayload, ...brandingPayload,
+          helpfulVotingEnabled, publicationFormat, ...contactPayload, ...brandingPayload,
           ...overrides,
         });
         if (!resp.ok) {
@@ -705,6 +708,53 @@ export default function AdminPublicationEditor() {
   const togglePublish = () => {
     const newStatus = status === "published" ? "unpublished" : "published";
     saveMeta({ status: newStatus }).then(() => setStatus(newStatus));
+  };
+
+  const generateStructure = async () => {
+    if (!pubId) {
+      toast({ title: "Save the publication first before generating." });
+      return;
+    }
+    if (!title) {
+      toast({ title: "Add a title before generating." });
+      return;
+    }
+    setGenerating(true);
+    try {
+      const topic = `${title}${introText ? ". " + introText : ""}`;
+      const actionMap: Record<string, string> = {
+        blog: "generate_blog",
+        walkthrough: "generate_walkthrough",
+        tutorial: "generate_tutorial",
+      };
+      const action = actionMap[publicationFormat];
+      if (!action) return;
+      const resp = await apiRequest("POST", "/api/publications/ai-assist", { text: topic, action });
+      const data = await resp.json();
+      const aiSections: { title: string; body: string }[] = data.sections || [];
+      if (aiSections.length === 0) {
+        toast({ title: "No sections returned. Try again." });
+        return;
+      }
+      const created: any[] = [];
+      for (const s of aiSections) {
+        const r = await apiRequest("POST", `/api/publications/${pubId}/sections`, { sectionType: "text" });
+        const newSection = await r.json();
+        const upd = await apiRequest("PATCH", `/api/publications/${pubId}/sections/${newSection.id}`, {
+          title: s.title,
+          body: s.body,
+          sectionType: "text",
+        });
+        const updatedSection = await upd.json();
+        created.push(updatedSection);
+      }
+      setSections(prev => [...prev, ...created]);
+      toast({ title: `${created.length} sections generated` });
+    } catch (e: any) {
+      toast({ title: "Generation failed", description: e.message, variant: "destructive" });
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const addSection = async () => {
@@ -867,6 +917,30 @@ export default function AdminPublicationEditor() {
             <CardTitle className="text-sm font-semibold">Publication Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+
+            {/* Publication Format */}
+            <div className="space-y-1">
+              <Label className="text-xs">Publication Format</Label>
+              <Select value={publicationFormat} onValueChange={v => setPublicationFormat(v as any)}>
+                <SelectTrigger data-testid="select-publication-format">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="standard">Standard</SelectItem>
+                  <SelectItem value="blog">Blog Style</SelectItem>
+                  <SelectItem value="walkthrough">Walkthrough</SelectItem>
+                  <SelectItem value="tutorial">Tutorial</SelectItem>
+                </SelectContent>
+              </Select>
+              {publicationFormat !== "standard" && (
+                <p className="text-[11px] text-muted-foreground">
+                  {publicationFormat === "blog" && "Editorial storytelling: intro, main sections, conclusion."}
+                  {publicationFormat === "walkthrough" && "Step-by-step visual guide for clients. Each step displays an instruction and image."}
+                  {publicationFormat === "tutorial" && "Structured teaching content: overview, materials, steps, tips, and common mistakes."}
+                </p>
+              )}
+            </div>
+
             <div className="space-y-1">
               <Label className="text-xs">Title *</Label>
               <Input
@@ -1272,17 +1346,35 @@ export default function AdminPublicationEditor() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-800">Content Sections</h2>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addSection}
-              className="gap-1.5 text-xs"
-              data-testid="button-add-section"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add Section
-            </Button>
+            <div className="flex gap-2">
+              {publicationFormat !== "standard" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={generateStructure}
+                  disabled={generating || !pubId || !title}
+                  className="gap-1.5 text-xs border-purple-200 text-purple-700 hover:bg-purple-50"
+                  data-testid="button-generate-structure"
+                >
+                  {generating
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Sparkles className="w-3.5 h-3.5" />}
+                  Generate
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addSection}
+                className="gap-1.5 text-xs"
+                data-testid="button-add-section"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Section
+              </Button>
+            </div>
           </div>
 
           {sections.length === 0 && (

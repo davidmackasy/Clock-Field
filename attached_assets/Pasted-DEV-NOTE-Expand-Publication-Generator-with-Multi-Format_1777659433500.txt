@@ -1,0 +1,216 @@
+DEV NOTE: Expand Publication Generator with Multi-Format Output (Blog, Walkthrough, Tutorial)
+
+Objective
+Upgrade the Publication feature to support multiple content formats without breaking any existing functionality.
+
+Do not break or affect:
+
+Existing publication generation flow
+Database structure for current publications
+Public link rendering
+Image handling and uploads
+AI generation pipeline (only extend it)
+Add Publication Type Selector (Frontend Only First)
+
+Location:
+Publication creation screen
+
+Add a required selection at the top:
+
+Field name:
+"Publication Format"
+
+Options:
+
+Standard (default, current behavior)
+Blog Style
+Walkthrough
+Tutorial
+
+Important:
+
+Default must remain "Standard" so nothing breaks for existing users
+If user does not touch this, system behaves exactly as now
+Define Output Behavior Per Format
+
+Keep the same input fields you already have
+Do NOT remove anything
+Only enhance based on selected format
+
+A. Standard (Existing)
+No change
+Keep current generation exactly as is
+
+B. Blog Style
+
+Purpose:
+More storytelling, editorial, engaging content
+
+AI Output Structure:
+
+Title
+Subtitle
+Introduction (context + problem)
+Main Sections (2–4 sections)
+Light tips or highlights
+Conclusion
+
+UI Rendering:
+
+Clean spacing
+Paragraph focused
+Optional images between sections
+
+C. Walkthrough (MOST IMPORTANT FOR YOU)
+
+Purpose:
+Step-by-step visual explanation for clients
+
+AI Output Structure:
+
+Title
+Short intro (what this is about)
+Step-by-step sections:
+
+Each step:
+
+Step title (Step 1, Step 2, etc.)
+Short instruction
+Optional note or tip
+
+Example structure:
+Step 1: Prepare the Area
+Step 2: Apply Product
+Step 3: Scrub or Vacuum
+Step 4: Final Check
+
+UI Rendering (CRITICAL):
+
+Each step is a block
+Image attached per step (if images exist)
+Clean vertical flow
+
+Layout:
+[Step Title]
+[Short instruction]
+[Image]
+
+If multiple images:
+Show grid under that step
+
+D. Tutorial Style
+
+Purpose:
+More detailed teaching content
+
+AI Output Structure:
+
+Title
+Overview
+Tools / Materials Needed
+Step-by-step instructions
+Tips and best practices
+Common mistakes to avoid
+Final result summary
+
+UI Rendering:
+
+Section-based layout
+More structured than walkthrough
+Less visual-heavy than walkthrough
+AI Prompt Routing (Backend)
+
+Do NOT replace current AI logic
+Extend it
+
+Add switch based on format:
+
+If format = Standard → use current prompt
+If format = Blog → use blog prompt
+If format = Walkthrough → use step-based prompt
+If format = Tutorial → use structured guide prompt
+
+Each prompt must:
+
+Stay concise
+Avoid long paragraphs
+Match UI structure
+Image Handling (IMPORTANT)
+
+Do NOT change how images are uploaded or stored
+
+Enhancement:
+When format = Walkthrough or Tutorial:
+
+Distribute images across steps
+If 4 images → map 1 per step
+If more → group logically
+If none → text-only fallback
+Database Changes (SAFE)
+
+Add new column:
+
+publication_format: string
+Values:
+
+standard
+blog
+walkthrough
+tutorial
+
+Default:
+standard
+
+Do NOT modify existing records
+
+Public Page Rendering Update
+
+Update rendering logic:
+
+If standard → current layout
+If blog → paragraph layout
+If walkthrough → step blocks
+If tutorial → section blocks
+
+Do NOT change:
+
+URL structure
+Sharing logic
+Review system
+UI/UX Details (IMPORTANT)
+Keep layout clean and mobile-first
+Step blocks must stack nicely on mobile
+Images must not stretch or crop badly
+No gray bars or broken aspect ratios
+Maintain 3-column grid on mobile when needed
+Backward Compatibility
+Old publications = Standard format automatically
+No migration needed
+No breaking changes
+Future Add-On (Do NOT build now)
+
+Later you can add:
+
+"Client Education Mode"
+"Before/After Story Mode"
+"Sales Proposal Mode"
+
+But not now
+
+End Result
+
+You now have:
+
+Simple publications (existing)
+Blog-style content for marketing
+Walkthroughs for clients (this is the big win)
+Tutorials for training cleaners
+
+This turns publication into:
+
+A client education tool
+A sales tool
+A proof-of-work tool
+
+If you want next step:
+I can design the exact UI layout for the walkthrough page so it looks premium and not basic.

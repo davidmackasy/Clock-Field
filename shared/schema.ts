@@ -1046,6 +1046,7 @@ export const publications = pgTable("publications", {
   brandingSource: text("branding_source").notNull().default("company"),
   customBrandName: text("custom_brand_name"),
   customBrandLogoUrl: text("custom_brand_logo_url"),
+  publicationFormat: text("publication_format").notNull().default("standard"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 });

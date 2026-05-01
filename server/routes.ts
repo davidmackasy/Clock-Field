@@ -6964,7 +6964,7 @@ FINAL RULES:
   app.post("/api/publications", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
-      const { title, subtitle, slug: rawSlug, category, introText, seoTitle, seoDescription, coverImageData, helpfulVotingEnabled, contactCtaEnabled } = req.body;
+      const { title, subtitle, slug: rawSlug, category, introText, seoTitle, seoDescription, coverImageData, helpfulVotingEnabled, contactCtaEnabled, publicationFormat } = req.body;
       if (!title) return res.status(400).json({ message: "Title is required" });
 
       let slug = rawSlug ? slugify(rawSlug) : slugify(title);
@@ -6991,6 +6991,7 @@ FINAL RULES:
         category: category || null,
         helpfulVotingEnabled: helpfulVotingEnabled !== false,
         contactCtaEnabled: contactCtaEnabled !== false,
+        publicationFormat: publicationFormat || "standard",
         createdBy: user.id,
         publishedAt: null,
         createdAt: now,
@@ -7053,6 +7054,7 @@ FINAL RULES:
         ...(b.contactWebsite !== undefined && { contactWebsite: b.contactWebsite }),
         ...(b.contactCtaText !== undefined && { contactCtaText: b.contactCtaText }),
         ...(b.contactCtaLink !== undefined && { contactCtaLink: b.contactCtaLink }),
+        ...(b.publicationFormat !== undefined && { publicationFormat: b.publicationFormat }),
       };
 
       if (b.status === "published" && !pub.publishedAt) {
@@ -7229,6 +7231,36 @@ FINAL RULES:
       const { text, action, context } = req.body;
       if (!text) return res.status(400).json({ message: "text required" });
 
+      const { default: OpenAI } = await import("openai");
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+      // ── Format-specific structure generators (return JSON with sections array) ──
+      const generateActions: Record<string, string> = {
+        generate_blog: `You are a professional business content writer. Generate a blog-style publication structure for the given topic. Return a JSON object with a "sections" array. Each section must have "title" (string) and "body" (string). Generate 4-5 sections: an engaging intro, 2-3 main content sections, and a conclusion. Keep each body concise (3-5 sentences), professional, and relevant to the topic.`,
+        generate_walkthrough: `You are a professional business writer specializing in step-by-step client walkthroughs. Generate a walkthrough for the given topic. Return a JSON object with a "sections" array. Each section must have "title" (string, formatted as "Step N: [action verb phrase]") and "body" (string, a short 1-3 sentence clear instruction). Generate 4-6 steps that are logical and easy to follow.`,
+        generate_tutorial: `You are a professional business educator. Generate a detailed tutorial for the given topic. Return a JSON object with a "sections" array. Each section must have "title" (string) and "body" (string). Include these sections in order: Overview, Tools & Materials Needed, then 3-4 numbered step-by-step instruction sections, Tips & Best Practices, Common Mistakes to Avoid, and Final Result. Keep each body concise and practical.`,
+      };
+
+      if (generateActions[action]) {
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: generateActions[action] },
+            { role: "user", content: text },
+          ],
+          max_tokens: 900,
+          response_format: { type: "json_object" },
+        });
+        const raw = completion.choices[0]?.message?.content?.trim() || "{}";
+        try {
+          const parsed = JSON.parse(raw);
+          return res.json({ sections: parsed.sections || [] });
+        } catch {
+          return res.json({ sections: [] });
+        }
+      }
+
+      // ── Existing text-improvement actions ──────────────────────────────────
       const systemPrompts: Record<string, string> = {
         improve: "You are a professional business writer. Improve the following text to be clear, professional, and engaging. Return only the improved text, no preamble.",
         professional: "You are an expert copywriter. Rewrite the following text in a professional, polished business tone. Return only the rewritten text.",
@@ -7239,9 +7271,6 @@ FINAL RULES:
       };
 
       const systemPrompt = systemPrompts[action] || systemPrompts.improve;
-
-      const { default: OpenAI } = await import("openai");
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [

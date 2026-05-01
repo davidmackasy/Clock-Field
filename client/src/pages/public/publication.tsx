@@ -271,74 +271,139 @@ export default function PublicPublication() {
           </div>
         )}
 
-        {/* Sections */}
-        {sections.map((section: any) => {
-          const sectionMedia: any[] = section.media || [];
-          const sectionImages = sectionMedia.map((m: any) => ({ src: m.imageData, caption: m.caption || undefined }));
-          const containerClass = SECTION_TYPE_STYLE[section.sectionType] || "";
-          const sectionPricing = section.pricingItems
-            ? (() => { try { return JSON.parse(section.pricingItems); } catch { return []; } })()
-            : [];
+        {/* Sections — format-aware rendering */}
+        {(() => {
+          const fmt = pub.publicationFormat || "standard";
+          return sections.map((section: any, sectionIdx: number) => {
+            const sectionMedia: any[] = section.media || [];
+            const sectionImages = sectionMedia.map((m: any) => ({ src: m.imageData, caption: m.caption || undefined }));
+            const sectionPricing = section.pricingItems
+              ? (() => { try { return JSON.parse(section.pricingItems); } catch { return []; } })()
+              : [];
 
-          return (
-            <section
-              key={section.id}
-              className={`mb-10 ${containerClass}`}
-              data-testid={`section-${section.id}`}
-            >
-              {section.title && (
-                <h2 className="font-bold text-gray-900 mb-3 text-xl">
-                  {section.title}
-                </h2>
-              )}
-              {section.body && (
-                <p className={`text-gray-700 leading-relaxed whitespace-pre-line mb-3 ${section.sectionType === "callout" ? "text-sm" : "text-base"}`}>
-                  {section.body}
-                </p>
-              )}
-              {section.sectionType === "cta" && contactInfo?.email && (
-                <a
-                  href={`mailto:${contactInfo.email}`}
-                  className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors mt-2"
-                  data-testid="button-section-cta"
-                >
-                  Contact {contactInfo.name || company?.name}
-                </a>
-              )}
-              {sectionImages.length > 0 && (
-                <div>
-                  <div className={`grid gap-2 my-3 ${sectionImages.length === 1 ? "grid-cols-1" : sectionImages.length === 2 ? "grid-cols-2" : sectionImages.length === 3 ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-4"}`}>
-                    {sectionImages.map((img, imgIdx) => {
-                      const globalIdx = allImages.findIndex(a => a.src === img.src);
-                      return (
-                        <div
-                          key={imgIdx}
-                          className="cursor-zoom-in group"
-                          onClick={() => openLightbox(allImages, globalIdx >= 0 ? globalIdx : imgIdx)}
-                          data-testid={`img-section-${section.id}-${imgIdx}`}
-                        >
-                          <div className="relative overflow-hidden rounded-xl border border-gray-100 bg-gray-50">
-                            <img
-                              src={img.src}
-                              alt={img.caption || ""}
-                              className="w-full object-cover aspect-video group-hover:scale-105 transition-transform duration-300"
-                            />
-                          </div>
-                          {img.caption && (
-                            <p className="text-xs text-gray-400 mt-1 text-center italic">{img.caption}</p>
-                          )}
-                        </div>
-                      );
-                    })}
+            const imageGrid = sectionImages.length > 0 ? (
+              <div className={`grid gap-2 my-3 ${sectionImages.length === 1 ? "grid-cols-1" : sectionImages.length === 2 ? "grid-cols-2" : sectionImages.length === 3 ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-4"}`}>
+                {sectionImages.map((img, imgIdx) => {
+                  const globalIdx = allImages.findIndex(a => a.src === img.src);
+                  return (
+                    <div
+                      key={imgIdx}
+                      className="cursor-zoom-in group"
+                      onClick={() => openLightbox(allImages, globalIdx >= 0 ? globalIdx : imgIdx)}
+                      data-testid={`img-section-${section.id}-${imgIdx}`}
+                    >
+                      <div className="relative overflow-hidden rounded-xl border border-gray-100 bg-gray-50">
+                        <img
+                          src={img.src}
+                          alt={img.caption || ""}
+                          className="w-full object-cover aspect-video group-hover:scale-105 transition-transform duration-300"
+                        />
+                      </div>
+                      {img.caption && (
+                        <p className="text-xs text-gray-400 mt-1 text-center italic">{img.caption}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null;
+
+            // ── Walkthrough: numbered step blocks ───────────────────────────
+            if (fmt === "walkthrough") {
+              return (
+                <section key={section.id} className="mb-8" data-testid={`section-${section.id}`}>
+                  <div className="flex gap-4">
+                    <div className="shrink-0 w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold mt-0.5">
+                      {sectionIdx + 1}
+                    </div>
+                    <div className="flex-1 min-w-0 pb-8 border-b border-gray-100">
+                      {section.title && (
+                        <h2 className="font-bold text-gray-900 mb-2 text-lg leading-snug" data-testid={`text-step-title-${section.id}`}>
+                          {section.title}
+                        </h2>
+                      )}
+                      {section.body && (
+                        <p className="text-gray-600 leading-relaxed whitespace-pre-line text-sm mb-3">
+                          {section.body}
+                        </p>
+                      )}
+                      {imageGrid}
+                      <SectionPricingBlock pricingItems={sectionPricing} />
+                    </div>
                   </div>
-                </div>
-              )}
+                </section>
+              );
+            }
 
-              {/* Per-section pricing */}
-              <SectionPricingBlock pricingItems={sectionPricing} />
-            </section>
-          );
-        })}
+            // ── Tutorial: structured card sections ──────────────────────────
+            if (fmt === "tutorial") {
+              return (
+                <section key={section.id} className="mb-6 border border-gray-100 rounded-xl overflow-hidden" data-testid={`section-${section.id}`}>
+                  {section.title && (
+                    <div className="bg-gray-50 px-5 py-3 border-b border-gray-100">
+                      <h2 className="font-bold text-gray-900 text-base">{section.title}</h2>
+                    </div>
+                  )}
+                  <div className="px-5 py-4">
+                    {section.body && (
+                      <p className="text-gray-700 leading-relaxed whitespace-pre-line text-base mb-3">
+                        {section.body}
+                      </p>
+                    )}
+                    {imageGrid}
+                    <SectionPricingBlock pricingItems={sectionPricing} />
+                  </div>
+                </section>
+              );
+            }
+
+            // ── Blog: paragraph-forward editorial layout ────────────────────
+            if (fmt === "blog") {
+              return (
+                <section key={section.id} className="mb-10" data-testid={`section-${section.id}`}>
+                  {section.title && (
+                    <h2 className="font-bold text-gray-900 mb-4 text-2xl leading-snug">
+                      {section.title}
+                    </h2>
+                  )}
+                  {section.body && (
+                    <p className="text-gray-700 leading-relaxed whitespace-pre-line text-base mb-4">
+                      {section.body}
+                    </p>
+                  )}
+                  {imageGrid}
+                  <SectionPricingBlock pricingItems={sectionPricing} />
+                </section>
+              );
+            }
+
+            // ── Standard (default) ──────────────────────────────────────────
+            const containerClass = SECTION_TYPE_STYLE[section.sectionType] || "";
+            return (
+              <section key={section.id} className={`mb-10 ${containerClass}`} data-testid={`section-${section.id}`}>
+                {section.title && (
+                  <h2 className="font-bold text-gray-900 mb-3 text-xl">{section.title}</h2>
+                )}
+                {section.body && (
+                  <p className={`text-gray-700 leading-relaxed whitespace-pre-line mb-3 ${section.sectionType === "callout" ? "text-sm" : "text-base"}`}>
+                    {section.body}
+                  </p>
+                )}
+                {section.sectionType === "cta" && contactInfo?.email && (
+                  <a
+                    href={`mailto:${contactInfo.email}`}
+                    className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors mt-2"
+                    data-testid="button-section-cta"
+                  >
+                    Contact {contactInfo.name || company?.name}
+                  </a>
+                )}
+                {imageGrid}
+                <SectionPricingBlock pricingItems={sectionPricing} />
+              </section>
+            );
+          });
+        })()}
 
         {/* ── Publication-level Pricing (legacy/global) ─────────────────── */}
         {pricing.length > 0 && (
