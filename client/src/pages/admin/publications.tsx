@@ -26,10 +26,24 @@ import {
   Plus, Newspaper, Search, ExternalLink, Copy, Pencil, Trash2,
   Globe, FileText, EyeOff, Archive, FileSignature, Send, Eye,
   CheckCircle2, XCircle, Clock, MoreHorizontal, Loader2, Edit3,
-  LayoutTemplate,
+  LayoutTemplate, Briefcase, UserPlus,
 } from "lucide-react";
 import type { Agreement, AgreementTemplate } from "@shared/schema";
 import AdminProposals from "@/pages/admin/proposals";
+
+// ── Hiring Package helpers ────────────────────────────────────────────────────
+const HP_STATUS_LABELS: Record<string, string> = {
+  draft: "Draft", sent: "Sent", viewed: "Viewed", completed: "Completed",
+};
+const HP_STATUS_COLORS: Record<string, string> = {
+  draft: "bg-gray-100 text-gray-700",
+  sent: "bg-blue-100 text-blue-700",
+  viewed: "bg-amber-100 text-amber-700",
+  completed: "bg-green-100 text-green-700",
+};
+const HP_STATUS_ICONS: Record<string, any> = {
+  draft: FileText, sent: Send, viewed: Eye, completed: CheckCircle2,
+};
 
 // ── Publication helpers ───────────────────────────────────────────────────────
 const PUB_STATUS_META: Record<string, { label: string; color: string }> = {
@@ -662,31 +676,236 @@ function PublicationsSubPage() {
   );
 }
 
+// ── Hiring Packages Sub-Page ──────────────────────────────────────────────────
+function HiringPackagesSubPage() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [, navigate] = useLocation();
+  const [search, setSearch] = useState("");
+  const [newDialogOpen, setNewDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [newForm, setNewForm] = useState({ employeeName: "", employeeEmail: "", jobTitle: "", startDate: "" });
+
+  const { data: packages = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/admin/hiring-packages"],
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/hiring-packages", newForm).then(r => r.json()),
+    onSuccess: (pkg: any) => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/hiring-packages"] });
+      toast({ title: "Hiring package created" });
+      setNewDialogOpen(false);
+      navigate(`/admin/hiring-packages/${pkg.id}`);
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/admin/hiring-packages/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/hiring-packages"] });
+      toast({ title: "Package deleted" });
+      setDeleteTarget(null);
+    },
+    onError: () => toast({ title: "Failed to delete", variant: "destructive" }),
+  });
+
+  const filtered = packages.filter(p =>
+    (p.employeeName || "").toLowerCase().includes(search.toLowerCase()) ||
+    (p.employeeEmail || "").toLowerCase().includes(search.toLowerCase()) ||
+    (p.jobTitle || "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Hiring Packages</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Create and send employee onboarding packages with digital signature</p>
+        </div>
+        <Button data-testid="button-new-hiring-package" onClick={() => setNewDialogOpen(true)}>
+          <Plus className="w-4 h-4 mr-2" /> New Package
+        </Button>
+      </div>
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <Input
+          placeholder="Search by name, email, or job title…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="pl-9"
+          data-testid="input-search-hiring-packages"
+        />
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mb-4">
+            <Briefcase className="w-6 h-6 text-blue-400" />
+          </div>
+          {search ? (
+            <p className="text-sm text-gray-600">No packages matching "{search}"</p>
+          ) : (
+            <>
+              <p className="text-sm font-medium text-gray-700">No hiring packages yet</p>
+              <p className="text-xs text-gray-400 mt-1">Create a package with company policies for new employees to sign</p>
+              <Button className="mt-4" size="sm" onClick={() => setNewDialogOpen(true)} data-testid="button-empty-new-package">
+                <Plus className="w-4 h-4 mr-2" /> Create Package
+              </Button>
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map(pkg => {
+            const Icon = HP_STATUS_ICONS[pkg.status] || FileText;
+            const colorClass = HP_STATUS_COLORS[pkg.status] || "bg-gray-100 text-gray-700";
+            return (
+              <Card key={pkg.id} className="hover:shadow-sm transition-shadow cursor-pointer"
+                data-testid={`card-hiring-package-${pkg.id}`}
+                onClick={() => navigate(`/admin/hiring-packages/${pkg.id}`)}>
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0 mt-0.5">
+                      <Briefcase className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-semibold text-gray-900 text-sm">
+                          {pkg.employeeName || "Unnamed Employee"}
+                        </h3>
+                        <Badge className={`text-[10px] px-2 py-0 h-4 rounded-full font-medium ${colorClass}`}>
+                          <Icon className="w-2.5 h-2.5 mr-0.5 inline" />
+                          {HP_STATUS_LABELS[pkg.status] || pkg.status}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {pkg.employeeEmail || "No email"}{pkg.jobTitle ? ` · ${pkg.jobTitle}` : ""}
+                      </p>
+                      <p className="text-[11px] text-gray-400 mt-1">
+                        Created {fmtDate(pkg.createdAt)}
+                        {pkg.sentAt ? ` · Sent ${fmtDate(pkg.sentAt)}` : ""}
+                        {pkg.completedAt ? ` · Completed ${fmtDate(pkg.completedAt)}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" className="w-8 h-8 text-gray-400 hover:text-gray-700"
+                        onClick={() => navigate(`/admin/hiring-packages/${pkg.id}`)}
+                        data-testid={`button-edit-package-${pkg.id}`}>
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="w-8 h-8 text-gray-400 hover:text-destructive"
+                        onClick={() => setDeleteTarget(pkg.id)}
+                        data-testid={`button-delete-package-${pkg.id}`}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* New Package Dialog */}
+      <Dialog open={newDialogOpen} onOpenChange={o => !o && setNewDialogOpen(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Hiring Package</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <Label htmlFor="np-name">Employee Name</Label>
+              <Input id="np-name" value={newForm.employeeName} onChange={e => setNewForm(p => ({ ...p, employeeName: e.target.value }))}
+                placeholder="Jane Smith" className="mt-1" data-testid="input-new-employee-name" />
+            </div>
+            <div>
+              <Label htmlFor="np-email">Employee Email</Label>
+              <Input id="np-email" type="email" value={newForm.employeeEmail} onChange={e => setNewForm(p => ({ ...p, employeeEmail: e.target.value }))}
+                placeholder="jane@example.com" className="mt-1" data-testid="input-new-employee-email" />
+            </div>
+            <div>
+              <Label htmlFor="np-title">Job Title</Label>
+              <Input id="np-title" value={newForm.jobTitle} onChange={e => setNewForm(p => ({ ...p, jobTitle: e.target.value }))}
+                placeholder="Cleaning Technician" className="mt-1" data-testid="input-new-job-title" />
+            </div>
+            <div>
+              <Label htmlFor="np-start">Start Date</Label>
+              <Input id="np-start" type="date" value={newForm.startDate} onChange={e => setNewForm(p => ({ ...p, startDate: e.target.value }))}
+                className="mt-1" data-testid="input-new-start-date" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !newForm.employeeName}
+              data-testid="button-create-package">
+              {createMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UserPlus className="w-4 h-4 mr-2" />}
+              Create Package
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={o => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Hiring Package?</AlertDialogTitle>
+            <AlertDialogDescription>This will permanently delete the package and all associated data. This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}
+              className="bg-destructive hover:bg-destructive/90"
+              data-testid="button-confirm-delete-package">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function AdminPublications() {
-  const [activeTab, setActiveTab] = useState("publications");
+  const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+  const initialTab = searchParams.get("tab") || "publications";
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
       <div className="max-w-5xl mx-auto w-full px-4 py-6 space-y-6">
-        <div className="flex gap-1 border-b pb-0 -mb-6">
+        <div className="flex gap-1 border-b pb-0 -mb-6 overflow-x-auto">
           <button
             onClick={() => setActiveTab("publications")}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 transition-colors ${activeTab === "publications" ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === "publications" ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
             data-testid="tab-publications">
             <Newspaper className="w-4 h-4" /> Publications
           </button>
           <button
             onClick={() => setActiveTab("agreements")}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 transition-colors ${activeTab === "agreements" ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === "agreements" ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
             data-testid="tab-agreements">
             <FileSignature className="w-4 h-4" /> Agreements
           </button>
           <button
             onClick={() => setActiveTab("proposals")}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 transition-colors ${activeTab === "proposals" ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === "proposals" ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
             data-testid="tab-proposals">
             <FileText className="w-4 h-4" /> Proposals
+          </button>
+          <button
+            onClick={() => setActiveTab("hiring")}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === "hiring" ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            data-testid="tab-hiring-packages">
+            <Briefcase className="w-4 h-4" /> Hiring Packages
           </button>
         </div>
 
@@ -694,6 +913,7 @@ export default function AdminPublications() {
           {activeTab === "publications" && <PublicationsSubPage />}
           {activeTab === "agreements" && <AgreementsSubPage />}
           {activeTab === "proposals" && <AdminProposals />}
+          {activeTab === "hiring" && <HiringPackagesSubPage />}
         </div>
       </div>
     </div>

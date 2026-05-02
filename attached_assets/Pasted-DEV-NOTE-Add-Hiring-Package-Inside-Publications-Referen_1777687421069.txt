@@ -1,0 +1,316 @@
+DEV NOTE: Add Hiring Package Inside Publications
+
+Reference file uploaded by user: hiring.pdf
+
+Goal:
+Add a new Hiring Package document type inside the existing Publications page. This will be used to send new employees a hiring package they can fill out, sign, download as PDF, print, or complete online through a public link.
+
+Do not break or affect anything currently working.
+Do not move Publications again.
+Do not add Hiring Package as a main menu item.
+Do not add Hiring Package to the hamburger menu.
+Do not change Agreements, Proposals, or existing Publications flow except to add this new document type inside Publications.
+Ask for approval before touching anything outside this scope.
+
+Current requirement:
+Hiring Package must live inside Publications only.
+
+Inside Publications, add document type tabs or cards:
+
+Publication
+Proposal
+Agreement
+Hiring Package
+
+Hiring Package should be treated like the other document templates but focused on employee onboarding.
+
+What the Hiring Package should include:
+Use the uploaded hiring package PDF as the starting structure. It includes:
+
+Cover page
+Rules of Conduct / Conditions of Employment
+Code of Ethics
+Dress Code and Personal Hygiene Policy
+Safety Boots Reimbursement Policy
+Substance Abuse Policy / Suspicion of Impairment
+Emergency Contact and Medical Information Form
+
+Main feature requirements:
+
+Admin can create a Hiring Package
+
+Inside Publications, add a Hiring Package option.
+
+Admin should be able to:
+
+Create a new hiring package
+Choose employee name
+Choose employee email
+Add job title or position
+Add start date
+Add company name
+Add company address
+Add optional notes
+Edit all policy sections before sending
+Preview the final document
+Save as draft
+Send to employee
+Generate public link
+Download PDF
+Print PDF
+
+Keep it editable
+
+The admin must be able to edit as much as possible before sending.
+
+Editable sections:
+
+Company name
+Company logo
+Company address
+Document title
+Intro message
+Rules of Conduct
+Code of Ethics
+Dress Code / Uniform Policy
+Safety Boots Policy
+Substance Abuse Policy
+Emergency Contact section
+Acknowledgement text
+Signature labels
+Footer text
+Page numbers
+Any custom policy section
+
+Add buttons:
+
+Add Section
+Remove Section
+Edit Section
+Reorder Section
+Duplicate Section
+
+Do not hard-code everything in a way that cannot be edited later.
+
+Employee public link flow
+
+When admin sends a hiring package, generate a secure public link.
+
+Employee should be able to open the link without logging in.
+
+Public link should allow employee to:
+
+Read the full hiring package
+Fill required fields
+Fill emergency contact information
+Add optional medical information
+Sign digitally
+Submit completed package
+Download completed PDF
+Print completed PDF
+
+The link should be clean and professional.
+
+Example public link format:
+
+/public/hiring-package/:token
+
+Do not expose internal database IDs in the public URL.
+
+Required employee fields
+
+Add these fillable fields:
+
+Employee full name
+Employee email
+Phone number
+Address
+Job title / position
+Start date
+Emergency contact 1 name
+Emergency contact 1 relationship
+Emergency contact 1 phone number
+Emergency contact 2 name
+Emergency contact 2 relationship
+Emergency contact 2 phone number
+Optional allergies
+Optional medical notes
+Employee signature
+Signature date
+
+Digital signature
+
+Add a signature box.
+
+Employee must be able to sign with:
+
+Mouse
+Finger on mobile
+Touch screen
+
+Also allow:
+
+Clear signature
+Re-sign
+Submit signature
+
+After submission, the signature must appear on the final completed PDF.
+
+Do not show only “Signed by employee.”
+Show the actual drawn signature.
+
+PDF output
+
+The final PDF should look professional.
+
+Requirements:
+
+Clean company header
+Logo if available
+Company name
+Document title: Hiring Package
+Employee name
+Date completed
+Clean section spacing
+Proper page breaks
+No text cut off
+No crowded pages
+Signature appears clearly
+Emergency contact section appears clearly
+Optional medical information only shows if employee filled it out
+Footer should show Clockfield branding only if branding setting allows it
+
+Also make sure every second page has enough top spacing so the PDF does not feel cramped.
+
+Admin view after submission
+
+Inside Publications > Hiring Package, admin should see:
+
+Draft
+Sent
+Viewed
+Completed
+Downloaded
+
+Admin should be able to:
+
+View submitted package
+Download completed PDF
+Print completed PDF
+Resend link
+Copy public link
+Archive package
+Delete only if allowed by current app rules
+
+Status tracking
+
+Add status values:
+
+draft
+sent
+viewed
+completed
+expired
+archived
+
+When employee opens the link, update status to viewed.
+
+When employee signs and submits, update status to completed.
+
+Email sending
+
+When admin sends the hiring package, send an email to the employee.
+
+Email should say something like:
+
+Subject:
+Your Hiring Package from [Company Name]
+
+Body:
+Hi [Employee Name],
+
+Please review and complete your hiring package using the secure link below.
+
+[Complete Hiring Package]
+
+You can fill it out online, sign it digitally, download a copy, or print it for your records.
+
+Thank you,
+[Company Name]
+
+Keep the email simple and professional.
+
+Mobile responsiveness
+
+The public employee form must work properly on mobile.
+
+Important mobile requirements:
+
+Readable text
+Large input fields
+Signature box works with finger
+PDF preview does not overflow
+Buttons stay visible
+No horizontal scrolling
+Sections should collapse or stack cleanly
+Download and print buttons should be easy to access
+
+Database suggestion
+
+Create a new table or model for hiring packages.
+
+Suggested fields:
+
+id
+business_id
+employee_id optional
+employee_name
+employee_email
+status
+public_token
+template_data_json
+employee_response_json
+signature_url or signature_data
+completed_pdf_url
+sent_at
+viewed_at
+completed_at
+expires_at
+created_at
+updated_at
+
+Do not store the public link as the primary security method only. Use a secure random token.
+
+Template system
+
+The Hiring Package should be template-based.
+
+Admin should be able to save a reusable template.
+
+Default template should be based on the uploaded hiring package, but edited into a cleaner modern Clockfield format.
+
+Add:
+
+Default Hiring Package Template
+Create Custom Hiring Package Template
+Edit Template
+Use Template
+
+Do not affect existing publication features
+
+Do not break:
+
+Current Publications
+Agreements
+Proposals
+Public links
+PDF generation
+Custom branding
+Company logo settings
+Existing form builder
+Client-facing public pages
+
+This is only adding Hiring Package as a new document type inside Publications.
+
+Final expected result:
+Admin goes to Publications, chooses Hiring Package, edits the package, sends it to a new employee, employee opens a public link, fills it out, signs it online, then admin receives a completed signed hiring package and can download or print the final PDF.

@@ -69,6 +69,8 @@ import AdminProposalBuilder from "@/pages/admin/proposal-builder";
 import PublicProposal from "@/pages/public/proposal";
 import AdminAgreementBuilder from "@/pages/admin/agreement-builder";
 import PublicAgreement from "@/pages/public/agreement";
+import AdminHiringPackageBuilder from "@/pages/admin/hiring-package-builder";
+import PublicHiringPackage from "@/pages/public/hiring-package";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import LandingPage from "@/pages/landing";
@@ -130,6 +132,7 @@ function AdminLayout() {
               <Route path="/admin/proposals" component={AdminProposals} />
               <Route path="/admin/agreements/:id" component={AdminAgreementBuilder} />
               <Route path="/admin/agreements" component={AdminAgreementsPage} />
+              <Route path="/admin/hiring-packages/:id" component={AdminHiringPackageBuilder} />
               <Route path="/admin/supplies" component={AdminSupplies} />
               <Route path="/admin/publications/:id" component={AdminPublicationEditor} />
               <Route path="/admin/publications" component={AdminPublications} />
@@ -331,6 +334,14 @@ function AppRouter() {
     return (
       <Switch>
         <Route path="/p/:slug" component={PublicPublication} />
+      </Switch>
+    );
+  }
+
+  if (location.startsWith("/public/hiring-package/")) {
+    return (
+      <Switch>
+        <Route path="/public/hiring-package/:token" component={PublicHiringPackage} />
       </Switch>
     );
   }

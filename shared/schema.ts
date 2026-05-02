@@ -1827,3 +1827,31 @@ export type ScheduledFieldNoteSubmission = typeof scheduledFieldNoteSubmissions.
 export type InsertScheduledFieldNoteSubmission = z.infer<typeof insertScheduledFieldNoteSubmissionSchema>;
 export type ScheduledFieldNoteStepSubmission = typeof scheduledFieldNoteStepSubmissions.$inferSelect;
 export type InsertScheduledFieldNoteStepSubmission = z.infer<typeof insertScheduledFieldNoteStepSubmissionSchema>;
+
+// ── Hiring Packages ───────────────────────────────────────────────────────────
+export const hiringPackages = pgTable("hiring_packages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  employeeName: text("employee_name").notNull().default(""),
+  employeeEmail: text("employee_email").notNull().default(""),
+  employeePhone: text("employee_phone").notNull().default(""),
+  employeeAddress: text("employee_address").notNull().default(""),
+  jobTitle: text("job_title").notNull().default(""),
+  startDate: text("start_date").notNull().default(""),
+  status: text("status").notNull().default("draft"),
+  publicToken: text("public_token").notNull().unique(),
+  templateData: json("template_data"),
+  employeeResponse: json("employee_response"),
+  signatureData: text("signature_data").notNull().default(""),
+  internalNotes: text("internal_notes").notNull().default(""),
+  sentAt: text("sent_at"),
+  viewedAt: text("viewed_at"),
+  completedAt: text("completed_at"),
+  expiresAt: text("expires_at"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const insertHiringPackageSchema = createInsertSchema(hiringPackages).omit({ id: true });
+export type HiringPackage = typeof hiringPackages.$inferSelect;
+export type InsertHiringPackage = z.infer<typeof insertHiringPackageSchema>;

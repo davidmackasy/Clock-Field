@@ -9521,6 +9521,183 @@ Return ONLY valid JSON:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ── Hiring Packages (Admin) ───────────────────────────────────────────────
+  app.get("/api/admin/hiring-packages", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const pkgs = await storage.getHiringPackagesByCompany(user.companyId);
+      res.json(pkgs);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/admin/hiring-packages/:id", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const pkg = await storage.getHiringPackage(req.params.id);
+      if (!pkg || pkg.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const company = await storage.getCompany(user.companyId);
+      res.json({ ...pkg, company });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/admin/hiring-packages", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { employeeName, employeeEmail, employeePhone, employeeAddress, jobTitle, startDate, templateData, internalNotes } = req.body;
+      const { randomUUID } = await import("crypto");
+      const now = new Date().toISOString();
+      const pkg = await storage.createHiringPackage({
+        companyId: user.companyId,
+        employeeName: employeeName || "",
+        employeeEmail: employeeEmail || "",
+        employeePhone: employeePhone || "",
+        employeeAddress: employeeAddress || "",
+        jobTitle: jobTitle || "",
+        startDate: startDate || "",
+        status: "draft",
+        publicToken: randomUUID(),
+        templateData: templateData || null,
+        employeeResponse: null,
+        signatureData: "",
+        internalNotes: internalNotes || "",
+        sentAt: null, viewedAt: null, completedAt: null, expiresAt: null,
+        createdAt: now, updatedAt: now,
+      });
+      res.json(pkg);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/admin/hiring-packages/:id", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const pkg = await storage.getHiringPackage(req.params.id);
+      if (!pkg || pkg.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const updated = await storage.updateHiringPackage(req.params.id, { ...req.body, updatedAt: new Date().toISOString() });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/admin/hiring-packages/:id", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const pkg = await storage.getHiringPackage(req.params.id);
+      if (!pkg || pkg.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      await storage.deleteHiringPackage(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/admin/hiring-packages/:id/send-email", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const pkg = await storage.getHiringPackage(req.params.id);
+      if (!pkg || pkg.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const company = await storage.getCompany(user.companyId);
+      const companyName = company?.name || "Your Employer";
+      const host = req.get("host") || "clockfield.ca";
+      const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
+      const publicUrl = `${proto}://${host}/public/hiring-package/${pkg.publicToken}`;
+      const to = req.body.email || pkg.employeeEmail;
+      if (!to) return res.status(400).json({ message: "Employee email is required" });
+
+      let emailSent = false;
+      let emailError = "";
+      try {
+        const FormDataLib = (await import("form-data")).default;
+        const Mailgun = (await import("mailgun.js")).default;
+        const mg = new Mailgun(FormDataLib);
+        const apiKey = process.env.MAILGUN_API_KEY;
+        const domain = process.env.MAILGUN_DOMAIN;
+        if (!apiKey || !domain) throw new Error("Email not configured");
+        const client = mg.client({ username: "api", key: apiKey });
+        const from = `${companyName} <noreply@${domain}>`;
+        const employeeFirstName = (pkg.employeeName || "").split(" ")[0] || "there";
+        await client.messages.create(domain, {
+          from,
+          to: [to],
+          subject: `Your Hiring Package from ${companyName}`,
+          text: `Hi ${employeeFirstName},\n\nPlease review and complete your hiring package by clicking the link below:\n${publicUrl}\n\nYou can read each policy, fill in your personal information, and sign digitally.\n\nThank you,\n${companyName}`,
+          html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fff;">
+<h2 style="color:#1a1a1a;margin-bottom:4px;font-size:22px;">Your Hiring Package</h2>
+<p style="color:#374151;font-size:15px;line-height:1.6;margin-top:16px;">Hi ${employeeFirstName},</p>
+<p style="color:#374151;font-size:15px;line-height:1.6;">Please review and complete your hiring package using the secure link below. You can read each policy, fill in your personal information, and sign digitally.</p>
+<div style="margin:28px 0;">
+  <a href="${publicUrl}" style="background:#2563eb;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:600;display:inline-block;">Complete My Hiring Package →</a>
+</div>
+<p style="color:#6b7280;font-size:13px;">If the button above doesn't work, copy and paste this link into your browser:<br/><a href="${publicUrl}" style="color:#2563eb;">${publicUrl}</a></p>
+<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
+<p style="color:#9ca3af;font-size:12px;">Sent by ${companyName} via Clockfield</p>
+</div>`,
+        });
+        emailSent = true;
+      } catch (mailErr: any) {
+        emailError = mailErr.message;
+      }
+
+      const now = new Date().toISOString();
+      await storage.updateHiringPackage(pkg.id, {
+        status: emailSent && pkg.status === "draft" ? "sent" : pkg.status,
+        sentAt: emailSent ? now : (pkg.sentAt || undefined),
+        updatedAt: now,
+      });
+
+      if (emailSent) {
+        res.json({ success: true, message: "Email sent successfully.", publicUrl });
+      } else {
+        res.json({ success: false, emailError, message: "Email could not be sent.", publicUrl });
+      }
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Hiring Packages (Public — no auth) ────────────────────────────────────
+  app.get("/api/public/hiring-packages/:token", async (req, res) => {
+    try {
+      const pkg = await storage.getHiringPackageByToken(req.params.token);
+      if (!pkg) return res.status(404).json({ message: "Not found" });
+      const company = await storage.getCompany(pkg.companyId);
+      if (!pkg.viewedAt) {
+        await storage.updateHiringPackage(pkg.id, {
+          viewedAt: new Date().toISOString(),
+          status: pkg.status === "sent" ? "viewed" : pkg.status,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      res.json({
+        id: pkg.id,
+        employeeName: pkg.employeeName,
+        employeeEmail: pkg.employeeEmail,
+        employeePhone: pkg.employeePhone,
+        employeeAddress: pkg.employeeAddress,
+        jobTitle: pkg.jobTitle,
+        startDate: pkg.startDate,
+        status: pkg.status,
+        templateData: pkg.templateData,
+        employeeResponse: pkg.employeeResponse,
+        signatureData: pkg.signatureData,
+        completedAt: pkg.completedAt,
+        company: { name: company?.name || "Your Employer", logoUrl: company?.logoUrl || null, address: company?.address || null },
+      });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/public/hiring-packages/:token/complete", async (req, res) => {
+    try {
+      const pkg = await storage.getHiringPackageByToken(req.params.token);
+      if (!pkg) return res.status(404).json({ message: "Not found" });
+      if (pkg.status === "completed") return res.status(400).json({ message: "Already completed" });
+      const { employeeResponse, signatureData } = req.body;
+      const now = new Date().toISOString();
+      await storage.updateHiringPackage(pkg.id, {
+        employeeResponse: employeeResponse || null,
+        signatureData: signatureData || "",
+        status: "completed",
+        completedAt: now,
+        updatedAt: now,
+      });
+      res.json({ success: true, completedAt: now });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   return httpServer;
 }
 

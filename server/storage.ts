@@ -69,6 +69,8 @@ import {
   type AgreementTemplate, type InsertAgreementTemplate,
   type Agreement, type InsertAgreement,
   type AgreementActivityLog, type InsertAgreementActivityLog,
+  hiringPackages,
+  type HiringPackage, type InsertHiringPackage,
   quoteRequestWalkthroughs, quoteRequestWalkthroughPhotos, quoteRequestWalkthroughSections,
   type QuoteRequestWalkthrough, type InsertQuoteRequestWalkthrough,
   type QuoteRequestWalkthroughPhoto, type InsertQuoteRequestWalkthroughPhoto,
@@ -392,6 +394,13 @@ export interface IStorage {
   // Agreement Activity
   getAgreementActivity(agreementId: string): Promise<AgreementActivityLog[]>;
   addAgreementActivity(data: InsertAgreementActivityLog): Promise<AgreementActivityLog>;
+  // Hiring Packages
+  getHiringPackagesByCompany(companyId: string): Promise<HiringPackage[]>;
+  getHiringPackage(id: string): Promise<HiringPackage | undefined>;
+  getHiringPackageByToken(token: string): Promise<HiringPackage | undefined>;
+  createHiringPackage(data: InsertHiringPackage): Promise<HiringPackage>;
+  updateHiringPackage(id: string, data: Partial<InsertHiringPackage>): Promise<HiringPackage | undefined>;
+  deleteHiringPackage(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2014,6 +2023,30 @@ export class DatabaseStorage implements IStorage {
   }
   async deleteScheduledFieldNoteStepSubmission(id: string): Promise<void> {
     await db.delete(scheduledFieldNoteStepSubmissions).where(eq(scheduledFieldNoteStepSubmissions.id, id));
+  }
+
+  // ── Hiring Packages ───────────────────────────────────────────────────────
+  async getHiringPackagesByCompany(companyId: string): Promise<HiringPackage[]> {
+    return db.select().from(hiringPackages).where(eq(hiringPackages.companyId, companyId)).orderBy(desc(hiringPackages.createdAt));
+  }
+  async getHiringPackage(id: string): Promise<HiringPackage | undefined> {
+    const [row] = await db.select().from(hiringPackages).where(eq(hiringPackages.id, id));
+    return row;
+  }
+  async getHiringPackageByToken(token: string): Promise<HiringPackage | undefined> {
+    const [row] = await db.select().from(hiringPackages).where(eq(hiringPackages.publicToken, token));
+    return row;
+  }
+  async createHiringPackage(data: InsertHiringPackage): Promise<HiringPackage> {
+    const [row] = await db.insert(hiringPackages).values(data as any).returning();
+    return row;
+  }
+  async updateHiringPackage(id: string, data: Partial<InsertHiringPackage>): Promise<HiringPackage | undefined> {
+    const [row] = await db.update(hiringPackages).set(data as any).where(eq(hiringPackages.id, id)).returning();
+    return row;
+  }
+  async deleteHiringPackage(id: string): Promise<void> {
+    await db.delete(hiringPackages).where(eq(hiringPackages.id, id));
   }
 }
 
