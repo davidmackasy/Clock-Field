@@ -9877,6 +9877,304 @@ Return ONLY valid JSON:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ── Training Hub API ──────────────────────────────────────────────────────
+
+  function trainingNow() { return new Date().toISOString(); }
+  function genCertCode() { return "CERT-" + Math.random().toString(36).substring(2, 10).toUpperCase(); }
+  function genPublicId() { return Math.random().toString(36).substring(2, 12) + Math.random().toString(36).substring(2, 12); }
+
+  function parseYoutubeId(url: string): string | null {
+    if (!url) return null;
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+      /^([a-zA-Z0-9_-]{11})$/,
+    ];
+    for (const p of patterns) { const m = url.match(p); if (m) return m[1]; }
+    return null;
+  }
+
+  // GET /api/training/stats
+  app.get("/api/training/stats", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const stats = await storage.getTrainingStats(user.companyId);
+      res.json(stats);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // GET /api/training/courses
+  app.get("/api/training/courses", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const courses = await storage.getTrainingCourses(user.companyId);
+      res.json(courses);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/training/courses
+  app.post("/api/training/courses", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const now = trainingNow();
+      const publicId = req.body.publicLinkEnabled ? genPublicId() : null;
+      const course = await storage.createTrainingCourse({
+        ...req.body,
+        companyId: user.companyId,
+        createdBy: user.id,
+        publicId,
+        createdAt: now,
+        updatedAt: now,
+      });
+      res.json(course);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // GET /api/training/courses/:id
+  app.get("/api/training/courses/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const course = await storage.getTrainingCourse(req.params.id);
+      if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const modules = await storage.getTrainingModules(course.id);
+      const assignments = await storage.getTrainingAssignments(course.id);
+      const completions = await storage.getTrainingCompletions(course.id);
+      const assigned = assignments.length;
+      const completedEmployees = new Set(assignments.filter(a => {
+        const empCompletions = completions.filter(c => c.employeeId === a.employeeId);
+        return empCompletions.length >= modules.filter(m => m.isRequired).length && modules.filter(m => m.isRequired).length > 0;
+      }).map(a => a.employeeId));
+      const started = new Set(completions.filter(c => c.employeeId).map(c => c.employeeId)).size;
+      const completed = completedEmployees.size;
+      const completionPct = assigned > 0 ? Math.round((completed / assigned) * 100) : 0;
+      res.json({ course, modules, assignments, completions, stats: { assigned, started, completed, completionPct } });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // PATCH /api/training/courses/:id
+  app.patch("/api/training/courses/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const course = await storage.getTrainingCourse(req.params.id);
+      if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const updateData: any = { ...req.body, updatedAt: trainingNow() };
+      if (req.body.publicLinkEnabled && !course.publicId) updateData.publicId = genPublicId();
+      const updated = await storage.updateTrainingCourse(req.params.id, updateData);
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // DELETE /api/training/courses/:id
+  app.delete("/api/training/courses/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const course = await storage.getTrainingCourse(req.params.id);
+      if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      await storage.deleteTrainingCourse(req.params.id);
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/training/courses/:id/modules
+  app.post("/api/training/courses/:id/modules", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const course = await storage.getTrainingCourse(req.params.id);
+      if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const now = trainingNow();
+      const youtubeEmbedId = req.body.youtubeUrl ? parseYoutubeId(req.body.youtubeUrl) : null;
+      const module = await storage.createTrainingModule({
+        ...req.body,
+        courseId: req.params.id,
+        companyId: user.companyId,
+        youtubeEmbedId,
+        createdAt: now,
+        updatedAt: now,
+      });
+      if (req.body.assets && Array.isArray(req.body.assets)) {
+        for (let i = 0; i < req.body.assets.length; i++) {
+          const a = req.body.assets[i];
+          if (a.assetData) await storage.createTrainingModuleAsset({ moduleId: module.id, assetData: a.assetData, assetType: a.assetType ?? "image", sortOrder: i, createdAt: now });
+        }
+      }
+      res.json(module);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // PATCH /api/training/courses/:courseId/modules/:moduleId
+  app.patch("/api/training/courses/:courseId/modules/:moduleId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const course = await storage.getTrainingCourse(req.params.courseId);
+      if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const now = trainingNow();
+      const youtubeEmbedId = req.body.youtubeUrl ? parseYoutubeId(req.body.youtubeUrl) : undefined;
+      const updateData: any = { ...req.body, updatedAt: now };
+      if (youtubeEmbedId !== undefined) updateData.youtubeEmbedId = youtubeEmbedId;
+      delete updateData.assets;
+      const updated = await storage.updateTrainingModule(req.params.moduleId, updateData);
+      if (req.body.assets && Array.isArray(req.body.assets)) {
+        await storage.deleteTrainingModuleAssets(req.params.moduleId);
+        for (let i = 0; i < req.body.assets.length; i++) {
+          const a = req.body.assets[i];
+          if (a.assetData) await storage.createTrainingModuleAsset({ moduleId: req.params.moduleId, assetData: a.assetData, assetType: a.assetType ?? "image", sortOrder: i, createdAt: now });
+        }
+      }
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // DELETE /api/training/courses/:courseId/modules/:moduleId
+  app.delete("/api/training/courses/:courseId/modules/:moduleId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const course = await storage.getTrainingCourse(req.params.courseId);
+      if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      await storage.deleteTrainingModule(req.params.moduleId);
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/training/courses/:id/assign
+  app.post("/api/training/courses/:id/assign", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const course = await storage.getTrainingCourse(req.params.id);
+      if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const { employeeIds } = req.body;
+      if (!Array.isArray(employeeIds)) return res.status(400).json({ message: "employeeIds required" });
+      await storage.assignTrainingCourse(req.params.id, user.companyId, employeeIds, user.id);
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // GET /api/training/my-courses — employee
+  app.get("/api/training/my-courses", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== "employee") return res.status(403).json({ message: "Forbidden" });
+      const courses = await storage.getMyTrainingCourses(user.id, user.companyId);
+      res.json(courses);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // GET /api/training/my-courses/:courseId — employee course detail
+  app.get("/api/training/my-courses/:courseId", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== "employee") return res.status(403).json({ message: "Forbidden" });
+      const detail = await storage.getMyTrainingCourse(req.params.courseId, user.id);
+      if (!detail) return res.status(404).json({ message: "Not found" });
+      res.json(detail);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/training/my-courses/:courseId/progress/:moduleId — employee mark complete
+  app.post("/api/training/my-courses/:courseId/progress/:moduleId", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== "employee") return res.status(403).json({ message: "Forbidden" });
+      const course = await storage.getTrainingCourse(req.params.courseId);
+      if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      await storage.markModuleComplete(req.params.courseId, req.params.moduleId, user.companyId, user.id, undefined);
+      const detail = await storage.getMyTrainingCourse(req.params.courseId, user.id);
+      if (detail && detail.course.isCompleted && course.certificateEnabled) {
+        const existing = await storage.getTrainingCertificate(req.params.courseId, user.id, undefined);
+        if (!existing) {
+          const now = trainingNow();
+          await storage.createTrainingCertificate({
+            courseId: req.params.courseId,
+            companyId: user.companyId,
+            employeeId: user.id,
+            publicLearnerId: null,
+            learnerName: `${user.firstName} ${user.lastName}`,
+            certificateCode: genCertCode(),
+            issuedAt: now,
+            createdAt: now,
+          });
+          await storage.updateTrainingCourse(req.params.courseId, { updatedAt: trainingNow() });
+        }
+      }
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Public Training Routes ────────────────────────────────────────────────
+
+  // GET /api/public/training/:publicId
+  app.get("/api/public/training/:publicId", async (req, res) => {
+    try {
+      const course = await storage.getTrainingCourseByPublicId(req.params.publicId);
+      if (!course || !course.publicLinkEnabled || !course.isPublished) return res.status(404).json({ message: "Course not found" });
+      const company = await storage.getCompany(course.companyId);
+      const modules = await storage.getTrainingModules(course.id);
+      res.json({
+        id: course.id,
+        title: course.title,
+        description: course.description,
+        category: course.category,
+        thumbnailData: course.thumbnailData,
+        estimatedDuration: course.estimatedDuration,
+        certificateEnabled: course.certificateEnabled,
+        companyName: company?.name ?? "Company",
+        modules: modules.map(m => ({
+          id: m.id,
+          title: m.title,
+          description: m.description,
+          youtubeEmbedId: m.youtubeEmbedId,
+          lessonText: m.lessonText,
+          sortOrder: m.sortOrder,
+          assets: m.assets,
+        })),
+      });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/public/training/:publicId/start
+  app.post("/api/public/training/:publicId/start", async (req, res) => {
+    try {
+      const course = await storage.getTrainingCourseByPublicId(req.params.publicId);
+      if (!course || !course.publicLinkEnabled || !course.isPublished) return res.status(404).json({ message: "Course not found" });
+      const { name, email } = req.body;
+      if (!name || !email) return res.status(400).json({ message: "name and email required" });
+      const now = trainingNow();
+      const learner = await storage.createPublicLearner({ courseId: course.id, companyId: course.companyId, name, email, startedAt: now, completedAt: null, createdAt: now });
+      res.json({ learnerId: learner.id });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/public/training/:publicId/progress/:moduleId
+  app.post("/api/public/training/:publicId/progress/:moduleId", async (req, res) => {
+    try {
+      const course = await storage.getTrainingCourseByPublicId(req.params.publicId);
+      if (!course || !course.publicLinkEnabled || !course.isPublished) return res.status(404).json({ message: "Course not found" });
+      const { learnerId } = req.body;
+      if (!learnerId) return res.status(400).json({ message: "learnerId required" });
+      const learner = await storage.getPublicLearner(learnerId);
+      if (!learner) return res.status(404).json({ message: "Learner not found" });
+      await storage.markModuleComplete(course.id, req.params.moduleId, course.companyId, undefined, learnerId);
+      const modules = await storage.getTrainingModules(course.id);
+      const progress = await storage.getTrainingProgress(course.id, undefined, learnerId);
+      const completedIds = new Set(progress.map(p => p.moduleId));
+      const reqModules = modules.filter(m => m.isRequired);
+      const isCompleted = reqModules.length > 0 ? reqModules.every(m => completedIds.has(m.id)) : completedIds.size === modules.length && modules.length > 0;
+      let certificate = null;
+      if (isCompleted) {
+        const now = trainingNow();
+        await storage.updatePublicLearner(learnerId, { completedAt: now });
+        if (course.certificateEnabled) {
+          const existing = await storage.getTrainingCertificate(course.id, undefined, learnerId);
+          if (!existing) {
+            const cert = await storage.createTrainingCertificate({ courseId: course.id, companyId: course.companyId, employeeId: null, publicLearnerId: learnerId, learnerName: learner.name, certificateCode: genCertCode(), issuedAt: now, createdAt: now });
+            certificate = { certificateCode: cert.certificateCode, issuedAt: cert.issuedAt };
+          } else {
+            certificate = { certificateCode: existing.certificateCode, issuedAt: existing.issuedAt };
+          }
+        }
+      }
+      res.json({ moduleId: req.params.moduleId, isCompleted, certificate });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   return httpServer;
 }
 

@@ -1,0 +1,367 @@
+DEV NOTE: Add Training Hub to ClockField
+
+Goal:
+Build a new Training Hub feature inside ClockField.
+
+This feature allows business admins to create training courses for employees using YouTube unlisted videos, text lessons, slides/images, modules, completion tracking, public course links, and downloadable completion certificates.
+
+Do not break or affect anything currently working.
+Do not change existing auth, employee app, admin app, payroll, worklogs, field notes, reports, publications, agreements, Stripe, or existing navigation unless required for this new Training Hub feature.
+Ask for approval before touching anything outside this feature.
+
+Feature name:
+Training Hub
+
+Main users:
+Admin / Business Owner
+Employee
+Public learner through shared link
+
+Core concept:
+Admins can create a course.
+Each course can have one or more modules.
+Each module can include:
+
+YouTube unlisted video embed
+Text lesson
+Steps/instructions
+Images or slide-style content
+Optional quiz/checklist
+Completion button
+
+Employees can watch/read modules, mark them complete, and receive a certificate after finishing the course.
+
+Admin can see which employees completed which courses.
+
+Public course links:
+Admins should be able to copy a public link for a course and send it to a new hire or employee who does not use the employee app.
+
+Example:
+Admin creates “How to Mop Properly”
+Course has 5 modules
+Admin copies course link
+Employee opens the link
+Employee watches the training
+Employee enters name/email if not logged in
+ClockField records completion
+Admin can see completion inside Training Hub
+
+Admin Side Requirements
+
+Add a new page:
+Training Hub
+
+Admin can:
+Create course
+Edit course
+Delete/archive course
+Publish/unpublish course
+Copy public course link
+Assign course to all employees
+Assign course to selected employees
+View completion progress
+View employee certificates
+
+Course fields:
+Course title
+Course description
+Category
+Required or optional
+Estimated duration
+Thumbnail image
+Certificate enabled true/false
+Visibility:
+Private to assigned employees
+Available to all employees
+Public link enabled
+
+Module fields:
+Module title
+Module description
+YouTube unlisted link
+Text lesson
+Step-by-step instructions
+Slides/images upload
+Sort order
+Required completion true/false
+
+YouTube video behavior:
+Admin pastes a YouTube unlisted link.
+System converts it to an embedded player.
+Video shows at the top of the module page.
+Do not store or upload video files to ClockField.
+Only store the YouTube URL and embed ID.
+Support normal YouTube links and youtu.be links.
+
+Employee Side Requirements
+
+Inside employee app:
+Do not add Training Hub to the main bottom navigation unless approved.
+
+Place access inside:
+Employee profile
+or employee dashboard card
+
+Employee sees:
+Assigned courses
+Required courses
+Completed courses
+In-progress courses
+Certificate downloads
+
+Course view should feel like Udemy:
+Video or slide content on top
+Module list below or side panel on desktop
+Progress bar
+Next module button
+Mark complete button
+Completion status
+Mobile-first layout
+
+Public Course Link Requirements
+
+A public course link should allow non-logged-in users to complete training.
+
+Public learner flow:
+Open course link
+See company branding
+Enter name and email
+Start course
+Watch/read modules
+Mark modules complete
+Finish course
+Download certificate if enabled
+
+Admin should see public completions under the course.
+
+Completion Tracking
+
+Track:
+Employee ID if logged in
+Name/email if public learner
+Course ID
+Module completions
+Started date
+Completed date
+Progress percentage
+Certificate ID
+IP/device optional, if already available safely
+
+Employee profile should show:
+Courses assigned
+Courses completed
+Courses overdue if due dates are added later
+Certificates earned
+
+Admin course dashboard should show:
+Total assigned
+Total started
+Total completed
+Completion percentage
+List of employees and statuses
+
+Certificate Requirements
+
+When a course is completed, generate a simple professional certificate.
+
+Certificate should include:
+Company name
+Employee name
+Course title
+Completion date
+Certificate ID
+ClockField branding small footer
+Admin/company logo if available
+
+Add download PDF button.
+
+Important:
+Certificates should only say the employee completed the internal training course.
+Do not claim official WCB/legal certification unless the admin specifically writes that in the course title/content.
+
+UI/UX Requirements
+
+Make it premium, clean, and mobile-native.
+
+Design style:
+Figma-style cards
+Clean course thumbnails
+Progress bars
+Rounded cards
+Large mobile tap targets
+Sticky “Continue” or “Mark Complete” button on mobile
+Professional empty states
+No cluttered layout
+
+Admin Training Hub layout:
+Top stats cards:
+Total courses
+Assigned employees
+Completed trainings
+Pending trainings
+
+Below:
+Course list grid
+Create Course button
+Search/filter by category/status
+
+Course builder:
+Use step-based layout:
+Step 1: Course details
+Step 2: Add modules
+Step 3: Assign employees
+Step 4: Publish/share
+
+Module editor:
+Video link field at top
+Preview embed
+Text lesson editor
+Slides/images upload
+Save module button
+
+Employee course layout:
+Mobile:
+Video/slide content on top
+Lesson text below
+Module list collapsible
+Progress bar visible
+Continue button sticky at bottom
+
+Desktop:
+Content on left
+Module list/progress on right
+
+Database Tables Suggested
+
+training_courses
+id
+business_id
+title
+description
+category
+thumbnail_url
+is_required
+is_published
+public_link_enabled
+certificate_enabled
+estimated_duration
+created_by
+created_at
+updated_at
+
+training_modules
+id
+course_id
+title
+description
+youtube_url
+youtube_embed_id
+lesson_text
+sort_order
+is_required
+created_at
+updated_at
+
+training_module_assets
+id
+module_id
+asset_url
+asset_type
+sort_order
+created_at
+
+training_assignments
+id
+course_id
+employee_id
+assigned_by
+due_date
+status
+created_at
+
+training_progress
+id
+course_id
+module_id
+employee_id nullable
+public_learner_id nullable
+status
+completed_at
+created_at
+
+training_public_learners
+id
+course_id
+business_id
+name
+email
+started_at
+completed_at
+
+training_certificates
+id
+course_id
+employee_id nullable
+public_learner_id nullable
+certificate_id
+pdf_url
+issued_at
+
+Permissions
+
+Admin:
+Full create/edit/delete/publish/assign access for their business only.
+
+Employee:
+Can only see courses assigned to them or available to all employees in their business.
+
+Public learner:
+Can only access the course through a valid public link.
+
+Security Requirements
+
+Do not expose private business data on public links.
+Public course page should only show:
+Company name/logo
+Course content
+Completion form
+Certificate after completion
+
+Validate all YouTube URLs.
+Do not allow scripts or unsafe embeds.
+Use sanitized rich text for lesson content.
+
+Do not allow one business to access another business’s courses.
+
+Public URL format:
+clockfield.com/training/public/[coursePublicId]
+
+Employee URL:
+clockfield.com/employee/training
+
+Admin URL:
+clockfield.com/admin/training
+
+Important Build Rules
+
+Do not break or affect anything else.
+Do not change existing employee profile behavior except adding Training Hub access.
+Do not change payroll, schedules, field notes, worklogs, reports, publications, agreements, or auth.
+Do not change existing database records outside this new feature.
+Use new tables for Training Hub.
+Keep all changes isolated.
+Make sure mobile works properly before marking complete.
+
+Final Expected Result
+
+Admin can create a professional training course with YouTube unlisted videos, text, slides, and modules.
+
+Employee can complete assigned training from their account.
+
+Admin can send a public course link to new hires.
+
+Admin can track who completed each course.
+
+Employees can download a certificate after completion.
+
+The full feature should feel professional, mobile-friendly, and similar to a simple Udemy-style internal training system for cleaning/service companies.

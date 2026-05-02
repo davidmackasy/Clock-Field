@@ -1960,3 +1960,120 @@ export type InsertEmployeeHiringPolicyAcceptance = z.infer<typeof insertEmployee
 export const insertEmployeeHiringDocumentSchema = createInsertSchema(employeeHiringDocuments).omit({ id: true });
 export type EmployeeHiringDocument = typeof employeeHiringDocuments.$inferSelect;
 export type InsertEmployeeHiringDocument = z.infer<typeof insertEmployeeHiringDocumentSchema>;
+
+// ── Training Hub ──────────────────────────────────────────────────────────────
+
+export const trainingCourses = pgTable("training_courses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  category: text("category"),
+  thumbnailData: text("thumbnail_data"),
+  isRequired: boolean("is_required").notNull().default(false),
+  isPublished: boolean("is_published").notNull().default(false),
+  publicLinkEnabled: boolean("public_link_enabled").notNull().default(false),
+  publicId: text("public_id").unique(),
+  certificateEnabled: boolean("certificate_enabled").notNull().default(true),
+  estimatedDuration: text("estimated_duration"),
+  createdBy: varchar("created_by").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const trainingModules = pgTable("training_modules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  courseId: varchar("course_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  youtubeUrl: text("youtube_url"),
+  youtubeEmbedId: text("youtube_embed_id"),
+  lessonText: text("lesson_text"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isRequired: boolean("is_required").notNull().default(true),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const trainingModuleAssets = pgTable("training_module_assets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  moduleId: varchar("module_id").notNull(),
+  assetData: text("asset_data").notNull(),
+  assetType: text("asset_type").notNull().default("image"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
+export const trainingAssignments = pgTable("training_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  courseId: varchar("course_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  employeeId: varchar("employee_id").notNull(),
+  assignedBy: varchar("assigned_by").notNull(),
+  dueDate: text("due_date"),
+  status: text("status").notNull().default("assigned"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const trainingProgress = pgTable("training_progress", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  courseId: varchar("course_id").notNull(),
+  moduleId: varchar("module_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  employeeId: varchar("employee_id"),
+  publicLearnerId: varchar("public_learner_id"),
+  completedAt: text("completed_at").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const trainingPublicLearners = pgTable("training_public_learners", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  courseId: varchar("course_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const trainingCertificates = pgTable("training_certificates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  courseId: varchar("course_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  employeeId: varchar("employee_id"),
+  publicLearnerId: varchar("public_learner_id"),
+  learnerName: text("learner_name").notNull(),
+  certificateCode: text("certificate_code").notNull().unique(),
+  issuedAt: text("issued_at").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertTrainingCourseSchema = createInsertSchema(trainingCourses).omit({ id: true });
+export type TrainingCourse = typeof trainingCourses.$inferSelect;
+export type InsertTrainingCourse = z.infer<typeof insertTrainingCourseSchema>;
+
+export const insertTrainingModuleSchema = createInsertSchema(trainingModules).omit({ id: true });
+export type TrainingModule = typeof trainingModules.$inferSelect;
+export type InsertTrainingModule = z.infer<typeof insertTrainingModuleSchema>;
+
+export const insertTrainingModuleAssetSchema = createInsertSchema(trainingModuleAssets).omit({ id: true });
+export type TrainingModuleAsset = typeof trainingModuleAssets.$inferSelect;
+export type InsertTrainingModuleAsset = z.infer<typeof insertTrainingModuleAssetSchema>;
+
+export const insertTrainingAssignmentSchema = createInsertSchema(trainingAssignments).omit({ id: true });
+export type TrainingAssignment = typeof trainingAssignments.$inferSelect;
+export type InsertTrainingAssignment = z.infer<typeof insertTrainingAssignmentSchema>;
+
+export const insertTrainingProgressSchema = createInsertSchema(trainingProgress).omit({ id: true });
+export type TrainingProgress = typeof trainingProgress.$inferSelect;
+export type InsertTrainingProgress = z.infer<typeof insertTrainingProgressSchema>;
+
+export const insertTrainingPublicLearnerSchema = createInsertSchema(trainingPublicLearners).omit({ id: true });
+export type TrainingPublicLearner = typeof trainingPublicLearners.$inferSelect;
+export type InsertTrainingPublicLearner = z.infer<typeof insertTrainingPublicLearnerSchema>;
+
+export const insertTrainingCertificateSchema = createInsertSchema(trainingCertificates).omit({ id: true });
+export type TrainingCertificate = typeof trainingCertificates.$inferSelect;
+export type InsertTrainingCertificate = z.infer<typeof insertTrainingCertificateSchema>;

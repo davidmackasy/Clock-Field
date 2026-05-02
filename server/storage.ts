@@ -78,6 +78,15 @@ import {
   type EmployeeHiringSubmission, type InsertEmployeeHiringSubmission,
   type EmployeeHiringPolicyAcceptance, type InsertEmployeeHiringPolicyAcceptance,
   type EmployeeHiringDocument, type InsertEmployeeHiringDocument,
+  trainingCourses, trainingModules, trainingModuleAssets, trainingAssignments,
+  trainingProgress, trainingPublicLearners, trainingCertificates,
+  type TrainingCourse, type InsertTrainingCourse,
+  type TrainingModule, type InsertTrainingModule,
+  type TrainingModuleAsset, type InsertTrainingModuleAsset,
+  type TrainingAssignment, type InsertTrainingAssignment,
+  type TrainingProgress, type InsertTrainingProgress,
+  type TrainingPublicLearner, type InsertTrainingPublicLearner,
+  type TrainingCertificate, type InsertTrainingCertificate,
   quoteRequestWalkthroughs, quoteRequestWalkthroughPhotos, quoteRequestWalkthroughSections,
   type QuoteRequestWalkthrough, type InsertQuoteRequestWalkthrough,
   type QuoteRequestWalkthroughPhoto, type InsertQuoteRequestWalkthroughPhoto,
@@ -433,6 +442,40 @@ export interface IStorage {
   getHPDocument(id: string): Promise<EmployeeHiringDocument | undefined>;
   upsertHPDocument(submissionId: string, documentType: string, data: InsertEmployeeHiringDocument): Promise<EmployeeHiringDocument>;
   deleteHPDocument(submissionId: string, documentType: string): Promise<void>;
+
+  // ── Training Hub ────────────────────────────────────────────────────────────
+  createTrainingCourse(data: InsertTrainingCourse): Promise<TrainingCourse>;
+  getTrainingCourses(companyId: string): Promise<(TrainingCourse & { moduleCount: number; assignedCount: number; completedCount: number })[]>;
+  getTrainingCourse(id: string): Promise<TrainingCourse | undefined>;
+  getTrainingCourseByPublicId(publicId: string): Promise<TrainingCourse | undefined>;
+  updateTrainingCourse(id: string, data: Partial<InsertTrainingCourse>): Promise<TrainingCourse | undefined>;
+  deleteTrainingCourse(id: string): Promise<void>;
+  getTrainingStats(companyId: string): Promise<{ totalCourses: number; totalAssigned: number; totalCompleted: number; totalPending: number }>;
+
+  createTrainingModule(data: InsertTrainingModule): Promise<TrainingModule>;
+  getTrainingModules(courseId: string): Promise<(TrainingModule & { assets: TrainingModuleAsset[] })[]>;
+  getTrainingModule(id: string): Promise<TrainingModule | undefined>;
+  updateTrainingModule(id: string, data: Partial<InsertTrainingModule>): Promise<TrainingModule | undefined>;
+  deleteTrainingModule(id: string): Promise<void>;
+
+  createTrainingModuleAsset(data: InsertTrainingModuleAsset): Promise<TrainingModuleAsset>;
+  deleteTrainingModuleAssets(moduleId: string): Promise<void>;
+
+  assignTrainingCourse(courseId: string, companyId: string, employeeIds: string[], assignedBy: string): Promise<void>;
+  getTrainingAssignments(courseId: string): Promise<(TrainingAssignment & { employeeName: string })[]>;
+  getMyTrainingCourses(employeeId: string, companyId: string): Promise<any[]>;
+  getMyTrainingCourse(courseId: string, employeeId: string): Promise<any>;
+
+  markModuleComplete(courseId: string, moduleId: string, companyId: string, employeeId?: string, publicLearnerId?: string): Promise<void>;
+  getTrainingProgress(courseId: string, employeeId?: string, publicLearnerId?: string): Promise<TrainingProgress[]>;
+  getTrainingCompletions(courseId: string): Promise<TrainingProgress[]>;
+
+  createPublicLearner(data: InsertTrainingPublicLearner): Promise<TrainingPublicLearner>;
+  getPublicLearner(id: string): Promise<TrainingPublicLearner | undefined>;
+  updatePublicLearner(id: string, data: Partial<InsertTrainingPublicLearner>): Promise<TrainingPublicLearner | undefined>;
+
+  createTrainingCertificate(data: InsertTrainingCertificate): Promise<TrainingCertificate>;
+  getTrainingCertificate(courseId: string, employeeId?: string, publicLearnerId?: string): Promise<TrainingCertificate | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2174,6 +2217,219 @@ export class DatabaseStorage implements IStorage {
   }
   async deleteHPDocument(submissionId: string, documentType: string): Promise<void> {
     await db.delete(employeeHiringDocuments).where(and(eq(employeeHiringDocuments.submissionId, submissionId), eq(employeeHiringDocuments.documentType, documentType)));
+  }
+
+  // ── Training Hub ─────────────────────────────────────────────────────────────
+
+  async createTrainingCourse(data: InsertTrainingCourse): Promise<TrainingCourse> {
+    const [row] = await db.insert(trainingCourses).values(data as any).returning();
+    return row;
+  }
+
+  async getTrainingCourses(companyId: string): Promise<(TrainingCourse & { moduleCount: number; assignedCount: number; completedCount: number })[]> {
+    const courses = await db.select().from(trainingCourses).where(eq(trainingCourses.companyId, companyId)).orderBy(desc(trainingCourses.createdAt));
+    const result = await Promise.all(courses.map(async c => {
+      const [{ count: modCount }] = await db.select({ count: sql<number>`count(*)::int` }).from(trainingModules).where(eq(trainingModules.courseId, c.id));
+      const [{ count: assignCount }] = await db.select({ count: sql<number>`count(*)::int` }).from(trainingAssignments).where(eq(trainingAssignments.courseId, c.id));
+      const completedEmployees = await db.selectDistinct({ employeeId: trainingProgress.employeeId }).from(trainingProgress).where(and(eq(trainingProgress.courseId, c.id), sql`${trainingProgress.employeeId} is not null`));
+      const reqModules = await db.select({ id: trainingModules.id }).from(trainingModules).where(and(eq(trainingModules.courseId, c.id), eq(trainingModules.isRequired, true)));
+      let completedCount = 0;
+      for (const emp of completedEmployees) {
+        if (!emp.employeeId) continue;
+        if (reqModules.length === 0) { completedCount++; continue; }
+        const done = await db.select({ count: sql<number>`count(*)::int` }).from(trainingProgress).where(and(eq(trainingProgress.courseId, c.id), eq(trainingProgress.employeeId, emp.employeeId)));
+        if ((done[0]?.count ?? 0) >= reqModules.length) completedCount++;
+      }
+      return { ...c, moduleCount: modCount ?? 0, assignedCount: assignCount ?? 0, completedCount };
+    }));
+    return result;
+  }
+
+  async getTrainingCourse(id: string): Promise<TrainingCourse | undefined> {
+    const [row] = await db.select().from(trainingCourses).where(eq(trainingCourses.id, id));
+    return row;
+  }
+
+  async getTrainingCourseByPublicId(publicId: string): Promise<TrainingCourse | undefined> {
+    const [row] = await db.select().from(trainingCourses).where(eq(trainingCourses.publicId, publicId));
+    return row;
+  }
+
+  async updateTrainingCourse(id: string, data: Partial<InsertTrainingCourse>): Promise<TrainingCourse | undefined> {
+    const [row] = await db.update(trainingCourses).set(data as any).where(eq(trainingCourses.id, id)).returning();
+    return row;
+  }
+
+  async deleteTrainingCourse(id: string): Promise<void> {
+    const modules = await db.select({ id: trainingModules.id }).from(trainingModules).where(eq(trainingModules.courseId, id));
+    for (const m of modules) {
+      await db.delete(trainingModuleAssets).where(eq(trainingModuleAssets.moduleId, m.id));
+    }
+    await db.delete(trainingModules).where(eq(trainingModules.courseId, id));
+    await db.delete(trainingAssignments).where(eq(trainingAssignments.courseId, id));
+    await db.delete(trainingProgress).where(eq(trainingProgress.courseId, id));
+    await db.delete(trainingPublicLearners).where(eq(trainingPublicLearners.courseId, id));
+    await db.delete(trainingCertificates).where(eq(trainingCertificates.courseId, id));
+    await db.delete(trainingCourses).where(eq(trainingCourses.id, id));
+  }
+
+  async getTrainingStats(companyId: string): Promise<{ totalCourses: number; totalAssigned: number; totalCompleted: number; totalPending: number }> {
+    const [{ count: totalCourses }] = await db.select({ count: sql<number>`count(*)::int` }).from(trainingCourses).where(eq(trainingCourses.companyId, companyId));
+    const [{ count: totalAssigned }] = await db.select({ count: sql<number>`count(*)::int` }).from(trainingAssignments).where(eq(trainingAssignments.companyId, companyId));
+    const completedAssignments = await db.select({ employeeId: trainingAssignments.employeeId, courseId: trainingAssignments.courseId }).from(trainingAssignments).where(and(eq(trainingAssignments.companyId, companyId), eq(trainingAssignments.status, "completed")));
+    const totalCompleted = completedAssignments.length;
+    const totalPending = Math.max(0, (totalAssigned ?? 0) - totalCompleted);
+    return { totalCourses: totalCourses ?? 0, totalAssigned: totalAssigned ?? 0, totalCompleted, totalPending };
+  }
+
+  async createTrainingModule(data: InsertTrainingModule): Promise<TrainingModule> {
+    const [row] = await db.insert(trainingModules).values(data as any).returning();
+    return row;
+  }
+
+  async getTrainingModules(courseId: string): Promise<(TrainingModule & { assets: TrainingModuleAsset[] })[]> {
+    const mods = await db.select().from(trainingModules).where(eq(trainingModules.courseId, courseId)).orderBy(asc(trainingModules.sortOrder));
+    return Promise.all(mods.map(async m => {
+      const assets = await db.select().from(trainingModuleAssets).where(eq(trainingModuleAssets.moduleId, m.id)).orderBy(asc(trainingModuleAssets.sortOrder));
+      return { ...m, assets };
+    }));
+  }
+
+  async getTrainingModule(id: string): Promise<TrainingModule | undefined> {
+    const [row] = await db.select().from(trainingModules).where(eq(trainingModules.id, id));
+    return row;
+  }
+
+  async updateTrainingModule(id: string, data: Partial<InsertTrainingModule>): Promise<TrainingModule | undefined> {
+    const [row] = await db.update(trainingModules).set(data as any).where(eq(trainingModules.id, id)).returning();
+    return row;
+  }
+
+  async deleteTrainingModule(id: string): Promise<void> {
+    await db.delete(trainingModuleAssets).where(eq(trainingModuleAssets.moduleId, id));
+    await db.delete(trainingProgress).where(eq(trainingProgress.moduleId, id));
+    await db.delete(trainingModules).where(eq(trainingModules.id, id));
+  }
+
+  async createTrainingModuleAsset(data: InsertTrainingModuleAsset): Promise<TrainingModuleAsset> {
+    const [row] = await db.insert(trainingModuleAssets).values(data as any).returning();
+    return row;
+  }
+
+  async deleteTrainingModuleAssets(moduleId: string): Promise<void> {
+    await db.delete(trainingModuleAssets).where(eq(trainingModuleAssets.moduleId, moduleId));
+  }
+
+  async assignTrainingCourse(courseId: string, companyId: string, employeeIds: string[], assignedBy: string): Promise<void> {
+    const now = new Date().toISOString();
+    for (const employeeId of employeeIds) {
+      const existing = await db.select().from(trainingAssignments).where(and(eq(trainingAssignments.courseId, courseId), eq(trainingAssignments.employeeId, employeeId)));
+      if (existing.length === 0) {
+        await db.insert(trainingAssignments).values({ courseId, companyId, employeeId, assignedBy, status: "assigned", createdAt: now });
+      }
+    }
+  }
+
+  async getTrainingAssignments(courseId: string): Promise<(TrainingAssignment & { employeeName: string })[]> {
+    const assignments = await db.select().from(trainingAssignments).where(eq(trainingAssignments.courseId, courseId)).orderBy(asc(trainingAssignments.createdAt));
+    return Promise.all(assignments.map(async a => {
+      const emp = await db.select({ firstName: users.firstName, lastName: users.lastName }).from(users).where(eq(users.id, a.employeeId));
+      const name = emp[0] ? `${emp[0].firstName} ${emp[0].lastName}` : "Unknown";
+      return { ...a, employeeName: name };
+    }));
+  }
+
+  async getMyTrainingCourses(employeeId: string, companyId: string): Promise<any[]> {
+    const assignments = await db.select({ courseId: trainingAssignments.courseId }).from(trainingAssignments).where(and(eq(trainingAssignments.employeeId, employeeId), eq(trainingAssignments.companyId, companyId)));
+    const publicCourses = await db.select().from(trainingCourses).where(and(eq(trainingCourses.companyId, companyId), eq(trainingCourses.isPublished, true)));
+    const assignedIds = new Set(assignments.map(a => a.courseId));
+    const courseIds = [...new Set([...assignments.map(a => a.courseId), ...publicCourses.map(c => c.id)])];
+    if (courseIds.length === 0) return [];
+    const courses = await db.select().from(trainingCourses).where(inArray(trainingCourses.id, courseIds));
+    return Promise.all(courses.map(async c => {
+      const modules = await db.select().from(trainingModules).where(eq(trainingModules.courseId, c.id));
+      const progress = await db.select().from(trainingProgress).where(and(eq(trainingProgress.courseId, c.id), eq(trainingProgress.employeeId, employeeId)));
+      const completedIds = new Set(progress.map(p => p.moduleId));
+      const totalModules = modules.length;
+      const completedModules = modules.filter(m => completedIds.has(m.id)).length;
+      const progressPct = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
+      const isCompleted = totalModules > 0 && completedModules >= modules.filter(m => m.isRequired).length && modules.filter(m => m.isRequired).every(m => completedIds.has(m.id));
+      const status = completedModules === 0 ? "not_started" : isCompleted ? "completed" : "in_progress";
+      const cert = await this.getTrainingCertificate(c.id, employeeId, undefined);
+      return { ...c, totalModules, completedModules, progressPct, isCompleted, status, certificate: cert ? { certificateCode: cert.certificateCode, issuedAt: cert.issuedAt } : null };
+    }));
+  }
+
+  async getMyTrainingCourse(courseId: string, employeeId: string): Promise<any> {
+    const course = await this.getTrainingCourse(courseId);
+    if (!course) return null;
+    const modules = await this.getTrainingModules(courseId);
+    const progress = await db.select().from(trainingProgress).where(and(eq(trainingProgress.courseId, courseId), eq(trainingProgress.employeeId, employeeId)));
+    const completedIds = new Set(progress.map(p => p.moduleId));
+    const modulesWithCompletion = modules.map(m => ({ ...m, completed: completedIds.has(m.id) }));
+    const totalModules = modules.length;
+    const completedModules = modules.filter(m => completedIds.has(m.id)).length;
+    const progressPct = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
+    const reqModules = modules.filter(m => m.isRequired);
+    const isCompleted = reqModules.length > 0 ? reqModules.every(m => completedIds.has(m.id)) : completedModules === totalModules && totalModules > 0;
+    const status = completedModules === 0 ? "not_started" : isCompleted ? "completed" : "in_progress";
+    const cert = await this.getTrainingCertificate(courseId, employeeId, undefined);
+    const courseWithMeta = { ...course, totalModules, completedModules, progressPct, isCompleted, status, certificate: cert ? { certificateCode: cert.certificateCode, issuedAt: cert.issuedAt } : null };
+    return { course: courseWithMeta, modules: modulesWithCompletion };
+  }
+
+  async markModuleComplete(courseId: string, moduleId: string, companyId: string, employeeId?: string, publicLearnerId?: string): Promise<void> {
+    const existing = await db.select().from(trainingProgress).where(and(
+      eq(trainingProgress.courseId, courseId),
+      eq(trainingProgress.moduleId, moduleId),
+      employeeId ? eq(trainingProgress.employeeId, employeeId) : isNull(trainingProgress.employeeId),
+      publicLearnerId ? eq(trainingProgress.publicLearnerId, publicLearnerId) : isNull(trainingProgress.publicLearnerId),
+    ));
+    if (existing.length > 0) return;
+    const now = new Date().toISOString();
+    await db.insert(trainingProgress).values({ courseId, moduleId, companyId, employeeId: employeeId ?? null, publicLearnerId: publicLearnerId ?? null, completedAt: now, createdAt: now } as any);
+    if (employeeId) {
+      await db.update(trainingAssignments).set({ status: "started" }).where(and(eq(trainingAssignments.courseId, courseId), eq(trainingAssignments.employeeId, employeeId), eq(trainingAssignments.status, "assigned")));
+    }
+  }
+
+  async getTrainingProgress(courseId: string, employeeId?: string, publicLearnerId?: string): Promise<TrainingProgress[]> {
+    const conditions = [eq(trainingProgress.courseId, courseId)];
+    if (employeeId) conditions.push(eq(trainingProgress.employeeId, employeeId));
+    if (publicLearnerId) conditions.push(eq(trainingProgress.publicLearnerId, publicLearnerId));
+    return db.select().from(trainingProgress).where(and(...conditions));
+  }
+
+  async getTrainingCompletions(courseId: string): Promise<TrainingProgress[]> {
+    return db.select().from(trainingProgress).where(eq(trainingProgress.courseId, courseId));
+  }
+
+  async createPublicLearner(data: InsertTrainingPublicLearner): Promise<TrainingPublicLearner> {
+    const [row] = await db.insert(trainingPublicLearners).values(data as any).returning();
+    return row;
+  }
+
+  async getPublicLearner(id: string): Promise<TrainingPublicLearner | undefined> {
+    const [row] = await db.select().from(trainingPublicLearners).where(eq(trainingPublicLearners.id, id));
+    return row;
+  }
+
+  async updatePublicLearner(id: string, data: Partial<InsertTrainingPublicLearner>): Promise<TrainingPublicLearner | undefined> {
+    const [row] = await db.update(trainingPublicLearners).set(data as any).where(eq(trainingPublicLearners.id, id)).returning();
+    return row;
+  }
+
+  async createTrainingCertificate(data: InsertTrainingCertificate): Promise<TrainingCertificate> {
+    const [row] = await db.insert(trainingCertificates).values(data as any).returning();
+    return row;
+  }
+
+  async getTrainingCertificate(courseId: string, employeeId?: string, publicLearnerId?: string): Promise<TrainingCertificate | undefined> {
+    const conditions: any[] = [eq(trainingCertificates.courseId, courseId)];
+    if (employeeId) conditions.push(eq(trainingCertificates.employeeId, employeeId));
+    if (publicLearnerId) conditions.push(eq(trainingCertificates.publicLearnerId, publicLearnerId));
+    const [row] = await db.select().from(trainingCertificates).where(and(...conditions));
+    return row;
   }
 }
 

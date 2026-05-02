@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, Mail, Phone, DollarSign, KeyRound, IdCard, Clock, ChevronRight, ScrollText, Receipt, Package } from "lucide-react";
+import { LogOut, Mail, Phone, DollarSign, KeyRound, IdCard, Clock, ChevronRight, ScrollText, Receipt, Package, GraduationCap } from "lucide-react";
 
 export default function EmployeeProfile() {
   const { user, logout } = useAuth();
@@ -169,6 +169,25 @@ export default function EmployeeProfile() {
                 <div>
                   <p className="text-sm font-medium">Supplies</p>
                   <p className="text-xs text-muted-foreground">View and report supply status</p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            </div>
+          </CardContent>
+        </Card>
+      </Link>
+
+      <Link href="/employee/training">
+        <Card className="cursor-pointer hover:shadow-sm transition-shadow active:scale-[0.99]" data-testid="link-training">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
+                  <GraduationCap className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">My Training</p>
+                  <p className="text-xs text-muted-foreground">Complete courses and earn certificates</p>
                 </div>
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground" />

@@ -21,7 +21,7 @@ import {
   DollarSign, Building2,
   Settings, LogOut, Clock, Users2, BookOpen,
   CreditCard, Bell, ShieldAlert, ChevronRight, Package, Newspaper,
-  FileInput,
+  FileInput, GraduationCap,
 } from "lucide-react";
 
 const navItems = [
@@ -35,6 +35,7 @@ const navItems = [
   { title: "Work Log", url: "/admin/work-log", icon: BookOpen },
   { title: "Forms", url: "/admin/quote-forms", icon: FileInput },
   { title: "Supplies", url: "/admin/supplies", icon: Package },
+  { title: "Training Hub", url: "/admin/training", icon: GraduationCap },
   { title: "Settings", url: "/admin/settings", icon: Settings },
 ];
 

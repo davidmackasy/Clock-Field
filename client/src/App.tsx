@@ -70,6 +70,9 @@ import PublicProposal from "@/pages/public/proposal";
 import AdminAgreementBuilder from "@/pages/admin/agreement-builder";
 import PublicAgreement from "@/pages/public/agreement";
 import HiringPackagePage from "@/pages/public/HiringPackagePage";
+import AdminTrainingHub from "@/pages/admin/training";
+import EmployeeTraining from "@/pages/employee/training";
+import PublicTrainingCourse from "@/pages/public/training-course";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import LandingPage from "@/pages/landing";
@@ -134,6 +137,7 @@ function AdminLayout() {
               <Route path="/admin/supplies" component={AdminSupplies} />
               <Route path="/admin/publications/:id" component={AdminPublicationEditor} />
               <Route path="/admin/publications" component={AdminPublications} />
+              <Route path="/admin/training" component={AdminTrainingHub} />
               <Route path="/admin/settings" component={AdminSettings} />
               <Route path="/admin/subscription" component={AdminSubscription} />
               <Route path="/admin/platform-messages" component={AdminPlatformMessages} />
@@ -213,6 +217,7 @@ function EmployeeLayout() {
           <Route path="/employee/field-notes" component={EmployeeFieldNotes} />
           <Route path="/employee/scheduled-field-notes/:id" component={EmployeeScheduledFieldNotesCapture} />
           <Route path="/employee/scheduled-field-notes" component={EmployeeScheduledFieldNotesList} />
+          <Route path="/employee/training" component={EmployeeTraining} />
           <Route path="/employee/profile" component={EmployeeProfile} />
           <Route component={NotFound} />
         </Switch>
@@ -312,6 +317,14 @@ function AppRouter() {
     return (
       <Switch>
         <Route path="/public/hiring-package/:token" component={HiringPackagePage} />
+      </Switch>
+    );
+  }
+
+  if (location.startsWith("/training/public/")) {
+    return (
+      <Switch>
+        <Route path="/training/public/:publicId" component={PublicTrainingCourse} />
       </Switch>
     );
   }
