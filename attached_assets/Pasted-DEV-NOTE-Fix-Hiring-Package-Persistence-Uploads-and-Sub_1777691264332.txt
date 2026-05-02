@@ -1,0 +1,780 @@
+DEV NOTE: Fix Hiring Package Persistence, Uploads, and Submission Review
+
+Goal:
+Fix the Hiring Package system properly so employee progress, accepted policies, personal information, uploaded documents, and signature are saved permanently. Also add a proper submissions section inside Publications > Hiring Package where admin can review everything submitted.
+
+Do not break or affect anything currently working.
+Do not touch Agreements.
+Do not touch Proposals.
+Do not touch normal Publications.
+Do not touch Forms, Field Notes, Auth, Stripe, Payroll, Attendance, or Employee app.
+Do not move Hiring Package outside Publications.
+Only fix and complete Publications > Hiring Package.
+
+Main problems to fix:
+
+Required document uploads are not working.
+Accepted policies are not being saved after refresh.
+Employee progress resets back to the first policy after refresh.
+Personal information, emergency contacts, medical info, documents, and signature may also not persist.
+Admin does not have a proper submitted applications section to review employee submissions.
+Upload size may be too small and should be increased safely.
+
+Expected result:
+When an employee accepts policies, fills information, uploads files, signs, and submits, everything must save to the backend. If they refresh the page or reopen the same public link, their progress should still be there.
+
+Fix Public Hiring Package Save System
+
+The public hiring package page must not rely only on frontend state.
+
+Everything must save to the backend as the employee completes each step.
+
+Save these fields:
+
+Accepted policies
+Current step
+Personal information
+Emergency contacts
+Optional medical information
+Uploaded documents
+Signature
+Final acknowledgement
+Submission status
+Last saved time
+
+When the employee refreshes the page, reload the saved submission by public token.
+
+Correct behavior:
+
+If employee accepted 3 policies, refresh should show 3 policies accepted.
+If employee accepted all policies, refresh should not bring them back to policy 1.
+If employee filled personal info, refresh should keep the saved personal info.
+If employee uploaded documents, refresh should show uploaded files.
+If employee signed, refresh should show signed status or completed status.
+If employee submitted, refresh should show review status page.
+
+Backend Persistence Requirement
+
+Create or update the backend so every public hiring package link has a submission record.
+
+Suggested data model:
+
+hiring_package_submissions
+
+Fields:
+
+id
+business_id
+hiring_package_id
+public_token
+employee_name
+employee_email
+current_step
+status
+accepted_policies_json
+personal_info_json
+emergency_contacts_json
+medical_info_json
+uploaded_documents_json
+signature_url
+signature_data
+final_acknowledgement
+submitted_at
+last_saved_at
+review_status
+admin_notes
+created_at
+updated_at
+
+Status values:
+
+sent
+viewed
+started
+in_progress
+submitted
+under_review
+missing_documents
+approved_hired
+not_approved
+fired_inactive
+archived
+
+Important:
+Do not create a new submission every time the public link opens.
+
+Correct logic:
+
+Find hiring package by public token
+Find existing submission by hiring_package_id and token
+If submission exists, load it
+If submission does not exist, create one only once
+Update that same submission during the whole process
+
+Policy Acceptance Must Save Immediately
+
+When employee clicks:
+
+I have read, understood, and agree to this policy.
+
+Immediately save that policy acceptance to the backend.
+
+Store:
+
+policy_id
+policy_title
+policy_version
+policy_content_snapshot
+accepted: true
+accepted_at
+employee_name if available
+employee_email if available
+ip_address if available
+user_agent if available
+
+After save succeeds, unlock the next policy.
+
+Do not unlock the next policy only in local state.
+
+Frontend should call backend first, then update UI.
+
+Example endpoint:
+
+POST /api/public/hiring-package/:token/policies/:policyId/accept
+
+Payload:
+
+{
+"accepted": true
+}
+
+Response:
+
+{
+"success": true,
+"acceptedPolicies": [...],
+"currentStep": "policies"
+}
+
+Fix Refresh Issue
+
+On public page load, fetch saved progress.
+
+Example endpoint:
+
+GET /api/public/hiring-package/:token/submission
+
+Response should include:
+
+hiring package details
+saved submission
+accepted policies
+current step
+uploaded files
+status
+review status
+
+Frontend must hydrate state from backend response.
+
+Do not reset state to default after refresh.
+
+Do not default to policy 1 if accepted policies already exist.
+
+Step logic:
+
+If not all policies accepted, show first unaccepted policy.
+If all policies accepted and personal info is empty, show Personal Info step.
+If personal info is complete and documents missing, show Documents step.
+If required documents uploaded and signature missing, show Signature step.
+If submitted, show Status page.
+
+Fix Required Document Uploads
+
+Make sure uploads work for:
+
+Government ID Front
+Government ID Back
+Resume / CV
+
+Allowed files:
+
+Government ID Front:
+JPG, JPEG, PNG, PDF
+
+Government ID Back:
+JPG, JPEG, PNG, PDF
+
+Resume / CV:
+PDF, DOC, DOCX
+
+Optional documents:
+JPG, JPEG, PNG, PDF, DOC, DOCX where needed
+
+Increase max file size:
+
+Set max upload size to 25 MB per file.
+
+Show this in the UI:
+
+Maximum file size: 25 MB
+
+Check all places that may block file size:
+
+Frontend validation
+Backend upload middleware
+Server body limit
+Multipart parser limit
+Storage provider limit
+Reverse proxy limit if any
+
+File Type Validation Must Use MIME and Extension
+
+Do not reject valid files only because MIME type is empty.
+
+Some browsers and mobile uploads return missing or different MIME values.
+
+Validate by:
+
+file.type
+file.name extension fallback
+
+Allowed extensions:
+
+Government ID:
+jpg, jpeg, png, pdf
+
+Resume:
+pdf, doc, docx
+
+Optional:
+jpg, jpeg, png, pdf, doc, docx
+
+Accepted MIME types:
+
+image/jpeg
+image/png
+application/pdf
+application/msword
+application/vnd.openxmlformats-officedocument.wordprocessingml.document
+
+Fix Upload Endpoint
+
+The upload endpoint must accept multipart/form-data.
+
+It must not require admin login because this is a public employee link.
+
+It must validate the secure public token.
+
+Correct backend flow:
+
+Receive public token
+Find hiring package
+Find or create submission
+Validate document type
+Validate file extension and MIME
+Validate size under 25 MB
+Upload to storage
+Save file metadata to submission
+Return uploaded file metadata
+
+Recommended document keys:
+
+government_id_front
+government_id_back
+resume_cv
+work_permit
+certificate_license
+other_supporting_document
+
+Make sure frontend and backend use the same keys.
+
+Check for mismatch like:
+
+governmentIdFront vs government_id_front
+governmentIdBack vs government_id_back
+resume vs resume_cv
+
+Use one standard everywhere.
+
+Upload State Must Persist
+
+After upload succeeds, update the submission record.
+
+uploaded_documents_json should store:
+
+document_type
+file_name
+file_url or storage_key
+mime_type
+file_size
+uploaded_at
+required true or false
+
+After refresh, the UI should show:
+
+Uploaded: filename.pdf
+Replace
+Remove
+
+Required error should disappear after upload.
+
+Do not show:
+
+Government ID Front is required
+
+once government_id_front exists in saved uploaded documents.
+
+Continue Button Validation
+
+The Continue to Signature button should check backend-backed uploaded document state.
+
+Required:
+
+government_id_front
+government_id_back
+resume_cv
+
+Optional documents should not block the next step.
+
+If all required files exist, allow the employee to continue.
+
+Auto-Save Personal Information
+
+Personal information should save when employee clicks Continue.
+
+Also add debounce auto-save if possible.
+
+Save:
+
+legal first name
+legal last name
+preferred name
+email
+phone
+home address
+city
+province/state
+postal code
+country
+job title
+start date
+
+On refresh, pre-fill the form.
+
+Auto-Save Emergency Contact
+
+Emergency contact information should save when employee clicks Continue.
+
+Save:
+
+emergency contact 1 name
+relationship
+phone
+email optional
+
+emergency contact 2 name
+relationship
+phone
+email optional
+
+On refresh, pre-fill the form.
+
+Auto-Save Optional Medical Information
+
+Medical info should save when employee clicks Continue.
+
+This section is optional.
+
+Save only what employee provides.
+
+Fields:
+
+allergies
+sensitivities
+medical notes
+special medication note
+emergency safety notes
+
+On refresh, pre-fill the form.
+
+Save Signature Properly
+
+When employee signs, save the actual drawn signature.
+
+Do not save only text.
+
+Signature should persist after refresh.
+
+Store as:
+
+signature image URL
+
+or
+
+signature base64 converted to stored file
+
+After submission, the final PDF must show the actual signature image.
+
+Final Submit Must Update Status
+
+When employee clicks Submit Hiring Package:
+
+Validate all required policies accepted
+Validate personal information complete
+Validate emergency contact complete
+Validate required documents uploaded
+Validate signature exists
+
+Then update submission:
+
+status: submitted
+review_status: under_review
+submitted_at: timestamp
+
+After submit, public link should show:
+
+Your hiring package has been submitted and is under review.
+
+Please keep this link. You can return to this page to check your application status.
+
+Current status:
+Under Review
+
+Add Hiring Package Submission Section In Admin
+
+Inside:
+
+Publications > Hiring Package
+
+Add a clear submissions area.
+
+Suggested tabs:
+
+Templates
+Create Package
+Sent Packages
+Submitted Applications
+Approved / Hired
+Archived
+
+Submitted Applications must show all employee submissions.
+
+Table/card columns:
+
+Employee name
+Email
+Phone
+Position
+Submitted date
+Package status
+Policies accepted
+Documents uploaded
+Signature status
+Review status
+Action: Review
+
+Admin Review Page
+
+When admin clicks Review, show full submission.
+
+Sections:
+
+Application Summary
+Policy Acceptance
+Personal Information
+Emergency Contacts
+Medical Information
+Uploaded Documents
+Signature
+Admin Decision
+
+Application Summary:
+
+Employee name
+Email
+Phone
+Position
+Start date
+Submitted date
+Current status
+
+Policy Acceptance:
+
+Show each policy
+Accepted or not accepted
+Accepted timestamp
+Policy version
+View accepted policy snapshot
+
+Uploaded Documents:
+
+Government ID Front
+Government ID Back
+Resume / CV
+Work Permit if uploaded
+Certificate / License if uploaded
+Other supporting document if uploaded
+
+For each file:
+
+Preview
+Download
+File name
+Uploaded date
+File size
+
+Resume preview:
+Preview PDF in browser if PDF.
+For DOC or DOCX, show download button if browser preview is not supported.
+
+Government ID preview:
+Show image preview for JPG/PNG.
+Show PDF preview for PDF.
+
+Signature:
+Show actual signature image.
+Show signature date.
+
+Admin Actions
+
+Add admin actions:
+
+Approve / Mark as Hired
+Request Missing Documents
+Mark Not Approved
+Mark Fired / Inactive
+Archive
+Download Completed PDF
+Download Documents
+Download All Documents as ZIP
+Copy Public Link
+Resend Link
+
+Do not auto-create employee profile unless admin confirms.
+
+When admin clicks Approve / Mark as Hired, show modal:
+
+Do you want to create an employee profile from this hiring package?
+
+Options:
+
+Create Employee Profile
+Approve Only
+Cancel
+
+Missing Documents Flow
+
+Admin can request missing documents.
+
+Admin selects missing items:
+
+Government ID Front
+Government ID Back
+Resume / CV
+Work Permit
+Certificate / License
+Other
+
+Admin adds message.
+
+Submission status becomes:
+
+missing_documents
+
+Public link should show:
+
+Action Required: Missing Documents
+
+Employee can upload only requested missing documents.
+
+After upload, status returns to:
+
+submitted
+
+or
+
+under_review
+
+Public Link Status Must Reflect Admin Review
+
+After submission, the public link becomes a status page.
+
+Show:
+
+Under Review
+Missing Documents
+Approved / Hired
+Not Approved
+Archived
+
+If Missing Documents:
+
+Show admin message.
+Show upload area for missing files only.
+
+If Approved / Hired:
+
+Show approved message.
+
+If Not Approved:
+
+Show not approved message.
+
+Testing Requirements
+
+Please test this properly before marking complete.
+
+Test 1: Policy persistence
+
+Open public hiring package link.
+Accept first policy.
+Refresh page.
+Confirm first policy remains accepted.
+Accept all policies.
+Refresh page.
+Confirm it does not return to first policy.
+Confirm it moves to next incomplete step.
+
+Test 2: Personal info persistence
+
+Fill personal information.
+Click Continue.
+Refresh page.
+Confirm all fields are still filled.
+
+Test 3: Emergency contact persistence
+
+Fill emergency contact.
+Click Continue.
+Refresh page.
+Confirm emergency contact remains saved.
+
+Test 4: Medical info persistence
+
+Fill optional medical info.
+Click Continue.
+Refresh page.
+Confirm medical info remains saved.
+
+Test 5: Document upload
+
+Upload government ID front as JPG.
+Upload government ID back as PNG.
+Upload resume as PDF.
+Refresh page.
+Confirm all uploaded files still show as uploaded.
+Confirm required errors disappear.
+Confirm Continue to Signature works.
+
+Test 6: DOC and DOCX resume
+
+Upload resume as DOC.
+Confirm it works.
+Replace with DOCX.
+Confirm it works.
+Refresh page.
+Confirm file persists.
+
+Test 7: PDF government ID
+
+Upload government ID front as PDF.
+Upload government ID back as PDF.
+Confirm both work.
+Refresh page.
+Confirm both persist.
+
+Test 8: File size
+
+Upload a file bigger than previous limit but under 25 MB.
+Confirm it works.
+Upload file over 25 MB.
+Confirm clean error says max size is 25 MB.
+
+Test 9: Signature persistence
+
+Sign the package.
+Refresh page before submitting.
+Confirm signature still exists.
+
+Test 10: Final submission
+
+Submit hiring package.
+Refresh public link.
+Confirm it shows Under Review status.
+Confirm employee cannot accidentally restart the application.
+
+Test 11: Admin review
+
+Go to Publications > Hiring Package > Submitted Applications.
+Confirm submitted employee appears.
+Open submission.
+Confirm accepted policies show.
+Confirm uploaded documents preview/download.
+Confirm personal info shows.
+Confirm emergency contact shows.
+Confirm medical info shows if filled.
+Confirm actual signature shows.
+
+Test 12: Admin approval
+
+Mark applicant Approved / Hired.
+Open public link again.
+Confirm employee sees Approved / Hired status.
+
+Important Implementation Notes
+
+Do not use localStorage as the main storage.
+LocalStorage can be used only as a temporary backup.
+Backend database must be the source of truth.
+
+Do not lose progress after refresh.
+
+Do not create duplicate submissions.
+
+Do not require login on public employee link.
+
+Do not expose internal database IDs.
+
+Do not store uploaded documents only in memory.
+
+Do not block DOC or DOCX because MIME type is empty.
+
+Do not block mobile uploads.
+
+Do not require optional documents.
+
+Final Expected Result
+
+Employee opens hiring package public link.
+
+They accept each policy one by one.
+
+They refresh the page.
+
+Everything remains saved.
+
+They fill personal information.
+
+They refresh the page.
+
+Everything remains saved.
+
+They upload government ID front, government ID back, and resume.
+
+PDF, DOC, DOCX, JPG, JPEG, and PNG work based on the document type.
+
+They refresh the page.
+
+Uploaded files remain visible.
+
+They sign and submit.
+
+The link becomes a status page.
+
+Admin opens Publications > Hiring Package > Submitted Applications.
+
+Admin sees the full submission, accepted policies, uploaded documents, personal information, emergency contacts, medical information, and signature.
+
+Admin can approve, request missing documents, reject, archive, or mark fired/inactive.
+
+Do not break or affect anything else.

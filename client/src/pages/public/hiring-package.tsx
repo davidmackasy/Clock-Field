@@ -10,13 +10,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Check, CheckCircle2, ChevronDown, ChevronRight, AlertCircle, Building2,
-  FileText, User, Phone, Clipboard, Pen, RotateCcw, Upload, X,
+  Check, CheckCircle2, AlertCircle, Building2,
+  FileText, User, Phone, Pen, Upload, X,
   Clock, Printer, AlertTriangle, Lock, Shield, Image, FileIcon,
 } from "lucide-react";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const STEPS = ["Policies", "Personal Info", "Emergency Contacts", "Medical Info", "Documents", "Signature"];
+const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25 MB
 
 const DOC_TYPES: { key: string; label: string; required: boolean; accept: string; allowedExts: string[]; hint: string }[] = [
   {
@@ -25,7 +26,7 @@ const DOC_TYPES: { key: string; label: string; required: boolean; accept: string
     required: true,
     accept: ".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf",
     allowedExts: ["jpg","jpeg","png","pdf"],
-    hint: "Driver's licence, passport, or government-issued ID — front side. JPG, PNG, or PDF.",
+    hint: "Driver's licence, passport, or government-issued ID — front side. JPG, PNG, or PDF. Max 25 MB.",
   },
   {
     key: "government_id_back",
@@ -33,7 +34,7 @@ const DOC_TYPES: { key: string; label: string; required: boolean; accept: string
     required: true,
     accept: ".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf",
     allowedExts: ["jpg","jpeg","png","pdf"],
-    hint: "Back of the same government-issued ID. JPG, PNG, or PDF.",
+    hint: "Back of the same government-issued ID. JPG, PNG, or PDF. Max 25 MB.",
   },
   {
     key: "resume_cv",
@@ -41,7 +42,7 @@ const DOC_TYPES: { key: string; label: string; required: boolean; accept: string
     required: true,
     accept: ".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     allowedExts: ["pdf","doc","docx"],
-    hint: "PDF, DOC, or DOCX — max 10 MB.",
+    hint: "PDF, DOC, or DOCX — max 25 MB.",
   },
   {
     key: "work_permit",
@@ -99,37 +100,54 @@ function fileSizeLabel(bytes: number) {
 }
 
 // ── Signature Canvas ───────────────────────────────────────────────────────────
-function SignatureCanvas({ onSign }: { onSign: (data: string) => void }) {
+function SignatureCanvas({ onSign, existingSignature }: { onSign: (data: string) => void; existingSignature?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
-  const lastPos = useRef({ x: 0, y: 0 });
-  const [hasSignature, setHasSignature] = useState(false);
+  const [hasDrawn, setHasDrawn] = useState(!!existingSignature);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    canvas.width = canvas.offsetWidth * window.devicePixelRatio;
-    canvas.height = canvas.offsetHeight * window.devicePixelRatio;
-    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.strokeStyle = "#1a1a1a";
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
+    // If there's an existing signature, restore it
+    if (existingSignature) {
+      const img = new window.Image();
+      img.onload = () => ctx.drawImage(img, 0, 0);
+      img.src = existingSignature;
+    }
   }, []);
 
   function getPos(e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) {
     const rect = canvas.getBoundingClientRect();
-    const pt = "touches" in e ? e.touches[0] : e;
-    return { x: pt.clientX - rect.left, y: pt.clientY - rect.top };
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    if ("touches" in e) {
+      return {
+        x: (e.touches[0].clientX - rect.left) * scaleX,
+        y: (e.touches[0].clientY - rect.top) * scaleY,
+      };
+    }
+    return {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY,
+    };
   }
 
-  function startDrawing(e: React.MouseEvent | React.TouchEvent) {
+  function startDraw(e: React.MouseEvent | React.TouchEvent) {
     e.preventDefault();
     drawing.current = true;
     const canvas = canvasRef.current!;
-    lastPos.current = getPos(e, canvas);
+    const ctx = canvas.getContext("2d")!;
+    const pos = getPos(e, canvas);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
   }
 
   function draw(e: React.MouseEvent | React.TouchEvent) {
@@ -138,47 +156,58 @@ function SignatureCanvas({ onSign }: { onSign: (data: string) => void }) {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
     const pos = getPos(e, canvas);
-    ctx.beginPath();
-    ctx.moveTo(lastPos.current.x, lastPos.current.y);
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
-    lastPos.current = pos;
-    setHasSignature(true);
+    setHasDrawn(true);
   }
 
-  function stopDrawing() {
+  function stopDraw() {
     if (!drawing.current) return;
     drawing.current = false;
-    const canvas = canvasRef.current!;
-    onSign(canvas.toDataURL("image/png"));
+    if (hasDrawn || canvasRef.current) {
+      const data = canvasRef.current!.toDataURL("image/png");
+      onSign(data);
+    }
   }
 
-  function clear() {
+  function clearCanvas() {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    setHasSignature(false);
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    setHasDrawn(false);
     onSign("");
   }
 
   return (
     <div className="space-y-2">
-      <div className="relative rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 overflow-hidden" style={{ height: 140 }}>
+      <div className="border-2 border-dashed border-gray-300 rounded-xl overflow-hidden bg-white touch-none relative">
         <canvas
           ref={canvasRef}
-          className="absolute inset-0 w-full h-full touch-none cursor-crosshair"
-          onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing}
-          onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing}
+          width={600}
+          height={180}
+          className="w-full block cursor-crosshair"
+          onMouseDown={startDraw}
+          onMouseMove={draw}
+          onMouseUp={stopDraw}
+          onMouseLeave={stopDraw}
+          onTouchStart={startDraw}
+          onTouchMove={draw}
+          onTouchEnd={stopDraw}
+          data-testid="canvas-signature"
         />
-        {!hasSignature && (
+        {!hasDrawn && !existingSignature && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <p className="text-sm text-gray-400 flex items-center gap-2"><Pen className="w-4 h-4" /> Draw your signature here</p>
+            <p className="text-gray-300 text-sm select-none flex items-center gap-2">
+              <Pen className="w-4 h-4" /> Sign here with your mouse or finger
+            </p>
           </div>
         )}
       </div>
-      {hasSignature && (
-        <Button variant="ghost" size="sm" className="gap-1.5 text-gray-500 h-7" onClick={clear}>
-          <RotateCcw className="w-3.5 h-3.5" /> Clear &amp; Re-sign
+      {(hasDrawn || existingSignature) && (
+        <Button variant="ghost" size="sm" className="text-xs text-gray-400 hover:text-red-500 gap-1.5" onClick={clearCanvas}
+          data-testid="button-clear-signature">
+          <X className="w-3 h-3" /> Clear signature
         </Button>
       )}
     </div>
@@ -199,15 +228,12 @@ function UploadSlot({
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   function isFileTypeAllowed(f: File): boolean {
-    // Primary: check file extension (works even when browser reports empty MIME)
     const ext = f.name.split(".").pop()?.toLowerCase() || "";
     if (allowedExts.includes(ext)) return true;
-    // Fallback: check MIME type when extension check fails (e.g. mobile cameras)
     if (!f.type) return false;
     const mime = f.type.toLowerCase();
     if (allowedExts.some(e => ["jpg","jpeg"].includes(e)) && mime.includes("jpeg")) return true;
     if (allowedExts.includes("png") && mime === "image/png") return true;
-    if (allowedExts.includes("gif") && mime === "image/gif") return true;
     if (allowedExts.includes("pdf") && mime === "application/pdf") return true;
     if (allowedExts.includes("doc") && mime === "application/msword") return true;
     if (allowedExts.includes("docx") && mime.includes("wordprocessingml")) return true;
@@ -225,8 +251,8 @@ function UploadSlot({
       e.target.value = "";
       return;
     }
-    if (f.size > 10 * 1024 * 1024) {
-      setUploadError("File is too large. Maximum size is 10 MB.");
+    if (f.size > MAX_FILE_BYTES) {
+      setUploadError("File is too large. Maximum size is 25 MB.");
       e.target.value = "";
       return;
     }
@@ -234,7 +260,6 @@ function UploadSlot({
     setLoading(true);
     try {
       const data = await readFileAsDataUrl(f);
-      // Preserve MIME type — some mobile browsers return empty string; infer from extension
       let mimeType = f.type;
       if (!mimeType) {
         const ext = f.name.split(".").pop()?.toLowerCase() || "";
@@ -306,12 +331,7 @@ function StepBar({ current, total }: { current: number; total: number }) {
   return (
     <div className="flex items-center gap-1">
       {Array.from({ length: total }).map((_, i) => (
-        <div
-          key={i}
-          className={`h-1.5 flex-1 rounded-full transition-colors ${
-            i < current ? "bg-blue-500" : i === current ? "bg-blue-400" : "bg-gray-200"
-          }`}
-        />
+        <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${i < current ? "bg-blue-500" : i === current ? "bg-blue-400" : "bg-gray-200"}`} />
       ))}
     </div>
   );
@@ -378,14 +398,14 @@ export default function PublicHiringPackage() {
     queryFn: () => fetch(`/api/public/hiring-packages/${token}`).then(r => { if (!r.ok) throw new Error("Not found"); return r.json(); }),
     enabled: !!token,
     retry: false,
+    staleTime: 0,
   });
 
-  // Step state
+  // ── Local state ─────────────────────────────────────────────────────────────
   const [step, setStep] = useState(0);
   const [policyStep, setPolicyStep] = useState(0);
   const [policyAcceptances, setPolicyAcceptances] = useState<any[]>([]);
 
-  // Form state
   const [form, setForm] = useState({
     firstName: "", lastName: "", preferredName: "", email: "", phone: "",
     address: "", city: "", province: "", postalCode: "", country: "Canada",
@@ -401,52 +421,151 @@ export default function PublicHiringPackage() {
   const [submitted, setSubmitted] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
+  const hasRestoredRef = useRef(false);
+
   const sections = (Array.isArray(pkg?.templateData) ? pkg.templateData : []).filter((s: any) => s.enabled !== false);
   const company = pkg?.company || {};
   const isAlreadySubmitted = SUBMITTED_STATUSES.includes(pkg?.status || "");
 
-  // Pre-fill form from package data + restore saved document uploads
+  // ── Restore ALL saved progress when pkg loads ─────────────────────────────
   useEffect(() => {
-    if (pkg && !submitted) {
-      const nameParts = (pkg.employeeName || "").split(" ");
-      setForm(prev => ({
-        ...prev,
-        firstName: nameParts[0] || "",
-        lastName: nameParts.slice(1).join(" ") || "",
-        email: pkg.employeeEmail || "",
-        phone: pkg.employeePhone || "",
-        jobTitle: pkg.jobTitle || "",
-        startDate: pkg.startDate || "",
-      }));
-      // Restore previously uploaded documents from saved progress
-      const savedDocFiles = (pkg.employeeResponse as any)?.documentFiles;
-      if (savedDocFiles && typeof savedDocFiles === "object") {
-        setDocFiles(prev => {
-          const merged: typeof prev = { ...prev };
-          for (const [key, val] of Object.entries(savedDocFiles)) {
-            if (val && typeof val === "object" && (val as any).data) {
-              merged[key] = val as any;
-            }
-          }
-          return merged;
-        });
+    if (!pkg || submitted || hasRestoredRef.current) return;
+    hasRestoredRef.current = true;
+
+    const resp = (pkg.employeeResponse as any) || null;
+    const savedPolicies = Array.isArray(pkg.policyAcceptances) ? pkg.policyAcceptances : [];
+    const nameParts = (pkg.employeeName || "").split(" ");
+
+    // ── Restore form ──────────────────────────────────────────────────────
+    setForm({
+      firstName:     resp?.firstName     || nameParts[0] || "",
+      lastName:      resp?.lastName      || nameParts.slice(1).join(" ") || "",
+      preferredName: resp?.preferredName || "",
+      email:         resp?.email         || pkg.employeeEmail || "",
+      phone:         resp?.phone         || pkg.employeePhone || "",
+      address:       resp?.address       || pkg.employeeAddress || "",
+      city:          resp?.city          || "",
+      province:      resp?.province      || "",
+      postalCode:    resp?.postalCode    || "",
+      country:       resp?.country       || "Canada",
+      jobTitle:      resp?.jobTitle      || pkg.jobTitle || "",
+      startDate:     resp?.startDate     || pkg.startDate || "",
+    });
+
+    // ── Restore emergency contacts ────────────────────────────────────────
+    if (resp?.emergencyContact1) setEc1(resp.emergencyContact1);
+    if (resp?.emergencyContact2) setEc2(resp.emergencyContact2);
+
+    // ── Restore medical ───────────────────────────────────────────────────
+    if (resp) {
+      setMedical({
+        allergies:     resp.allergies     || "",
+        sensitivities: resp.sensitivities || "",
+        medicalNotes:  resp.medicalNotes  || "",
+        medicationNote: resp.medicationNote || "",
+      });
+    }
+
+    // ── Restore uploaded documents ────────────────────────────────────────
+    const savedDocFiles = resp?.documentFiles;
+    if (savedDocFiles && typeof savedDocFiles === "object") {
+      const restored: typeof docFiles = {};
+      for (const [key, val] of Object.entries(savedDocFiles)) {
+        if (val && typeof val === "object" && (val as any).data) {
+          restored[key] = val as any;
+        }
       }
+      setDocFiles(restored);
+    }
+
+    // ── Restore signature ─────────────────────────────────────────────────
+    const savedSig = pkg.signatureData || resp?.signatureData || "";
+    if (savedSig) setSignature(savedSig);
+
+    // ── Restore policy acceptances ────────────────────────────────────────
+    if (savedPolicies.length > 0) {
+      setPolicyAcceptances(savedPolicies);
+      // Advance policyStep to the first unaccepted policy (or last if all done)
+      const secs = (Array.isArray(pkg.templateData) ? pkg.templateData : []).filter((s: any) => s.enabled !== false);
+      const acceptedIds = new Set(savedPolicies.map((a: any) => a.sectionId));
+      const firstUnacceptedIdx = secs.findIndex((s: any) => !acceptedIds.has(s.id));
+      setPolicyStep(firstUnacceptedIdx === -1 ? Math.max(0, secs.length - 1) : firstUnacceptedIdx);
+    }
+
+    // ── Restore step ──────────────────────────────────────────────────────
+    // Prefer explicitly saved currentStep, else infer from progress
+    if (typeof resp?.currentStep === "number" && resp.currentStep > 0) {
+      setStep(resp.currentStep);
+    } else if (savedPolicies.length > 0) {
+      const secs = (Array.isArray(pkg.templateData) ? pkg.templateData : []).filter((s: any) => s.enabled !== false);
+      const allAccepted = secs.length > 0 && savedPolicies.length >= secs.length;
+      if (allAccepted) setStep(1); // At minimum move past policies
     }
   }, [pkg]);
 
-  // Mark as "started" once employee begins interacting
-  useEffect(() => {
-    if (pkg && !isAlreadySubmitted && !submitted) {
-      fetch(`/api/public/hiring-packages/${token}/save-progress`, { method: "POST" }).catch(() => {});
-    }
-  }, [pkg]);
+  // ── Core save-progress function ──────────────────────────────────────────
+  const saveProgress = useCallback(async (overrides: {
+    currentStep?: number;
+    newPolicies?: any[];
+    newSignature?: string;
+    formOverride?: typeof form;
+    ec1Override?: typeof ec1;
+    ec2Override?: typeof ec2;
+    medicalOverride?: typeof medical;
+  } = {}) => {
+    if (!token || isAlreadySubmitted) return;
+    const currentFormData = overrides.formOverride ?? form;
+    const currentEc1 = overrides.ec1Override ?? ec1;
+    const currentEc2 = overrides.ec2Override ?? ec2;
+    const currentMedical = overrides.medicalOverride ?? medical;
+    const currentStep_ = overrides.currentStep ?? step;
+    const currentPolicies = overrides.newPolicies ?? policyAcceptances;
+    const currentSig = overrides.newSignature ?? signature;
 
-  // Persist uploaded document files to server so they survive a page refresh
+    try {
+      await fetch(`/api/public/hiring-packages/${token}/save-progress`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentStep: currentStep_,
+          policyStep,
+          policyAcceptances: currentPolicies,
+          employeeResponse: {
+            firstName: currentFormData.firstName,
+            lastName: currentFormData.lastName,
+            fullName: `${currentFormData.firstName} ${currentFormData.lastName}`.trim(),
+            preferredName: currentFormData.preferredName,
+            email: currentFormData.email,
+            phone: currentFormData.phone,
+            address: currentFormData.address,
+            city: currentFormData.city,
+            province: currentFormData.province,
+            postalCode: currentFormData.postalCode,
+            country: currentFormData.country,
+            jobTitle: currentFormData.jobTitle,
+            startDate: currentFormData.startDate,
+            emergencyContact1: currentEc1,
+            emergencyContact2: currentEc2,
+            allergies: currentMedical.allergies,
+            sensitivities: currentMedical.sensitivities,
+            medicalNotes: currentMedical.medicalNotes,
+            medicationNote: currentMedical.medicationNote,
+          },
+          ...(currentSig ? { signatureData: currentSig } : {}),
+        }),
+      });
+    } catch {
+      // non-fatal
+    }
+  }, [token, isAlreadySubmitted, form, ec1, ec2, medical, step, policyStep, policyAcceptances, signature]);
+
+  // ── Persist uploaded document files ─────────────────────────────────────
   async function persistDocFiles(updatedDocs: typeof docFiles) {
     if (!token || isAlreadySubmitted) return;
     const documentFiles: Record<string, any> = {};
     DOC_TYPES.forEach(d => {
       if (updatedDocs[d.key]) documentFiles[d.key] = updatedDocs[d.key];
+      else documentFiles[d.key] = null; // explicitly remove deleted files
     });
     try {
       await fetch(`/api/public/hiring-packages/${token}/save-progress`, {
@@ -454,11 +573,10 @@ export default function PublicHiringPackage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ documentFiles }),
       });
-    } catch {
-      // non-fatal — files are still in local state
-    }
+    } catch { /* non-fatal */ }
   }
 
+  // ── Policy acceptance ─────────────────────────────────────────────────────
   function acceptPolicy(section: any) {
     const acceptance = {
       sectionId: section.id,
@@ -469,32 +587,35 @@ export default function PublicHiringPackage() {
     };
     const newAcceptances = [...policyAcceptances, acceptance];
     setPolicyAcceptances(newAcceptances);
-    if (policyStep < sections.length - 1) {
-      setPolicyStep(policyStep + 1);
+    const nextIdx = policyStep < sections.length - 1 ? policyStep + 1 : policyStep;
+    setPolicyStep(nextIdx);
+    // Save immediately to backend
+    saveProgress({ newPolicies: newAcceptances });
+  }
+
+  function allPoliciesAccepted() { return policyAcceptances.length >= sections.length; }
+  function isPolicyAccepted(section: any) { return policyAcceptances.some(a => a.sectionId === section.id); }
+
+  // ── Document file handler ─────────────────────────────────────────────────
+  function handleDocFile(docType: string, file: { filename: string; mimeType: string; size: number; data: string } | null) {
+    // Compute the update outside the state setter to avoid calling async code inside React's updater
+    const updatedDocs = { ...docFiles, [docType]: file };
+    setDocFiles(updatedDocs);
+    persistDocFiles(updatedDocs);
+  }
+
+  // ── Signature handler ─────────────────────────────────────────────────────
+  function handleSign(data: string) {
+    setSignature(data);
+    if (data) {
+      saveProgress({ newSignature: data });
     }
   }
 
-  function allPoliciesAccepted() {
-    return policyAcceptances.length >= sections.length;
-  }
-
-  function isPolicyAccepted(section: any) {
-    return policyAcceptances.some(a => a.sectionId === section.id);
-  }
-
-  function handleDocFile(docType: string, file: { filename: string; mimeType: string; size: number; data: string } | null) {
-    setDocFiles(prev => {
-      const updated = { ...prev, [docType]: file };
-      persistDocFiles(updated);
-      return updated;
-    });
-  }
-
+  // ── Validation ────────────────────────────────────────────────────────────
   function validateStep(s: number): string[] {
     const errs: string[] = [];
-    if (s === 0) {
-      if (!allPoliciesAccepted()) errs.push("Please accept all policies before continuing.");
-    }
+    if (s === 0 && !allPoliciesAccepted()) errs.push("Please accept all policies before continuing.");
     if (s === 1) {
       if (!form.firstName.trim()) errs.push("First name is required.");
       if (!form.lastName.trim()) errs.push("Last name is required.");
@@ -505,8 +626,7 @@ export default function PublicHiringPackage() {
       if (!ec1.phone.trim()) errs.push("Emergency Contact 1 phone is required.");
     }
     if (s === 4) {
-      const required = DOC_TYPES.filter(d => d.required);
-      required.forEach(d => {
+      DOC_TYPES.filter(d => d.required).forEach(d => {
         if (!docFiles[d.key]) errs.push(`${d.label} is required.`);
       });
     }
@@ -521,16 +641,21 @@ export default function PublicHiringPackage() {
     const errs = validateStep(step);
     if (errs.length > 0) { setErrors(errs); return; }
     setErrors([]);
-    setStep(s => s + 1);
+    const nextStep = step + 1;
+    setStep(nextStep);
+    // Save all current state including the new step
+    saveProgress({ currentStep: nextStep });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function goBack() {
     setErrors([]);
-    setStep(s => Math.max(0, s - 1));
+    const prevStep = Math.max(0, step - 1);
+    setStep(prevStep);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  // ── Final submission ──────────────────────────────────────────────────────
   async function handleSubmit() {
     const errs = validateStep(5);
     if (errs.length > 0) { setErrors(errs); return; }
@@ -538,9 +663,7 @@ export default function PublicHiringPackage() {
     setSubmitting(true);
     try {
       const documentFiles: Record<string, any> = {};
-      DOC_TYPES.forEach(d => {
-        if (docFiles[d.key]) documentFiles[d.key] = docFiles[d.key];
-      });
+      DOC_TYPES.forEach(d => { if (docFiles[d.key]) documentFiles[d.key] = docFiles[d.key]; });
 
       const employeeResponse = {
         firstName: form.firstName,
@@ -573,13 +696,14 @@ export default function PublicHiringPackage() {
       });
       if (!r.ok) throw new Error("Submission failed");
       setSubmitted(true);
-    } catch (e: any) {
+    } catch {
       setErrors(["Submission failed. Please try again."]);
     } finally {
       setSubmitting(false);
     }
   }
 
+  // ── Loading / Error ───────────────────────────────────────────────────────
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -639,7 +763,7 @@ export default function PublicHiringPackage() {
 
       <div className="max-w-2xl mx-auto px-4 py-5 space-y-5 pb-24">
 
-        {/* Status page */}
+        {/* ── STATUS PAGE ─────────────────────────────────────────────── */}
         {showStatusPage && (
           <>
             <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-2xl p-5">
@@ -647,7 +771,7 @@ export default function PublicHiringPackage() {
               <p className="text-blue-100 text-sm">Welcome back, {pkg.employeeName || "there"}. Here is your current status.</p>
             </div>
             <StatusPage
-              status={pkg.status}
+              status={submitted ? "submitted" : pkg.status}
               company={company}
               employeeName={pkg.employeeName}
               completedAt={pkg.completedAt}
@@ -656,7 +780,7 @@ export default function PublicHiringPackage() {
           </>
         )}
 
-        {/* ── STEP 0: POLICIES ────────────────────────────────────────────── */}
+        {/* ── STEP 0: POLICIES ────────────────────────────────────────── */}
         {!showStatusPage && step === 0 && (
           <div className="space-y-4">
             <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-2xl p-5">
@@ -671,7 +795,6 @@ export default function PublicHiringPackage() {
               )}
             </div>
 
-            {/* Policy progress */}
             <div className="flex items-center justify-between px-1">
               <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                 <FileText className="w-4 h-4" /> Company Policies
@@ -681,7 +804,6 @@ export default function PublicHiringPackage() {
               </span>
             </div>
 
-            {/* Policy list */}
             <div className="space-y-3">
               {sections.map((section: any, idx: number) => {
                 const accepted = isPolicyAccepted(section);
@@ -689,15 +811,13 @@ export default function PublicHiringPackage() {
                 const isLocked = idx > policyStep && !accepted;
 
                 return (
-                  <div
-                    key={section.id || idx}
+                  <div key={section.id || idx}
                     className={`rounded-xl border overflow-hidden transition-all ${
                       accepted ? "border-green-200 bg-green-50/30" :
                       isCurrent ? "border-blue-300 bg-white shadow-sm" :
                       "border-gray-200 bg-gray-50 opacity-60"
                     }`}
                   >
-                    {/* Section header */}
                     <div className="flex items-center gap-3 p-4">
                       <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${
                         accepted ? "bg-green-100 text-green-700" :
@@ -713,7 +833,6 @@ export default function PublicHiringPackage() {
                       {isLocked && <Lock className="w-3.5 h-3.5 text-gray-300 shrink-0" />}
                     </div>
 
-                    {/* Current policy: show full content + accept button */}
                     {isCurrent && (
                       <div className="border-t px-4 pb-4">
                         <div className="max-h-72 overflow-y-auto bg-white rounded-lg border border-gray-100 p-4 mt-3">
@@ -750,7 +869,7 @@ export default function PublicHiringPackage() {
           </div>
         )}
 
-        {/* ── STEP 1: PERSONAL INFO ─────────────────────────────────────── */}
+        {/* ── STEP 1: PERSONAL INFO ──────────────────────────────────── */}
         {!showStatusPage && step === 1 && (
           <div className="space-y-4">
             <div>
@@ -833,7 +952,7 @@ export default function PublicHiringPackage() {
           </div>
         )}
 
-        {/* ── STEP 2: EMERGENCY CONTACTS ────────────────────────────────── */}
+        {/* ── STEP 2: EMERGENCY CONTACTS ─────────────────────────────── */}
         {!showStatusPage && step === 2 && (
           <div className="space-y-4">
             <div>
@@ -899,48 +1018,43 @@ export default function PublicHiringPackage() {
           </div>
         )}
 
-        {/* ── STEP 3: MEDICAL INFO ──────────────────────────────────────── */}
+        {/* ── STEP 3: MEDICAL INFO ───────────────────────────────────── */}
         {!showStatusPage && step === 3 && (
           <div className="space-y-4">
             <div>
               <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                 <Shield className="w-5 h-5 text-blue-600" /> Medical Information
-                <Badge className="bg-gray-100 text-gray-600 font-normal text-xs">Optional</Badge>
               </h2>
-            </div>
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-              <p className="text-xs text-blue-800 leading-relaxed">
-                <span className="font-semibold">Confidentiality Notice:</span> The information you provide in this section will be held in the strictest confidence and will only be shared on a need-to-know basis with authorized personnel. This form is not intended to request or investigate your personal medical history. The information is being collected only to help respond to an emergency, safety concern, allergy, sensitivity, or medical situation that may occur at work.
-              </p>
+              <p className="text-sm text-gray-500 mt-1">This section is optional. Please share only what is relevant to your workplace safety or emergency response. All information is confidential.</p>
             </div>
             <Card>
               <CardContent className="p-4 space-y-3">
                 <div>
-                  <Label className="text-xs text-gray-500">Allergies</Label>
-                  <Input value={medical.allergies} onChange={e => setMedical(p => ({ ...p, allergies: e.target.value }))}
-                    placeholder="e.g. Latex, nuts, penicillin — or 'None known'" className="mt-1 h-9 text-sm" data-testid="input-allergies" />
+                  <Label className="text-xs text-gray-500">Allergies (optional)</Label>
+                  <Textarea value={medical.allergies} onChange={e => setMedical(p => ({ ...p, allergies: e.target.value }))}
+                    placeholder="e.g. Peanuts, latex, penicillin" className="mt-1 text-sm min-h-[60px] resize-none" data-testid="input-allergies" />
                 </div>
                 <div>
-                  <Label className="text-xs text-gray-500">Sensitivities</Label>
-                  <Input value={medical.sensitivities} onChange={e => setMedical(p => ({ ...p, sensitivities: e.target.value }))}
-                    placeholder="e.g. Bleach, strong scents, dust — or 'None'" className="mt-1 h-9 text-sm" data-testid="input-sensitivities" />
+                  <Label className="text-xs text-gray-500">Sensitivities or Chemical Reactions (optional)</Label>
+                  <Textarea value={medical.sensitivities} onChange={e => setMedical(p => ({ ...p, sensitivities: e.target.value }))}
+                    placeholder="e.g. Sensitivity to bleach or strong scents" className="mt-1 text-sm min-h-[60px] resize-none" data-testid="input-sensitivities" />
                 </div>
                 <div>
-                  <Label className="text-xs text-gray-500">Medical Notes Relevant to Workplace Safety</Label>
+                  <Label className="text-xs text-gray-500">Medical Notes (optional)</Label>
                   <Textarea value={medical.medicalNotes} onChange={e => setMedical(p => ({ ...p, medicalNotes: e.target.value }))}
-                    placeholder="Any conditions or restrictions relevant to safe performance of your job (optional)" className="mt-1 text-sm min-h-[70px] resize-none" data-testid="input-medicalNotes" />
+                    placeholder="Any relevant medical information your employer should be aware of in an emergency" className="mt-1 text-sm min-h-[60px] resize-none" data-testid="input-medicalNotes" />
                 </div>
                 <div>
-                  <Label className="text-xs text-gray-500">Special Medication Note (optional)</Label>
-                  <Input value={medical.medicationNote} onChange={e => setMedical(p => ({ ...p, medicationNote: e.target.value }))}
-                    placeholder="Any prescribed medication that may affect work performance" className="mt-1 h-9 text-sm" data-testid="input-medicationNote" />
+                  <Label className="text-xs text-gray-500">Medication Note (optional)</Label>
+                  <Textarea value={medical.medicationNote} onChange={e => setMedical(p => ({ ...p, medicationNote: e.target.value }))}
+                    placeholder="Any medication that may affect work performance or emergency response" className="mt-1 text-sm min-h-[60px] resize-none" data-testid="input-medicationNote" />
                 </div>
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* ── STEP 4: DOCUMENTS ─────────────────────────────────────────── */}
+        {/* ── STEP 4: DOCUMENTS ─────────────────────────────────────── */}
         {!showStatusPage && step === 4 && (
           <div className="space-y-4">
             <div>
@@ -967,95 +1081,114 @@ export default function PublicHiringPackage() {
           </div>
         )}
 
-        {/* ── STEP 5: SIGNATURE ─────────────────────────────────────────── */}
+        {/* ── STEP 5: SIGNATURE ─────────────────────────────────────── */}
         {!showStatusPage && step === 5 && (
           <div className="space-y-4">
             <div>
               <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <Pen className="w-5 h-5 text-blue-600" /> Final Acknowledgement &amp; Signature
+                <Pen className="w-5 h-5 text-blue-600" /> Review & Sign
               </h2>
+              <p className="text-sm text-gray-500 mt-1">Review the summary below, draw your signature, and submit your hiring package.</p>
             </div>
+
+            {/* Summary */}
             <Card>
-              <CardContent className="p-4 space-y-4">
-                <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-                  <p className="text-sm text-blue-800 leading-relaxed">
-                    I confirm that the information I provided is accurate to the best of my knowledge. I confirm that I have read, understood, and agreed to all required company policies in this hiring package. I understand that this hiring package and all accepted policies may become part of my confidential employment file.
-                  </p>
+              <CardContent className="p-4 space-y-3 text-sm">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Summary</p>
+                <div className="grid grid-cols-2 gap-2 text-gray-700">
+                  <div><span className="text-gray-400 text-xs block">Name</span>{form.firstName} {form.lastName}</div>
+                  {form.phone && <div><span className="text-gray-400 text-xs block">Phone</span>{form.phone}</div>}
+                  {form.email && <div><span className="text-gray-400 text-xs block">Email</span>{form.email}</div>}
+                  {form.jobTitle && <div><span className="text-gray-400 text-xs block">Position</span>{form.jobTitle}</div>}
                 </div>
-                <div className="flex items-start gap-3 p-3 rounded-xl border border-gray-200 bg-gray-50">
-                  <Checkbox
-                    id="ack-checkbox"
-                    checked={agreedToAck}
-                    onCheckedChange={v => setAgreedToAck(!!v)}
-                    className="mt-0.5"
-                    data-testid="checkbox-acknowledge"
-                  />
-                  <label htmlFor="ack-checkbox" className="text-sm text-gray-700 cursor-pointer leading-relaxed">
-                    I agree and confirm all of the above.
-                  </label>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-700 mb-2">Digital Signature</p>
-                  <p className="text-xs text-gray-500 mb-3">Please draw your signature in the box below using your mouse or finger on mobile.</p>
-                  <SignatureCanvas onSign={setSignature} />
+                <div className="pt-2 border-t flex gap-4 flex-wrap text-xs">
+                  <span className="flex items-center gap-1 text-green-700">
+                    <Check className="w-3.5 h-3.5" /> {policyAcceptances.length} polic{policyAcceptances.length === 1 ? "y" : "ies"} accepted
+                  </span>
+                  <span className="flex items-center gap-1 text-green-700">
+                    <Check className="w-3.5 h-3.5" /> {Object.values(docFiles).filter(Boolean).length} document{Object.values(docFiles).filter(Boolean).length === 1 ? "" : "s"} uploaded
+                  </span>
                 </div>
               </CardContent>
             </Card>
+
+            {/* Signature */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-700">Your Signature <span className="text-red-500">*</span></Label>
+              <p className="text-xs text-gray-500">Draw your signature below using your mouse or finger on mobile.</p>
+              <SignatureCanvas onSign={handleSign} existingSignature={signature || undefined} />
+            </div>
+
+            {/* Acknowledgement */}
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="ack"
+                  checked={agreedToAck}
+                  onCheckedChange={v => setAgreedToAck(v as boolean)}
+                  data-testid="checkbox-ack"
+                />
+                <Label htmlFor="ack" className="text-sm text-blue-900 leading-relaxed cursor-pointer">
+                  I confirm that the information I provided is accurate to the best of my knowledge. I confirm that I have read, understood, and agreed to all required company policies in this hiring package. I understand that this hiring package and all accepted policies may become part of my confidential employment file.
+                </Label>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Validation errors */}
+        {/* ── ERROR DISPLAY ──────────────────────────────────────────── */}
         {errors.length > 0 && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-1" data-testid="validation-errors">
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-1">
             {errors.map((e, i) => (
               <p key={i} className="text-sm text-red-700 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" /> {e}
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {e}
               </p>
             ))}
           </div>
         )}
 
-      </div>
-
-      {/* Footer nav */}
-      {!showStatusPage && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t z-20">
-          <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
-            {step > 0 && (
-              <Button variant="outline" className="flex-1 h-11" onClick={goBack}>
-                Back
-              </Button>
-            )}
-            {step === 0 && (
-              <Button
-                className="flex-1 h-11 font-semibold"
-                onClick={goNext}
-                disabled={!allPoliciesAccepted()}
-                data-testid="button-continue-to-personal"
-              >
-                Continue to Personal Information
-              </Button>
-            )}
-            {step > 0 && step < 5 && (
-              <Button className="flex-1 h-11 font-semibold" onClick={goNext} data-testid={`button-next-step-${step}`}>
-                {step === 3 ? "Continue to Documents" : step === 4 ? "Continue to Signature" : "Continue"}
-              </Button>
-            )}
-            {step === 5 && (
-              <Button
-                className="flex-1 h-11 font-semibold bg-green-600 hover:bg-green-700"
-                onClick={handleSubmit}
-                disabled={submitting || !agreedToAck || !signature}
-                data-testid="button-submit-package"
-              >
-                {submitting
-                  ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2 inline-block" />Submitting…</>
-                  : <><Check className="w-5 h-5 mr-2" /> Submit Hiring Package</>}
-              </Button>
-            )}
+        {/* ── NAVIGATION ────────────────────────────────────────────── */}
+        {!showStatusPage && (
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t px-4 py-3 z-10">
+            <div className="max-w-2xl mx-auto flex gap-3">
+              {step > 0 && (
+                <Button variant="outline" className="flex-1 h-11" onClick={goBack} data-testid="button-back">
+                  Back
+                </Button>
+              )}
+              {step < 5 ? (
+                <Button
+                  className="flex-1 h-11 text-sm font-semibold bg-blue-600 hover:bg-blue-700"
+                  onClick={goNext}
+                  disabled={step === 0 && !allPoliciesAccepted()}
+                  data-testid="button-next"
+                >
+                  {step === 0 ? "Continue to Personal Information" :
+                   step === 1 ? "Continue to Emergency Contacts" :
+                   step === 2 ? "Continue to Medical Information" :
+                   step === 3 ? "Continue to Documents" :
+                   "Continue to Signature"}
+                </Button>
+              ) : (
+                <Button
+                  className="flex-1 h-11 text-sm font-semibold bg-green-600 hover:bg-green-700"
+                  onClick={handleSubmit}
+                  disabled={submitting}
+                  data-testid="button-submit"
+                >
+                  {submitting ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Submitting...
+                    </span>
+                  ) : "Submit Hiring Package"}
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+      </div>
     </div>
   );
 }

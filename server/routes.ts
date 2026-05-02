@@ -9727,25 +9727,39 @@ Return ONLY valid JSON:
       if (terminalStatuses.includes(pkg.status)) return res.json({ success: true });
       const now = new Date().toISOString();
 
-      // If the client is sending document files for persistence, merge them into employeeResponse
-      const { documentFiles } = req.body || {};
-      const updates: any = { status: "started", updatedAt: now };
+      const {
+        documentFiles,
+        policyAcceptances,
+        currentStep,
+        policyStep,
+        employeeResponse: partialEmpResp,
+        signatureData,
+      } = req.body || {};
+
+      // Start with existing saved data
+      const existing = (pkg.employeeResponse as any) || {};
+      let mergedEmpResp: Record<string, any> = { ...existing };
+
+      // Merge partial employee response (form data, EC, medical)
+      if (partialEmpResp && typeof partialEmpResp === "object") {
+        mergedEmpResp = { ...mergedEmpResp, ...partialEmpResp };
+      }
+
+      // Persist navigation state so employee can resume from the right place
+      if (typeof currentStep === "number") mergedEmpResp.currentStep = currentStep;
+      if (typeof policyStep === "number") mergedEmpResp.policyStep = policyStep;
+
+      // Merge uploaded document files (null = remove, value = upsert)
       if (documentFiles && typeof documentFiles === "object") {
-        // Merge with any previously saved employeeResponse, preserving other fields
-        const existing = (pkg.employeeResponse as any) || {};
         const existingDocFiles = existing.documentFiles || {};
-        // Merge: new files overwrite old ones for the same key; null removes the key
         const mergedDocFiles: Record<string, any> = { ...existingDocFiles };
         for (const [key, val] of Object.entries(documentFiles)) {
-          if (val === null) {
-            delete mergedDocFiles[key];
-          } else {
-            mergedDocFiles[key] = val;
-          }
+          if (val === null) delete mergedDocFiles[key];
+          else mergedDocFiles[key] = val;
         }
-        updates.employeeResponse = { ...existing, documentFiles: mergedDocFiles };
+        mergedEmpResp.documentFiles = mergedDocFiles;
 
-        // Also update uploadedDocuments metadata so admin can see what's been uploaded
+        // Refresh uploadedDocuments metadata column for admin visibility
         const uploadedDocuments = Object.entries(mergedDocFiles).map(([docType, meta]: [string, any]) => ({
           docType,
           filename: meta.filename || docType,
@@ -9753,7 +9767,30 @@ Return ONLY valid JSON:
           size: meta.size || 0,
           uploadedAt: now,
         }));
-        updates.uploadedDocuments = uploadedDocuments;
+        (mergedEmpResp as any).__uploadedDocuments = uploadedDocuments;
+      }
+
+      const updates: any = {
+        // Advance status to "started" only from early statuses; don't downgrade
+        status: ["draft","sent","viewed"].includes(pkg.status) ? "started" : pkg.status,
+        updatedAt: now,
+        employeeResponse: mergedEmpResp,
+      };
+
+      // Persist policy acceptances
+      if (Array.isArray(policyAcceptances)) {
+        updates.policyAcceptances = policyAcceptances;
+      }
+
+      // Persist signature during progress (before final submit)
+      if (typeof signatureData === "string" && signatureData) {
+        updates.signatureData = signatureData;
+      }
+
+      // Push uploadedDocuments metadata if we computed it above
+      if (mergedEmpResp.__uploadedDocuments) {
+        updates.uploadedDocuments = mergedEmpResp.__uploadedDocuments;
+        delete mergedEmpResp.__uploadedDocuments;
       }
 
       await storage.updateHiringPackage(pkg.id, updates);
