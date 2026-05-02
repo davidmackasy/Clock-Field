@@ -1,0 +1,359 @@
+DEV NOTE: Fix Hiring Package Upload Failed Connection Error
+Issue:
+The upload UI is now triggering, but every upload fails with:
+Upload failed. Please check your connection and try again.
+This means the file picker and frontend upload handler are working, but the request is failing after upload starts.
+Most likely causes:
+Wrong upload API route
+Backend route not registered
+Public route blocked by auth middleware
+Multipart/form-data not being parsed
+Request body/file too large
+Backend returning 401, 403, 404, 413, or 500
+Frontend catch block is hiding the real backend error
+Storage upload is failing
+CORS or Replit route/proxy issue
+Document type mismatch between frontend and backend
+Scope:
+Only fix Hiring Package document uploads.
+Do not touch anything else.
+Do not change policies.
+Do not change signature.
+Do not change personal info.
+Do not change Publications outside Hiring Package.
+Do not touch Agreements, Proposals, Forms, Field Notes, Auth, Stripe, Payroll, Attendance, or Employee app.
+
+
+Stop showing generic error only
+
+
+The frontend currently shows:
+Upload failed. Please check your connection and try again.
+That is too generic.
+Update upload error handling so it reads the real backend response.
+Frontend should log and display the actual error from the API:
+const errorBody = await response.json().catch(() => null)
+Show messages like:
+Upload route not found.
+File too large. Maximum size is 100 MB.
+This file type is not supported.
+Public hiring package token is invalid.
+Upload storage failed.
+Server error while saving document.
+Keep the UI clean, but do not hide the real issue during testing.
+
+
+Check browser Network tab first
+
+
+Open DevTools > Network.
+Try uploading one small PDF under 1 MB.
+Check the upload request:
+Request URL
+Request method
+Status code
+Response body
+Fix based on status:
+404:
+Frontend is posting to the wrong route or backend route does not exist.
+401 or 403:
+Upload route is protected by auth middleware. Public hiring package uploads must validate token, not require login.
+413:
+Request body/file size limit is too low. Increase multipart/server/proxy limit to 100 MB.
+415:
+File type validation is rejecting the file.
+500:
+Backend route exists but upload/storage/database save is failing.
+
+
+Use one exact upload route
+
+
+Standardize the route everywhere.
+Frontend must POST to:
+/api/public/hiring-package/:token/upload-document
+Backend must register the exact same route:
+POST /api/public/hiring-package/:token/upload-document
+Do not use mixed route names like:
+/api/public/hiring-packages/:token/upload
+/api/hiring-package/:token/documents
+/api/public/hiring-package/:id/upload
+Use one route only.
+
+
+Public upload route must not require login
+
+
+This route is used by employees from a public link.
+Do not use admin auth middleware on this route.
+Correct logic:
+Validate public token
+Find hiring package
+Find or create submission
+Allow upload
+Wrong logic:
+Require logged-in admin
+Require employee account
+Require session auth
+Block public route because token is not an authenticated user
+
+
+Confirm frontend FormData is correct
+
+
+Frontend upload must send multipart/form-data.
+Do this:
+const formData = new FormData()
+formData.append("file", file)
+formData.append("documentType", documentType)
+await fetch(/api/public/hiring-package/${token}/upload-document, {
+method: "POST",
+body: formData
+})
+Do not manually set Content-Type.
+Wrong:
+headers: { "Content-Type": "application/json" }
+Wrong:
+body: JSON.stringify({ file })
+The browser must set the multipart boundary automatically.
+
+
+Backend must parse multipart/form-data
+
+
+If using Express, use multer or equivalent.
+Example logic:
+upload.single("file")
+Make sure backend reads:
+req.file
+req.body.documentType
+req.params.token
+If req.file is undefined, the multipart parser is not connected correctly.
+
+
+Increase limits properly
+
+
+Set file limit to:
+100 MB per file
+Check all places:
+Frontend validation
+Multer/busboy/file parser
+Express body limit where relevant
+Server upload limit
+Storage upload limit
+Replit/proxy config if applicable
+Example multer config:
+limits: {
+fileSize: 100 * 1024 * 1024
+}
+Important:
+JSON body limit does not fix multipart upload if multer has a smaller limit.
+
+
+Fix document type keys
+
+
+Use the same keys everywhere.
+Frontend sends:
+government_id_front
+government_id_back
+resume_cv
+work_permit
+certificate_license
+other_supporting_document
+Backend accepts those exact keys.
+Database stores those exact keys.
+Validation checks those exact keys.
+Do not allow mismatch like:
+resume
+resumeCv
+governmentIdFront
+governmentIdBack
+
+
+Add backend response details
+
+
+Backend should return clear JSON on every failure.
+Examples:
+If token missing or invalid:
+{
+"success": false,
+"error": "Invalid or expired hiring package link."
+}
+If file missing:
+{
+"success": false,
+"error": "No file was received. Please select a document and try again."
+}
+If file too large:
+{
+"success": false,
+"error": "File is too large. Maximum file size is 100 MB."
+}
+If document type invalid:
+{
+"success": false,
+"error": "Invalid document type."
+}
+If storage fails:
+{
+"success": false,
+"error": "The file could not be saved. Please try again."
+}
+
+
+Add temporary backend logs
+
+
+Add logs only around this upload route.
+Log:
+Upload route hit
+Token received
+Hiring package found or not found
+Submission found or created
+Document type received
+File received yes/no
+File name
+File size
+File MIME
+Validation result
+Storage result
+Database save result
+Example:
+console.log("[Hiring Upload] route hit", { token, documentType })
+console.log("[Hiring Upload] file", req.file?.originalname, req.file?.size, req.file?.mimetype)
+This will show where the upload is failing.
+
+
+Make upload work even without storage first
+
+
+To isolate the issue, test in two stages.
+Stage 1:
+Confirm backend receives the file and returns success without saving to permanent storage.
+Stage 2:
+Connect storage and database save.
+Do not leave it unfinished, but this helps find the broken layer.
+
+
+Storage fallback if object storage fails
+
+
+If current app storage is failing, use the same upload/storage pattern that already works elsewhere in the app.
+Search for working uploads in:
+Field Notes photo upload
+Incident report attachment upload
+Form builder file upload
+Company logo upload
+Profile image upload
+Reuse the working storage helper from the app instead of creating a new broken upload system.
+Do not rewrite unrelated flows. Only reuse the helper.
+
+
+Save uploaded document to submission
+
+
+After successful storage, update the hiring package submission.
+Store in uploaded_documents_json:
+{
+"government_id_front": {
+"documentType": "government_id_front",
+"fileName": "id-front.pdf",
+"originalName": "id-front.pdf",
+"storageKey": "...",
+"mimeType": "application/pdf",
+"fileSize": 123456,
+"uploadedAt": "2026-..."
+}
+}
+Return the saved object to frontend.
+
+
+Frontend success behavior
+
+
+On success, update only the uploaded document card.
+Government ID Front should change from error to:
+Uploaded: file-name.pdf
+Replace
+Remove
+Clear this error:
+Upload failed. Please check your connection and try again.
+Also clear required validation errors for that document.
+
+
+Required validation after upload
+
+
+Continue to Signature must check:
+uploadedDocuments.government_id_front
+uploadedDocuments.government_id_back
+uploadedDocuments.resume_cv
+If these exist, allow continue.
+Do not check old state names.
+
+
+Test with small files first
+
+
+Before testing 100 MB, test with:
+Small JPG under 500 KB
+Small PNG under 500 KB
+Small PDF under 1 MB
+Small DOCX under 1 MB
+If small files fail, this is not a size issue. It is route, auth, multipart parser, storage, or database.
+
+
+Required test list
+
+
+Test 1:
+Upload small JPG for Government ID Front.
+Expected:
+Card shows uploaded file name.
+Test 2:
+Refresh page.
+Expected:
+File still shows uploaded.
+Test 3:
+Upload small PNG for Government ID Back.
+Expected:
+Card shows uploaded file name.
+Test 4:
+Upload small PDF for Resume.
+Expected:
+Card shows uploaded file name.
+Test 5:
+Upload DOCX for Resume.
+Expected:
+Card shows uploaded file name.
+Test 6:
+Click Continue to Signature after required files are uploaded.
+Expected:
+No required errors.
+Test 7:
+Open admin side:
+Publications > Hiring Package > Submitted Applications > Review.
+Expected:
+Documents show with preview/download.
+
+
+Most likely fix
+
+
+Based on the new screenshot, the upload button is working now, but every card fails with the same connection error.
+Start by checking:
+Frontend request URL
+Backend route exists
+Route is public, not protected by auth
+Backend parses multipart/form-data
+Backend receives req.file
+Backend documentType matches allowed keys
+Storage helper works
+Database update works
+Do not keep changing the UI until the backend route is verified.
+Final expected result:
+Employee can upload Government ID Front, Government ID Back, and Resume / CV. The upload shows the file name immediately, persists after refresh, clears required errors, allows Continue to Signature, and appears in the admin Hiring Package submission review.
+Do not break or affect anything else.
