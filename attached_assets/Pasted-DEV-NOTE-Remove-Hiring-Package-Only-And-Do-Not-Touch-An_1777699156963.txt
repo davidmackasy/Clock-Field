@@ -1,0 +1,236 @@
+DEV NOTE: Remove Hiring Package Only And Do Not Touch Anything Else
+
+Goal:
+Remove the current Hiring Package implementation completely so we can rebuild it later from scratch.
+
+This is a production app.
+People are actively using it.
+Do not break anything currently working.
+
+Critical instruction:
+Do not touch authentication.
+Do not touch login.
+Do not touch logout.
+Do not touch sessions.
+Do not touch auth middleware.
+Do not touch Stripe.
+Do not touch payments.
+Do not touch subscriptions.
+Do not touch attendance.
+Do not touch payroll.
+Do not touch schedules.
+Do not touch employee app.
+Do not touch Field Notes.
+Do not touch Forms.
+Do not touch Agreements.
+Do not touch Proposals.
+Do not touch regular Publications.
+Do not touch public client links.
+Do not touch existing upload systems.
+Do not touch server-wide middleware.
+Do not touch Vite setup.
+Do not touch global route registration.
+
+Only remove the Hiring Package feature that was recently added.
+
+1. Remove Hiring Package From Publications UI
+
+Inside Publications, remove the Hiring Package tab/card/button.
+
+Keep these existing sections working exactly as they are:
+
+Publication
+Proposal
+Agreement
+
+Do not rename anything else.
+Do not move anything else.
+Do not redesign Publications.
+Do not change the Publications navigation.
+Only remove Hiring Package from the visible UI.
+
+2. Remove Hiring Package Public Link Routes
+
+Remove or disable only the public hiring package routes.
+
+Examples to remove or disable:
+
+/public/hiring-package/:token
+/api/public/hiring-package/:token
+/api/public/hiring-package/:token/submission
+/api/public/hiring-package/:token/save-progress
+/api/public/hiring-package/:token/upload-document
+/api/public/hiring-packages/:token/upload-document
+
+Do not touch any other public routes.
+
+Do not touch public report links.
+Do not touch public review links.
+Do not touch public form links.
+Do not touch public field note links.
+Do not touch client-facing publication links.
+
+3. Remove Hiring Package API Routes Only
+
+Remove only API routes related to Hiring Package.
+
+Search for routes using names like:
+
+hiring-package
+hiringPackage
+hiring_package
+HiringPackage
+upload-document
+save-progress if only used for hiring package
+
+Do not remove upload routes used by other features.
+
+Before deleting any route, confirm it is only used by Hiring Package.
+
+4. Remove Hiring Package Components Only
+
+Remove or disconnect only components related to Hiring Package.
+
+Possible component names:
+
+HiringPackage
+HiringPackagePublic
+HiringPackageBuilder
+HiringPackageUpload
+HiringPackageSubmission
+HiringPackageReview
+HiringPackageTemplates
+HiringPackageDocuments
+HiringPackageSignature
+
+Do not remove shared components unless they were created only for Hiring Package.
+
+Do not delete shared upload components used elsewhere.
+
+5. Remove Hiring Package Menu References
+
+Remove only Hiring Package references from:
+
+Publications tabs
+Publications cards
+Publication document type selector
+Any route list
+Any sidebar or mobile menu if it was added there
+
+Do not touch any other menu item.
+
+6. Remove Hiring Package Database Usage Safely
+
+Do not drop database tables in production unless approved.
+
+For now:
+
+Stop using Hiring Package tables/models.
+Leave existing database tables untouched unless they are causing errors.
+Do not run destructive migrations.
+Do not delete customer data.
+Do not delete uploaded files without approval.
+
+If there are migrations already created, do not rollback production database without approval.
+
+Safer approach:
+
+Remove feature access from UI and routes.
+Leave existing records dormant.
+We can clean database later after approval.
+
+7. Remove Hiring Package Upload Logic Only
+
+Remove the new Hiring Package upload endpoint and related upload handler.
+
+Do not touch upload logic used by:
+
+Field Notes
+Company logos
+Forms
+Incident reports
+Profile images
+Client reports
+Any other existing file upload
+
+The earlier upload issue must not lead to changing global upload middleware, auth middleware, or app-wide request handling.
+
+8. Remove Hiring Package From Admin Review Areas
+
+If a Submitted Applications section was added inside Publications > Hiring Package, remove it.
+
+Do not remove any existing submissions, forms, agreements, proposals, or publication records.
+
+9. Remove Hiring Package From Public Status Flow
+
+Remove only the hiring package application status page.
+
+Do not touch status or public views for other modules.
+
+10. Check For Broken Imports
+
+After removing Hiring Package files and references, run build checks.
+
+Fix only broken imports caused by the removal.
+
+Do not refactor unrelated files.
+
+Do not “clean up” unrelated code.
+
+Do not optimize unrelated code.
+
+11. Test Existing App After Removal
+
+Test these existing areas to make sure nothing else broke:
+
+Login works
+Logout works
+Stripe/subscription pages still load
+Publications page still loads
+Publication creation still works
+Proposal still works
+Agreement still works
+Forms still work
+Field Notes still work
+Attendance still works
+Employee app still works
+Public client links still work
+Existing uploads still work
+
+12. Final Expected Result
+
+Hiring Package is no longer visible or accessible.
+
+Publications still works normally.
+
+Proposal still works normally.
+
+Agreement still works normally.
+
+Regular publication flow still works normally.
+
+No authentication code was changed.
+
+No Stripe code was changed.
+
+No attendance code was changed.
+
+No employee app code was changed.
+
+No global middleware was changed.
+
+No existing upload system was changed.
+
+No production data was deleted.
+
+No unrelated feature was affected.
+
+Repeat this instruction before implementing:
+
+Do not touch authentication.
+Do not touch Stripe.
+Do not touch attendance.
+Do not touch payroll.
+Do not touch employee app.
+Do not touch global middleware.
+Only remove the Hiring Package feature.
