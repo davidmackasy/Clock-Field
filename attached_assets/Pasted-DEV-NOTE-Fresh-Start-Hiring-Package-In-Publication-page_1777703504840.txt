@@ -1,0 +1,1068 @@
+DEV NOTE: Fresh Start Hiring Package In Publication page Using New JavaScript Implementation
+
+Goal:
+Build the Hiring Package feature from scratch using a clean JavaScript implementation.
+
+Do not reuse old Hiring Package attempts.
+Do not reuse deleted Hiring Package files.
+Do not reuse broken upload logic.
+Do not reuse broken public-link logic.
+Do not patch old failed work.
+Create a fresh, clean, isolated implementation.
+
+This Hiring Package must live inside the Publication area with:
+
+Application
+Agreement
+Proposal
+Hiring Package
+
+The app should treat Hiring Package as one of the document/application types, but it must have its own clean flow, own routes, own API handlers, own upload handling, own persistence, and own admin review section.
+
+Production warning:
+This app is live.
+Do not break anything.
+
+Do not touch authentication.
+Do not touch login.
+Do not touch logout.
+Do not touch sessions.
+Do not touch auth middleware.
+Do not touch Stripe.
+Do not touch payments.
+Do not touch subscriptions.
+Do not touch attendance.
+Do not touch payroll.
+Do not touch schedules.
+Do not touch employee app.
+Do not touch Field Notes.
+Do not touch Forms.
+Do not touch current Agreements.
+Do not touch current Proposals.
+Do not touch existing Application flow.
+Do not touch public client links.
+Do not touch existing upload systems.
+Do not touch global middleware.
+Do not touch Vite setup.
+Do not change app-wide route behavior.
+Only add the new clean Hiring Package feature.
+
+Ask for approval before touching anything outside this feature.
+
+Placement In App
+
+Inside the Applications section, show these document options:
+
+Application
+Agreement
+Proposal
+Hiring Package
+
+Hiring Package should not be a main menu item.
+Hiring Package should not be added randomly to the hamburger menu.
+Hiring Package should not replace Application, Agreement, or Proposal.
+Hiring Package should sit beside them as its own type.
+
+Suggested admin route:
+
+/applications/hiring-package
+
+Suggested public route:
+
+/public/hiring-package/:token
+
+Suggested API namespace:
+
+/api/hiring-package/*
+/api/public/hiring-package/*
+
+Fresh JavaScript Implementation Rule
+
+Build new files with clear names.
+
+Suggested frontend files:
+
+client/src/pages/applications/HiringPackagePage.jsx
+client/src/pages/public/PublicHiringPackage.jsx
+client/src/components/hiring-package/HiringPackageTemplates.jsx
+client/src/components/hiring-package/HiringPackagePolicies.jsx
+client/src/components/hiring-package/HiringPackageCreate.jsx
+client/src/components/hiring-package/HiringPackageSent.jsx
+client/src/components/hiring-package/HiringPackageSubmissions.jsx
+client/src/components/hiring-package/HiringPackageReview.jsx
+client/src/components/hiring-package/HiringPackageUploader.jsx
+client/src/components/hiring-package/HiringPackageSignature.jsx
+
+Suggested backend files:
+
+server/routes/hiringPackageRoutes.js
+server/routes/publicHiringPackageRoutes.js
+server/services/hiringPackageService.js
+server/services/hiringPackageUploadService.js
+server/services/hiringPackagePdfService.js
+
+Use the existing app structure if file naming differs, but keep this feature isolated.
+
+Do not reuse broken old route files.
+Do not copy old failed upload handler.
+Do not copy old failed persistence logic.
+
+Admin Hiring Package Page Structure
+
+Inside Applications > Hiring Package, add these tabs:
+
+Templates
+Policies
+Create Package
+Sent Packages
+Submitted Applications
+Approved / Hired
+Archived
+
+Use clean wording:
+
+“1 application submitted”
+not
+“1 package submitted”
+
+Definitions:
+
+Templates:
+Reusable hiring package layouts.
+
+Policies:
+Editable policies included in the hiring package.
+
+Create Package:
+Create and send a new hiring package to an applicant.
+
+Sent Packages:
+Links sent to applicants but not fully submitted.
+
+Submitted Applications:
+Applicants who completed and submitted the package.
+
+Approved / Hired:
+Applicants approved by admin.
+
+Archived:
+Old or inactive hiring package records.
+
+Default Hiring Package Content
+
+Base the default Hiring Package on the uploaded 12-page hiring package document.
+
+It must include:
+
+Cover page
+Rules of Conduct / Conditions of Employment
+Code of Ethics
+Dress Code and Personal Hygiene Policy
+Safety Boots Reimbursement Policy
+Substance Abuse Policy / Suspicion of Impairment
+Emergency Contact and Medical Information Form
+Final acknowledgement and signature
+
+Make this content editable.
+
+Use dynamic placeholders:
+
+[Company Name]
+[Company Address]
+[Manager Name]
+[Manager Email]
+[Manager Phone]
+[Employee Name]
+[Position]
+[Start Date]
+
+Do not hard-code one company name only.
+
+Policies Tab
+
+Admin must be able to manage policies.
+
+Admin can:
+
+View policies
+Edit policy title
+Edit objective
+Edit scope
+Edit policy body
+Edit responsibilities
+Edit acknowledgement text
+Add policy
+Remove custom policy
+Reorder policies
+Duplicate policy
+Mark policy required or optional
+Preview as applicant
+Save changes
+Restore default policy
+Save policy set as template
+
+Each policy should have:
+
+id
+title
+version
+required
+order
+content
+acceptanceStatement
+lastEditedAt
+
+Required Default Policies
+
+Add these default policies:
+
+Rules of Conduct / Conditions of Employment
+Code of Ethics
+Dress Code and Personal Hygiene Policy
+Safety Boots Reimbursement Policy
+Substance Abuse Policy / Suspicion of Impairment
+Emergency Contact and Medical Information Privacy Notice
+Final Employee Acknowledgement
+
+All required policies must appear in the public applicant flow.
+
+Public Hiring Package Flow
+
+Applicant opens:
+
+/public/hiring-package/:token
+
+No login required.
+
+Public flow steps:
+
+Step 1: Policies
+Step 2: Personal Information
+Step 3: Emergency Contacts
+Step 4: Optional Medical Information
+Step 5: Document Upload
+Step 6: Final Acknowledgement and Signature
+Step 7: Status Page
+
+The applicant cannot skip required steps.
+
+Policy Acceptance Flow
+
+The applicant must read and accept each required policy one at a time.
+
+Example:
+
+Policy 1 of 6:
+Rules of Conduct / Conditions of Employment
+
+Button:
+
+I have read, understood, and agree to this policy.
+
+After accepting policy 1, unlock policy 2.
+
+Do not allow skip.
+Do not allow continue until all required policies are accepted.
+
+Acceptance helper text:
+
+By clicking agree, you confirm that you reviewed this policy and understand that it may form part of your confidential employment file.
+
+Policy Acceptance Save Requirement
+
+Each policy acceptance must save immediately to the backend.
+
+Store:
+
+submission_id
+package_id
+policy_id
+policy_title
+policy_version
+policy_content_snapshot
+accepted_at
+accepted_by_name if available
+accepted_by_email if available
+ip_address if available
+user_agent if available
+
+Important:
+Save the full policy snapshot at acceptance time.
+If admin edits the policy later, the accepted version must stay unchanged.
+
+Progress Persistence Requirement
+
+Everything must save to backend.
+
+Do not rely on frontend state only.
+Do not rely on localStorage as the main source of truth.
+
+Save:
+
+Accepted policies
+Current step
+Personal information
+Emergency contacts
+Medical information
+Uploaded documents
+Signature
+Final acknowledgement
+Submission status
+Review status
+
+When applicant refreshes:
+
+Accepted policies remain accepted.
+Current step remains correct.
+Personal info remains filled.
+Emergency contacts remain filled.
+Medical info remains filled.
+Uploaded documents remain visible.
+Signature remains saved.
+Submitted status remains submitted.
+
+Public Page Load Logic
+
+On public page load:
+
+GET /api/public/hiring-package/:token
+
+Return:
+
+package details
+template details
+policies
+accepted policies
+current step
+personal information
+emergency contacts
+medical information
+uploaded documents
+signature status
+submission status
+review status
+
+Step recovery logic:
+
+If required policies are not all accepted, show first unaccepted policy.
+If policies complete and personal info missing, show Personal Information.
+If personal info complete and emergency contacts missing, show Emergency Contacts.
+If emergency contacts complete and documents missing, show Document Upload.
+If documents complete and signature missing, show Signature.
+If submitted, show Status Page.
+
+Personal Information Fields
+
+Required:
+
+Legal first name
+Legal last name
+Email
+Phone number
+Home address
+City
+Province / State
+Postal code
+Country
+Position / job title
+Expected start date
+
+Optional:
+
+Preferred name
+Employee ID
+Date of birth if admin enables it
+
+Save on continue.
+Reload after refresh.
+
+Emergency Contact Fields
+
+Required:
+
+Emergency contact 1 name
+Emergency contact 1 relationship
+Emergency contact 1 phone
+Emergency contact 1 email optional
+
+Emergency contact 2 name
+Emergency contact 2 relationship
+Emergency contact 2 phone
+Emergency contact 2 email optional
+
+Save on continue.
+Reload after refresh.
+
+Optional Medical Information
+
+This section is optional.
+
+Fields:
+
+Allergies
+Sensitivities
+Medical notes relevant to workplace safety
+Medication or special note the employee wants the company to know
+Emergency safety notes
+
+Show privacy notice:
+
+The information you provide in this section will be held in the strictest confidence and will only be shared on a need-to-know basis with authorized company personnel. This form is not intended to request or investigate your personal medical history. The information is collected only to help respond to an emergency, allergy, sensitivity, safety concern, or medical situation that may occur at work.
+
+Save if provided.
+Reload after refresh.
+
+Document Upload Requirements
+
+Required uploads:
+
+Government ID Front
+Government ID Back
+Resume / CV
+
+Optional uploads:
+
+Work Permit
+Certificate / Licence
+Other Supporting Document
+
+Use these exact keys everywhere:
+
+government_id_front
+government_id_back
+resume_cv
+work_permit
+certificate_license
+other_supporting_document
+
+Use the same keys in:
+
+Frontend
+Backend
+Database
+Validation
+Admin review
+PDF generation
+
+Allowed File Types
+
+Government ID Front:
+JPG, JPEG, PNG, PDF
+
+Government ID Back:
+JPG, JPEG, PNG, PDF
+
+Resume / CV:
+PDF, DOC, DOCX
+
+Work Permit:
+JPG, JPEG, PNG, PDF, DOC, DOCX
+
+Certificate / Licence:
+JPG, JPEG, PNG, PDF
+
+Other Supporting Document:
+JPG, JPEG, PNG, PDF, DOC, DOCX
+
+Allowed MIME types:
+
+image/jpeg
+image/png
+application/pdf
+application/msword
+application/vnd.openxmlformats-officedocument.wordprocessingml.document
+
+Also validate by extension.
+
+Do not reject valid files because MIME type is blank.
+
+Upload Size
+
+Set upload size for this Hiring Package feature:
+
+100 MB per file
+
+Show UI text:
+
+Maximum file size: 100 MB
+
+Apply this only to the new Hiring Package upload route.
+
+Do not change global upload settings for the app.
+
+Clean Upload Route
+
+Use a fresh route:
+
+POST /api/public/hiring-package/:token/upload-document
+
+Route requirements:
+
+Must be registered before SPA fallback
+Must return JSON, not HTML
+Must not require login
+Must validate secure public token
+Must accept multipart/form-data
+Must parse file correctly
+Must save file to storage
+Must save file metadata to database
+Must return uploaded file metadata
+
+Frontend FormData:
+
+formData.append("file", file)
+formData.append("documentType", documentType)
+
+Do not manually set Content-Type.
+Let browser set multipart boundary.
+
+Upload UI Behavior
+
+Each upload card must have a unique file input.
+
+Unique IDs:
+
+upload-government_id_front
+upload-government_id_back
+upload-resume_cv
+upload-work_permit
+upload-certificate_license
+upload-other_supporting_document
+
+After successful upload, show:
+
+Uploaded: filename.ext
+Replace
+Remove
+
+Clear that document’s error.
+
+Required validation must check only:
+
+government_id_front
+government_id_back
+resume_cv
+
+Optional documents must not block continue.
+
+Upload Failure Handling
+
+Do not show only generic errors.
+
+Read backend response and show clear errors:
+
+File is too large. Maximum file size is 100 MB.
+This file type is not supported.
+No file was received. Please try again.
+Invalid or expired hiring package link.
+The file could not be saved. Please try again.
+
+During development, log only this feature:
+
+Selected file name
+Selected file type
+Selected file size
+Document type
+Request URL
+Response status
+Response body
+
+Backend logs only for this route:
+
+Route hit
+Token received
+Document type received
+File received yes/no
+File name
+File size
+MIME type
+Validation result
+Storage result
+Database save result
+
+Uploaded Document Persistence
+
+After upload, save:
+
+document_type
+original_name
+file_name
+storage_key
+mime_type
+file_size
+required
+uploaded_at
+
+On refresh, reload uploaded documents.
+
+Uploaded cards must still show:
+
+Uploaded: filename.ext
+
+Signature Step
+
+Before signature, show:
+
+I confirm that the information I provided is accurate to the best of my knowledge. I confirm that I have read, understood, and agreed to all required company policies in this hiring package. I understand that this hiring package and all accepted policies may become part of my confidential employment file.
+
+Required checkbox:
+
+I agree and confirm.
+
+Signature must support:
+
+Mouse
+Finger on mobile
+Touch screen
+Clear signature
+Re-sign
+
+Save actual drawn signature image.
+Do not save only text.
+
+Signature must show in admin review and completed PDF.
+
+Submit Flow
+
+When applicant submits:
+
+Validate required policies accepted
+Validate personal information complete
+Validate emergency contacts complete
+Validate required documents uploaded
+Validate final acknowledgement checked
+Validate signature exists
+
+Then update:
+
+status: submitted
+review_status: under_review
+submitted_at
+
+Public link becomes Status Page.
+
+Show:
+
+Your hiring package has been submitted and is under review.
+
+Please keep this link. You can return to this page to check your application status.
+
+Current status:
+Under Review
+
+Admin Submitted Applications
+
+Inside Applications > Hiring Package > Submitted Applications, show:
+
+Applicant name
+Email
+Phone
+Position
+Submitted date
+Application status
+Policies accepted count
+Documents uploaded count
+Signature status
+Review button
+
+Admin Review Page
+
+When admin clicks Review, show:
+
+Application Summary
+Accepted Policies
+Uploaded Documents
+Personal Information
+Emergency Contacts
+Medical Information
+Signature
+Admin Decision
+
+Accepted Policies:
+
+Policy title
+Accepted status
+Accepted timestamp
+Policy version
+View accepted policy snapshot
+
+Uploaded Documents:
+
+Government ID Front
+Government ID Back
+Resume / CV
+Work Permit if uploaded
+Certificate / Licence if uploaded
+Other Supporting Document if uploaded
+
+Each file:
+
+Preview
+Download
+File name
+File size
+Uploaded date
+
+Preview logic:
+
+JPG/PNG: image preview
+PDF: PDF preview if supported
+DOC/DOCX: download button if preview is not supported
+
+Signature:
+
+Show actual drawn signature image
+Show signature date
+
+Admin Actions
+
+Admin can:
+
+Approve / Mark as Hired
+Request Missing Documents
+Mark Not Approved
+Archive
+Download Completed Package PDF
+Download All Documents
+Download All As ZIP
+Copy Public Link
+Resend Link
+Print Package
+
+Do not auto-create employee profile unless admin confirms.
+
+Missing Documents Flow
+
+Admin can request missing documents.
+
+Admin selects:
+
+Government ID Front
+Government ID Back
+Resume / CV
+Work Permit
+Certificate / Licence
+Other Supporting Document
+
+Admin adds message.
+
+Submission status becomes:
+
+missing_documents
+
+Public link shows:
+
+Action Required: Missing Documents
+
+Employee can upload requested missing documents.
+
+After upload, status returns to:
+
+under_review
+
+PDF Output
+
+Completed PDF must include:
+
+Company logo if available
+Company name
+Company address
+Document title: Hiring Package
+Applicant name
+Date completed
+Accepted policy list
+Accepted timestamps
+Full accepted policy text or appendix
+Personal information
+Emergency contacts
+Optional medical information only if filled
+Uploaded document checklist
+Final acknowledgement
+Actual drawn signature
+Signature date
+
+Do not include raw file URLs.
+
+PDF quality:
+
+Clean header
+Good spacing
+Proper page breaks
+No text cut off
+No crowded pages
+Enough top spacing on every new page
+Footer shows Clockfield branding only if branding settings allow it
+
+Download And Print
+
+Public link:
+
+Download Blank Hiring Package PDF
+Print Blank Hiring Package PDF
+
+After submission:
+
+Download Completed Hiring Package PDF
+Print Completed Hiring Package PDF
+
+Admin:
+
+Download completed package PDF
+Print package
+Download all documents
+Download all as ZIP
+
+Email Sending
+
+When admin sends package:
+
+Subject:
+Your Hiring Package from [Company Name]
+
+Body:
+Hi [Employee Name],
+
+Please review and complete your hiring package using the secure link below.
+
+[Complete Hiring Package]
+
+You can fill it out online, review each company policy, upload your required documents, sign digitally, and return to the same link to check your application status.
+
+Thank you,
+[Company Name]
+
+Database Suggestion
+
+Create clean new models or tables for this feature.
+
+Do not reuse old broken tables unless they are clean and safe.
+
+Suggested tables:
+
+hiring_packages
+hiring_package_templates
+hiring_package_policies
+hiring_package_submissions
+hiring_package_policy_acceptances
+hiring_package_documents
+
+hiring_packages:
+
+id
+business_id
+template_id
+employee_name
+employee_email
+position
+public_token
+status
+sent_at
+viewed_at
+expires_at
+created_by
+created_at
+updated_at
+
+hiring_package_submissions:
+
+id
+business_id
+hiring_package_id
+public_token
+current_step
+status
+review_status
+personal_info_json
+emergency_contacts_json
+medical_info_json
+final_acknowledgement
+signature_storage_key
+signature_uploaded_at
+submitted_at
+last_saved_at
+admin_notes
+created_at
+updated_at
+
+hiring_package_policy_acceptances:
+
+id
+business_id
+submission_id
+policy_id
+policy_title
+policy_version
+policy_content_snapshot
+accepted_at
+ip_address
+user_agent
+created_at
+
+hiring_package_documents:
+
+id
+business_id
+submission_id
+document_type
+original_name
+file_name
+storage_key
+mime_type
+file_size
+required
+uploaded_at
+created_at
+
+Status Values
+
+Use:
+
+draft
+sent
+viewed
+started
+in_progress
+submitted
+under_review
+missing_documents
+approved_hired
+not_approved
+archived
+completed
+downloaded
+expired
+
+Mobile Requirements
+
+Public applicant form must work on mobile.
+
+Requirements:
+
+Readable text
+Large input fields
+Signature works with finger
+File upload works on mobile
+PDF preview does not overflow
+Buttons stay visible
+No horizontal scrolling
+Sections stack cleanly
+Download and print buttons easy to access
+
+Testing Requirements
+
+Test before marking complete.
+
+Test 1:
+Applications page still works.
+
+Test 2:
+Application, Agreement, Proposal still work.
+
+Test 3:
+Hiring Package appears as new type only.
+
+Test 4:
+Admin creates package and public link opens.
+
+Test 5:
+Accept first policy, refresh, accepted policy remains saved.
+
+Test 6:
+Accept all policies, refresh, system does not return to first policy.
+
+Test 7:
+Fill personal info, refresh, fields remain saved.
+
+Test 8:
+Fill emergency contacts, refresh, fields remain saved.
+
+Test 9:
+Fill optional medical info, refresh, fields remain saved.
+
+Test 10:
+Upload Government ID Front as JPG.
+
+Test 11:
+Upload Government ID Back as PNG.
+
+Test 12:
+Upload Resume as PDF.
+
+Test 13:
+Refresh page, uploaded files still show.
+
+Test 14:
+Upload Resume as DOC.
+
+Test 15:
+Upload Resume as DOCX.
+
+Test 16:
+Upload Government ID Front as PDF.
+
+Test 17:
+Upload file under 100 MB.
+
+Test 18:
+Upload file over 100 MB and confirm clean error.
+
+Test 19:
+Required upload errors clear after upload.
+
+Test 20:
+Continue to Signature works after required files uploaded.
+
+Test 21:
+Sign with mouse.
+
+Test 22:
+Sign with finger on mobile.
+
+Test 23:
+Refresh before submit and signature remains saved.
+
+Test 24:
+Submit package and status page shows Under Review.
+
+Test 25:
+Admin sees application in Submitted Applications.
+
+Test 26:
+Admin can review accepted policies.
+
+Test 27:
+Admin can preview/download documents.
+
+Test 28:
+Admin can see actual signature.
+
+Test 29:
+Admin can download completed PDF.
+
+Test 30:
+Admin can approve, request missing documents, or archive.
+
+Final Expected Result
+
+Applications section contains:
+
+Application
+Agreement
+Proposal
+Hiring Package
+
+Hiring Package is fresh, clean, and fully digital.
+
+Admin can edit policies, create a package, send a link, view submissions, review documents, and download completed files.
+
+Applicant can open public link, read and accept every policy, fill forms, upload required documents, sign, submit, and check status.
+
+Uploads work for PDF, DOC, DOCX, JPG, JPEG, and PNG.
+
+Progress saves after refresh.
+
+Admin sees everything submitted.
+
+No old failed code is reused.
+
+Do not break or affect anything else.

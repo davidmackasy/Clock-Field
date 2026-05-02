@@ -26,8 +26,9 @@ import {
   Plus, Newspaper, Search, ExternalLink, Copy, Pencil, Trash2,
   Globe, FileText, EyeOff, Archive, FileSignature, Send, Eye,
   CheckCircle2, XCircle, X, Clock, MoreHorizontal, Loader2, Edit3,
-  LayoutTemplate, AlertCircle,
+  LayoutTemplate, AlertCircle, Briefcase,
 } from "lucide-react";
+import HiringPackageAdmin from "@/pages/admin/HiringPackageAdmin";
 import type { Agreement, AgreementTemplate } from "@shared/schema";
 import AdminProposals from "@/pages/admin/proposals";
 
@@ -691,12 +692,19 @@ export default function AdminPublications() {
             data-testid="tab-proposals">
             <FileText className="w-4 h-4" /> Proposals
           </button>
+          <button
+            onClick={() => setActiveTab("hiring-package")}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === "hiring-package" ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            data-testid="tab-hiring-package">
+            <Briefcase className="w-4 h-4" /> Hiring Package
+          </button>
         </div>
 
         <div className="pt-2">
           {activeTab === "publications" && <PublicationsSubPage />}
           {activeTab === "agreements" && <AgreementsSubPage />}
           {activeTab === "proposals" && <AdminProposals />}
+          {activeTab === "hiring-package" && <HiringPackageAdmin />}
         </div>
       </div>
     </div>

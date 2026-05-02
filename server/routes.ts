@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { db, pool } from "./db";
 import { setupAuth, hashPassword, comparePasswords, requireAuth, requireRole } from "./auth";
 import OpenAI from "openai";
-import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail, sendAdminRequestReplyEmail, sendTrialAccountEmail, sendProposalEmail } from "./mail";
+import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail, sendAdminRequestReplyEmail, sendTrialAccountEmail, sendProposalEmail, sendHiringPackageEmail } from "./mail";
 import { createHash } from "crypto";
 import passport from "passport";
 import { randomBytes } from "crypto";
@@ -9521,7 +9521,426 @@ Return ONLY valid JSON:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  // ── Employee Hiring removed ───────────────────────────────────────────────
+  // ── Hiring Package (Publications) ─────────────────────────────────────────
+  const hpUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
+  const hpNow = () => new Date().toISOString();
+  const hpMakeSub = async (pkg: any) => {
+    const now = hpNow();
+    return storage.createHPSubmission({ companyId: pkg.companyId, packageId: pkg.id, publicToken: pkg.publicToken, status: "started", createdAt: now, updatedAt: now });
+  };
+
+  // Templates
+  app.get("/api/hiring-package/templates", requireAuth, requireRole("admin"), async (req: any, res) => {
+    try {
+      const rows = await storage.getHPTemplatesByCompany(req.user.companyId);
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/hiring-package/templates", requireAuth, requireRole("admin"), async (req: any, res) => {
+    try {
+      const companyId = req.user.companyId;
+      const { name, policies, isDefault } = req.body;
+      if (!name) return res.status(400).json({ message: "name is required" });
+      if (isDefault) {
+        const existing = await storage.getHPTemplatesByCompany(companyId);
+        for (const t of existing) if (t.isDefault) await storage.updateHPTemplate(t.id, { isDefault: false, updatedAt: hpNow() });
+      }
+      const now = hpNow();
+      const row = await storage.createHPTemplate({ companyId, name, policies: policies || [], isDefault: !!isDefault, createdAt: now, updatedAt: now });
+      res.json(row);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/hiring-package/templates/:id", requireAuth, requireRole("admin"), async (req: any, res) => {
+    try {
+      const companyId = req.user.companyId;
+      const { id } = req.params;
+      const { isDefault } = req.body;
+      if (isDefault) {
+        const existing = await storage.getHPTemplatesByCompany(companyId);
+        for (const t of existing) if (t.isDefault && t.id !== id) await storage.updateHPTemplate(t.id, { isDefault: false, updatedAt: hpNow() });
+      }
+      const row = await storage.updateHPTemplate(id, { ...req.body, updatedAt: hpNow() });
+      if (!row) return res.status(404).json({ message: "Not found" });
+      res.json(row);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/hiring-package/templates/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      await storage.deleteHPTemplate(req.params.id);
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Packages
+  app.get("/api/hiring-package/packages", requireAuth, requireRole("admin"), async (req: any, res) => {
+    try {
+      const rows = await storage.getHPPackagesByCompany(req.user.companyId);
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/hiring-package/packages", requireAuth, requireRole("admin"), async (req: any, res) => {
+    try {
+      const companyId = req.user.companyId;
+      const { employeeName, employeeEmail, position, templateId } = req.body;
+      if (!employeeName || !employeeEmail) return res.status(400).json({ message: "employeeName and employeeEmail required" });
+      const publicToken = randomBytes(32).toString("hex");
+      let resolvedTemplateId = templateId || null;
+      if (!resolvedTemplateId) {
+        const tmpl = await storage.getHPDefaultTemplate(companyId);
+        if (tmpl) resolvedTemplateId = tmpl.id;
+      }
+      const now = hpNow();
+      const row = await storage.createHPPackage({
+        companyId, employeeName, employeeEmail, position: position || "",
+        templateId: resolvedTemplateId, publicToken, status: "draft", createdAt: now, updatedAt: now,
+      });
+      res.json(row);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/hiring-package/packages/:id/send", requireAuth, requireRole("admin"), async (req: any, res) => {
+    try {
+      const pkg = await storage.getHPPackage(req.params.id);
+      if (!pkg) return res.status(404).json({ message: "Not found" });
+      const company = await storage.getCompany(req.user.companyId);
+      const companyName = company?.name || "Your Employer";
+      const publicLink = `${req.protocol}://${req.get("host")}/public/hiring-package/${pkg.publicToken}`;
+      await sendHiringPackageEmail({ to: pkg.employeeEmail, employeeName: pkg.employeeName, companyName, publicLink });
+      const updated = await storage.updateHPPackage(pkg.id, { status: "sent", sentAt: hpNow(), updatedAt: hpNow() });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/hiring-package/packages/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      await storage.deleteHPPackage(req.params.id);
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Submissions (admin view)
+  app.get("/api/hiring-package/submissions", requireAuth, requireRole("admin"), async (req: any, res) => {
+    try {
+      const rows = await storage.getHPSubmissionsByCompany(req.user.companyId);
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/hiring-package/submissions/:id", requireAuth, requireRole("admin"), async (req: any, res) => {
+    try {
+      const pkg = await storage.getHPPackage(req.params.id);
+      if (!pkg) return res.status(404).json({ message: "Not found" });
+      const sub = await storage.getHPSubmissionByPackage(req.params.id);
+      const acceptances = sub ? await storage.getHPPolicyAcceptances(sub.id) : [];
+      const documents = sub ? (await storage.getHPDocuments(sub.id)).map((d: any) => { const { fileData: _f, ...rest } = d; return rest; }) : [];
+      res.json({ package: pkg, submission: sub || null, acceptances, documents });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/hiring-package/submissions/:id/status", requireAuth, requireRole("admin"), async (req: any, res) => {
+    try {
+      const pkg = await storage.getHPPackage(req.params.id);
+      if (!pkg) return res.status(404).json({ message: "Not found" });
+      const { reviewStatus, missingDocsMessage, adminNotes } = req.body;
+      if (reviewStatus) await storage.updateHPPackage(pkg.id, { status: reviewStatus, updatedAt: hpNow() });
+      const sub = await storage.getHPSubmissionByPackage(pkg.id);
+      if (sub) {
+        const subUpdate: any = { updatedAt: hpNow() };
+        if (reviewStatus) subUpdate.status = reviewStatus;
+        if (missingDocsMessage !== undefined) subUpdate.missingDocsMessage = missingDocsMessage;
+        if (adminNotes !== undefined) subUpdate.adminNotes = adminNotes;
+        await storage.updateHPSubmission(sub.id, subUpdate);
+      }
+      const updatedPkg = await storage.getHPPackage(pkg.id);
+      const updatedSub = await storage.getHPSubmissionByPackage(pkg.id);
+      const acceptances = updatedSub ? await storage.getHPPolicyAcceptances(updatedSub.id) : [];
+      const documents = updatedSub ? (await storage.getHPDocuments(updatedSub.id)).map((d: any) => { const { fileData: _f, ...rest } = d; return rest; }) : [];
+      res.json({ package: updatedPkg, submission: updatedSub || null, acceptances, documents });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Document download (admin)
+  app.get("/api/hiring-package/documents/:id/download", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const doc = await storage.getHPDocument(req.params.id);
+      if (!doc) return res.status(404).json({ message: "Not found" });
+      const buf = Buffer.from((doc as any).fileData as string, "base64");
+      res.setHeader("Content-Type", doc.mimeType || "application/octet-stream");
+      res.setHeader("Content-Disposition", `attachment; filename="${doc.originalName}"`);
+      res.send(buf);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // PDF download (admin)
+  app.get("/api/hiring-package/submissions/:id/download-pdf", requireAuth, requireRole("admin"), async (req: any, res) => {
+    try {
+      const pkg = await storage.getHPPackage(req.params.id);
+      if (!pkg) return res.status(404).json({ message: "Not found" });
+      const sub = await storage.getHPSubmissionByPackage(req.params.id);
+      const acceptances = sub ? await storage.getHPPolicyAcceptances(sub.id) : [];
+      const PDFDocument = (await import("pdfkit")).default;
+      const doc = new PDFDocument({ margin: 50 });
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="hiring-package-${pkg.employeeName.replace(/\s+/g, "-")}.pdf"`);
+      doc.pipe(res);
+      doc.fontSize(20).text("Hiring Package", { align: "center" });
+      doc.moveDown();
+      doc.fontSize(13).text(`Applicant: ${pkg.employeeName}`);
+      doc.text(`Email: ${pkg.employeeEmail}`);
+      if (pkg.position) doc.text(`Position: ${pkg.position}`);
+      doc.text(`Status: ${pkg.status}`);
+      doc.moveDown();
+      if (acceptances.length > 0) {
+        doc.fontSize(15).text("Accepted Policies");
+        doc.moveDown(0.5);
+        for (const a of acceptances) doc.fontSize(11).text(`• ${a.policyTitle} (v${a.policyVersion}) — accepted ${new Date(a.acceptedAt!).toLocaleDateString()}`);
+        doc.moveDown();
+      }
+      if (sub?.personalInfoJson) {
+        const pi = sub.personalInfoJson as any;
+        doc.fontSize(15).text("Personal Information").moveDown(0.5);
+        doc.fontSize(11).text(`Name: ${pi.firstName} ${pi.lastName}`);
+        if (pi.email) doc.text(`Email: ${pi.email}`);
+        if (pi.phone) doc.text(`Phone: ${pi.phone}`);
+        if (pi.address) doc.text(`Address: ${pi.address}, ${pi.city}, ${pi.province} ${pi.postalCode}`);
+        doc.moveDown();
+      }
+      if (sub?.emergencyContactsJson) {
+        const ec = sub.emergencyContactsJson as any;
+        doc.fontSize(15).text("Emergency Contacts").moveDown(0.5);
+        if (ec.contact1) doc.fontSize(11).text(`Contact 1: ${ec.contact1.name} (${ec.contact1.relationship}) — ${ec.contact1.phone}`);
+        if (ec.contact2) doc.fontSize(11).text(`Contact 2: ${ec.contact2.name} (${ec.contact2.relationship}) — ${ec.contact2.phone}`);
+        doc.moveDown();
+      }
+      if (sub?.signatureData) {
+        doc.fontSize(15).text("Signature").moveDown(0.5);
+        const b64 = (sub.signatureData as string).replace(/^data:image\/\w+;base64,/, "");
+        try { doc.image(Buffer.from(b64, "base64"), { width: 200 }); } catch {}
+        if (sub.finalAcknowledgement) doc.fontSize(10).moveDown(0.5).text("Final Acknowledgement: Agreed");
+        doc.moveDown();
+      }
+      doc.end();
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ZIP download (admin)
+  app.get("/api/hiring-package/submissions/:id/download-zip", requireAuth, requireRole("admin"), async (req: any, res) => {
+    try {
+      const pkg = await storage.getHPPackage(req.params.id);
+      if (!pkg) return res.status(404).json({ message: "Not found" });
+      const sub = await storage.getHPSubmissionByPackage(req.params.id);
+      const docs = sub ? await storage.getHPDocuments(sub.id) : [];
+      const archiver = (await import("archiver")).default;
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename="hiring-package-${pkg.employeeName.replace(/\s+/g, "-")}.zip"`);
+      const archive = archiver("zip", { zlib: { level: 9 } });
+      archive.pipe(res);
+      for (const doc of docs) {
+        const buf = Buffer.from((doc as any).fileData as string, "base64");
+        archive.append(buf, { name: `${doc.documentType}/${doc.originalName}` });
+      }
+      if (sub?.signatureData) {
+        const b64 = (sub.signatureData as string).replace(/^data:image\/\w+;base64,/, "");
+        archive.append(Buffer.from(b64, "base64"), { name: "signature.png" });
+      }
+      archive.finalize();
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Public Hiring Package routes ──────────────────────────────────────────
+  app.get("/api/public/hiring-package/:token", async (req, res) => {
+    try {
+      const pkg = await storage.getHPPackageByToken(req.params.token);
+      if (!pkg) return res.status(404).json({ message: "Invalid or expired link" });
+      const [company, tmpl] = await Promise.all([
+        storage.getCompany(pkg.companyId),
+        pkg.templateId ? storage.getHPTemplate(pkg.templateId) : storage.getHPDefaultTemplate(pkg.companyId),
+      ]);
+      let sub = await storage.getHPSubmissionByPackage(pkg.id);
+      if (!sub) {
+        sub = await hpMakeSub(pkg);
+        if (pkg.status === "sent") await storage.updateHPPackage(pkg.id, { status: "started", updatedAt: hpNow() });
+      } else if (pkg.status === "sent") {
+        await storage.updateHPPackage(pkg.id, { status: "viewed", updatedAt: hpNow() });
+      }
+      const acceptances = await storage.getHPPolicyAcceptances(sub.id);
+      const documents = (await storage.getHPDocuments(sub.id)).map((d: any) => { const { fileData: _f, ...rest } = d; return rest; });
+      const { signatureData: _s, ...subSafe } = sub as any;
+      const policies = (tmpl?.policies as any[]) || [];
+      res.json({ package: pkg, submission: subSafe, acceptances, documents, companyName: company?.name || "Your Employer", template: { policies } });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/public/hiring-package/:token/accept-policy", async (req, res) => {
+    try {
+      const pkg = await storage.getHPPackageByToken(req.params.token);
+      if (!pkg) return res.status(404).json({ message: "Invalid link" });
+      let sub = await storage.getHPSubmissionByPackage(pkg.id);
+      if (!sub) sub = await hpMakeSub(pkg);
+      const { policyId, policyTitle, policyVersion, policyContentSnapshot } = req.body;
+      const existing = await storage.getHPPolicyAcceptances(sub.id);
+      if (!existing.find((a: any) => a.policyId === policyId)) {
+        const now = hpNow();
+        await storage.createHPPolicyAcceptance({
+          companyId: pkg.companyId, submissionId: sub.id, policyId,
+          policyTitle, policyVersion: policyVersion || "1.0",
+          policyContentSnapshot: policyContentSnapshot || "",
+          acceptedAt: now, createdAt: now,
+        });
+      }
+      await storage.updateHPPackage(pkg.id, { status: "in_progress", updatedAt: hpNow() });
+      await storage.updateHPSubmission(sub.id, { status: "in_progress", updatedAt: hpNow() });
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/public/hiring-package/:token/save-progress", async (req, res) => {
+    try {
+      const pkg = await storage.getHPPackageByToken(req.params.token);
+      if (!pkg) return res.status(404).json({ message: "Invalid link" });
+      let sub = await storage.getHPSubmissionByPackage(pkg.id);
+      if (!sub) sub = await hpMakeSub(pkg);
+      const { step, personalInfo, emergencyContacts, medicalInfo } = req.body;
+      const update: any = { status: "in_progress", updatedAt: hpNow() };
+      if (step === "personal_info" && personalInfo) update.personalInfoJson = personalInfo;
+      if (step === "emergency_contacts" && emergencyContacts !== undefined) update.emergencyContactsJson = emergencyContacts;
+      if (step === "medical_info") update.medicalInfoJson = medicalInfo !== undefined ? medicalInfo : null;
+      await storage.updateHPSubmission(sub.id, update);
+      await storage.updateHPPackage(pkg.id, { status: "in_progress", updatedAt: hpNow() });
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/public/hiring-package/:token/upload-document", hpUpload.single("file"), async (req: any, res) => {
+    try {
+      const pkg = await storage.getHPPackageByToken(req.params.token);
+      if (!pkg) return res.status(404).json({ message: "Invalid link" });
+      if (!req.file) return res.status(400).json({ message: "No file provided" });
+      let sub = await storage.getHPSubmissionByPackage(pkg.id);
+      if (!sub) sub = await hpMakeSub(pkg);
+      const { documentType } = req.body;
+      if (!documentType) return res.status(400).json({ message: "documentType required" });
+      const now = hpNow();
+      const fileData = req.file.buffer.toString("base64");
+      const safeFileName = req.file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+      const doc = await storage.upsertHPDocument(sub.id, documentType, {
+        companyId: pkg.companyId, submissionId: sub.id, documentType,
+        originalName: req.file.originalname, fileName: safeFileName,
+        mimeType: req.file.mimetype, fileSize: req.file.size, fileData,
+        uploadedAt: now, createdAt: now,
+      });
+      const { fileData: _fd, ...docSafe } = doc as any;
+      await storage.updateHPPackage(pkg.id, { status: "in_progress", updatedAt: hpNow() });
+      res.json(docSafe);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/public/hiring-package/:token/remove-document", async (req, res) => {
+    try {
+      const pkg = await storage.getHPPackageByToken(req.params.token);
+      if (!pkg) return res.status(404).json({ message: "Invalid link" });
+      const sub = await storage.getHPSubmissionByPackage(pkg.id);
+      if (!sub) return res.status(404).json({ message: "No submission" });
+      const { documentType } = req.body;
+      if (!documentType) return res.status(400).json({ message: "documentType required" });
+      await storage.deleteHPDocument(sub.id, documentType);
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/public/hiring-package/:token/sign", async (req, res) => {
+    try {
+      const pkg = await storage.getHPPackageByToken(req.params.token);
+      if (!pkg) return res.status(404).json({ message: "Invalid link" });
+      let sub = await storage.getHPSubmissionByPackage(pkg.id);
+      if (!sub) sub = await hpMakeSub(pkg);
+      const { signatureData, finalAcknowledgement } = req.body;
+      await storage.updateHPSubmission(sub.id, { signatureData, finalAcknowledgement: !!finalAcknowledgement, signatureUploadedAt: hpNow(), updatedAt: hpNow() });
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/public/hiring-package/:token/submit", async (req, res) => {
+    try {
+      const pkg = await storage.getHPPackageByToken(req.params.token);
+      if (!pkg) return res.status(404).json({ message: "Invalid link" });
+      const sub = await storage.getHPSubmissionByPackage(pkg.id);
+      if (!sub) return res.status(400).json({ message: "No submission in progress" });
+      const now = hpNow();
+      await storage.updateHPSubmission(sub.id, { status: "submitted", submittedAt: now, updatedAt: now });
+      await storage.updateHPPackage(pkg.id, { status: "submitted", updatedAt: now });
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/public/hiring-package/:token/download-blank-pdf", async (req, res) => {
+    try {
+      const pkg = await storage.getHPPackageByToken(req.params.token);
+      if (!pkg) return res.status(404).json({ message: "Invalid link" });
+      const [company, tmpl] = await Promise.all([
+        storage.getCompany(pkg.companyId),
+        pkg.templateId ? storage.getHPTemplate(pkg.templateId) : storage.getHPDefaultTemplate(pkg.companyId),
+      ]);
+      const PDFDocument = (await import("pdfkit")).default;
+      const doc = new PDFDocument({ margin: 50 });
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="hiring-package.pdf"`);
+      doc.pipe(res);
+      doc.fontSize(20).text("Hiring Package", { align: "center" });
+      doc.fontSize(13).text(company?.name || "", { align: "center" });
+      doc.moveDown();
+      const policies = ((tmpl?.policies || []) as any[]);
+      for (const policy of policies) {
+        doc.fontSize(15).text(policy.title || "");
+        if (policy.version) doc.fontSize(10).text(`Version: ${policy.version}`);
+        doc.moveDown(0.5);
+        if (policy.content) doc.fontSize(11).text(policy.content, { lineGap: 2 });
+        doc.moveDown();
+        if (policy.acceptanceStatement) {
+          doc.fontSize(11).text("Acceptance: " + policy.acceptanceStatement);
+          doc.moveDown(0.3);
+          doc.text("Signature: _________________________  Date: ____________");
+        }
+        doc.addPage();
+      }
+      doc.end();
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/public/hiring-package/:token/download-completed-pdf", async (req, res) => {
+    try {
+      const pkg = await storage.getHPPackageByToken(req.params.token);
+      if (!pkg) return res.status(404).json({ message: "Invalid link" });
+      const sub = await storage.getHPSubmissionByPackage(pkg.id);
+      if (!sub) return res.status(400).json({ message: "No submission" });
+      const acceptances = await storage.getHPPolicyAcceptances(sub.id);
+      const PDFDocument = (await import("pdfkit")).default;
+      const doc = new PDFDocument({ margin: 50 });
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="completed-hiring-package.pdf"`);
+      doc.pipe(res);
+      doc.fontSize(20).text("Completed Hiring Package", { align: "center" });
+      doc.moveDown();
+      doc.fontSize(13).text(`Applicant: ${pkg.employeeName}`).text(`Email: ${pkg.employeeEmail}`).text(`Status: ${sub.status}`);
+      doc.moveDown();
+      if (acceptances.length) {
+        doc.fontSize(15).text("Accepted Policies");
+        for (const a of acceptances) doc.fontSize(11).text(`• ${a.policyTitle} — ${new Date(a.acceptedAt!).toLocaleDateString()}`);
+        doc.moveDown();
+      }
+      if (sub.signatureData) {
+        doc.fontSize(15).text("Signature");
+        const b64 = (sub.signatureData as string).replace(/^data:image\/\w+;base64,/, "");
+        try { doc.image(Buffer.from(b64, "base64"), { width: 200 }); } catch {}
+      }
+      doc.end();
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   return httpServer;
 }
 

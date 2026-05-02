@@ -69,6 +69,7 @@ import AdminProposalBuilder from "@/pages/admin/proposal-builder";
 import PublicProposal from "@/pages/public/proposal";
 import AdminAgreementBuilder from "@/pages/admin/agreement-builder";
 import PublicAgreement from "@/pages/public/agreement";
+import HiringPackagePage from "@/pages/public/HiringPackagePage";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import LandingPage from "@/pages/landing";
@@ -303,6 +304,14 @@ function AppRouter() {
     return (
       <Switch>
         <Route path="/public/agreements/:token" component={PublicAgreement} />
+      </Switch>
+    );
+  }
+
+  if (location.startsWith("/public/hiring-package/")) {
+    return (
+      <Switch>
+        <Route path="/public/hiring-package/:token" component={HiringPackagePage} />
       </Switch>
     );
   }
