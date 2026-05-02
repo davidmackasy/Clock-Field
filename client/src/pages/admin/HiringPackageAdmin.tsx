@@ -1,780 +1,727 @@
-import { useState, useRef, useCallback, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/hooks/use-toast";
 import {
-  Plus, Send, Copy, CheckCircle2, Clock, XCircle, Archive, Loader2,
-  Eye, AlertCircle, Users, FileText, Pencil, Trash2, Download, User,
-  Phone, Shield, ChevronDown, ChevronUp, X, RotateCcw, Settings,
-  Briefcase, ChevronRight, RefreshCw, FileDown, Package,
+  Send, Briefcase, Plus, Trash2, Settings, Users, Copy, ExternalLink,
+  CheckCircle2, Clock, XCircle, FileText, Eye, Loader2, ChevronDown, ChevronUp,
+  AlertCircle, RefreshCw,
 } from "lucide-react";
 
-// ── Default Policies ──────────────────────────────────────────────────────────
-const DEFAULT_POLICIES = [
-  {
-    id: "rules_of_conduct",
-    title: "Rules of Conduct / Conditions of Employment",
-    version: "1.0",
-    required: true,
-    order: 1,
-    content: `Objective:\nTo establish clear expectations regarding employee conduct, performance, and behaviour while employed with [Company Name]. These rules exist to ensure a safe, respectful, and productive workplace for all team members and clients.\n\nScope:\nThis policy applies to all employees, contractors, and subcontractors working on behalf of [Company Name].\n\nConduct Standards:\n1. Employees must arrive on time for all scheduled shifts. Consistent tardiness or unexcused absences will result in disciplinary action.\n2. All employees must treat clients, colleagues, supervisors, and the public with courtesy and professionalism at all times.\n3. Theft, fraud, dishonesty, or misrepresentation of any kind will result in immediate termination and may be referred to law enforcement.\n4. Employees must not use company vehicles, supplies, or property for personal use without prior written approval.\n5. All client information, home access details, and business information must be treated as strictly confidential.\n6. Use of personal mobile phones during working hours must be kept to an absolute minimum and must not interfere with work duties.\n7. Employees must not consume alcohol or non-prescribed substances before or during scheduled shifts.\n8. Any disputes with colleagues or clients must be reported to management immediately and must not be handled personally in an aggressive or confrontational manner.\n\nPerformance Standards:\n1. Employees are expected to complete all assigned duties to the standard outlined by management and client expectations.\n2. Employees must follow cleaning protocols, checklists, and instructions provided by supervisors without deviation.\n3. Failure to meet consistent performance standards will result in documented warnings, additional training, or termination.\n\nConsequences:\nViolation of these rules may result in verbal warning, written warning, suspension, demotion, or termination, depending on the severity and frequency of the violation.`,
-    acceptanceStatement: "I have read, understood, and agree to abide by the Rules of Conduct and Conditions of Employment.",
-  },
-  {
-    id: "code_of_ethics",
-    title: "Code of Ethics",
-    version: "1.0",
-    required: true,
-    order: 2,
-    content: `Objective:\nTo define the ethical standards expected of all employees and to ensure that [Company Name] operates with integrity, transparency, and respect in every aspect of its business.\n\nScope:\nThis code applies to all persons employed by or representing [Company Name].\n\nCore Ethical Principles:\n1. Integrity: Employees must act honestly and with integrity in all business dealings, communications, and interactions.\n2. Respect: Every person — client, colleague, or member of the public — must be treated with dignity and respect regardless of their background, identity, or status.\n3. Accountability: Employees must take responsibility for their actions and report mistakes or incidents promptly and honestly.\n4. Confidentiality: Client information, business records, pricing, staff details, and operational data must never be shared externally without written authorization.\n5. Conflict of Interest: Employees must disclose any potential conflict of interest to management in writing and must not allow personal interests to influence their work decisions.\n6. Client Trust: [Company Name] builds its reputation on trust. Employees must never take advantage of client access, belongings, or vulnerabilities.\n7. Fair Dealing: Employees must not engage in unfair competitive practices, deceptive behaviour, or misrepresentation of services.\n\nReporting Ethical Concerns:\nAny employee who witnesses or suspects unethical behaviour must report it to their supervisor or management. Reports made in good faith will be treated confidentially and with no retaliation.`,
-    acceptanceStatement: "I have read and agree to uphold the Code of Ethics in all aspects of my employment.",
-  },
-  {
-    id: "dress_code",
-    title: "Dress Code and Personal Hygiene Policy",
-    version: "1.0",
-    required: true,
-    order: 3,
-    content: `Objective:\nTo ensure that all employees present a professional, clean, and consistent appearance while representing [Company Name] on job sites and in client environments.\n\nScope:\nThis policy applies to all field employees, supervisors, and any employee who interacts with clients.\n\nUniform Requirements:\n1. All employees must wear the designated company uniform at all times while on active duty. Uniform items will be provided by [Company Name] unless otherwise communicated.\n2. Uniforms must be clean, pressed where applicable, and in good condition. Torn, stained, or excessively worn uniforms must be replaced promptly.\n3. Company-branded items (shirts, jackets, hats) must not be modified, cut, or worn with offensive or inappropriate personal clothing.\n4. Employees must wear appropriate closed-toe footwear on all job sites. Safety boots are required in designated areas and are subject to the Safety Boots Reimbursement Policy.\n5. Excessive jewellery that poses a safety risk or could cause damage to client property must not be worn during shifts.\n\nPersonal Hygiene:\n1. Employees must maintain adequate personal hygiene standards at all times during working hours.\n2. Strong fragrances, including heavy perfumes or colognes, must be avoided as they may affect clients with allergies or sensitivities.\n3. Hair must be clean and either tied back or secured when working in environments where it could pose a hygiene or safety concern.\n\nNon-Compliance:\nFailure to maintain dress and hygiene standards may result in the employee being sent home without pay until the issue is corrected, followed by a formal warning.`,
-    acceptanceStatement: "I have read and agree to follow the Dress Code and Personal Hygiene Policy.",
-  },
-  {
-    id: "safety_boots",
-    title: "Safety Boots Reimbursement Policy",
-    version: "1.0",
-    required: true,
-    order: 4,
-    content: `Objective:\nTo ensure all employees working in environments that require protective footwear are properly equipped, and to outline the reimbursement process for approved safety boot purchases.\n\nScope:\nThis policy applies to all field employees required to wear CSA-approved safety boots as part of their job duties.\n\nRequirements:\n1. Employees working on-site must wear CSA-approved Grade 1 safety boots (steel toe or composite toe) at all times during active field duties.\n2. Boots must be in good condition and provide adequate protection. Damaged or worn-through boots must be replaced promptly.\n3. Employees are responsible for purchasing their own safety boots.\n\nReimbursement:\n1. [Company Name] will reimburse eligible employees up to the approved amount of $[boot_reimbursement_amount] for the purchase of safety boots upon commencement of employment.\n2. To receive reimbursement, the employee must submit a valid receipt within 30 days of purchase. Receipts submitted after this period will not be accepted.\n3. Reimbursement will be processed through payroll within the next pay period after submission of an approved receipt.\n4. Only one reimbursement per 12-month period is permitted unless boots are damaged in the course of employment, in which case a management-approved exception may be granted.\n5. Reimbursement is not available for employees who have not yet completed their probationary period unless pre-approved in writing by management.\n\nEmployees must retain all receipts and submit them to management for processing.`,
-    acceptanceStatement: "I have read and agree to the Safety Boots Reimbursement Policy.",
-  },
-  {
-    id: "substance_abuse",
-    title: "Substance Abuse Policy / Suspicion of Impairment",
-    version: "1.0",
-    required: true,
-    order: 5,
-    content: `Objective:\nTo maintain a safe, healthy, and drug-free workplace for all employees, clients, and the public.\n\nScope:\nThis policy applies to all employees, subcontractors, and individuals representing [Company Name] during working hours, on company premises, in company vehicles, or at client locations.\n\nProhibited Conduct:\n1. Reporting to work under the influence of alcohol, cannabis, illegal drugs, or any substance that impairs judgment, motor control, or behaviour is strictly prohibited.\n2. Possessing, using, distributing, or selling controlled substances on company premises, in company vehicles, or at client locations is strictly prohibited.\n3. Misuse of prescription medication in a manner that impairs safe job performance is prohibited. Employees taking prescription medication that may affect performance must notify management in confidence.\n\nSuspicion of Impairment:\n1. Supervisors are authorized to remove any employee from duty if there is reasonable suspicion of impairment.\n2. Reasonable suspicion may be based on observable signs including but not limited to: slurred speech, unsteady balance, erratic behaviour, odour of alcohol or cannabis, or inability to communicate clearly.\n3. An employee removed from duty due to suspected impairment will not be paid for the remainder of that shift.\n4. The employee may be subject to further investigation, mandatory assessment, and disciplinary action up to and including termination.\n\nConsequences:\nAny confirmed violation of this policy will result in immediate termination. Employees causing harm or damage while impaired on duty may be subject to legal action.\n\nDuty to Accommodate:\n[Company Name] is committed to accommodating employees with a substance use disorder in accordance with applicable human rights legislation, subject to the requirement that the employee participate in an approved treatment or rehabilitation program.`,
-    acceptanceStatement: "I have read and agree to the Substance Abuse Policy and understand the consequences of impairment on duty.",
-  },
-  {
-    id: "medical_privacy",
-    title: "Emergency Contact and Medical Information Privacy Notice",
-    version: "1.0",
-    required: true,
-    order: 6,
-    content: `Objective:\nTo inform employees of how their emergency contact and optional medical information is collected, stored, and used by [Company Name].\n\nScope:\nThis notice applies to all employees who provide emergency contact details or optional medical information as part of their onboarding process.\n\nInformation Collected:\n1. Emergency Contact Information: Name, relationship, phone number, and email address for up to two designated emergency contacts.\n2. Optional Medical Information: Allergies, sensitivities, medical conditions relevant to workplace safety, medications, or notes the employee voluntarily chooses to disclose.\n\nPurpose of Collection:\nEmergency contact information is collected solely to enable [Company Name] to reach a designated person in the event of a workplace emergency, illness, or accident.\n\nOptional medical information is collected only to help [Company Name] respond appropriately in an emergency, allergy, sensitivity, or safety situation that may occur at work.\n\nStorage and Access:\n1. All personal and medical information is stored securely and is treated as strictly confidential.\n2. Access to this information is restricted to authorized personnel on a strict need-to-know basis.\n3. This information will not be shared externally, sold, or used for any purpose other than those described in this notice.\n4. Optional medical information is not used to make employment decisions and is not shared with clients, insurers, or third parties without explicit written consent from the employee.\n\nVoluntary Disclosure:\nThe provision of optional medical information is entirely voluntary. Employees are not required to disclose personal medical history. Only information relevant to a potential workplace emergency or safety concern is requested.\n\nRetention:\nPersonal information will be retained for the duration of employment and for a reasonable period thereafter as required by applicable law, after which it will be securely destroyed.`,
-    acceptanceStatement: "I have read and understand the Emergency Contact and Medical Information Privacy Notice.",
-  },
-  {
-    id: "final_acknowledgement",
-    title: "Final Employee Acknowledgement",
-    version: "1.0",
-    required: true,
-    order: 7,
-    content: `By completing this hiring package, I acknowledge and confirm the following:\n\n1. I have read each policy and document included in this hiring package in its entirety.\n2. I understand the contents of all policies, including the Rules of Conduct, Code of Ethics, Dress Code, Safety Boots Reimbursement Policy, Substance Abuse Policy, and Privacy Notice.\n3. I agree to comply with all policies outlined in this hiring package as a condition of my employment.\n4. I understand that these policies may form part of my confidential employment file and may be referenced in employment reviews, performance discussions, or disciplinary proceedings.\n5. I confirm that all personal information I have provided in this application is accurate and complete to the best of my knowledge. I understand that providing false information may result in termination.\n6. I consent to [Company Name] storing my personal information, emergency contact details, and optionally provided medical information in accordance with the Privacy Notice included in this package.\n7. I acknowledge that the digital signature I provide in this package is legally binding and serves as my consent to all contents of this hiring package.\n8. I understand that this hiring package does not constitute a contract of employment and that my employment remains subject to the terms communicated at the time of my official offer.\n\nIf I have any questions about any of the policies or information contained in this hiring package, I agree to raise them with management before completing the final signature step.`,
-    acceptanceStatement: "I have read, understood, and agree to this Final Employee Acknowledgement. I confirm that all information I have provided is accurate.",
-  },
-];
+type HiringTemplate = {
+  id: string;
+  companyId: string;
+  name: string;
+  policies: { id: string; title: string; content: string }[];
+  bootReimbursementAmount: string;
+  requireDateOfBirth: boolean;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-function fmtDate(iso?: string | null) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" });
-}
-function fmtDateTime(iso?: string | null) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString("en-CA", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+type HiringPackage = {
+  id: string;
+  companyId: string;
+  templateId: string;
+  employeeName: string;
+  employeeEmail: string;
+  position: string;
+  publicToken: string;
+  status: string;
+  sentAt: string | null;
+  expiresAt: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type HiringSubmission = {
+  id: string;
+  packageId: string;
+  publicToken: string;
+  currentStep: number;
+  status: string;
+  reviewStatus: string | null;
+  personalInfoJson: any;
+  emergencyContactsJson: any;
+  medicalInfoJson: any;
+  finalAcknowledgement: boolean;
+  signatureData: string | null;
+  submittedAt: string | null;
+  lastSavedAt: string | null;
+  adminNotes: string | null;
+  missingDocsMessage: string | null;
+  requestedMissingDocs: string[] | null;
+  createdAt: string;
+};
+
+type SubmissionDetail = {
+  package: HiringPackage;
+  submission: HiringSubmission | null;
+  template: HiringTemplate | null;
+  policyAcceptances: any[];
+  documents: any[];
+};
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
+  draft: { label: "Draft", color: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400", icon: FileText },
+  sent: { label: "Sent", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400", icon: Send },
+  started: { label: "In Progress", color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400", icon: Clock },
+  submitted: { label: "Submitted", color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", icon: CheckCircle2 },
+  approved: { label: "Approved", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400", icon: CheckCircle2 },
+  rejected: { label: "Rejected", color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", icon: XCircle },
+};
+
+function StatusBadge({ status }: { status: string }) {
+  const cfg = STATUS_CONFIG[status] ?? { label: status, color: "bg-gray-100 text-gray-600", icon: FileText };
+  const Icon = cfg.icon;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>
+      <Icon className="w-3 h-3" />{cfg.label}
+    </span>
+  );
 }
 
-type Policy = typeof DEFAULT_POLICIES[0];
-
-function statusBadge(status: string) {
-  const map: Record<string, { label: string; className: string }> = {
-    draft: { label: "Draft", className: "bg-gray-100 text-gray-700" },
-    sent: { label: "Sent", className: "bg-blue-100 text-blue-700" },
-    viewed: { label: "Viewed", className: "bg-purple-100 text-purple-700" },
-    started: { label: "Started", className: "bg-yellow-100 text-yellow-800" },
-    in_progress: { label: "In Progress", className: "bg-orange-100 text-orange-700" },
-    submitted: { label: "Submitted", className: "bg-green-100 text-green-700" },
-    under_review: { label: "Under Review", className: "bg-blue-100 text-blue-700" },
-    missing_documents: { label: "Missing Docs", className: "bg-red-100 text-red-700" },
-    approved_hired: { label: "Approved / Hired", className: "bg-emerald-100 text-emerald-700" },
-    not_approved: { label: "Not Approved", className: "bg-red-100 text-red-700" },
-    archived: { label: "Archived", className: "bg-gray-100 text-gray-500" },
-  };
-  const m = map[status] || { label: status, className: "bg-gray-100 text-gray-600" };
-  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${m.className}`}>{m.label}</span>;
+function formatDate(s: string | null | undefined) {
+  if (!s) return "—";
+  return new Date(s).toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" });
 }
 
-// ── Templates Tab ─────────────────────────────────────────────────────────────
-function TemplatesTab() {
+export default function HiringPackageAdmin() {
   const { toast } = useToast();
-  const qc = useQueryClient();
-  const [newName, setNewName] = useState("");
-  const [createOpen, setCreateOpen] = useState(false);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"packages" | "settings">("packages");
+  const [sendDialog, setSendDialog] = useState(false);
+  const [detailDialog, setDetailDialog] = useState<string | null>(null);
+  const [sendForm, setSendForm] = useState({ employeeName: "", employeeEmail: "", position: "" });
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [expandedPolicy, setExpandedPolicy] = useState<string | null>(null);
 
-  const { data: templates = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/hiring-package/templates"] });
+  // Template state
+  const [editingTemplate, setEditingTemplate] = useState<HiringTemplate | null>(null);
+  const [newPolicyTitle, setNewPolicyTitle] = useState("");
+  const [newPolicyContent, setNewPolicyContent] = useState("");
+  const [addingPolicy, setAddingPolicy] = useState(false);
 
-  const createMut = useMutation({
-    mutationFn: (name: string) => apiRequest("POST", "/api/hiring-package/templates", { name, policies: DEFAULT_POLICIES, isDefault: templates.length === 0 }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/hiring-package/templates"] }); setCreateOpen(false); setNewName(""); toast({ title: "Template created" }); },
-    onError: () => toast({ title: "Failed to create template", variant: "destructive" }),
+  const { data: template, isLoading: templateLoading } = useQuery<HiringTemplate>({
+    queryKey: ["/api/hiring-package/template"],
   });
 
-  const setDefaultMut = useMutation({
-    mutationFn: (id: string) => apiRequest("PATCH", `/api/hiring-package/templates/${id}`, { isDefault: true }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/hiring-package/templates"] }); toast({ title: "Default template updated" }); },
-    onError: () => toast({ title: "Failed to update", variant: "destructive" }),
+  const { data: packages = [], isLoading: packagesLoading } = useQuery<HiringPackage[]>({
+    queryKey: ["/api/hiring-package/packages"],
   });
 
-  const deleteMut = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", `/api/hiring-package/templates/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/hiring-package/templates"] }); setDeleteId(null); toast({ title: "Template deleted" }); },
-    onError: () => toast({ title: "Failed to delete", variant: "destructive" }),
+  const { data: submissions = [] } = useQuery<HiringSubmission[]>({
+    queryKey: ["/api/hiring-package/submissions"],
   });
 
-  if (isLoading) return <div className="space-y-3">{[1,2].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>;
+  const { data: detail, isLoading: detailLoading } = useQuery<SubmissionDetail>({
+    queryKey: ["/api/hiring-package/packages", detailDialog, "detail"],
+    enabled: !!detailDialog,
+  });
+
+  const createPackageMutation = useMutation({
+    mutationFn: (data: typeof sendForm) => apiRequest("POST", "/api/hiring-package/packages", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hiring-package/packages"] });
+      setSendDialog(false);
+      setSendForm({ employeeName: "", employeeEmail: "", position: "" });
+      toast({ title: "Package created", description: "The hiring package has been created. You can now send it." });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const sendEmailMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("POST", `/api/hiring-package/packages/${id}/send`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hiring-package/packages"] });
+      toast({ title: "Email sent", description: "The hiring package link has been emailed to the employee." });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const deletePackageMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/hiring-package/packages/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hiring-package/packages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hiring-package/submissions"] });
+      setDeleteConfirm(null);
+      toast({ title: "Deleted", description: "Hiring package removed." });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const updateTemplateMutation = useMutation({
+    mutationFn: (data: Partial<HiringTemplate>) => apiRequest("PATCH", `/api/hiring-package/template/${template?.id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hiring-package/template"] });
+      setEditingTemplate(null);
+      toast({ title: "Template saved" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const updateReviewMutation = useMutation({
+    mutationFn: ({ submissionId, data }: { submissionId: string; data: any }) =>
+      apiRequest("PATCH", `/api/hiring-package/submissions/${submissionId}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hiring-package/submissions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hiring-package/packages", detailDialog, "detail"] });
+      toast({ title: "Submission updated" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const getPublicLink = (token: string) => `${window.location.origin}/public/hiring-package/${token}`;
+
+  const copyLink = (token: string) => {
+    navigator.clipboard.writeText(getPublicLink(token));
+    toast({ title: "Link copied!" });
+  };
+
+  const getSubmissionForPackage = (pkgId: string) => submissions.find(s => s.packageId === pkgId);
+
+  const effectiveStatus = (pkg: HiringPackage) => {
+    const sub = getSubmissionForPackage(pkg.id);
+    if (!sub) return pkg.status;
+    if (sub.status === "submitted") return "submitted";
+    if (sub.status === "started") return "started";
+    return pkg.status;
+  };
+
+  // Template editing helpers
+  const currentTemplate = editingTemplate ?? template;
+
+  const addPolicy = () => {
+    if (!newPolicyTitle.trim() || !newPolicyContent.trim()) return;
+    const policies = [...(currentTemplate?.policies ?? []), {
+      id: `p_${Date.now()}`,
+      title: newPolicyTitle.trim(),
+      content: newPolicyContent.trim(),
+    }];
+    if (editingTemplate) {
+      setEditingTemplate({ ...editingTemplate, policies });
+    } else if (template) {
+      setEditingTemplate({ ...template, policies });
+    }
+    setNewPolicyTitle("");
+    setNewPolicyContent("");
+    setAddingPolicy(false);
+  };
+
+  const removePolicy = (policyId: string) => {
+    const policies = (currentTemplate?.policies ?? []).filter(p => p.id !== policyId);
+    if (editingTemplate) {
+      setEditingTemplate({ ...editingTemplate, policies });
+    } else if (template) {
+      setEditingTemplate({ ...template, policies });
+    }
+  };
+
+  const saveTemplate = () => {
+    if (!editingTemplate || !template) return;
+    updateTemplateMutation.mutate({
+      name: editingTemplate.name,
+      policies: editingTemplate.policies,
+      bootReimbursementAmount: editingTemplate.bootReimbursementAmount,
+      requireDateOfBirth: editingTemplate.requireDateOfBirth,
+    });
+  };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Templates</h2>
-          <p className="text-sm text-muted-foreground">Reusable hiring package layouts. The default template is used when creating new packages.</p>
-        </div>
-        <Button size="sm" onClick={() => setCreateOpen(true)} data-testid="button-create-template"><Plus className="w-4 h-4 mr-1.5" />New Template</Button>
+      {/* Sub-tabs */}
+      <div className="flex items-center gap-1 border-b border-border">
+        <button
+          onClick={() => setActiveTab("packages")}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "packages" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          data-testid="hp-tab-packages">
+          <Users className="w-4 h-4" /> Packages
+        </button>
+        <button
+          onClick={() => setActiveTab("settings")}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "settings" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          data-testid="hp-tab-settings">
+          <Settings className="w-4 h-4" /> Template Settings
+        </button>
       </div>
 
-      {templates.length === 0 ? (
-        <div className="border rounded-lg p-8 text-center text-muted-foreground">
-          <FileText className="w-8 h-8 mx-auto mb-2 opacity-40" />
-          <p className="text-sm">No templates yet. Create one to get started.</p>
-          <Button size="sm" className="mt-3" onClick={() => setCreateOpen(true)}>Create Default Template</Button>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {templates.map((t: any) => (
-            <div key={t.id} className="border rounded-lg p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <FileText className="w-5 h-5 text-muted-foreground" />
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm">{t.name}</span>
-                    {t.isDefault && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">Default</span>}
-                  </div>
-                  <p className="text-xs text-muted-foreground">{(t.policies || []).length} policies · Created {fmtDate(t.createdAt)}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {!t.isDefault && (
-                  <Button size="sm" variant="outline" onClick={() => setDefaultMut.mutate(t.id)} data-testid={`button-set-default-${t.id}`}>Set Default</Button>
-                )}
-                <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteId(t.id)} data-testid={`button-delete-template-${t.id}`}><Trash2 className="w-4 h-4" /></Button>
-              </div>
+      {/* ── PACKAGES TAB ── */}
+      {activeTab === "packages" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-foreground">Sent Packages</h3>
+              <p className="text-sm text-muted-foreground">Send hiring packages to new employees for them to complete online.</p>
             </div>
-          ))}
+            <Button onClick={() => setSendDialog(true)} size="sm" data-testid="btn-send-package">
+              <Plus className="w-4 h-4 mr-1" /> Send Package
+            </Button>
+          </div>
+
+          {packagesLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : packages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-border rounded-lg">
+              <Briefcase className="w-10 h-10 text-muted-foreground mb-3" />
+              <p className="text-sm font-medium text-foreground mb-1">No packages yet</p>
+              <p className="text-xs text-muted-foreground mb-4">Create your first hiring package to send to a new employee.</p>
+              <Button size="sm" onClick={() => setSendDialog(true)} data-testid="btn-send-package-empty">
+                <Plus className="w-4 h-4 mr-1" /> Send Package
+              </Button>
+            </div>
+          ) : (
+            <div className="border border-border rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 border-b border-border">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Employee</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Position</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Sent</th>
+                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {packages.map(pkg => {
+                    const status = effectiveStatus(pkg);
+                    const canSend = status === "draft";
+                    return (
+                      <tr key={pkg.id} className="hover:bg-muted/30 transition-colors" data-testid={`row-package-${pkg.id}`}>
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-foreground">{pkg.employeeName}</div>
+                          <div className="text-xs text-muted-foreground">{pkg.employeeEmail}</div>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">{pkg.position || "—"}</td>
+                        <td className="px-4 py-3"><StatusBadge status={status} /></td>
+                        <td className="px-4 py-3 text-muted-foreground">{formatDate(pkg.sentAt)}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost" size="sm"
+                              onClick={() => setDetailDialog(pkg.id)}
+                              data-testid={`btn-view-${pkg.id}`}>
+                              <Eye className="w-3.5 h-3.5 mr-1" /> View
+                            </Button>
+                            <Button
+                              variant="ghost" size="sm"
+                              onClick={() => copyLink(pkg.publicToken)}
+                              data-testid={`btn-copy-link-${pkg.id}`}>
+                              <Copy className="w-3.5 h-3.5" />
+                            </Button>
+                            {canSend && (
+                              <Button
+                                variant="ghost" size="sm"
+                                onClick={() => sendEmailMutation.mutate(pkg.id)}
+                                disabled={sendEmailMutation.isPending}
+                                data-testid={`btn-send-email-${pkg.id}`}>
+                                <Send className="w-3.5 h-3.5 mr-1" /> Send Email
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost" size="sm"
+                              onClick={() => setDeleteConfirm(pkg.id)}
+                              className="text-destructive hover:text-destructive"
+                              data-testid={`btn-delete-${pkg.id}`}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>New Template</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-2">
-            <Label>Template Name</Label>
-            <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Standard Hiring Package" data-testid="input-template-name" />
-            <p className="text-xs text-muted-foreground">The new template will be created with the 7 default policies.</p>
+      {/* ── SETTINGS TAB ── */}
+      {activeTab === "settings" && (
+        <div className="space-y-6">
+          {templateLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : !template ? (
+            <div className="text-center py-12 text-muted-foreground text-sm">Template not found</div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-semibold text-foreground">Hiring Template</h3>
+                  <p className="text-sm text-muted-foreground">Configure the policies and settings for new hire packages.</p>
+                </div>
+                {editingTemplate && (
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setEditingTemplate(null)} data-testid="btn-cancel-template">
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={saveTemplate} disabled={updateTemplateMutation.isPending} data-testid="btn-save-template">
+                      {updateTemplateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Changes"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* General Settings */}
+              <div className="border border-border rounded-lg p-4 space-y-4">
+                <h4 className="text-sm font-semibold text-foreground">General Settings</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Boot Reimbursement Amount</Label>
+                    <div className="relative mt-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                      <Input
+                        className="pl-7"
+                        value={currentTemplate?.bootReimbursementAmount ?? "60.00"}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (editingTemplate) setEditingTemplate({ ...editingTemplate, bootReimbursementAmount: val });
+                          else if (template) setEditingTemplate({ ...template, bootReimbursementAmount: val });
+                        }}
+                        data-testid="input-boot-reimbursement"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 pt-5">
+                    <Switch
+                      checked={currentTemplate?.requireDateOfBirth ?? false}
+                      onCheckedChange={val => {
+                        if (editingTemplate) setEditingTemplate({ ...editingTemplate, requireDateOfBirth: val });
+                        else if (template) setEditingTemplate({ ...template, requireDateOfBirth: val });
+                      }}
+                      data-testid="switch-require-dob"
+                    />
+                    <Label className="text-sm cursor-pointer">Require Date of Birth</Label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Policies */}
+              <div className="border border-border rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-foreground">Company Policies</h4>
+                  <Button variant="outline" size="sm" onClick={() => setAddingPolicy(true)} data-testid="btn-add-policy">
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Add Policy
+                  </Button>
+                </div>
+                {(currentTemplate?.policies ?? []).length === 0 && !addingPolicy && (
+                  <p className="text-sm text-muted-foreground text-center py-4">No policies added yet. Add your first company policy.</p>
+                )}
+                {(currentTemplate?.policies ?? []).map(policy => (
+                  <div key={policy.id} className="border border-border rounded-md overflow-hidden">
+                    <div
+                      className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/30"
+                      onClick={() => setExpandedPolicy(expandedPolicy === policy.id ? null : policy.id)}>
+                      <span className="text-sm font-medium text-foreground">{policy.title}</span>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost" size="sm"
+                          className="text-destructive hover:text-destructive h-6 w-6 p-0"
+                          onClick={e => { e.stopPropagation(); removePolicy(policy.id); }}
+                          data-testid={`btn-remove-policy-${policy.id}`}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                        {expandedPolicy === policy.id ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                      </div>
+                    </div>
+                    {expandedPolicy === policy.id && (
+                      <div className="px-4 pb-3 border-t border-border bg-muted/20">
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap pt-3">{policy.content}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {addingPolicy && (
+                  <div className="border border-border rounded-md p-4 space-y-3 bg-muted/20">
+                    <Input
+                      placeholder="Policy title (e.g. Health & Safety Policy)"
+                      value={newPolicyTitle}
+                      onChange={e => setNewPolicyTitle(e.target.value)}
+                      data-testid="input-new-policy-title"
+                    />
+                    <Textarea
+                      placeholder="Policy content..."
+                      rows={5}
+                      value={newPolicyContent}
+                      onChange={e => setNewPolicyContent(e.target.value)}
+                      data-testid="input-new-policy-content"
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="outline" size="sm" onClick={() => { setAddingPolicy(false); setNewPolicyTitle(""); setNewPolicyContent(""); }}>Cancel</Button>
+                      <Button size="sm" onClick={addPolicy} data-testid="btn-save-policy">Add Policy</Button>
+                    </div>
+                  </div>
+                )}
+                {editingTemplate && (currentTemplate?.policies ?? []).length > 0 && (
+                  <div className="pt-2 flex justify-end">
+                    <Button size="sm" onClick={saveTemplate} disabled={updateTemplateMutation.isPending} data-testid="btn-save-template-bottom">
+                      {updateTemplateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Changes"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── SEND PACKAGE DIALOG ── */}
+      <Dialog open={sendDialog} onOpenChange={setSendDialog}>
+        <DialogContent className="sm:max-w-md" data-testid="dialog-send-package">
+          <DialogHeader>
+            <DialogTitle>Send Hiring Package</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label>Employee Name <span className="text-destructive">*</span></Label>
+              <Input
+                className="mt-1"
+                placeholder="Jane Smith"
+                value={sendForm.employeeName}
+                onChange={e => setSendForm(f => ({ ...f, employeeName: e.target.value }))}
+                data-testid="input-employee-name"
+              />
+            </div>
+            <div>
+              <Label>Employee Email <span className="text-destructive">*</span></Label>
+              <Input
+                className="mt-1"
+                type="email"
+                placeholder="jane@example.com"
+                value={sendForm.employeeEmail}
+                onChange={e => setSendForm(f => ({ ...f, employeeEmail: e.target.value }))}
+                data-testid="input-employee-email"
+              />
+            </div>
+            <div>
+              <Label>Position</Label>
+              <Input
+                className="mt-1"
+                placeholder="e.g. Cleaner, Supervisor"
+                value={sendForm.position}
+                onChange={e => setSendForm(f => ({ ...f, position: e.target.value }))}
+                data-testid="input-employee-position"
+              />
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button onClick={() => createMut.mutate(newName)} disabled={!newName.trim() || createMut.isPending} data-testid="button-create-template-confirm">
-              {createMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}Create
+            <Button variant="outline" onClick={() => setSendDialog(false)}>Cancel</Button>
+            <Button
+              onClick={() => createPackageMutation.mutate(sendForm)}
+              disabled={!sendForm.employeeName.trim() || !sendForm.employeeEmail.trim() || createPackageMutation.isPending}
+              data-testid="btn-confirm-send">
+              {createPackageMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-4 h-4 mr-1" />}
+              Create Package
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!deleteId} onOpenChange={v => { if (!v) setDeleteId(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Delete Template?</AlertDialogTitle><AlertDialogDescription>This will permanently delete this template. Packages already sent will not be affected.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={() => deleteId && deleteMut.mutate(deleteId)}>Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-  );
-}
-
-// ── Policies Tab ──────────────────────────────────────────────────────────────
-function PoliciesTab() {
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  const [policies, setPolicies] = useState<Policy[]>(DEFAULT_POLICIES);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<Partial<Policy>>({});
-  const [confirmReset, setConfirmReset] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  const { data: templates = [] } = useQuery<any[]>({ queryKey: ["/api/hiring-package/templates"] });
-  const defaultTemplate = (templates as any[]).find((t: any) => t.isDefault);
-
-  useEffect(() => {
-    if (defaultTemplate?.policies?.length) setPolicies(defaultTemplate.policies);
-  }, [defaultTemplate?.id]);
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const ordered = policies.map((p, i) => ({ ...p, order: i + 1 }));
-      if (defaultTemplate) {
-        await apiRequest("PATCH", `/api/hiring-package/templates/${defaultTemplate.id}`, { policies: ordered });
-      } else {
-        await apiRequest("POST", "/api/hiring-package/templates", { name: "Default Template", policies: ordered, isDefault: true });
-      }
-      qc.invalidateQueries({ queryKey: ["/api/hiring-package/templates"] });
-      toast({ title: "Policies saved" });
-    } catch {
-      toast({ title: "Failed to save", variant: "destructive" });
-    } finally { setSaving(false); }
-  };
-
-  const startEdit = (p: Policy) => { setEditingId(p.id); setEditDraft({ ...p }); };
-  const cancelEdit = () => { setEditingId(null); setEditDraft({}); };
-  const saveEdit = () => {
-    setPolicies(ps => ps.map(p => p.id === editingId ? { ...p, ...editDraft } as Policy : p));
-    setEditingId(null); setEditDraft({});
-  };
-  const remove = (id: string) => setPolicies(ps => ps.filter(p => p.id !== id));
-  const moveUp = (idx: number) => { if (idx === 0) return; const a = [...policies]; [a[idx - 1], a[idx]] = [a[idx], a[idx - 1]]; setPolicies(a); };
-  const moveDown = (idx: number) => { if (idx === policies.length - 1) return; const a = [...policies]; [a[idx], a[idx + 1]] = [a[idx + 1], a[idx]]; setPolicies(a); };
-  const duplicate = (p: Policy) => {
-    const copy = { ...p, id: p.id + "_copy_" + Date.now(), title: p.title + " (Copy)", order: policies.length + 1 };
-    setPolicies(ps => [...ps, copy]);
-  };
-  const addNew = () => {
-    const np: Policy = { id: "policy_" + Date.now(), title: "New Policy", version: "1.0", required: true, order: policies.length + 1, content: "", acceptanceStatement: "I have read and agree to this policy." };
-    setPolicies(ps => [...ps, np]);
-    setEditingId(np.id); setEditDraft({ ...np });
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Policies</h2>
-          <p className="text-sm text-muted-foreground">Manage policies included in the hiring package. Changes apply to the default template.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => setConfirmReset(true)} data-testid="button-restore-defaults"><RotateCcw className="w-4 h-4 mr-1" />Restore Defaults</Button>
-          <Button size="sm" variant="outline" onClick={addNew} data-testid="button-add-policy"><Plus className="w-4 h-4 mr-1" />Add Policy</Button>
-          <Button size="sm" onClick={save} disabled={saving} data-testid="button-save-policies">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}Save Policies
-          </Button>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        {policies.map((policy, idx) => (
-          <div key={policy.id} className="border rounded-lg overflow-hidden">
-            {editingId === policy.id ? (
-              <div className="p-4 space-y-3 bg-blue-50/50">
-                <div className="grid grid-cols-2 gap-3">
-                  <div><Label className="text-xs">Policy Title</Label><Input value={editDraft.title || ""} onChange={e => setEditDraft(d => ({ ...d, title: e.target.value }))} className="mt-1 h-8 text-sm" data-testid="input-policy-title" /></div>
-                  <div><Label className="text-xs">Version</Label><Input value={editDraft.version || ""} onChange={e => setEditDraft(d => ({ ...d, version: e.target.value }))} className="mt-1 h-8 text-sm" /></div>
-                </div>
-                <div><Label className="text-xs">Policy Content</Label><Textarea value={editDraft.content || ""} onChange={e => setEditDraft(d => ({ ...d, content: e.target.value }))} className="mt-1 text-sm min-h-[140px]" data-testid="textarea-policy-content" /></div>
-                <div><Label className="text-xs">Acceptance Statement (button text shown to applicant)</Label><Input value={editDraft.acceptanceStatement || ""} onChange={e => setEditDraft(d => ({ ...d, acceptanceStatement: e.target.value }))} className="mt-1 h-8 text-sm" /></div>
-                <div className="flex items-center gap-2"><Switch checked={!!editDraft.required} onCheckedChange={v => setEditDraft(d => ({ ...d, required: v }))} /><span className="text-sm">Required policy</span></div>
-                <div className="flex gap-2 justify-end">
-                  <Button size="sm" variant="outline" onClick={cancelEdit}>Cancel</Button>
-                  <Button size="sm" onClick={saveEdit} data-testid="button-save-policy-edit">Save</Button>
-                </div>
-              </div>
-            ) : (
-              <div className="p-3 flex items-center justify-between">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex flex-col gap-0.5">
-                    <button onClick={() => moveUp(idx)} disabled={idx === 0} className="p-0.5 hover:bg-gray-100 rounded disabled:opacity-30"><ChevronUp className="w-3 h-3" /></button>
-                    <button onClick={() => moveDown(idx)} disabled={idx === policies.length - 1} className="p-0.5 hover:bg-gray-100 rounded disabled:opacity-30"><ChevronDown className="w-3 h-3" /></button>
-                  </div>
-                  <span className="text-xs font-bold text-gray-400 w-4">{idx + 1}</span>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm truncate">{policy.title}</span>
-                      <span className="text-xs text-muted-foreground">v{policy.version}</span>
-                      {policy.required ? <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">Required</span> : <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Optional</span>}
-                    </div>
-                    <p className="text-xs text-muted-foreground truncate max-w-xs">{policy.acceptanceStatement}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => startEdit(policy)} data-testid={`button-edit-policy-${idx}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                  <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => duplicate(policy)}><FileText className="w-3.5 h-3.5" /></Button>
-                  <Button size="sm" variant="ghost" className="h-7 px-2 text-red-500 hover:text-red-700" onClick={() => remove(policy.id)} data-testid={`button-remove-policy-${idx}`}><X className="w-3.5 h-3.5" /></Button>
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
-        <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Restore Default Policies?</AlertDialogTitle><AlertDialogDescription>This will replace all current policies with the original 7 default policies. Unsaved changes will be lost.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { setPolicies(DEFAULT_POLICIES); setEditingId(null); setConfirmReset(false); }}>Restore</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-  );
-}
-
-// ── Create Package Tab ────────────────────────────────────────────────────────
-function CreatePackageTab() {
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  const [form, setForm] = useState({ employeeName: "", employeeEmail: "", position: "", templateId: "" });
-  const [creating, setCreating] = useState(false);
-  const [created, setCreated] = useState<any>(null);
-
-  const { data: templates = [] } = useQuery<any[]>({ queryKey: ["/api/hiring-package/templates"] });
-  const defaultTemplate = (templates as any[]).find((t: any) => t.isDefault);
-
-  const handleCreate = async () => {
-    if (!form.employeeName.trim() || !form.employeeEmail.trim()) {
-      toast({ title: "Name and email are required", variant: "destructive" }); return;
-    }
-    setCreating(true);
-    try {
-      const pkg: any = await apiRequest("POST", "/api/hiring-package/packages", {
-        employeeName: form.employeeName,
-        employeeEmail: form.employeeEmail,
-        position: form.position,
-        templateId: form.templateId || defaultTemplate?.id || null,
-      });
-      await apiRequest("POST", `/api/hiring-package/packages/${pkg.id}/send`);
-      qc.invalidateQueries({ queryKey: ["/api/hiring-package/packages"] });
-      setCreated(pkg);
-      toast({ title: "Hiring package sent!", description: `Link sent to ${form.employeeEmail}` });
-      setForm({ employeeName: "", employeeEmail: "", position: "", templateId: "" });
-    } catch (e: any) {
-      toast({ title: "Failed to create package", description: e?.message || "Please try again.", variant: "destructive" });
-    } finally { setCreating(false); }
-  };
-
-  const publicLink = created ? `${window.location.origin}/public/hiring-package/${created.publicToken}` : "";
-
-  return (
-    <div className="space-y-5 max-w-xl">
-      <div>
-        <h2 className="text-lg font-semibold">Create Package</h2>
-        <p className="text-sm text-muted-foreground">Create and send a hiring package link to a new applicant.</p>
-      </div>
-
-      {created && (
-        <div className="border border-green-200 bg-green-50 rounded-lg p-4 space-y-2">
-          <div className="flex items-center gap-2 text-green-700 font-medium text-sm"><CheckCircle2 className="w-4 h-4" />Package sent successfully!</div>
-          <div className="flex items-center gap-2">
-            <Input value={publicLink} readOnly className="text-xs h-8 bg-white" data-testid="input-package-link" />
-            <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(publicLink); toast({ title: "Link copied" }); }} data-testid="button-copy-link"><Copy className="w-3.5 h-3.5" /></Button>
-          </div>
-          <Button size="sm" variant="ghost" className="text-green-700" onClick={() => setCreated(null)}>Create another</Button>
-        </div>
-      )}
-
-      <div className="space-y-4">
-        <div>
-          <Label>Applicant Full Name <span className="text-red-500">*</span></Label>
-          <Input className="mt-1" value={form.employeeName} onChange={e => setForm(f => ({ ...f, employeeName: e.target.value }))} placeholder="Jane Smith" data-testid="input-employee-name" />
-        </div>
-        <div>
-          <Label>Applicant Email <span className="text-red-500">*</span></Label>
-          <Input className="mt-1" type="email" value={form.employeeEmail} onChange={e => setForm(f => ({ ...f, employeeEmail: e.target.value }))} placeholder="jane@example.com" data-testid="input-employee-email" />
-        </div>
-        <div>
-          <Label>Position / Job Title</Label>
-          <Input className="mt-1" value={form.position} onChange={e => setForm(f => ({ ...f, position: e.target.value }))} placeholder="e.g. Cleaning Technician" data-testid="input-position" />
-        </div>
-        <div>
-          <Label>Template</Label>
-          <Select value={form.templateId} onValueChange={v => setForm(f => ({ ...f, templateId: v }))}>
-            <SelectTrigger className="mt-1"><SelectValue placeholder={defaultTemplate ? `Default: ${defaultTemplate.name}` : "No templates — create one first"} /></SelectTrigger>
-            <SelectContent>
-              {(templates as any[]).map((t: any) => (
-                <SelectItem key={t.id} value={t.id}>{t.name}{t.isDefault ? " (Default)" : ""}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <Button className="w-full" onClick={handleCreate} disabled={creating || !form.employeeName.trim() || !form.employeeEmail.trim()} data-testid="button-send-package">
-          {creating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}Create & Send Hiring Package
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-// ── Review Modal ──────────────────────────────────────────────────────────────
-function ReviewModal({ pkg, onClose }: { pkg: any; onClose: () => void }) {
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  const [missingDocsMsg, setMissingDocsMsg] = useState("");
-  const [missingDocsOpen, setMissingDocsOpen] = useState(false);
-  const [adminNotes, setAdminNotes] = useState("");
-  const [section, setSection] = useState<"summary" | "policies" | "personal" | "emergency" | "medical" | "documents" | "signature" | "actions">("summary");
-
-  const { data: detail, isLoading } = useQuery<any>({
-    queryKey: ["/api/hiring-package/submissions", pkg.id],
-    queryFn: () => apiRequest("GET", `/api/hiring-package/submissions/${pkg.id}`),
-  });
-
-  useEffect(() => { if (detail?.submission?.adminNotes) setAdminNotes(detail.submission.adminNotes); }, [detail?.submission?.adminNotes]);
-
-  const statusMut = useMutation({
-    mutationFn: (data: any) => apiRequest("PATCH", `/api/hiring-package/submissions/${pkg.id}/status`, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/hiring-package/packages"] }); qc.invalidateQueries({ queryKey: ["/api/hiring-package/submissions", pkg.id] }); toast({ title: "Status updated" }); },
-    onError: () => toast({ title: "Failed to update", variant: "destructive" }),
-  });
-
-  const publicLink = `${window.location.origin}/public/hiring-package/${pkg.publicToken}`;
-  const sub = detail?.submission;
-  const acceptances = detail?.acceptances || [];
-  const docs = detail?.documents || [];
-  const personal = sub?.personalInfoJson as any;
-  const emergency = sub?.emergencyContactsJson as any;
-  const medical = sub?.medicalInfoJson as any;
-
-  const sectionBtn = (id: typeof section, label: string) => (
-    <button onClick={() => setSection(id)} className={`text-left px-3 py-2 text-sm rounded-lg w-full transition-colors ${section === id ? "bg-primary text-white" : "hover:bg-muted"}`}>{label}</button>
-  );
-
-  const downloadDoc = (doc: any) => {
-    const a = document.createElement("a"); a.href = `/api/hiring-package/documents/${doc.id}/download`; a.download = doc.originalName; a.click();
-  };
-
-  return (
-    <Dialog open onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
-          <DialogTitle className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2">{pkg.employeeName} {statusBadge(detail?.package?.status || pkg.status)}</div>
-              <p className="text-sm font-normal text-muted-foreground mt-0.5">{pkg.employeeEmail} · {pkg.position || "No position"}</p>
-            </div>
-            <div className="flex gap-2 mr-6">
-              <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(publicLink); toast({ title: "Link copied" }); }}><Copy className="w-3.5 h-3.5 mr-1" />Copy Link</Button>
-              {sub && <Button size="sm" variant="outline" onClick={() => window.open(`/api/hiring-package/submissions/${pkg.id}/download-pdf`, "_blank")} data-testid="button-download-pdf"><FileDown className="w-3.5 h-3.5 mr-1" />PDF</Button>}
-              {sub && <Button size="sm" variant="outline" onClick={() => window.open(`/api/hiring-package/submissions/${pkg.id}/download-zip`, "_blank")} data-testid="button-download-zip"><Package className="w-3.5 h-3.5 mr-1" />ZIP</Button>}
-            </div>
-          </DialogTitle>
-        </DialogHeader>
-        <div className="flex flex-1 min-h-0 overflow-hidden">
-          <div className="w-44 shrink-0 border-r p-3 space-y-1 overflow-y-auto">
-            {sectionBtn("summary", "Summary")}
-            {sectionBtn("policies", `Policies (${acceptances.length})`)}
-            {sectionBtn("personal", "Personal Info")}
-            {sectionBtn("emergency", "Emergency Contacts")}
-            {sectionBtn("medical", "Medical Info")}
-            {sectionBtn("documents", `Documents (${docs.length})`)}
-            {sectionBtn("signature", "Signature")}
-            {sectionBtn("actions", "Admin Actions")}
-          </div>
-          <div className="flex-1 overflow-y-auto p-5">
-            {isLoading && <div className="space-y-3"><Skeleton className="h-8 w-full" /><Skeleton className="h-24 w-full" /></div>}
-
-            {!isLoading && section === "summary" && (
-              <div className="space-y-4">
-                <h3 className="font-semibold">Application Summary</h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div><span className="text-muted-foreground">Status</span><div className="mt-0.5">{statusBadge(detail?.package?.status || pkg.status)}</div></div>
-                  <div><span className="text-muted-foreground">Sent</span><div className="mt-0.5 font-medium">{fmtDate(pkg.sentAt)}</div></div>
-                  <div><span className="text-muted-foreground">Position</span><div className="mt-0.5 font-medium">{pkg.position || "—"}</div></div>
-                  <div><span className="text-muted-foreground">Submitted</span><div className="mt-0.5 font-medium">{fmtDate(sub?.submittedAt)}</div></div>
-                  <div><span className="text-muted-foreground">Policies Accepted</span><div className="mt-0.5 font-medium">{acceptances.length}</div></div>
-                  <div><span className="text-muted-foreground">Documents Uploaded</span><div className="mt-0.5 font-medium">{docs.length}</div></div>
-                  <div><span className="text-muted-foreground">Signature</span><div className="mt-0.5 font-medium">{sub?.signatureData ? "✓ Signed" : "Not signed"}</div></div>
-                  <div><span className="text-muted-foreground">Final Acknowledgement</span><div className="mt-0.5 font-medium">{sub?.finalAcknowledgement ? "✓ Agreed" : "Not agreed"}</div></div>
-                </div>
-                {sub?.missingDocsMessage && (
-                  <div className="border border-amber-200 bg-amber-50 rounded p-3 text-sm"><span className="font-medium text-amber-700">Missing Documents Request:</span> {sub.missingDocsMessage}</div>
-                )}
-              </div>
-            )}
-
-            {!isLoading && section === "policies" && (
-              <div className="space-y-3">
-                <h3 className="font-semibold">Accepted Policies</h3>
-                {acceptances.length === 0 ? <p className="text-sm text-muted-foreground">No policies accepted yet.</p> : acceptances.map((a: any) => (
-                  <div key={a.id} className="border rounded-lg p-3 text-sm space-y-1">
-                    <div className="flex items-center justify-between"><span className="font-medium">{a.policyTitle}</span><span className="text-xs text-muted-foreground">v{a.policyVersion}</span></div>
-                    <div className="text-xs text-green-600">✓ Accepted {fmtDateTime(a.acceptedAt)}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {!isLoading && section === "personal" && (
-              <div className="space-y-3">
-                <h3 className="font-semibold">Personal Information</h3>
-                {!personal ? <p className="text-sm text-muted-foreground">Not provided yet.</p> : (
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                    {[["Legal First Name", personal.firstName], ["Legal Last Name", personal.lastName], ["Preferred Name", personal.preferredName], ["Email", personal.email], ["Phone", personal.phone], ["Date of Birth", personal.dateOfBirth], ["Home Address", personal.address], ["City", personal.city], ["Province / State", personal.province], ["Postal Code", personal.postalCode], ["Country", personal.country], ["Position", personal.position], ["Expected Start Date", personal.startDate]].map(([k, v]) => v ? (
-                      <div key={k}><span className="text-muted-foreground text-xs">{k}</span><div className="font-medium">{v as string}</div></div>
-                    ) : null)}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {!isLoading && section === "emergency" && (
-              <div className="space-y-4">
-                <h3 className="font-semibold">Emergency Contacts</h3>
-                {!emergency ? <p className="text-sm text-muted-foreground">Not provided yet.</p> : [emergency.contact1, emergency.contact2].filter(Boolean).map((c: any, i: number) => (
-                  <div key={i} className="border rounded-lg p-3 space-y-1 text-sm">
-                    <p className="font-medium text-xs text-muted-foreground uppercase tracking-wide">Contact {i + 1}</p>
-                    <p className="font-medium">{c.name} — {c.relationship}</p>
-                    <p>{c.phone}{c.email ? ` · ${c.email}` : ""}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {!isLoading && section === "medical" && (
-              <div className="space-y-3">
-                <h3 className="font-semibold">Optional Medical Information</h3>
-                {!medical || Object.values(medical).every(v => !v) ? <p className="text-sm text-muted-foreground">No medical information provided.</p> : (
-                  <div className="space-y-2 text-sm">
-                    {[["Allergies", medical.allergies], ["Sensitivities", medical.sensitivities], ["Medical Notes", medical.medicalNotes], ["Medications", medical.medications], ["Emergency Safety Notes", medical.emergencyNotes]].map(([k, v]) => v ? (
-                      <div key={k}><span className="text-xs text-muted-foreground">{k}</span><p className="font-medium">{v as string}</p></div>
-                    ) : null)}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {!isLoading && section === "documents" && (
-              <div className="space-y-3">
-                <h3 className="font-semibold">Uploaded Documents</h3>
-                {docs.length === 0 ? <p className="text-sm text-muted-foreground">No documents uploaded yet.</p> : docs.map((doc: any) => (
-                  <div key={doc.id} className="border rounded-lg p-3 flex items-center justify-between">
-                    <div className="text-sm">
-                      <p className="font-medium">{doc.originalName}</p>
-                      <p className="text-xs text-muted-foreground">{doc.documentType.replace(/_/g, " ")} · {(doc.fileSize / 1024).toFixed(0)} KB · {fmtDate(doc.uploadedAt)}</p>
-                    </div>
-                    <Button size="sm" variant="outline" onClick={() => downloadDoc(doc)} data-testid={`button-download-doc-${doc.id}`}><Download className="w-3.5 h-3.5 mr-1" />Download</Button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {!isLoading && section === "signature" && (
-              <div className="space-y-3">
-                <h3 className="font-semibold">Signature</h3>
-                {!sub?.signatureData ? <p className="text-sm text-muted-foreground">Not signed yet.</p> : (
-                  <div className="space-y-2">
-                    <div className="border rounded-lg p-3 bg-white">
-                      <img src={sub.signatureData} alt="Signature" className="max-h-24 object-contain" />
-                    </div>
-                    <p className="text-xs text-muted-foreground">Signed on {fmtDateTime(sub.signatureUploadedAt)}</p>
-                    <p className="text-xs text-muted-foreground">Final Acknowledgement: {sub.finalAcknowledgement ? "✓ Agreed" : "Not agreed"}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {!isLoading && section === "actions" && (
-              <div className="space-y-4">
-                <h3 className="font-semibold">Admin Actions</h3>
-                <div>
-                  <Label className="text-xs">Admin Notes</Label>
-                  <Textarea value={adminNotes} onChange={e => setAdminNotes(e.target.value)} className="mt-1 text-sm" rows={3} placeholder="Internal notes..." />
-                  <Button size="sm" className="mt-2" onClick={() => statusMut.mutate({ adminNotes })} disabled={statusMut.isPending} data-testid="button-save-notes">Save Notes</Button>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button variant="outline" className="text-green-700 border-green-200 hover:bg-green-50" onClick={() => statusMut.mutate({ reviewStatus: "approved_hired" })} disabled={statusMut.isPending} data-testid="button-approve">✓ Approve / Mark as Hired</Button>
-                  <Button variant="outline" className="text-amber-700 border-amber-200 hover:bg-amber-50" onClick={() => setMissingDocsOpen(true)} disabled={statusMut.isPending} data-testid="button-missing-docs">Request Missing Documents</Button>
-                  <Button variant="outline" className="text-red-700 border-red-200 hover:bg-red-50" onClick={() => statusMut.mutate({ reviewStatus: "not_approved" })} disabled={statusMut.isPending} data-testid="button-not-approved">✗ Not Approved</Button>
-                  <Button variant="outline" className="text-gray-600" onClick={() => statusMut.mutate({ reviewStatus: "archived" })} disabled={statusMut.isPending} data-testid="button-archive">Archive</Button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </DialogContent>
-
-      <Dialog open={missingDocsOpen} onOpenChange={setMissingDocsOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Request Missing Documents</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-2">
-            <Label>Message to Applicant</Label>
-            <Textarea value={missingDocsMsg} onChange={e => setMissingDocsMsg(e.target.value)} placeholder="Please upload the following documents..." rows={4} />
-          </div>
+      {/* ── DELETE CONFIRM ── */}
+      <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+        <DialogContent className="sm:max-w-sm" data-testid="dialog-delete-confirm">
+          <DialogHeader>
+            <DialogTitle>Delete Package</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">This will permanently delete the hiring package and all submission data. This cannot be undone.</p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setMissingDocsOpen(false)}>Cancel</Button>
-            <Button onClick={() => { statusMut.mutate({ reviewStatus: "missing_documents", missingDocsMessage: missingDocsMsg }); setMissingDocsOpen(false); }} disabled={!missingDocsMsg.trim()}>Send Request</Button>
+            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => deleteConfirm && deletePackageMutation.mutate(deleteConfirm)} disabled={deletePackageMutation.isPending} data-testid="btn-confirm-delete">
+              {deletePackageMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Dialog>
-  );
-}
 
-// ── Package List Component ────────────────────────────────────────────────────
-function PackageList({ packages, emptyMsg }: { packages: any[]; emptyMsg: string }) {
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  const [reviewing, setReviewing] = useState<any | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-
-  const deleteMut = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", `/api/hiring-package/packages/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/hiring-package/packages"] }); setDeleteId(null); toast({ title: "Package deleted" }); },
-    onError: () => toast({ title: "Failed to delete", variant: "destructive" }),
-  });
-
-  const resendMut = useMutation({
-    mutationFn: (id: string) => apiRequest("POST", `/api/hiring-package/packages/${id}/send`),
-    onSuccess: () => toast({ title: "Link resent" }),
-    onError: () => toast({ title: "Failed to resend", variant: "destructive" }),
-  });
-
-  if (packages.length === 0) return (
-    <div className="border rounded-lg p-8 text-center text-muted-foreground">
-      <Briefcase className="w-8 h-8 mx-auto mb-2 opacity-40" />
-      <p className="text-sm">{emptyMsg}</p>
-    </div>
-  );
-
-  return (
-    <>
-      <div className="space-y-2">
-        {packages.map((pkg: any) => (
-          <div key={pkg.id} className="border rounded-lg p-4 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <User className="w-5 h-5 text-muted-foreground shrink-0" />
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-medium text-sm">{pkg.employeeName}</span>
-                  {statusBadge(pkg.status)}
+      {/* ── DETAIL DIALOG ── */}
+      <Dialog open={!!detailDialog} onOpenChange={() => setDetailDialog(null)}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="dialog-package-detail">
+          <DialogHeader>
+            <DialogTitle>Package Details</DialogTitle>
+          </DialogHeader>
+          {detailLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : !detail ? (
+            <p className="text-sm text-muted-foreground text-center py-8">Not found</p>
+          ) : (
+            <div className="space-y-5">
+              {/* Package info */}
+              <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
+                <div>
+                  <div className="text-xs text-muted-foreground">Employee</div>
+                  <div className="font-medium">{detail.package.employeeName}</div>
+                  <div className="text-sm text-muted-foreground">{detail.package.employeeEmail}</div>
                 </div>
-                <p className="text-xs text-muted-foreground">{pkg.employeeEmail} {pkg.position ? `· ${pkg.position}` : ""} · Sent {fmtDate(pkg.sentAt || pkg.createdAt)}</p>
+                <div>
+                  <div className="text-xs text-muted-foreground">Position</div>
+                  <div className="font-medium">{detail.package.position || "—"}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Status</div>
+                  <StatusBadge status={effectiveStatus(detail.package)} />
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Sent</div>
+                  <div className="text-sm">{formatDate(detail.package.sentAt)}</div>
+                </div>
               </div>
+
+              {/* Link */}
+              <div className="flex items-center gap-2">
+                <Input readOnly value={getPublicLink(detail.package.publicToken)} className="text-xs font-mono" />
+                <Button variant="outline" size="sm" onClick={() => copyLink(detail.package.publicToken)} data-testid="btn-detail-copy">
+                  <Copy className="w-3.5 h-3.5" />
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => window.open(getPublicLink(detail.package.publicToken), "_blank")} data-testid="btn-detail-open">
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </Button>
+                {effectiveStatus(detail.package) === "draft" && (
+                  <Button size="sm" onClick={() => { sendEmailMutation.mutate(detail.package.id); }} disabled={sendEmailMutation.isPending} data-testid="btn-detail-send-email">
+                    <Send className="w-3.5 h-3.5 mr-1" /> Send Email
+                  </Button>
+                )}
+                {effectiveStatus(detail.package) === "sent" && (
+                  <Button variant="outline" size="sm" onClick={() => { sendEmailMutation.mutate(detail.package.id); }} disabled={sendEmailMutation.isPending} data-testid="btn-detail-resend-email">
+                    <RefreshCw className="w-3.5 h-3.5 mr-1" /> Resend
+                  </Button>
+                )}
+              </div>
+
+              {/* Submission */}
+              {!detail.submission ? (
+                <div className="text-center py-6 text-sm text-muted-foreground border border-dashed border-border rounded-lg">
+                  <AlertCircle className="w-5 h-5 mx-auto mb-2 text-muted-foreground" />
+                  The employee has not started filling out this package yet.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-foreground">Submission</h4>
+                    <StatusBadge status={detail.submission.status} />
+                  </div>
+
+                  {/* Personal Info */}
+                  {detail.submission.personalInfoJson && (
+                    <div className="border border-border rounded-md p-3 space-y-1">
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Personal Information</div>
+                      {Object.entries(detail.submission.personalInfoJson as Record<string, string>).map(([k, v]) => (
+                        <div key={k} className="grid grid-cols-2 text-sm gap-1">
+                          <span className="text-muted-foreground capitalize">{k.replace(/([A-Z])/g, ' $1').trim()}</span>
+                          <span className="text-foreground font-medium">{String(v) || "—"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Emergency Contacts */}
+                  {detail.submission.emergencyContactsJson && Array.isArray(detail.submission.emergencyContactsJson) && (
+                    <div className="border border-border rounded-md p-3 space-y-2">
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Emergency Contacts</div>
+                      {(detail.submission.emergencyContactsJson as any[]).map((c, i) => (
+                        <div key={i} className="text-sm">
+                          <span className="font-medium">{c.name}</span>
+                          {c.relationship && <span className="text-muted-foreground"> — {c.relationship}</span>}
+                          {c.phone && <span className="text-muted-foreground"> · {c.phone}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Policy Acceptances */}
+                  {detail.policyAcceptances.length > 0 && (
+                    <div className="border border-border rounded-md p-3">
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Policy Acceptances</div>
+                      <div className="space-y-1">
+                        {detail.policyAcceptances.map(pa => (
+                          <div key={pa.id} className="flex items-center gap-2 text-sm">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                            <span>{pa.policyTitle}</span>
+                            <span className="text-muted-foreground text-xs ml-auto">{formatDate(pa.acceptedAt)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Documents */}
+                  {detail.documents.length > 0 && (
+                    <div className="border border-border rounded-md p-3">
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Uploaded Documents</div>
+                      <div className="space-y-1">
+                        {detail.documents.map(doc => (
+                          <div key={doc.id} className="flex items-center gap-2 text-sm">
+                            <FileText className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                            <span className="capitalize">{doc.documentType.replace(/_/g, " ")}</span>
+                            <span className="text-muted-foreground text-xs">— {doc.originalName}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Signature */}
+                  {detail.submission.signatureData && (
+                    <div className="border border-border rounded-md p-3">
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Signature</div>
+                      <img src={detail.submission.signatureData} alt="Signature" className="max-h-24 border border-border rounded bg-white" />
+                    </div>
+                  )}
+
+                  {/* Admin actions */}
+                  {detail.submission.status === "submitted" && (
+                    <div className="border border-border rounded-md p-3 space-y-3">
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Review</div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm" variant="outline"
+                          className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                          onClick={() => updateReviewMutation.mutate({ submissionId: detail.submission!.id, data: { reviewStatus: "approved" } })}
+                          disabled={updateReviewMutation.isPending}
+                          data-testid="btn-approve-submission">
+                          <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Approve
+                        </Button>
+                        <Button
+                          size="sm" variant="outline"
+                          className="border-red-400 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          onClick={() => updateReviewMutation.mutate({ submissionId: detail.submission!.id, data: { reviewStatus: "rejected" } })}
+                          disabled={updateReviewMutation.isPending}
+                          data-testid="btn-reject-submission">
+                          <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
+                        </Button>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Admin Notes</Label>
+                        <Textarea
+                          className="mt-1 text-sm"
+                          rows={3}
+                          defaultValue={detail.submission.adminNotes ?? ""}
+                          placeholder="Internal notes..."
+                          onBlur={e => updateReviewMutation.mutate({ submissionId: detail.submission!.id, data: { adminNotes: e.target.value } })}
+                          data-testid="input-admin-notes"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/public/hiring-package/${pkg.publicToken}`); toast({ title: "Link copied" }); }} data-testid={`button-copy-${pkg.id}`}><Copy className="w-3.5 h-3.5" /></Button>
-              <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => resendMut.mutate(pkg.id)} data-testid={`button-resend-${pkg.id}`}><RefreshCw className="w-3.5 h-3.5" /></Button>
-              <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setReviewing(pkg)} data-testid={`button-review-${pkg.id}`}><Eye className="w-3.5 h-3.5 mr-1" />Review</Button>
-              <Button size="sm" variant="ghost" className="h-7 px-2 text-red-500 hover:text-red-700" onClick={() => setDeleteId(pkg.id)} data-testid={`button-delete-${pkg.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
-            </div>
-          </div>
-        ))}
-      </div>
-      {reviewing && <ReviewModal pkg={reviewing} onClose={() => setReviewing(null)} />}
-      <AlertDialog open={!!deleteId} onOpenChange={v => { if (!v) setDeleteId(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Delete Package?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the hiring package and all associated data.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={() => deleteId && deleteMut.mutate(deleteId)}>Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
-  );
-}
-
-// ── Main Export ───────────────────────────────────────────────────────────────
-export default function HiringPackageAdmin() {
-  const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
-  const [activeTab, setActiveTab] = useState(searchParams.get("hptab") || "sent");
-
-  const { data: packages = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/hiring-package/packages"] });
-
-  const sentStatuses = ["draft", "sent", "viewed", "started", "in_progress"];
-  const submittedStatuses = ["submitted", "under_review", "missing_documents"];
-
-  const sentPkgs = (packages as any[]).filter((p: any) => sentStatuses.includes(p.status));
-  const submittedPkgs = (packages as any[]).filter((p: any) => submittedStatuses.includes(p.status));
-  const approvedPkgs = (packages as any[]).filter((p: any) => p.status === "approved_hired");
-  const archivedPkgs = (packages as any[]).filter((p: any) => ["archived", "not_approved"].includes(p.status));
-
-  const tabs = [
-    { id: "templates", label: "Templates", icon: <FileText className="w-4 h-4" /> },
-    { id: "policies", label: "Policies", icon: <Settings className="w-4 h-4" /> },
-    { id: "create", label: "Create Package", icon: <Plus className="w-4 h-4" /> },
-    { id: "sent", label: "Sent Packages", icon: <Send className="w-4 h-4" />, count: sentPkgs.length },
-    { id: "submitted", label: "Submitted Applications", icon: <Users className="w-4 h-4" />, count: submittedPkgs.length },
-    { id: "approved", label: "Approved / Hired", icon: <CheckCircle2 className="w-4 h-4" /> },
-    { id: "archived", label: "Archived", icon: <Archive className="w-4 h-4" /> },
-  ];
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-2">
-        <Briefcase className="w-5 h-5 text-primary" />
-        <div>
-          <h1 className="text-xl font-bold">Hiring Package</h1>
-          <p className="text-sm text-muted-foreground">Manage and send digital hiring packages to applicants.</p>
-        </div>
-      </div>
-
-      <div className="flex gap-1 border-b overflow-x-auto">
-        {tabs.map(t => (
-          <button key={t.id} onClick={() => setActiveTab(t.id)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === t.id ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
-            data-testid={`tab-hp-${t.id}`}>
-            {t.icon}{t.label}
-            {t.count != null && t.count > 0 && <span className="ml-1 bg-primary/10 text-primary text-xs px-1.5 py-0.5 rounded-full font-medium">{t.count}</span>}
-          </button>
-        ))}
-      </div>
-
-      <div>
-        {activeTab === "templates" && <TemplatesTab />}
-        {activeTab === "policies" && <PoliciesTab />}
-        {activeTab === "create" && <CreatePackageTab />}
-        {activeTab === "sent" && (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">Packages sent to applicants who have not yet fully submitted.</p>
-            {isLoading ? <Skeleton className="h-16 w-full" /> : <PackageList packages={sentPkgs} emptyMsg="No packages sent yet. Go to Create Package to send one." />}
-          </div>
-        )}
-        {activeTab === "submitted" && (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              {submittedPkgs.length === 0 ? "No applications submitted yet." : `${submittedPkgs.length} application${submittedPkgs.length === 1 ? "" : "s"} submitted and awaiting review.`}
-            </p>
-            {isLoading ? <Skeleton className="h-16 w-full" /> : <PackageList packages={submittedPkgs} emptyMsg="No applications submitted yet." />}
-          </div>
-        )}
-        {activeTab === "approved" && (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">Applicants who have been approved or marked as hired.</p>
-            {isLoading ? <Skeleton className="h-16 w-full" /> : <PackageList packages={approvedPkgs} emptyMsg="No approved applicants yet." />}
-          </div>
-        )}
-        {activeTab === "archived" && (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">Archived or not approved applications.</p>
-            {isLoading ? <Skeleton className="h-16 w-full" /> : <PackageList packages={archivedPkgs} emptyMsg="No archived applications." />}
-          </div>
-        )}
-      </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

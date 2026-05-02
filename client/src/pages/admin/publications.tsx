@@ -28,9 +28,9 @@ import {
   CheckCircle2, XCircle, X, Clock, MoreHorizontal, Loader2, Edit3,
   LayoutTemplate, AlertCircle, Briefcase,
 } from "lucide-react";
-import HiringPackageAdmin from "@/pages/admin/HiringPackageAdmin";
 import type { Agreement, AgreementTemplate } from "@shared/schema";
 import AdminProposals from "@/pages/admin/proposals";
+import HiringPackageAdmin from "@/pages/admin/HiringPackageAdmin";
 
 
 // ── Publication helpers ───────────────────────────────────────────────────────

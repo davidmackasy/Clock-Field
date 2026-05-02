@@ -1,0 +1,487 @@
+DEV NOTE: Fix Hiring Package Admin Review Not Showing Submitted Data
+Issue:
+The public Hiring Package flow is being completed successfully. The applicant accepts policies, fills personal information, emergency contacts, medical info, uploads documents, signs, and submits. The public link then shows Under Review.
+But inside the admin side, when clicking:
+Hiring Package > Submitted Applications > Review
+the review modal still shows empty or incorrect values:
+Policies accepted: 0
+Documents uploaded: 0
+Signature: Not signed
+Final acknowledgement: Not agreed
+Personal info blank
+Emergency contact blank
+Medical info blank
+No uploaded documents visible
+No signature visible
+This means the public submission data is not being connected, saved, fetched, or mapped correctly into the admin review view.
+Do not rebuild the whole feature.
+Do not remove the current Hiring Package.
+Do not touch authentication.
+Do not touch Stripe.
+Do not touch attendance.
+Do not touch payroll.
+Do not touch schedules.
+Do not touch Forms.
+Do not touch Field Notes.
+Do not touch Agreements.
+Do not touch Proposals.
+Do not touch Publications outside Hiring Package.
+Do not touch global middleware.
+Only fix Hiring Package submission persistence and admin review display.
+
+
+Root Problem To Check
+
+
+The public page shows Under Review, so submit status is being saved somewhere.
+But the admin Review modal is not reading the same submitted data.
+Check for these likely issues:
+Public flow saves data in one table, admin review reads another table.
+Public flow saves under token, admin review fetches by package ID but does not join submission data.
+Public flow stores data in local state or localStorage but not database.
+Public flow saves submitted status only, not the full submission payload.
+Admin review uses stale package data instead of submission data.
+Admin review expects fields under different names than public flow saves.
+Documents are stored in a separate table but admin review is not fetching them.
+Policy acceptances are stored in a separate table but admin review is not fetching them.
+Signature is stored under signatureStorageKey but admin review expects signature_url.
+Final acknowledgement is stored as boolean but admin review expects string or different key.
+Uploaded document keys mismatch.
+
+
+Correct Data Source
+
+
+Admin review must load the full submission record, not only the package record.
+When admin opens Review, fetch a complete payload from one endpoint.
+Suggested endpoint:
+GET /api/hiring-package/submissions/:submissionId/full
+or update existing review endpoint to return full data.
+Response must include:
+package
+submission
+policyAcceptances
+personalInfo
+emergencyContacts
+medicalInfo
+documents
+signature
+finalAcknowledgement
+reviewStatus
+timestamps
+Do not rely on partial package card data for the review modal.
+
+
+Public Submit Must Save Full Data To Backend
+
+
+On final submit, confirm the backend has saved:
+accepted policies
+personal information
+emergency contacts
+medical information
+uploaded documents
+final acknowledgement
+signature
+submitted_at
+status
+review_status
+Final submit endpoint should not only set status to under_review.
+It must either:
+save all latest step data before status update
+or
+verify existing saved data exists before submit.
+Recommended final submit behavior:
+POST /api/public/hiring-package/:token/submit
+Backend should:
+Find package by token
+Find submission by package_id/token
+Validate required policies accepted
+Validate personal info exists
+Validate emergency contacts exist
+Validate required documents exist
+Validate signature exists
+Validate final acknowledgement true
+Set status = submitted
+Set review_status = under_review
+Set submitted_at = now
+Return complete submission summary
+
+
+Ensure One Submission Record Is Used
+
+
+Do not create a new blank submission record when admin opens review.
+Do not create duplicate submissions when public page refreshes.
+Correct logic:
+Public link creates or loads one submission record.
+Every step updates that same submission record.
+Admin review reads that same submission record.
+Use stable keys:
+hiring_package_id
+public_token
+submission_id
+business_id
+
+
+Fix Admin Review Fetch
+
+
+When clicking Review from Sent Packages or Submitted Applications, do this:
+If there is a submission_id, fetch by submission_id.
+If there is only package_id, fetch the latest submission for that package.
+If package is submitted, never show empty draft package data.
+Example logic:
+const reviewData = await fetch(/api/hiring-package/submissions/${submissionId}/full)
+If submissionId is missing:
+fetch(/api/hiring-package/packages/${packageId}/submission)
+The returned data must populate the modal tabs.
+
+
+Fix Summary Counts
+
+
+Summary must calculate from actual fetched data.
+Policies Accepted:
+policyAcceptances.length
+Documents Uploaded:
+documents.length
+Signature:
+signature exists ? Signed : Not signed
+Final Acknowledgement:
+submission.final_acknowledgement === true ? Agreed : Not agreed
+Submitted:
+submission.submitted_at
+Status:
+submission.review_status or submission.status
+Do not use package.status alone for these fields.
+
+
+Fix Policies Tab In Review Modal
+
+
+Policies tab should show accepted policies.
+For each accepted policy show:
+Policy title
+Accepted timestamp
+Policy version
+Accepted status
+View policy snapshot
+If policies were accepted in public flow, they must appear here.
+Check field mapping:
+policy_content_snapshot
+policyTitle
+policy_title
+accepted_at
+acceptedAt
+Standardize or map correctly.
+
+
+Fix Personal Info Tab
+
+
+Personal Info tab should show the submitted personal info.
+Map from:
+submission.personal_info_json
+or equivalent field.
+Show:
+Legal first name
+Legal last name
+Preferred name
+Email
+Phone number
+Home address
+City
+Province / State
+Postal code
+Country
+Position / job title
+Expected start date
+If the public flow stores personalInfo in camelCase, admin must map it.
+Example mapping support:
+personal_info_json.legalFirstName
+personal_info_json.legal_first_name
+Do not leave blank because of casing mismatch.
+
+
+Fix Emergency Contacts Tab
+
+
+Emergency Contacts tab should show:
+Emergency contact 1 name
+Relationship
+Phone
+Email optional
+Emergency contact 2 name
+Relationship
+Phone
+Email optional
+Source:
+submission.emergency_contacts_json
+or equivalent field.
+
+
+Fix Medical Info Tab
+
+
+Medical Info tab should show optional data only if filled.
+Show:
+Allergies
+Sensitivities
+Medical notes
+Medication note
+Emergency safety notes
+If empty, show:
+No optional medical information was provided.
+Do not show blank broken fields.
+
+
+Fix Documents Tab
+
+
+Documents tab must show uploaded files from the submitted package.
+Fetch from the documents table or uploaded_documents_json.
+Required document keys:
+government_id_front
+government_id_back
+resume_cv
+Optional keys:
+work_permit
+certificate_license
+other_supporting_document
+For each document show:
+Document label
+File name
+File size
+Uploaded date
+Preview
+Download
+Preview rules:
+JPG/PNG: image preview
+PDF: PDF preview if supported
+DOC/DOCX: download button only
+If files are stored by storage key, admin download route must generate secure access.
+Do not use raw public storage URLs if the app normally protects files.
+
+
+Fix Signature Tab
+
+
+Signature tab must show the actual drawn signature.
+Check where public flow saves signature:
+signature_storage_key
+signature_url
+signature_data
+signatureBase64
+Admin review must support the saved format.
+If stored as base64:
+Render image from base64.
+If stored as storage key:
+Use secure read/download URL.
+If stored as URL:
+Render image.
+Summary should say Signed if any valid signature exists.
+
+
+Fix Final Acknowledgement
+
+
+Final acknowledgement should show:
+Agreed
+when the public flow checkbox was accepted.
+Check field names:
+final_acknowledgement
+finalAcknowledgement
+agreed
+confirmationAccepted
+Map correctly.
+
+
+Fix Submitted Applications List
+
+
+Submitted Applications should only list real submitted applications.
+Use source:
+submissions where status = submitted OR review_status IN under_review, missing_documents, approved_hired, not_approved
+The list should show:
+Applicant name
+Email
+Phone
+Position
+Submitted date
+Application status
+Policies accepted count
+Documents uploaded count
+Signature status
+Review button
+If the application is under review, it should not still show as Draft in the review modal.
+
+
+Fix Sent Packages List
+
+
+Sent Packages should show packages that are sent but not submitted.
+If an applicant submitted, move it out of Sent Packages and into Submitted Applications.
+Sent Packages status can show:
+sent
+viewed
+started
+in_progress
+Submitted Applications status can show:
+submitted
+under_review
+missing_documents
+approved_hired
+not_approved
+
+
+Fix Status Mapping
+
+
+The public link shows Under Review.
+Admin modal should show:
+Status: Under Review
+Submitted: actual submitted date
+Signature: Signed
+Final Acknowledgement: Agreed
+Do not show Draft if public status is Under Review.
+Use review_status as the admin-facing status when available.
+
+
+Backend Full Review Payload Example
+
+
+Admin review endpoint should return something like:
+{
+"success": true,
+"package": {
+"id": "...",
+"employeeName": "David",
+"employeeEmail": "davidmackasy@yahoo.com",
+"position": "leaner",
+"status": "submitted"
+},
+"submission": {
+"id": "...",
+"status": "submitted",
+"reviewStatus": "under_review",
+"submittedAt": "...",
+"currentStep": "status",
+"finalAcknowledgement": true,
+"personalInfo": {},
+"emergencyContacts": {},
+"medicalInfo": {},
+"signature": {}
+},
+"policyAcceptances": [],
+"documents": []
+}
+Replace empty arrays with actual database data.
+
+
+Do Not Lose Existing Submitted Data
+
+
+Before changing schema or mappings, inspect current saved data.
+Check database tables for this package/token:
+hiring_packages
+hiring_package_submissions
+hiring_package_policy_acceptances
+hiring_package_documents
+Find where the data currently exists.
+Do not delete records.
+Do not wipe existing submissions.
+Do not reset the current test package.
+If data exists under a different field name, map it correctly.
+If data only exists in localStorage, fix the public save endpoints so future submissions persist to backend.
+
+
+Add Admin Review Empty States
+
+
+If a section has no data, show a proper message.
+Examples:
+No accepted policies found for this submission.
+No documents uploaded for this submission.
+No signature found for this submission.
+But only show these if the backend truly has no data.
+Do not show 0 because the frontend failed to fetch or map data.
+
+
+Add Debug Logs During Fix
+
+
+Temporary backend logs only for Hiring Package review endpoints:
+Review opened for packageId/submissionId
+Submission found yes/no
+Policy acceptances count
+Documents count
+Personal info exists yes/no
+Emergency contacts exists yes/no
+Medical info exists yes/no
+Signature exists yes/no
+Final acknowledgement value
+Temporary frontend logs only for review modal:
+Review payload
+Mapped policies count
+Mapped documents count
+Mapped signature status
+Remove or hide logs after testing.
+
+
+Testing Requirements
+
+
+Test before marking complete.
+Test 1:
+Open public hiring package.
+Accept all policies.
+Submit completed package.
+Public link shows Under Review.
+Test 2:
+Open admin > Hiring Package > Submitted Applications.
+Confirm applicant appears there, not only in Sent Packages.
+Test 3:
+Click Review.
+Summary shows:
+Status: Under Review
+Submitted: real date/time
+Policies Accepted: correct count
+Documents Uploaded: correct count
+Signature: Signed
+Final Acknowledgement: Agreed
+Test 4:
+Policies tab shows each accepted policy with timestamp.
+Test 5:
+Personal Info tab shows submitted personal info.
+Test 6:
+Emergency Contacts tab shows submitted contacts.
+Test 7:
+Medical Info tab shows submitted optional medical info, or proper empty message if none was provided.
+Test 8:
+Documents tab shows uploaded ID front, ID back, and resume.
+Test 9:
+Preview/download each document.
+Test 10:
+Signature tab shows actual drawn signature image.
+Test 11:
+Refresh admin page and open review again.
+All submitted data still appears.
+
+
+Final Expected Result
+
+
+When an applicant submits the public Hiring Package, the admin review section must show everything submitted:
+accepted policies
+policy timestamps
+personal information
+emergency contacts
+optional medical information
+uploaded documents
+actual signature
+final acknowledgement
+under review status
+submitted date
+The applicant should not show as Draft after submission.
+Do not break or affect anything else.

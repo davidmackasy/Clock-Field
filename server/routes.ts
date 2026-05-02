@@ -9521,437 +9521,359 @@ Return ONLY valid JSON:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  // ── Hiring Package (Publications) ─────────────────────────────────────────
-  const hpUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
+  // ── Hiring Package (Publications tab) ─────────────────────────────────────
+  const hpUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
   const hpNow = () => new Date().toISOString();
-  const hpMakeSub = async (pkg: any) => {
-    const now = hpNow();
-    return storage.createHPSubmission({ companyId: pkg.companyId, packageId: pkg.id, publicToken: pkg.publicToken, status: "started", createdAt: now, updatedAt: now });
+
+  // Ensure company has a default template, create one if not
+  const ensureHPTemplate = async (companyId: string) => {
+    let tpl = await storage.getHPDefaultTemplate(companyId);
+    if (!tpl) {
+      tpl = await storage.createHPTemplate({
+        companyId,
+        name: "Default Template",
+        policies: [],
+        bootReimbursementAmount: "60.00",
+        requireDateOfBirth: false,
+        isDefault: true,
+        createdAt: hpNow(),
+        updatedAt: hpNow(),
+      } as any);
+    }
+    return tpl;
   };
 
-  // Templates
-  app.get("/api/hiring-package/templates", requireAuth, requireRole("admin"), async (req: any, res) => {
+  // GET /api/hiring-package/template — get or create default template
+  app.get("/api/hiring-package/template", requireAuth, requireRole("admin"), async (req: any, res) => {
     try {
-      const rows = await storage.getHPTemplatesByCompany(req.user.companyId);
-      res.json(rows);
+      const companyId = req.user.companyId;
+      const tpl = await ensureHPTemplate(companyId);
+      res.json(tpl);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.post("/api/hiring-package/templates", requireAuth, requireRole("admin"), async (req: any, res) => {
+  // PATCH /api/hiring-package/template/:id
+  app.patch("/api/hiring-package/template/:id", requireAuth, requireRole("admin"), async (req: any, res) => {
     try {
-      const companyId = req.user.companyId;
-      const { name, policies, isDefault } = req.body;
-      if (!name) return res.status(400).json({ message: "name is required" });
-      if (isDefault) {
-        const existing = await storage.getHPTemplatesByCompany(companyId);
-        for (const t of existing) if (t.isDefault) await storage.updateHPTemplate(t.id, { isDefault: false, updatedAt: hpNow() });
-      }
-      const now = hpNow();
-      const row = await storage.createHPTemplate({ companyId, name, policies: policies || [], isDefault: !!isDefault, createdAt: now, updatedAt: now });
-      res.json(row);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.patch("/api/hiring-package/templates/:id", requireAuth, requireRole("admin"), async (req: any, res) => {
-    try {
-      const companyId = req.user.companyId;
       const { id } = req.params;
-      const { isDefault } = req.body;
-      if (isDefault) {
-        const existing = await storage.getHPTemplatesByCompany(companyId);
-        for (const t of existing) if (t.isDefault && t.id !== id) await storage.updateHPTemplate(t.id, { isDefault: false, updatedAt: hpNow() });
-      }
-      const row = await storage.updateHPTemplate(id, { ...req.body, updatedAt: hpNow() });
-      if (!row) return res.status(404).json({ message: "Not found" });
-      res.json(row);
+      const existing = await storage.getHPTemplate(id);
+      if (!existing || existing.companyId !== req.user.companyId) return res.status(404).json({ message: "Not found" });
+      const updated = await storage.updateHPTemplate(id, { ...req.body, updatedAt: hpNow() });
+      res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.delete("/api/hiring-package/templates/:id", requireAuth, requireRole("admin"), async (req, res) => {
-    try {
-      await storage.deleteHPTemplate(req.params.id);
-      res.json({ ok: true });
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  // Packages
+  // GET /api/hiring-package/packages
   app.get("/api/hiring-package/packages", requireAuth, requireRole("admin"), async (req: any, res) => {
     try {
-      const companyId = req.user.companyId;
-      const pkgs = await storage.getHPPackagesByCompany(companyId);
-      const subs = await storage.getHPSubmissionsByCompany(companyId);
-      // Build a map: packageId -> newest submission (subs is ordered desc createdAt)
-      const subByPkg = new Map<string, any>();
-      for (const s of subs) { if (!subByPkg.has(s.packageId)) subByPkg.set(s.packageId, s); }
-      // If a submission has advanced status but the package row is still at a basic status,
-      // surface the submission's status so tab filtering works correctly.
-      const BASIC = new Set(["draft", "sent", "viewed", "started", "in_progress"]);
-      const result = pkgs.map((pkg: any) => {
-        const sub = subByPkg.get(pkg.id);
-        const effectiveStatus = (sub && !BASIC.has(sub.status) && BASIC.has(pkg.status))
-          ? sub.status : pkg.status;
-        return { ...pkg, status: effectiveStatus };
-      });
-      res.json(result);
+      const pkgs = await storage.getHPPackagesByCompany(req.user.companyId);
+      res.json(pkgs);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // POST /api/hiring-package/packages — create package
   app.post("/api/hiring-package/packages", requireAuth, requireRole("admin"), async (req: any, res) => {
     try {
-      const companyId = req.user.companyId;
-      const { employeeName, employeeEmail, position, templateId } = req.body;
-      if (!employeeName || !employeeEmail) return res.status(400).json({ message: "employeeName and employeeEmail required" });
-      const publicToken = randomBytes(32).toString("hex");
-      let resolvedTemplateId = templateId || null;
-      if (!resolvedTemplateId) {
-        const tmpl = await storage.getHPDefaultTemplate(companyId);
-        if (tmpl) resolvedTemplateId = tmpl.id;
-      }
+      const { employeeName, employeeEmail, position } = req.body;
+      if (!employeeName || !employeeEmail) return res.status(400).json({ message: "employeeName and employeeEmail are required" });
+      const tpl = await ensureHPTemplate(req.user.companyId);
+      const token = randomBytes(32).toString("hex");
       const now = hpNow();
-      const row = await storage.createHPPackage({
-        companyId, employeeName, employeeEmail, position: position || "",
-        templateId: resolvedTemplateId, publicToken, status: "draft", createdAt: now, updatedAt: now,
-      });
-      res.json(row);
+      const pkg = await storage.createHPPackage({
+        companyId: req.user.companyId,
+        templateId: tpl.id,
+        employeeName,
+        employeeEmail,
+        position: position ?? "",
+        publicToken: token,
+        status: "draft",
+        sentAt: null,
+        expiresAt: null,
+        createdBy: req.user.id,
+        createdAt: now,
+        updatedAt: now,
+      } as any);
+      res.status(201).json(pkg);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // POST /api/hiring-package/packages/:id/send — send email
   app.post("/api/hiring-package/packages/:id/send", requireAuth, requireRole("admin"), async (req: any, res) => {
     try {
       const pkg = await storage.getHPPackage(req.params.id);
-      if (!pkg) return res.status(404).json({ message: "Not found" });
+      if (!pkg || pkg.companyId !== req.user.companyId) return res.status(404).json({ message: "Not found" });
       const company = await storage.getCompany(req.user.companyId);
-      const companyName = company?.name || "Your Employer";
       const publicLink = `${req.protocol}://${req.get("host")}/public/hiring-package/${pkg.publicToken}`;
-      await sendHiringPackageEmail({ to: pkg.employeeEmail, employeeName: pkg.employeeName, companyName, publicLink });
+      await sendHiringPackageEmail({
+        to: pkg.employeeEmail,
+        employeeName: pkg.employeeName,
+        companyName: company?.name ?? "Your Employer",
+        publicLink,
+      });
       const updated = await storage.updateHPPackage(pkg.id, { status: "sent", sentAt: hpNow(), updatedAt: hpNow() });
       res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.delete("/api/hiring-package/packages/:id", requireAuth, requireRole("admin"), async (req, res) => {
+  // DELETE /api/hiring-package/packages/:id
+  app.delete("/api/hiring-package/packages/:id", requireAuth, requireRole("admin"), async (req: any, res) => {
     try {
-      await storage.deleteHPPackage(req.params.id);
+      const pkg = await storage.getHPPackage(req.params.id);
+      if (!pkg || pkg.companyId !== req.user.companyId) return res.status(404).json({ message: "Not found" });
+      // delete submission if any
+      const sub = await storage.getHPSubmissionByPackage(pkg.id);
+      if (sub) {
+        // delete documents
+        const docs = await storage.getHPDocuments(sub.id);
+        for (const doc of docs) {
+          await storage.deleteHPDocument(sub.id, doc.documentType);
+        }
+      }
+      await storage.deleteHPPackage(pkg.id);
       res.json({ ok: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  // Submissions (admin view)
+  // GET /api/hiring-package/submissions
   app.get("/api/hiring-package/submissions", requireAuth, requireRole("admin"), async (req: any, res) => {
     try {
-      const rows = await storage.getHPSubmissionsByCompany(req.user.companyId);
-      res.json(rows);
+      const subs = await storage.getHPSubmissionsByCompany(req.user.companyId);
+      res.json(subs);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // GET /api/hiring-package/submissions/:id
   app.get("/api/hiring-package/submissions/:id", requireAuth, requireRole("admin"), async (req: any, res) => {
     try {
-      const pkg = await storage.getHPPackage(req.params.id);
-      if (!pkg) return res.status(404).json({ message: "Not found" });
-      const sub = await storage.getHPSubmissionByPackage(req.params.id);
-      const acceptances = sub ? await storage.getHPPolicyAcceptances(sub.id) : [];
-      const documents = sub ? (await storage.getHPDocuments(sub.id)).map((d: any) => { const { fileData: _f, ...rest } = d; return rest; }) : [];
-      res.json({ package: pkg, submission: sub || null, acceptances, documents });
+      const sub = await storage.getHPSubmission(req.params.id);
+      if (!sub || sub.companyId !== req.user.companyId) return res.status(404).json({ message: "Not found" });
+      const policyAcceptances = await storage.getHPPolicyAcceptances(sub.id);
+      const documents = await storage.getHPDocuments(sub.id);
+      res.json({ submission: sub, policyAcceptances, documents });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.patch("/api/hiring-package/submissions/:id/status", requireAuth, requireRole("admin"), async (req: any, res) => {
+  // PATCH /api/hiring-package/submissions/:id — admin review
+  app.patch("/api/hiring-package/submissions/:id", requireAuth, requireRole("admin"), async (req: any, res) => {
+    try {
+      const sub = await storage.getHPSubmission(req.params.id);
+      if (!sub || sub.companyId !== req.user.companyId) return res.status(404).json({ message: "Not found" });
+      const allowed = ["reviewStatus", "adminNotes", "missingDocsMessage", "requestedMissingDocs"];
+      const data: any = { updatedAt: hpNow() };
+      for (const k of allowed) { if (req.body[k] !== undefined) data[k] = req.body[k]; }
+      const updated = await storage.updateHPSubmission(sub.id, data);
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // GET /api/hiring-package/packages/:id/detail — package + submission + template
+  app.get("/api/hiring-package/packages/:id/detail", requireAuth, requireRole("admin"), async (req: any, res) => {
     try {
       const pkg = await storage.getHPPackage(req.params.id);
-      if (!pkg) return res.status(404).json({ message: "Not found" });
-      const { reviewStatus, missingDocsMessage, adminNotes } = req.body;
-      if (reviewStatus) await storage.updateHPPackage(pkg.id, { status: reviewStatus, updatedAt: hpNow() });
+      if (!pkg || pkg.companyId !== req.user.companyId) return res.status(404).json({ message: "Not found" });
       const sub = await storage.getHPSubmissionByPackage(pkg.id);
-      if (sub) {
-        const subUpdate: any = { updatedAt: hpNow() };
-        if (reviewStatus) subUpdate.status = reviewStatus;
-        if (missingDocsMessage !== undefined) subUpdate.missingDocsMessage = missingDocsMessage;
-        if (adminNotes !== undefined) subUpdate.adminNotes = adminNotes;
-        await storage.updateHPSubmission(sub.id, subUpdate);
-      }
-      const updatedPkg = await storage.getHPPackage(pkg.id);
-      const updatedSub = await storage.getHPSubmissionByPackage(pkg.id);
-      const acceptances = updatedSub ? await storage.getHPPolicyAcceptances(updatedSub.id) : [];
-      const documents = updatedSub ? (await storage.getHPDocuments(updatedSub.id)).map((d: any) => { const { fileData: _f, ...rest } = d; return rest; }) : [];
-      res.json({ package: updatedPkg, submission: updatedSub || null, acceptances, documents });
+      const tpl = await storage.getHPTemplate(pkg.templateId);
+      const policyAcceptances = sub ? await storage.getHPPolicyAcceptances(sub.id) : [];
+      const documents = sub ? await storage.getHPDocuments(sub.id) : [];
+      res.json({ package: pkg, submission: sub ?? null, template: tpl ?? null, policyAcceptances, documents });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  // Document download (admin)
-  app.get("/api/hiring-package/documents/:id/download", requireAuth, requireRole("admin"), async (req, res) => {
-    try {
-      const doc = await storage.getHPDocument(req.params.id);
-      if (!doc) return res.status(404).json({ message: "Not found" });
-      const buf = Buffer.from((doc as any).fileData as string, "base64");
-      res.setHeader("Content-Type", doc.mimeType || "application/octet-stream");
-      res.setHeader("Content-Disposition", `attachment; filename="${doc.originalName}"`);
-      res.send(buf);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
+  // ── Public HP routes (no auth) ──────────────────────────────────────────────
 
-  // PDF download (admin)
-  app.get("/api/hiring-package/submissions/:id/download-pdf", requireAuth, requireRole("admin"), async (req: any, res) => {
-    try {
-      const pkg = await storage.getHPPackage(req.params.id);
-      if (!pkg) return res.status(404).json({ message: "Not found" });
-      const sub = await storage.getHPSubmissionByPackage(req.params.id);
-      const acceptances = sub ? await storage.getHPPolicyAcceptances(sub.id) : [];
-      const PDFDocument = (await import("pdfkit")).default;
-      const doc = new PDFDocument({ margin: 50 });
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="hiring-package-${pkg.employeeName.replace(/\s+/g, "-")}.pdf"`);
-      doc.pipe(res);
-      doc.fontSize(20).text("Hiring Package", { align: "center" });
-      doc.moveDown();
-      doc.fontSize(13).text(`Applicant: ${pkg.employeeName}`);
-      doc.text(`Email: ${pkg.employeeEmail}`);
-      if (pkg.position) doc.text(`Position: ${pkg.position}`);
-      doc.text(`Status: ${pkg.status}`);
-      doc.moveDown();
-      if (acceptances.length > 0) {
-        doc.fontSize(15).text("Accepted Policies");
-        doc.moveDown(0.5);
-        for (const a of acceptances) doc.fontSize(11).text(`• ${a.policyTitle} (v${a.policyVersion}) — accepted ${new Date(a.acceptedAt!).toLocaleDateString()}`);
-        doc.moveDown();
-      }
-      if (sub?.personalInfoJson) {
-        const pi = sub.personalInfoJson as any;
-        doc.fontSize(15).text("Personal Information").moveDown(0.5);
-        doc.fontSize(11).text(`Name: ${pi.firstName} ${pi.lastName}`);
-        if (pi.email) doc.text(`Email: ${pi.email}`);
-        if (pi.phone) doc.text(`Phone: ${pi.phone}`);
-        if (pi.address) doc.text(`Address: ${pi.address}, ${pi.city}, ${pi.province} ${pi.postalCode}`);
-        doc.moveDown();
-      }
-      if (sub?.emergencyContactsJson) {
-        const ec = sub.emergencyContactsJson as any;
-        doc.fontSize(15).text("Emergency Contacts").moveDown(0.5);
-        if (ec.contact1) doc.fontSize(11).text(`Contact 1: ${ec.contact1.name} (${ec.contact1.relationship}) — ${ec.contact1.phone}`);
-        if (ec.contact2) doc.fontSize(11).text(`Contact 2: ${ec.contact2.name} (${ec.contact2.relationship}) — ${ec.contact2.phone}`);
-        doc.moveDown();
-      }
-      if (sub?.signatureData) {
-        doc.fontSize(15).text("Signature").moveDown(0.5);
-        const b64 = (sub.signatureData as string).replace(/^data:image\/\w+;base64,/, "");
-        try { doc.image(Buffer.from(b64, "base64"), { width: 200 }); } catch {}
-        if (sub.finalAcknowledgement) doc.fontSize(10).moveDown(0.5).text("Final Acknowledgement: Agreed");
-        doc.moveDown();
-      }
-      doc.end();
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  // ZIP download (admin)
-  app.get("/api/hiring-package/submissions/:id/download-zip", requireAuth, requireRole("admin"), async (req: any, res) => {
-    try {
-      const pkg = await storage.getHPPackage(req.params.id);
-      if (!pkg) return res.status(404).json({ message: "Not found" });
-      const sub = await storage.getHPSubmissionByPackage(req.params.id);
-      const docs = sub ? await storage.getHPDocuments(sub.id) : [];
-      const archiver = (await import("archiver")).default;
-      res.setHeader("Content-Type", "application/zip");
-      res.setHeader("Content-Disposition", `attachment; filename="hiring-package-${pkg.employeeName.replace(/\s+/g, "-")}.zip"`);
-      const archive = archiver("zip", { zlib: { level: 9 } });
-      archive.pipe(res);
-      for (const doc of docs) {
-        const buf = Buffer.from((doc as any).fileData as string, "base64");
-        archive.append(buf, { name: `${doc.documentType}/${doc.originalName}` });
-      }
-      if (sub?.signatureData) {
-        const b64 = (sub.signatureData as string).replace(/^data:image\/\w+;base64,/, "");
-        archive.append(Buffer.from(b64, "base64"), { name: "signature.png" });
-      }
-      archive.finalize();
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  // ── Public Hiring Package routes ──────────────────────────────────────────
+  // GET /api/public/hiring-package/:token
   app.get("/api/public/hiring-package/:token", async (req, res) => {
     try {
       const pkg = await storage.getHPPackageByToken(req.params.token);
-      if (!pkg) return res.status(404).json({ message: "Invalid or expired link" });
-      const [company, tmpl] = await Promise.all([
-        storage.getCompany(pkg.companyId),
-        pkg.templateId ? storage.getHPTemplate(pkg.templateId) : storage.getHPDefaultTemplate(pkg.companyId),
-      ]);
+      if (!pkg) return res.status(404).json({ message: "Package not found" });
+      const tpl = await storage.getHPTemplate(pkg.templateId);
       let sub = await storage.getHPSubmissionByPackage(pkg.id);
       if (!sub) {
-        sub = await hpMakeSub(pkg);
-        if (pkg.status === "sent") await storage.updateHPPackage(pkg.id, { status: "started", updatedAt: hpNow() });
-      } else if (pkg.status === "sent") {
-        await storage.updateHPPackage(pkg.id, { status: "viewed", updatedAt: hpNow() });
-      }
-      const acceptances = await storage.getHPPolicyAcceptances(sub.id);
-      const documents = (await storage.getHPDocuments(sub.id)).map((d: any) => { const { fileData: _f, ...rest } = d; return rest; });
-      const { signatureData: _s, ...subSafe } = sub as any;
-      const policies = (tmpl?.policies as any[]) || [];
-      res.json({ package: pkg, submission: subSafe, acceptances, documents, companyName: company?.name || "Your Employer", template: { policies } });
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.post("/api/public/hiring-package/:token/accept-policy", async (req, res) => {
-    try {
-      const pkg = await storage.getHPPackageByToken(req.params.token);
-      if (!pkg) return res.status(404).json({ message: "Invalid link" });
-      let sub = await storage.getHPSubmissionByPackage(pkg.id);
-      if (!sub) sub = await hpMakeSub(pkg);
-      const { policyId, policyTitle, policyVersion, policyContentSnapshot } = req.body;
-      const existing = await storage.getHPPolicyAcceptances(sub.id);
-      if (!existing.find((a: any) => a.policyId === policyId)) {
+        // auto-create submission on first visit
         const now = hpNow();
-        await storage.createHPPolicyAcceptance({
-          companyId: pkg.companyId, submissionId: sub.id, policyId,
-          policyTitle, policyVersion: policyVersion || "1.0",
-          policyContentSnapshot: policyContentSnapshot || "",
-          acceptedAt: now, createdAt: now,
-        });
+        sub = await storage.createHPSubmission({
+          companyId: pkg.companyId,
+          packageId: pkg.id,
+          publicToken: pkg.publicToken,
+          currentStep: 1,
+          status: "started",
+          createdAt: now,
+          updatedAt: now,
+        } as any);
+        // mark package as started
+        if (pkg.status === "sent" || pkg.status === "draft") {
+          await storage.updateHPPackage(pkg.id, { status: "sent", updatedAt: now });
+        }
       }
-      await storage.updateHPPackage(pkg.id, { status: "in_progress", updatedAt: hpNow() });
-      await storage.updateHPSubmission(sub.id, { status: "in_progress", updatedAt: hpNow() });
-      res.json({ ok: true });
+      const policyAcceptances = await storage.getHPPolicyAcceptances(sub.id);
+      const documents = await storage.getHPDocuments(sub.id);
+      const company = await storage.getCompany(pkg.companyId);
+      const safeDocuments = documents.map(d => ({
+        id: d.id, documentType: d.documentType, originalName: d.originalName,
+        fileSize: d.fileSize, uploadedAt: d.uploadedAt,
+      }));
+      res.json({
+        package: { id: pkg.id, employeeName: pkg.employeeName, employeeEmail: pkg.employeeEmail, position: pkg.position, status: pkg.status, sentAt: pkg.sentAt },
+        submission: { id: sub.id, currentStep: sub.currentStep, status: sub.status, personalInfoJson: sub.personalInfoJson, emergencyContactsJson: sub.emergencyContactsJson, medicalInfoJson: sub.medicalInfoJson, finalAcknowledgement: sub.finalAcknowledgement, signatureData: sub.signatureData, submittedAt: sub.submittedAt, lastSavedAt: sub.lastSavedAt, requestedMissingDocs: sub.requestedMissingDocs },
+        template: tpl ? { id: tpl.id, name: tpl.name, policies: tpl.policies, bootReimbursementAmount: tpl.bootReimbursementAmount, requireDateOfBirth: tpl.requireDateOfBirth } : null,
+        policyAcceptances,
+        documents: safeDocuments,
+        companyName: company?.name ?? "Your Employer",
+      });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.post("/api/public/hiring-package/:token/save-progress", async (req, res) => {
+  // PATCH /api/public/hiring-package/:token/personal-info
+  app.patch("/api/public/hiring-package/:token/personal-info", async (req, res) => {
     try {
       const pkg = await storage.getHPPackageByToken(req.params.token);
-      if (!pkg) return res.status(404).json({ message: "Invalid link" });
-      let sub = await storage.getHPSubmissionByPackage(pkg.id);
-      if (!sub) sub = await hpMakeSub(pkg);
-      const { step, personalInfo, emergencyContacts, medicalInfo } = req.body;
-      const update: any = { status: "in_progress", updatedAt: hpNow() };
-      if (step === "personal_info" && personalInfo) update.personalInfoJson = personalInfo;
-      if (step === "emergency_contacts" && emergencyContacts !== undefined) update.emergencyContactsJson = emergencyContacts;
-      if (step === "medical_info") update.medicalInfoJson = medicalInfo !== undefined ? medicalInfo : null;
-      await storage.updateHPSubmission(sub.id, update);
-      await storage.updateHPPackage(pkg.id, { status: "in_progress", updatedAt: hpNow() });
-      res.json({ ok: true });
+      if (!pkg) return res.status(404).json({ message: "Not found" });
+      const sub = await storage.getHPSubmissionByPackage(pkg.id);
+      if (!sub) return res.status(404).json({ message: "Submission not found" });
+      if (sub.status === "submitted") return res.status(400).json({ message: "Already submitted" });
+      const now = hpNow();
+      const updated = await storage.updateHPSubmission(sub.id, { personalInfoJson: req.body.personalInfoJson, currentStep: Math.max(sub.currentStep ?? 1, 2), lastSavedAt: now, updatedAt: now });
+      res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.post("/api/public/hiring-package/:token/upload-document", hpUpload.single("file"), async (req: any, res) => {
+  // PATCH /api/public/hiring-package/:token/emergency-contacts
+  app.patch("/api/public/hiring-package/:token/emergency-contacts", async (req, res) => {
     try {
       const pkg = await storage.getHPPackageByToken(req.params.token);
-      if (!pkg) return res.status(404).json({ message: "Invalid link" });
-      if (!req.file) return res.status(400).json({ message: "No file provided" });
-      let sub = await storage.getHPSubmissionByPackage(pkg.id);
-      if (!sub) sub = await hpMakeSub(pkg);
+      if (!pkg) return res.status(404).json({ message: "Not found" });
+      const sub = await storage.getHPSubmissionByPackage(pkg.id);
+      if (!sub) return res.status(404).json({ message: "Submission not found" });
+      if (sub.status === "submitted") return res.status(400).json({ message: "Already submitted" });
+      const now = hpNow();
+      const updated = await storage.updateHPSubmission(sub.id, { emergencyContactsJson: req.body.emergencyContactsJson, currentStep: Math.max(sub.currentStep ?? 1, 3), lastSavedAt: now, updatedAt: now });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // PATCH /api/public/hiring-package/:token/medical-info
+  app.patch("/api/public/hiring-package/:token/medical-info", async (req, res) => {
+    try {
+      const pkg = await storage.getHPPackageByToken(req.params.token);
+      if (!pkg) return res.status(404).json({ message: "Not found" });
+      const sub = await storage.getHPSubmissionByPackage(pkg.id);
+      if (!sub) return res.status(404).json({ message: "Submission not found" });
+      if (sub.status === "submitted") return res.status(400).json({ message: "Already submitted" });
+      const now = hpNow();
+      const updated = await storage.updateHPSubmission(sub.id, { medicalInfoJson: req.body.medicalInfoJson, currentStep: Math.max(sub.currentStep ?? 1, 4), lastSavedAt: now, updatedAt: now });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/public/hiring-package/:token/policy-accept
+  app.post("/api/public/hiring-package/:token/policy-accept", async (req, res) => {
+    try {
+      const pkg = await storage.getHPPackageByToken(req.params.token);
+      if (!pkg) return res.status(404).json({ message: "Not found" });
+      const sub = await storage.getHPSubmissionByPackage(pkg.id);
+      if (!sub) return res.status(404).json({ message: "Submission not found" });
+      if (sub.status === "submitted") return res.status(400).json({ message: "Already submitted" });
+      const { policyId, policyTitle, policyContentSnapshot } = req.body;
+      const now = hpNow();
+      const acceptance = await storage.createHPPolicyAcceptance({
+        companyId: pkg.companyId,
+        submissionId: sub.id,
+        policyId,
+        policyTitle,
+        policyVersion: "1.0",
+        policyContentSnapshot,
+        acceptedAt: now,
+        ipAddress: req.ip ?? "",
+        userAgent: req.headers["user-agent"] ?? "",
+        createdAt: now,
+      } as any);
+      await storage.updateHPSubmission(sub.id, { currentStep: Math.max(sub.currentStep ?? 1, 5), lastSavedAt: now, updatedAt: now });
+      res.json(acceptance);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/public/hiring-package/:token/documents — file upload
+  app.post("/api/public/hiring-package/:token/documents", hpUpload.single("file"), async (req, res) => {
+    try {
+      const pkg = await storage.getHPPackageByToken(req.params.token);
+      if (!pkg) return res.status(404).json({ message: "Not found" });
+      const sub = await storage.getHPSubmissionByPackage(pkg.id);
+      if (!sub) return res.status(404).json({ message: "Submission not found" });
+      if (sub.status === "submitted") return res.status(400).json({ message: "Already submitted" });
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
       const { documentType } = req.body;
       if (!documentType) return res.status(400).json({ message: "documentType required" });
       const now = hpNow();
       const fileData = req.file.buffer.toString("base64");
-      const safeFileName = req.file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, "_");
       const doc = await storage.upsertHPDocument(sub.id, documentType, {
-        companyId: pkg.companyId, submissionId: sub.id, documentType,
-        originalName: req.file.originalname, fileName: safeFileName,
-        mimeType: req.file.mimetype, fileSize: req.file.size, fileData,
-        uploadedAt: now, createdAt: now,
-      });
-      const { fileData: _fd, ...docSafe } = doc as any;
-      await storage.updateHPPackage(pkg.id, { status: "in_progress", updatedAt: hpNow() });
-      res.json(docSafe);
+        companyId: pkg.companyId,
+        submissionId: sub.id,
+        documentType,
+        originalName: req.file.originalname,
+        fileName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        fileSize: req.file.size,
+        fileData,
+        required: true,
+        uploadedAt: now,
+        createdAt: now,
+      } as any);
+      await storage.updateHPSubmission(sub.id, { currentStep: Math.max(sub.currentStep ?? 1, 6), lastSavedAt: now, updatedAt: now });
+      res.json({ id: doc.id, documentType: doc.documentType, originalName: doc.originalName, fileSize: doc.fileSize });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.post("/api/public/hiring-package/:token/remove-document", async (req, res) => {
+  // DELETE /api/public/hiring-package/:token/documents/:documentType
+  app.delete("/api/public/hiring-package/:token/documents/:documentType", async (req, res) => {
     try {
       const pkg = await storage.getHPPackageByToken(req.params.token);
-      if (!pkg) return res.status(404).json({ message: "Invalid link" });
+      if (!pkg) return res.status(404).json({ message: "Not found" });
       const sub = await storage.getHPSubmissionByPackage(pkg.id);
-      if (!sub) return res.status(404).json({ message: "No submission" });
-      const { documentType } = req.body;
-      if (!documentType) return res.status(400).json({ message: "documentType required" });
-      await storage.deleteHPDocument(sub.id, documentType);
+      if (!sub) return res.status(404).json({ message: "Submission not found" });
+      if (sub.status === "submitted") return res.status(400).json({ message: "Already submitted" });
+      await storage.deleteHPDocument(sub.id, req.params.documentType);
       res.json({ ok: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.post("/api/public/hiring-package/:token/sign", async (req, res) => {
+  // PATCH /api/public/hiring-package/:token/signature
+  app.patch("/api/public/hiring-package/:token/signature", async (req, res) => {
     try {
       const pkg = await storage.getHPPackageByToken(req.params.token);
-      if (!pkg) return res.status(404).json({ message: "Invalid link" });
-      let sub = await storage.getHPSubmissionByPackage(pkg.id);
-      if (!sub) sub = await hpMakeSub(pkg);
-      const { signatureData, finalAcknowledgement } = req.body;
-      await storage.updateHPSubmission(sub.id, { signatureData, finalAcknowledgement: !!finalAcknowledgement, signatureUploadedAt: hpNow(), updatedAt: hpNow() });
-      res.json({ ok: true });
+      if (!pkg) return res.status(404).json({ message: "Not found" });
+      const sub = await storage.getHPSubmissionByPackage(pkg.id);
+      if (!sub) return res.status(404).json({ message: "Submission not found" });
+      if (sub.status === "submitted") return res.status(400).json({ message: "Already submitted" });
+      const now = hpNow();
+      const updated = await storage.updateHPSubmission(sub.id, {
+        signatureData: req.body.signatureData,
+        finalAcknowledgement: req.body.finalAcknowledgement,
+        signatureUploadedAt: now,
+        currentStep: Math.max(sub.currentStep ?? 1, 7),
+        lastSavedAt: now,
+        updatedAt: now,
+      });
+      res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // POST /api/public/hiring-package/:token/submit
   app.post("/api/public/hiring-package/:token/submit", async (req, res) => {
     try {
       const pkg = await storage.getHPPackageByToken(req.params.token);
-      if (!pkg) return res.status(404).json({ message: "Invalid link" });
+      if (!pkg) return res.status(404).json({ message: "Not found" });
       const sub = await storage.getHPSubmissionByPackage(pkg.id);
-      if (!sub) return res.status(400).json({ message: "No submission in progress" });
+      if (!sub) return res.status(404).json({ message: "Submission not found" });
+      if (sub.status === "submitted") return res.status(400).json({ message: "Already submitted" });
       const now = hpNow();
-      await storage.updateHPSubmission(sub.id, { status: "submitted", submittedAt: now, updatedAt: now });
+      const updated = await storage.updateHPSubmission(sub.id, {
+        status: "submitted",
+        submittedAt: now,
+        currentStep: 7,
+        updatedAt: now,
+      });
       await storage.updateHPPackage(pkg.id, { status: "submitted", updatedAt: now });
-      res.json({ ok: true });
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.get("/api/public/hiring-package/:token/download-blank-pdf", async (req, res) => {
-    try {
-      const pkg = await storage.getHPPackageByToken(req.params.token);
-      if (!pkg) return res.status(404).json({ message: "Invalid link" });
-      const [company, tmpl] = await Promise.all([
-        storage.getCompany(pkg.companyId),
-        pkg.templateId ? storage.getHPTemplate(pkg.templateId) : storage.getHPDefaultTemplate(pkg.companyId),
-      ]);
-      const PDFDocument = (await import("pdfkit")).default;
-      const doc = new PDFDocument({ margin: 50 });
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="hiring-package.pdf"`);
-      doc.pipe(res);
-      doc.fontSize(20).text("Hiring Package", { align: "center" });
-      doc.fontSize(13).text(company?.name || "", { align: "center" });
-      doc.moveDown();
-      const policies = ((tmpl?.policies || []) as any[]);
-      for (const policy of policies) {
-        doc.fontSize(15).text(policy.title || "");
-        if (policy.version) doc.fontSize(10).text(`Version: ${policy.version}`);
-        doc.moveDown(0.5);
-        if (policy.content) doc.fontSize(11).text(policy.content, { lineGap: 2 });
-        doc.moveDown();
-        if (policy.acceptanceStatement) {
-          doc.fontSize(11).text("Acceptance: " + policy.acceptanceStatement);
-          doc.moveDown(0.3);
-          doc.text("Signature: _________________________  Date: ____________");
-        }
-        doc.addPage();
-      }
-      doc.end();
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.get("/api/public/hiring-package/:token/download-completed-pdf", async (req, res) => {
-    try {
-      const pkg = await storage.getHPPackageByToken(req.params.token);
-      if (!pkg) return res.status(404).json({ message: "Invalid link" });
-      const sub = await storage.getHPSubmissionByPackage(pkg.id);
-      if (!sub) return res.status(400).json({ message: "No submission" });
-      const acceptances = await storage.getHPPolicyAcceptances(sub.id);
-      const PDFDocument = (await import("pdfkit")).default;
-      const doc = new PDFDocument({ margin: 50 });
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="completed-hiring-package.pdf"`);
-      doc.pipe(res);
-      doc.fontSize(20).text("Completed Hiring Package", { align: "center" });
-      doc.moveDown();
-      doc.fontSize(13).text(`Applicant: ${pkg.employeeName}`).text(`Email: ${pkg.employeeEmail}`).text(`Status: ${sub.status}`);
-      doc.moveDown();
-      if (acceptances.length) {
-        doc.fontSize(15).text("Accepted Policies");
-        for (const a of acceptances) doc.fontSize(11).text(`• ${a.policyTitle} — ${new Date(a.acceptedAt!).toLocaleDateString()}`);
-        doc.moveDown();
-      }
-      if (sub.signatureData) {
-        doc.fontSize(15).text("Signature");
-        const b64 = (sub.signatureData as string).replace(/^data:image\/\w+;base64,/, "");
-        try { doc.image(Buffer.from(b64, "base64"), { width: 200 }); } catch {}
-      }
-      doc.end();
+      res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 

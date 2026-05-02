@@ -401,14 +401,14 @@ export interface IStorage {
   // Agreement Activity
   getAgreementActivity(agreementId: string): Promise<AgreementActivityLog[]>;
   addAgreementActivity(data: InsertAgreementActivityLog): Promise<AgreementActivityLog>;
-  // Hiring Packages
+  // Hiring Packages (legacy)
   getHiringPackagesByCompany(companyId: string): Promise<HiringPackage[]>;
   getHiringPackage(id: string): Promise<HiringPackage | undefined>;
   getHiringPackageByToken(token: string): Promise<HiringPackage | undefined>;
   createHiringPackage(data: InsertHiringPackage): Promise<HiringPackage>;
   updateHiringPackage(id: string, data: Partial<InsertHiringPackage>): Promise<HiringPackage | undefined>;
   deleteHiringPackage(id: string): Promise<void>;
-  // Hiring Package (Publications) — uses employee_hiring_* tables
+  // Hiring Package Feature (Publications tab)
   getHPTemplatesByCompany(companyId: string): Promise<EmployeeHiringTemplate[]>;
   getHPTemplate(id: string): Promise<EmployeeHiringTemplate | undefined>;
   getHPDefaultTemplate(companyId: string): Promise<EmployeeHiringTemplate | undefined>;
@@ -2081,7 +2081,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(hiringPackages).where(eq(hiringPackages.id, id));
   }
 
-  // ── Hiring Package (Publications tab) ─────────────────────────────────────
+  // ── Hiring Package Feature (Publications tab) ──────────────────────────────
   async getHPTemplatesByCompany(companyId: string): Promise<EmployeeHiringTemplate[]> {
     return db.select().from(employeeHiringTemplates).where(eq(employeeHiringTemplates.companyId, companyId)).orderBy(desc(employeeHiringTemplates.createdAt));
   }

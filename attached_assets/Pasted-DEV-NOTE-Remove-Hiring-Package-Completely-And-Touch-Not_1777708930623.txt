@@ -1,0 +1,335 @@
+DEV NOTE: Remove Hiring Package Completely And Touch Nothing Else
+
+Goal:
+Remove every part of the Hiring Package feature completely.
+
+The feature has been attempted multiple times and is still not working properly. Remove it fully so it does not appear anywhere in the app.
+
+This is a production app.
+Do not break anything.
+
+Critical instruction:
+Do not touch authentication.
+Do not touch login.
+Do not touch logout.
+Do not touch sessions.
+Do not touch auth middleware.
+Do not touch Stripe.
+Do not touch payments.
+Do not touch subscriptions.
+Do not touch attendance.
+Do not touch payroll.
+Do not touch schedules.
+Do not touch employee app.
+Do not touch employees list.
+Do not touch clients.
+Do not touch management.
+Do not touch work log.
+Do not touch Field Notes.
+Do not touch Forms.
+Do not touch Agreements.
+Do not touch Proposals.
+Do not touch Applications.
+Do not touch Publications.
+Do not touch public client links.
+Do not touch existing upload systems.
+Do not touch global middleware.
+Do not touch Vite setup.
+Do not touch server-wide route registration except removing Hiring Package routes only.
+Do not refactor unrelated code.
+Do not clean up unrelated code.
+Do not delete unrelated files.
+Do not run destructive database migrations without approval.
+
+Only remove Hiring Package.
+
+Remove Hiring Package From UI
+
+Remove Hiring Package from every visible place it was added.
+
+Check and remove from:
+
+Applications section
+Publications section
+Employee dropdown
+Sidebar
+Top navigation
+Mobile menu
+Hamburger menu
+Admin tabs
+Dashboard cards
+Quick actions
+Search results if added
+Any “Submitted Applications” view that only belongs to Hiring Package
+Any “Sent Packages” view that only belongs to Hiring Package
+Any “Policies” tab that only belongs to Hiring Package
+Any “Templates” tab that only belongs to Hiring Package
+
+Keep these existing features untouched:
+
+Application
+Agreement
+Proposal
+Publication
+Employees
+Forms
+Field Notes
+Attendance
+Payroll
+Schedules
+
+Remove Public Hiring Package Pages
+
+Remove only the Hiring Package public pages.
+
+Remove routes like:
+
+/public/hiring-package/:token
+/public/employee-hiring/:token
+
+Do not touch other public routes.
+
+Do not touch:
+
+Public client reports
+Public forms
+Public review links
+Public field note links
+Public publication links
+Public proposal links
+Public agreement links
+
+Remove Hiring Package API Routes Only
+
+Remove all Hiring Package API routes.
+
+Search for and remove only routes containing:
+
+hiring-package
+hiringPackage
+hiring_package
+employee-hiring
+employeeHiring
+employee_hiring
+
+Possible routes:
+
+/api/hiring-package
+/api/hiring-package/*
+/api/public/hiring-package/*
+/api/employee-hiring/*
+/api/public/employee-hiring/*
+
+Do not remove shared upload routes used by other features.
+
+Remove Hiring Package Components Only
+
+Remove or disconnect only Hiring Package components.
+
+Possible names:
+
+HiringPackage
+HiringPackagePage
+PublicHiringPackage
+HiringPackageTemplates
+HiringPackagePolicies
+HiringPackageCreate
+HiringPackageSent
+HiringPackageSubmissions
+HiringPackageReview
+HiringPackageUploader
+HiringPackageSignature
+EmployeeHiringPackage
+PublicEmployeeHiring
+
+Do not remove shared components.
+
+Do not remove:
+
+Shared Modal
+Shared Upload
+Shared Signature
+Shared PDF
+Shared Button
+Shared Form components
+
+unless they were created only for Hiring Package and are not used anywhere else.
+
+Remove Hiring Package Backend Files Only
+
+Remove only backend files created for Hiring Package.
+
+Possible files:
+
+hiringPackageRoutes.js
+publicHiringPackageRoutes.js
+hiringPackageService.js
+hiringPackageUploadService.js
+hiringPackagePdfService.js
+employeeHiringRoutes.js
+employeeHiringService.js
+
+Before deleting a file, confirm it is only used by Hiring Package.
+
+If a file contains mixed features, remove only the Hiring Package code blocks.
+
+Remove Hiring Package Imports
+
+Search the codebase for:
+
+HiringPackage
+hiringPackage
+hiring-package
+hiring_package
+EmployeeHiring
+employeeHiring
+employee-hiring
+employee_hiring
+
+Remove only references related to the Hiring Package feature.
+
+Fix broken imports caused by removal.
+
+Do not refactor unrelated imports.
+
+Remove Hiring Package Database Usage Safely
+
+Do not drop production tables without approval.
+
+For now:
+
+Stop reading from Hiring Package tables.
+Stop writing to Hiring Package tables.
+Remove UI and route access.
+Leave database tables/data dormant unless they cause errors.
+
+Do not delete applicant records or uploaded files unless approved.
+
+If the agent created migrations, do not rollback or run destructive migration in production without approval.
+
+Remove Hiring Package Upload Logic Only
+
+Remove Hiring Package-specific upload routes and upload handlers.
+
+Do not touch upload logic for:
+
+Forms
+Field Notes
+Company logos
+Incident reports
+Client reports
+Profile images
+Publications
+Agreements
+Proposals
+
+Do not change global upload middleware.
+
+Remove Hiring Package PDF Logic Only
+
+Remove Hiring Package-specific PDF generation.
+
+Do not touch PDF generation for:
+
+Agreements
+Proposals
+Publications
+Incident reports
+Field Notes
+Reports
+
+Remove Hiring Package Email Logic Only
+
+Remove Hiring Package-specific email sending.
+
+Do not touch email logic for:
+
+Welcome emails
+Broadcast emails
+Agreement emails
+Proposal emails
+Form emails
+Field Note emails
+Subscription emails
+
+Keep Existing Features Working
+
+After removal, these must still work:
+
+Login
+Logout
+Stripe payments
+Subscriptions
+Attendance
+Payroll
+Schedules
+Employee page
+Client page
+Management page
+Work Log
+Forms
+Field Notes
+Publications
+Agreements
+Proposals
+Applications
+Public links
+Existing uploads
+Existing PDFs
+
+Build And Test After Removal
+
+Run build/type checks.
+
+Fix only issues directly caused by removing Hiring Package.
+
+Test:
+
+App loads.
+Login works.
+Sidebar loads.
+Employee page loads.
+Applications page loads.
+Publications page loads.
+Agreement still works.
+Proposal still works.
+Forms still work.
+Field Notes still work.
+Attendance still works.
+Payroll still works.
+No Hiring Package appears anywhere.
+Old Hiring Package public links return a clean 404 or not found page.
+No server errors from missing Hiring Package imports.
+
+Final Expected Result
+
+Hiring Package is completely removed from the app.
+
+No Hiring Package tabs.
+No Hiring Package menu item.
+No Hiring Package public page.
+No Hiring Package API routes.
+No Hiring Package upload route.
+No Hiring Package PDF route.
+No Hiring Package admin review modal.
+No Hiring Package submitted applications area.
+No Hiring Package sent packages area.
+No Hiring Package policies area.
+
+Everything else in the app works exactly as before.
+
+Repeat before starting:
+
+Do not touch authentication.
+Do not touch Stripe.
+Do not touch attendance.
+Do not touch payroll.
+Do not touch schedules.
+Do not touch Field Notes.
+Do not touch Forms.
+Do not touch Agreements.
+Do not touch Proposals.
+Do not touch Applications.
+Do not touch Publications.
+Do not touch global middleware.
+Only remove Hiring Package.
