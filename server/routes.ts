@@ -9726,10 +9726,37 @@ Return ONLY valid JSON:
       const terminalStatuses = ["submitted", "under_review", "approved", "not_approved", "fired_inactive", "archived", "completed"];
       if (terminalStatuses.includes(pkg.status)) return res.json({ success: true });
       const now = new Date().toISOString();
-      await storage.updateHiringPackage(pkg.id, {
-        status: "started",
-        updatedAt: now,
-      });
+
+      // If the client is sending document files for persistence, merge them into employeeResponse
+      const { documentFiles } = req.body || {};
+      const updates: any = { status: "started", updatedAt: now };
+      if (documentFiles && typeof documentFiles === "object") {
+        // Merge with any previously saved employeeResponse, preserving other fields
+        const existing = (pkg.employeeResponse as any) || {};
+        const existingDocFiles = existing.documentFiles || {};
+        // Merge: new files overwrite old ones for the same key; null removes the key
+        const mergedDocFiles: Record<string, any> = { ...existingDocFiles };
+        for (const [key, val] of Object.entries(documentFiles)) {
+          if (val === null) {
+            delete mergedDocFiles[key];
+          } else {
+            mergedDocFiles[key] = val;
+          }
+        }
+        updates.employeeResponse = { ...existing, documentFiles: mergedDocFiles };
+
+        // Also update uploadedDocuments metadata so admin can see what's been uploaded
+        const uploadedDocuments = Object.entries(mergedDocFiles).map(([docType, meta]: [string, any]) => ({
+          docType,
+          filename: meta.filename || docType,
+          mimeType: meta.mimeType || "application/octet-stream",
+          size: meta.size || 0,
+          uploadedAt: now,
+        }));
+        updates.uploadedDocuments = uploadedDocuments;
+      }
+
+      await storage.updateHiringPackage(pkg.id, updates);
       res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });

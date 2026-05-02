@@ -1,0 +1,236 @@
+DEV NOTE: Fix Hiring Package Document Uploads Only
+Issue:
+On the public hiring package link, Step 5 of 6 shows required documents, but uploads are not working for:
+Government ID Front
+Government ID Back
+Resume / CV
+The UI says:
+Government ID Front is required.
+Government ID Back is required.
+Resume / CV is required.
+But the employee cannot successfully upload the required files.
+Scope:
+Only fix document upload handling inside:
+Public Hiring Package Link
+Step 5: Documents
+Publications > Hiring Package document submission flow
+Do not touch anything else.
+Do not change the hiring package policy flow.
+Do not change signature flow.
+Do not change Publications layout.
+Do not change Agreements, Proposals, Forms, Field Notes, Auth, Stripe, or employee management.
+Do not redesign the page unless required for upload feedback.
+Focus only on making uploads work.
+Expected Upload Support:
+Government ID Front:
+Allow JPG, JPEG, PNG, PDF
+Government ID Back:
+Allow JPG, JPEG, PNG, PDF
+Resume / CV:
+Allow PDF, DOC, DOCX
+Optional Work Permit:
+Allow JPG, JPEG, PNG, PDF, DOC, DOCX
+Optional Certificate / License:
+Allow JPG, JPEG, PNG, PDF
+Optional Supporting Document:
+Allow JPG, JPEG, PNG, PDF, DOC, DOCX
+Max file size:
+10 MB per file unless the app already has a different upload limit.
+Frontend Fix Requirements:
+
+
+Check the upload input accept values
+
+
+Make sure file inputs are not blocking valid files.
+Use:
+Government ID fields:
+accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+Resume field:
+accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+Work permit:
+accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+Certificate:
+accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+Other supporting document:
+accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+Check validation logic
+
+
+Make sure validation checks both:
+file.type
+file.name extension
+Some browsers may return empty MIME type for DOC, DOCX, or mobile-uploaded files.
+Do not reject a valid file only because file.type is empty.
+Use extension fallback.
+Allowed extensions:
+Government ID:
+jpg, jpeg, png, pdf
+Resume:
+pdf, doc, docx
+Optional general documents:
+jpg, jpeg, png, pdf, doc, docx
+
+
+Fix upload API route
+
+
+Check the public hiring package upload endpoint.
+Likely route examples:
+/api/public/hiring-package/:token/upload
+/api/hiring-package/:token/documents
+/api/public/hiring-packages/:token/documents
+Make sure the endpoint accepts multipart/form-data.
+Required backend handling:
+Parse FormData
+Read documentType
+Read file
+Validate file type
+Validate file size
+Upload/store the file
+Save file metadata to hiring package submission record
+Return uploaded document info to frontend
+Return response like:
+{
+"success": true,
+"documentType": "government_id_front",
+"fileName": "id-front.pdf",
+"fileUrl": "...",
+"mimeType": "application/pdf",
+"size": 123456
+}
+
+
+Check public token authorization
+
+
+Because this page is public, do not require logged-in admin auth for the upload endpoint.
+The endpoint should validate the secure public token instead.
+Correct logic:
+Find hiring package by public token
+Confirm token is valid
+Confirm package is not archived or expired
+Allow upload for that package
+Attach uploaded file to that package/submission
+Do not require employee login.
+
+
+Fix required document state after upload
+
+
+After a successful upload, the UI should immediately update the document card.
+Example:
+Government ID Front
+Uploaded: id-front.pdf
+Replace
+Remove
+Government ID Back
+Uploaded: id-back.jpg
+Replace
+Remove
+Resume / CV
+Uploaded: resume.docx
+Replace
+Remove
+The red validation box should disappear for uploaded required documents.
+Do not show “required” error after the file is already uploaded.
+
+
+Continue button validation
+
+
+The Continue to Signature button should only block when required files are missing.
+Required files:
+government_id_front
+government_id_back
+resume_cv
+If all three are uploaded, allow employee to continue.
+Do not require optional documents.
+
+
+Add clear upload error messages
+
+
+If upload fails, show a clean message under the specific document card.
+Examples:
+This file type is not supported. Please upload JPG, PNG, or PDF.
+Resume must be PDF, DOC, or DOCX.
+File is too large. Maximum size is 10 MB.
+Upload failed. Please try again.
+Avoid showing only a generic error.
+
+
+Check storage and file URL handling
+
+
+Make sure uploaded files are stored in the same storage system used by the app.
+Do not store files only in frontend memory.
+The uploaded document must still exist after refresh.
+When the employee refreshes or returns to the public link, uploaded files should still show as uploaded.
+
+
+Admin review must receive files
+
+
+After employee submits, admin must see uploaded files inside:
+Publications > Hiring Package > Submitted Applications > Review
+Admin should be able to:
+Preview government ID front
+Preview government ID back
+Preview resume if browser supports it
+Download government ID front
+Download government ID back
+Download resume
+Download optional files
+
+
+Debug checks
+
+
+Please inspect these areas:
+File input accept attribute
+Frontend allowedFileTypes array
+Backend allowed MIME types
+Backend allowed extensions
+Upload endpoint auth middleware
+Upload endpoint multipart parser
+Storage bucket or upload folder permissions
+Max payload limit
+CORS or public route middleware
+Required document state mapping
+documentType enum mismatch
+Possible enum mismatch to check:
+Frontend may send:
+governmentIdFront
+governmentIdBack
+resume
+Backend may expect:
+government_id_front
+government_id_back
+resume_cv
+Make sure frontend and backend use the same document type keys.
+Recommended document type keys:
+government_id_front
+government_id_back
+resume_cv
+work_permit
+certificate_license
+other_supporting_document
+
+
+Do not break current UI
+
+
+Keep the current Step 5 layout.
+Only improve:
+Upload functionality
+Validation
+Uploaded state
+Error messages
+Backend persistence
+Admin file preview/download
+Final expected result:
+Employee opens the public hiring package link, goes to Step 5, uploads government ID front, government ID back, and resume. PDF, DOC, DOCX, JPG, JPEG, and PNG files work based on the document type. The required error messages disappear after upload. The employee can continue to signature. Admin can later review and download the uploaded documents inside Publications > Hiring Package.
+Do not change or affect anything else.

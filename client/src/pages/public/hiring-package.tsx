@@ -18,13 +18,55 @@ import {
 // ── Constants ──────────────────────────────────────────────────────────────────
 const STEPS = ["Policies", "Personal Info", "Emergency Contacts", "Medical Info", "Documents", "Signature"];
 
-const DOC_TYPES: { key: string; label: string; required: boolean; accept: string; hint: string }[] = [
-  { key: "gov_id_front", label: "Government ID (Front)", required: true, accept: "image/*, application/pdf", hint: "Driver's licence, passport, or government-issued ID — front side" },
-  { key: "gov_id_back", label: "Government ID (Back)", required: true, accept: "image/*, application/pdf", hint: "Back of the same government-issued ID" },
-  { key: "resume", label: "Resume / CV", required: true, accept: ".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document", hint: "PDF, DOC, or DOCX — max 10 MB" },
-  { key: "work_permit", label: "Work Permit", required: false, accept: "image/*, application/pdf", hint: "If applicable — leave blank if not required" },
-  { key: "certificate", label: "Certificate / Licence", required: false, accept: "image/*, application/pdf", hint: "Safety training, professional licence, or any relevant certificate" },
-  { key: "other", label: "Other Supporting Document", required: false, accept: "image/*, application/pdf,.doc,.docx", hint: "Any other document you would like to include" },
+const DOC_TYPES: { key: string; label: string; required: boolean; accept: string; allowedExts: string[]; hint: string }[] = [
+  {
+    key: "government_id_front",
+    label: "Government ID (Front)",
+    required: true,
+    accept: ".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf",
+    allowedExts: ["jpg","jpeg","png","pdf"],
+    hint: "Driver's licence, passport, or government-issued ID — front side. JPG, PNG, or PDF.",
+  },
+  {
+    key: "government_id_back",
+    label: "Government ID (Back)",
+    required: true,
+    accept: ".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf",
+    allowedExts: ["jpg","jpeg","png","pdf"],
+    hint: "Back of the same government-issued ID. JPG, PNG, or PDF.",
+  },
+  {
+    key: "resume_cv",
+    label: "Resume / CV",
+    required: true,
+    accept: ".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    allowedExts: ["pdf","doc","docx"],
+    hint: "PDF, DOC, or DOCX — max 10 MB.",
+  },
+  {
+    key: "work_permit",
+    label: "Work Permit",
+    required: false,
+    accept: ".jpg,.jpeg,.png,.pdf,.doc,.docx,image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    allowedExts: ["jpg","jpeg","png","pdf","doc","docx"],
+    hint: "If applicable — leave blank if not required.",
+  },
+  {
+    key: "certificate_license",
+    label: "Certificate / Licence",
+    required: false,
+    accept: ".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf",
+    allowedExts: ["jpg","jpeg","png","pdf"],
+    hint: "Safety training, professional licence, or any relevant certificate.",
+  },
+  {
+    key: "other_supporting_document",
+    label: "Other Supporting Document",
+    required: false,
+    accept: ".jpg,.jpeg,.png,.pdf,.doc,.docx,image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    allowedExts: ["jpg","jpeg","png","pdf","doc","docx"],
+    hint: "Any other document you would like to include.",
+  },
 ];
 
 const SUBMITTED_STATUSES = ["submitted", "under_review", "missing_documents", "approved", "not_approved", "fired_inactive", "archived", "completed"];
@@ -145,27 +187,67 @@ function SignatureCanvas({ onSign }: { onSign: (data: string) => void }) {
 
 // ── Upload Slot ────────────────────────────────────────────────────────────────
 function UploadSlot({
-  docType, label, required, accept, hint, file, onFile, disabled,
+  docType, label, required, accept, allowedExts, hint, file, onFile, disabled,
 }: {
-  docType: string; label: string; required: boolean; accept: string; hint: string;
+  docType: string; label: string; required: boolean; accept: string; allowedExts: string[]; hint: string;
   file?: { filename: string; mimeType: string; size: number; data: string } | null;
   onFile: (docType: string, file: { filename: string; mimeType: string; size: number; data: string } | null) => void;
   disabled?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  function isFileTypeAllowed(f: File): boolean {
+    // Primary: check file extension (works even when browser reports empty MIME)
+    const ext = f.name.split(".").pop()?.toLowerCase() || "";
+    if (allowedExts.includes(ext)) return true;
+    // Fallback: check MIME type when extension check fails (e.g. mobile cameras)
+    if (!f.type) return false;
+    const mime = f.type.toLowerCase();
+    if (allowedExts.some(e => ["jpg","jpeg"].includes(e)) && mime.includes("jpeg")) return true;
+    if (allowedExts.includes("png") && mime === "image/png") return true;
+    if (allowedExts.includes("gif") && mime === "image/gif") return true;
+    if (allowedExts.includes("pdf") && mime === "application/pdf") return true;
+    if (allowedExts.includes("doc") && mime === "application/msword") return true;
+    if (allowedExts.includes("docx") && mime.includes("wordprocessingml")) return true;
+    return false;
+  }
 
   async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
-    if (f.size > 10 * 1024 * 1024) {
-      alert("File is too large. Maximum size is 10 MB.");
+    setUploadError(null);
+
+    if (!isFileTypeAllowed(f)) {
+      const extList = allowedExts.map(x => x.toUpperCase()).join(", ");
+      setUploadError(`File type not supported. Please upload: ${extList}.`);
+      e.target.value = "";
       return;
     }
+    if (f.size > 10 * 1024 * 1024) {
+      setUploadError("File is too large. Maximum size is 10 MB.");
+      e.target.value = "";
+      return;
+    }
+
     setLoading(true);
     try {
       const data = await readFileAsDataUrl(f);
-      onFile(docType, { filename: f.name, mimeType: f.type, size: f.size, data });
+      // Preserve MIME type — some mobile browsers return empty string; infer from extension
+      let mimeType = f.type;
+      if (!mimeType) {
+        const ext = f.name.split(".").pop()?.toLowerCase() || "";
+        const extMime: Record<string, string> = {
+          jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
+          pdf: "application/pdf", doc: "application/msword",
+          docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        };
+        mimeType = extMime[ext] || "application/octet-stream";
+      }
+      onFile(docType, { filename: f.name, mimeType, size: f.size, data });
+    } catch {
+      setUploadError("Upload failed. Please try again.");
     } finally {
       setLoading(false);
       e.target.value = "";
@@ -175,17 +257,19 @@ function UploadSlot({
   const isImage = file?.mimeType?.startsWith("image/");
 
   return (
-    <div className={`rounded-xl border p-4 transition-colors ${file ? "border-green-200 bg-green-50/30" : "border-dashed border-gray-300 bg-gray-50/50"}`}>
+    <div className={`rounded-xl border p-4 transition-colors ${uploadError ? "border-red-200 bg-red-50/30" : file ? "border-green-200 bg-green-50/30" : "border-dashed border-gray-300 bg-gray-50/50"}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-2 flex-1 min-w-0">
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${file ? "bg-green-100" : "bg-gray-100"}`}>
-            {file ? <Check className="w-4 h-4 text-green-600" /> : isImage ? <Image className="w-4 h-4 text-gray-400" /> : <FileIcon className="w-4 h-4 text-gray-400" />}
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${uploadError ? "bg-red-100" : file ? "bg-green-100" : "bg-gray-100"}`}>
+            {uploadError ? <AlertCircle className="w-4 h-4 text-red-500" /> : file ? <Check className="w-4 h-4 text-green-600" /> : isImage ? <Image className="w-4 h-4 text-gray-400" /> : <FileIcon className="w-4 h-4 text-gray-400" />}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-gray-800">
               {label} {required && <span className="text-red-500">*</span>}
             </p>
-            {file ? (
+            {uploadError ? (
+              <p className="text-xs text-red-600 mt-0.5">{uploadError}</p>
+            ) : file ? (
               <p className="text-xs text-green-700 mt-0.5 truncate">{file.filename} ({fileSizeLabel(file.size)})</p>
             ) : (
               <p className="text-xs text-gray-500 mt-0.5">{hint}</p>
@@ -195,7 +279,7 @@ function UploadSlot({
         <div className="flex items-center gap-1 shrink-0">
           {file && (
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-red-500"
-              onClick={() => onFile(docType, null)} disabled={disabled}>
+              onClick={() => { onFile(docType, null); setUploadError(null); }} disabled={disabled}>
               <X className="w-3.5 h-3.5" />
             </Button>
           )}
@@ -203,7 +287,7 @@ function UploadSlot({
             variant={file ? "outline" : "default"}
             size="sm"
             className="h-8 gap-1.5 text-xs"
-            onClick={() => inputRef.current?.click()}
+            onClick={() => { setUploadError(null); inputRef.current?.click(); }}
             disabled={disabled || loading}
             data-testid={`button-upload-${docType}`}
           >
@@ -321,7 +405,7 @@ export default function PublicHiringPackage() {
   const company = pkg?.company || {};
   const isAlreadySubmitted = SUBMITTED_STATUSES.includes(pkg?.status || "");
 
-  // Pre-fill form from package data
+  // Pre-fill form from package data + restore saved document uploads
   useEffect(() => {
     if (pkg && !submitted) {
       const nameParts = (pkg.employeeName || "").split(" ");
@@ -334,6 +418,19 @@ export default function PublicHiringPackage() {
         jobTitle: pkg.jobTitle || "",
         startDate: pkg.startDate || "",
       }));
+      // Restore previously uploaded documents from saved progress
+      const savedDocFiles = (pkg.employeeResponse as any)?.documentFiles;
+      if (savedDocFiles && typeof savedDocFiles === "object") {
+        setDocFiles(prev => {
+          const merged: typeof prev = { ...prev };
+          for (const [key, val] of Object.entries(savedDocFiles)) {
+            if (val && typeof val === "object" && (val as any).data) {
+              merged[key] = val as any;
+            }
+          }
+          return merged;
+        });
+      }
     }
   }, [pkg]);
 
@@ -343,6 +440,24 @@ export default function PublicHiringPackage() {
       fetch(`/api/public/hiring-packages/${token}/save-progress`, { method: "POST" }).catch(() => {});
     }
   }, [pkg]);
+
+  // Persist uploaded document files to server so they survive a page refresh
+  async function persistDocFiles(updatedDocs: typeof docFiles) {
+    if (!token || isAlreadySubmitted) return;
+    const documentFiles: Record<string, any> = {};
+    DOC_TYPES.forEach(d => {
+      if (updatedDocs[d.key]) documentFiles[d.key] = updatedDocs[d.key];
+    });
+    try {
+      await fetch(`/api/public/hiring-packages/${token}/save-progress`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentFiles }),
+      });
+    } catch {
+      // non-fatal — files are still in local state
+    }
+  }
 
   function acceptPolicy(section: any) {
     const acceptance = {
@@ -368,7 +483,11 @@ export default function PublicHiringPackage() {
   }
 
   function handleDocFile(docType: string, file: { filename: string; mimeType: string; size: number; data: string } | null) {
-    setDocFiles(prev => ({ ...prev, [docType]: file }));
+    setDocFiles(prev => {
+      const updated = { ...prev, [docType]: file };
+      persistDocFiles(updated);
+      return updated;
+    });
   }
 
   function validateStep(s: number): string[] {
