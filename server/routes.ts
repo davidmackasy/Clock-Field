@@ -9577,8 +9577,22 @@ Return ONLY valid JSON:
   // Packages
   app.get("/api/hiring-package/packages", requireAuth, requireRole("admin"), async (req: any, res) => {
     try {
-      const rows = await storage.getHPPackagesByCompany(req.user.companyId);
-      res.json(rows);
+      const companyId = req.user.companyId;
+      const pkgs = await storage.getHPPackagesByCompany(companyId);
+      const subs = await storage.getHPSubmissionsByCompany(companyId);
+      // Build a map: packageId -> newest submission (subs is ordered desc createdAt)
+      const subByPkg = new Map<string, any>();
+      for (const s of subs) { if (!subByPkg.has(s.packageId)) subByPkg.set(s.packageId, s); }
+      // If a submission has advanced status but the package row is still at a basic status,
+      // surface the submission's status so tab filtering works correctly.
+      const BASIC = new Set(["draft", "sent", "viewed", "started", "in_progress"]);
+      const result = pkgs.map((pkg: any) => {
+        const sub = subByPkg.get(pkg.id);
+        const effectiveStatus = (sub && !BASIC.has(sub.status) && BASIC.has(pkg.status))
+          ? sub.status : pkg.status;
+        return { ...pkg, status: effectiveStatus };
+      });
+      res.json(result);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 

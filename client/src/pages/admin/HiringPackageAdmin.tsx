@@ -443,7 +443,7 @@ function ReviewModal({ pkg, onClose }: { pkg: any; onClose: () => void }) {
     queryFn: () => apiRequest("GET", `/api/hiring-package/submissions/${pkg.id}`),
   });
 
-  useEffect(() => { if (detail?.adminNotes) setAdminNotes(detail.adminNotes); }, [detail?.adminNotes]);
+  useEffect(() => { if (detail?.submission?.adminNotes) setAdminNotes(detail.submission.adminNotes); }, [detail?.submission?.adminNotes]);
 
   const statusMut = useMutation({
     mutationFn: (data: any) => apiRequest("PATCH", `/api/hiring-package/submissions/${pkg.id}/status`, data),
@@ -473,7 +473,7 @@ function ReviewModal({ pkg, onClose }: { pkg: any; onClose: () => void }) {
         <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
           <DialogTitle className="flex items-center justify-between">
             <div>
-              <div className="flex items-center gap-2">{pkg.employeeName} {statusBadge(pkg.status)}</div>
+              <div className="flex items-center gap-2">{pkg.employeeName} {statusBadge(detail?.package?.status || pkg.status)}</div>
               <p className="text-sm font-normal text-muted-foreground mt-0.5">{pkg.employeeEmail} · {pkg.position || "No position"}</p>
             </div>
             <div className="flex gap-2 mr-6">
@@ -501,7 +501,7 @@ function ReviewModal({ pkg, onClose }: { pkg: any; onClose: () => void }) {
               <div className="space-y-4">
                 <h3 className="font-semibold">Application Summary</h3>
                 <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div><span className="text-muted-foreground">Status</span><div className="mt-0.5">{statusBadge(pkg.status)}</div></div>
+                  <div><span className="text-muted-foreground">Status</span><div className="mt-0.5">{statusBadge(detail?.package?.status || pkg.status)}</div></div>
                   <div><span className="text-muted-foreground">Sent</span><div className="mt-0.5 font-medium">{fmtDate(pkg.sentAt)}</div></div>
                   <div><span className="text-muted-foreground">Position</span><div className="mt-0.5 font-medium">{pkg.position || "—"}</div></div>
                   <div><span className="text-muted-foreground">Submitted</span><div className="mt-0.5 font-medium">{fmtDate(sub?.submittedAt)}</div></div>
