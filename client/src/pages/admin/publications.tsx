@@ -25,24 +25,39 @@ import {
 import {
   Plus, Newspaper, Search, ExternalLink, Copy, Pencil, Trash2,
   Globe, FileText, EyeOff, Archive, FileSignature, Send, Eye,
-  CheckCircle2, XCircle, Clock, MoreHorizontal, Loader2, Edit3,
-  LayoutTemplate, Briefcase, UserPlus,
+  CheckCircle2, XCircle, X, Clock, MoreHorizontal, Loader2, Edit3,
+  LayoutTemplate, Briefcase, UserPlus, AlertCircle,
 } from "lucide-react";
 import type { Agreement, AgreementTemplate } from "@shared/schema";
 import AdminProposals from "@/pages/admin/proposals";
 
 // ── Hiring Package helpers ────────────────────────────────────────────────────
 const HP_STATUS_LABELS: Record<string, string> = {
-  draft: "Draft", sent: "Sent", viewed: "Viewed", completed: "Completed",
+  draft: "Draft", sent: "Sent", viewed: "Viewed", started: "Started",
+  submitted: "Submitted", under_review: "Under Review",
+  missing_documents: "Missing Documents", approved: "Approved",
+  not_approved: "Not Approved", fired_inactive: "Fired / Inactive",
+  archived: "Archived", completed: "Submitted",
 };
 const HP_STATUS_COLORS: Record<string, string> = {
   draft: "bg-gray-100 text-gray-700",
   sent: "bg-blue-100 text-blue-700",
   viewed: "bg-amber-100 text-amber-700",
-  completed: "bg-green-100 text-green-700",
+  started: "bg-purple-100 text-purple-700",
+  submitted: "bg-yellow-100 text-yellow-800",
+  under_review: "bg-yellow-100 text-yellow-800",
+  missing_documents: "bg-orange-100 text-orange-800",
+  approved: "bg-green-100 text-green-700",
+  not_approved: "bg-red-100 text-red-700",
+  fired_inactive: "bg-gray-200 text-gray-600",
+  archived: "bg-gray-100 text-gray-500",
+  completed: "bg-yellow-100 text-yellow-800",
 };
 const HP_STATUS_ICONS: Record<string, any> = {
-  draft: FileText, sent: Send, viewed: Eye, completed: CheckCircle2,
+  draft: FileText, sent: Send, viewed: Eye, started: Pencil,
+  submitted: CheckCircle2, under_review: Clock, missing_documents: AlertCircle,
+  approved: CheckCircle2, not_approved: X, fired_inactive: X,
+  archived: Archive, completed: CheckCircle2,
 };
 
 // ── Publication helpers ───────────────────────────────────────────────────────

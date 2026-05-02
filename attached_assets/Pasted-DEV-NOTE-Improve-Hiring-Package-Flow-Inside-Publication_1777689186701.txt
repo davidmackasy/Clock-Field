@@ -1,0 +1,831 @@
+DEV NOTE: Improve Hiring Package Flow Inside Publications Only
+
+Goal:
+Improve the Hiring Package section inside Publications so new employees must read and accept every company policy before they can complete the rest of the hiring package, upload required documents, sign, and submit.
+
+Do not break or affect anything currently working.
+Do not move Hiring Package outside Publications.
+Do not add Hiring Package to the main menu or hamburger menu.
+Do not change Agreements, Proposals, Publications, Forms, Field Notes, Stripe, Auth, or any unrelated flow.
+Only improve Publications > Hiring Package.
+Ask for approval before touching anything outside this scope.
+
+Current location must remain:
+
+Publications
+Publication
+Proposal
+Agreement
+Hiring Package
+
+Hiring Package must stay inside Publications only.
+
+Main Hiring Package Flow
+
+Admin creates and sends a Hiring Package public link to a new employee.
+
+Employee opens the public link and must complete the hiring package in this order:
+
+Step 1: Review and accept each policy
+Step 2: Fill personal information
+Step 3: Fill emergency contact information
+Step 4: Fill optional medical information
+Step 5: Upload required documents
+Step 6: Final acknowledgement and signature
+Step 7: Submit application
+Step 8: See application review status
+
+The employee should not be able to skip ahead.
+
+They must accept each policy before the next one unlocks.
+
+Policy Acceptance Flow
+
+Inside the public link, show the policies as a locked step-by-step checklist.
+
+Example:
+
+Rules of Conduct / Conditions of Employment
+Status: Not Started
+Code of Ethics
+Status: Locked
+Dress Code and Personal Hygiene Policy
+Status: Locked
+Safety Boots Reimbursement Policy
+Status: Locked
+Substance Abuse Policy / Suspicion of Impairment
+Status: Locked
+Emergency Contact and Medical Information Notice
+Status: Locked
+
+When employee opens policy 1, they must read it and click:
+
+I have read, understood, and agree to this policy.
+
+After clicking accept, policy 2 unlocks.
+
+Repeat this process for every policy.
+
+Do not allow the employee to continue to personal information until every required policy has been accepted.
+
+Policy Acceptance Record
+
+For each policy acceptance, store:
+
+Policy title
+Policy version
+Policy content snapshot at time of acceptance
+Employee name
+Employee email
+Accepted checkbox value
+Accepted timestamp
+IP address if available
+Browser/device info if available
+Hiring package ID
+Public token ID
+
+This is important because policies may be edited later. The system must keep the exact version the employee agreed to.
+
+Policy Button Text
+
+Use this acceptance label on every policy:
+
+I have read, understood, and agree to this policy.
+
+Use this helper text:
+
+By clicking agree, you confirm that you have reviewed this policy and understand that it forms part of your employment file.
+
+Required Policies To Include
+
+Use the uploaded 12-page hiring package as the base.
+
+The Hiring Package must include full editable policy sections, not short summaries.
+
+Default policy sections:
+
+Rules of Conduct / Conditions of Employment
+Code of Ethics
+Dress Code and Personal Hygiene Policy
+Safety Boots Reimbursement Policy
+Substance Abuse Policy / Suspicion of Impairment
+Emergency Contact and Medical Information Notice
+Final Employee Acknowledgement
+
+Each policy should be editable by the admin.
+
+Admin must be able to:
+
+Edit title
+Edit objective
+Edit scope
+Edit policy text
+Edit responsibilities
+Edit expectations
+Edit acknowledgement text
+Add new policy
+Remove policy
+Reorder policy
+Duplicate policy
+Save as template
+
+Rules of Conduct / Conditions of Employment
+
+Create this as a detailed policy section.
+
+Include a default intro like:
+
+The following rules of conduct and conditions of employment apply to all employees of [Company Name]. These rules are intended to protect clients, employees, company property, workplace safety, and the professional reputation of [Company Name].
+
+Include editable rule items based on the provided document.
+
+Default items should include:
+
+Falsification of personal information supplied to the company
+Using incorrect personal information or identification
+Damaging company property, client property, or employee property
+Smoking in unauthorized areas or where the client does not allow smoking
+Being impaired while at work by alcohol, drugs, or any substance
+Use of profane or abusive language
+Unauthorized opening of desks, cabinets, lockers, refrigerators, or client property
+Threatening clients, employees, or members of the public
+Unauthorized use of company property, phone, tools, or equipment
+Removing anything from the workplace without permission
+Theft or attempted theft
+Willful damage to company or client property
+Leaving assigned work areas without authorization
+Entering client areas without permission
+Fighting, harassment, or unsuitable behaviour
+Insubordination
+Failure to follow instructions from a manager or supervisor
+Bringing personal possessions into client areas without approval
+Leaving an assigned work area before completing the shift
+Unauthorized use of client facilities or washrooms
+Working outside assigned hours without approval
+Signing in or out for another employee
+Failure to sign in or out as required
+Showing time other than the exact time worked
+Refusing to cooperate with company or client requirements
+Any act that may damage the reputation, trust, or business relationship of [Company Name]
+
+Add acknowledgement text:
+
+I acknowledge that I have read and understood the Rules of Conduct / Conditions of Employment. I understand that failure to follow these rules may result in disciplinary action, up to and including termination of employment.
+
+Code of Ethics
+
+Create this as a detailed policy section.
+
+Include values from the uploaded package:
+
+Personal respect
+Respect for customers
+Respect for society
+Respect for the environment
+Respect for the company and its interests
+Honesty and responsibility
+Compliance with the law
+Compliance with business standards
+Compliance with company policies and procedures
+
+Default editable text:
+
+At [Company Name], employees are expected to act honestly, professionally, respectfully, and responsibly at all times. Employees must not discriminate, harass, or mistreat clients, coworkers, or members of the public.
+
+Include reporting line placeholder:
+
+If you have a concern about a violation of this Code of Ethics, you may report it to:
+
+[Manager Name]
+[Manager Email]
+[Manager Phone]
+
+Add acknowledgement text:
+
+I acknowledge that I have read and understood the Code of Ethics. I agree to follow the ethical standards expected by [Company Name].
+
+Dress Code and Personal Hygiene Policy
+
+Create this as a detailed policy section with:
+
+Objective
+Scope
+Uniform / clothing provisions
+Hygiene expectations
+Personal grooming expectations
+Inappropriate attire
+Acknowledgement
+
+Include these editable default details:
+
+Employees must present themselves professionally while representing [Company Name].
+Employees must wear assigned uniforms while on duty.
+Company uniforms are for work-related purposes only.
+Uniform items are company property where applicable.
+Lost or damaged uniforms may need to be reported or replaced.
+Uniforms must be worn during working hours and must not be worn in places that could negatively affect the company image.
+Employees must maintain clean and appropriate personal hygiene.
+Strong perfumes, colognes, or lotions should be avoided where they may affect clients or coworkers.
+Clothing must be clean, pressed, and fit appropriately.
+Shoes must be clean and safe for work.
+Clothing must not interfere with safe work.
+Jewelry must not create a safety hazard.
+Inappropriate attire may include sweatpants, jogging pants, bicycle shorts, athletic shorts, tank tops, ripped or unprofessional clothing, flip-flops, sandals, beach footwear, and clothing with offensive wording or images.
+
+Add acknowledgement text:
+
+I acknowledge that I have read and understood the Dress Code and Personal Hygiene Policy. I agree to follow this policy while representing [Company Name].
+
+Safety Boots Reimbursement Policy
+
+Create this as a detailed policy section with:
+
+Objective
+Guidelines
+Expectations
+Responsibilities
+Acknowledgement
+
+Include editable default details:
+
+Cleaners may be required to wear CSA-approved safety boots during assigned work duties.
+Employees who are required to wear CSA-approved safety boots may be eligible for reimbursement up to the approved company amount.
+The employee must submit an original receipt for the approved safety boots purchase.
+The employee must present the approved safety boots when requested.
+The employee must provide any required safety boot documentation within the required time period.
+If reimbursement is approved, the company may reimburse the employee through payroll.
+If employment ends before the required period, the safety boot allowance may be forfeited or adjusted based on company policy.
+Employees are responsible for maintaining their safety boots in good and serviceable condition.
+
+Add admin editable setting:
+
+Safety boot reimbursement amount
+
+Default value:
+
+$60.00
+
+Add acknowledgement text:
+
+I acknowledge that I have read and understood the Safety Boots Reimbursement Policy. I agree to follow the requirements for safety footwear and reimbursement.
+
+Substance Abuse Policy / Suspicion of Impairment
+
+Create this as a detailed policy section.
+
+This section must include the important signs and responsibilities from the uploaded package, including the page 10 and page 11 content.
+
+Include:
+
+Objective
+Scope
+Definitions
+Employee responsibilities
+Company responsibilities
+Suspicion of impairment procedure
+Voluntary identification
+Prescribed medication note
+Signs that may indicate impairment
+Disciplinary measures
+Acknowledgement
+
+Default objective:
+
+[Company Name] is committed to maintaining a safe, professional, and substance-free workplace. Employees must not report to work impaired by alcohol, drugs, medication misuse, or any substance that may affect safe and professional work performance.
+
+Include zero-tolerance wording:
+
+[Company Name] adopts a zero-tolerance approach to alcohol and drug use in the workplace where safety, client trust, or work performance may be affected.
+
+Include employee responsibilities:
+
+Employees must report to work fit for duty.
+Employees must follow this policy during all work hours.
+Employees must inform management of work restrictions or safety-related medication concerns where appropriate.
+Employees must not use, possess, distribute, or be under the influence of alcohol or drugs during working hours.
+Employees must cooperate with reasonable company procedures where impairment is suspected.
+
+Include company responsibilities:
+
+[Company Name] will take reasonable measures to protect employee health, client safety, workplace safety, and the company’s professional reputation.
+[Company Name] may remove an employee from a work site if impairment is reasonably suspected.
+[Company Name] may arrange safe transportation where required.
+[Company Name] may investigate the situation and document the incident.
+[Company Name] may provide support or accommodation where required by law.
+
+Include suspicion of impairment procedure:
+
+If an employee is reasonably suspected of impairment, management may:
+Request a second opinion from another manager or supervisor
+Speak privately with the employee
+Observe and document signs of impairment
+Remove the employee from the work site for safety reasons
+Arrange safe transportation
+Prevent the employee from driving a personal vehicle from the site
+Schedule a follow-up meeting
+Determine whether disciplinary action or support is required
+
+Include signs that may indicate impairment.
+
+Group them like this:
+
+Absenteeism:
+Unplanned or unauthorized work absence
+Frequent delays
+Frequent sick leave
+Repeated absences, especially before or after weekends, holidays, or pay days
+Unplanned frequent absences due to personal emergencies
+
+Behaviour at work:
+Staggering or unstable movement
+Eyes injected with blood
+Smell of alcohol or cannabis
+Changes in behaviour
+Avoiding supervision
+Excessive mood changes
+Confusion or unusual speech
+Inappropriate or unusual behaviour
+
+Labour relations:
+Poor relationship with coworkers
+Becoming aggressive, argumentative, or uncooperative
+Complaints from others
+Reduced teamwork
+
+Performance issues:
+Failure to meet deadlines
+Important or neglected work tasks
+Production objectives not respected
+Repeated mistakes
+Poor judgment
+Work quality concerns
+
+Add disciplinary note:
+
+Failure to comply with this policy may result in disciplinary measures, up to and including termination of employment, depending on the seriousness of the situation.
+
+Add acknowledgement text:
+
+I acknowledge that I have read and understood the Substance Abuse Policy / Suspicion of Impairment. I agree to follow this policy and understand that failure to comply may result in disciplinary action, up to and including termination of employment.
+
+Emergency Contact and Medical Information Notice
+
+Create this as a separate policy or notice before the employee fills medical information.
+
+Include this confidentiality note near the medical section:
+
+The information you provide in this section will be held in the strictest confidence and will only be shared on a need-to-know basis with authorized personnel. This form is not intended to request or investigate your personal medical history. The information is being collected only to help respond to an emergency, safety concern, allergy, sensitivity, or medical situation that may occur at work.
+
+Employee must accept this notice before filling the medical section.
+
+Button text:
+
+I have read and understood this confidentiality notice.
+
+Personal Information Section
+
+After all policies are accepted, unlock personal information.
+
+Required fields:
+
+Legal first name
+Legal last name
+Preferred name optional
+Email
+Phone number
+Home address
+City
+Province / State
+Postal code
+Country
+Job title / position
+Start date
+Date of birth optional only if admin enables it
+Employee ID optional
+
+Emergency Contact Section
+
+Required fields:
+
+Emergency contact 1 name
+Emergency contact 1 relationship
+Emergency contact 1 phone number
+Emergency contact 1 email optional
+
+Emergency contact 2 name
+Emergency contact 2 relationship
+Emergency contact 2 phone number
+Emergency contact 2 email optional
+
+Optional Medical Information Section
+
+This section should clearly say optional.
+
+Fields:
+
+Allergies
+Sensitivities
+Medical notes relevant to workplace safety
+Special medication note optional
+Anything the employee wants the company to know in case of emergency
+
+Do not force medical fields as required.
+
+Required Document Upload Section
+
+After personal and emergency information, show document upload.
+
+Employee must upload:
+
+Government ID front
+Government ID back
+Resume
+
+Optional uploads:
+
+Work permit
+SIN document if enabled by admin
+Certificate or license
+Safety training certificate
+Other supporting document
+
+Important:
+Do not require SIN upload by default unless admin enables it.
+Government ID and resume should be required by default.
+
+Accepted formats:
+
+PDF
+PNG
+JPG
+JPEG
+DOC
+DOCX for resume only
+
+Maximum file size should be shown clearly.
+
+Example text:
+
+Upload clear copies of the required documents. Your government ID must show the front and back. Your resume may be uploaded as PDF, DOC, or DOCX.
+
+Document Preview In Admin
+
+Inside Publications > Hiring Package > Submitted Applications, admin must be able to:
+
+Open application
+Preview resume
+Preview government ID front
+Preview government ID back
+Preview optional documents
+Download each file
+Download all files as ZIP
+Download completed hiring package PDF
+Print completed package
+View policy acceptance history
+View employee signature
+View submitted personal information
+View emergency contact information
+View optional medical information
+
+Final Signature Step
+
+After all policies are accepted, information is filled, and required files are uploaded, show final signature.
+
+Before signature, show final acknowledgement:
+
+I confirm that the information I provided is accurate to the best of my knowledge. I confirm that I have read, understood, and agreed to all required company policies in this hiring package. I understand that this hiring package and all accepted policies may become part of my confidential employment file.
+
+Employee must check:
+
+I agree and confirm.
+
+Then employee signs digitally.
+
+Signature options:
+
+Draw signature with mouse
+Draw signature with finger on mobile
+Clear signature
+Re-sign
+
+After signing, button should say:
+
+Submit Hiring Package
+
+Submission Confirmation Page
+
+After submission, show:
+
+Your hiring package has been submitted and is under review.
+
+Please keep this link. You can return to this page to check your application status.
+
+Current status:
+Under Review
+
+Do not show final approval until admin approves it in Clockfield.
+
+Public Link Status Page
+
+The same public link should become a status page after submission.
+
+When employee returns to the link, show:
+
+Submitted
+Under Review
+Missing Documents
+Approved / Hired
+Not Approved
+Archived
+
+If admin requests missing documents, employee should see:
+
+Action Required: Missing Documents
+
+Admin message:
+[message from admin]
+
+Employee should be able to upload only the missing requested documents without redoing the full package unless admin reopens a specific section.
+
+Admin Review Statuses
+
+Inside Publications > Hiring Package, add application statuses:
+
+Draft
+Sent
+Viewed
+Started
+Submitted
+Under Review
+Missing Documents
+Approved / Hired
+Not Approved
+Fired / Inactive
+Archived
+
+Admin actions:
+
+Approve / Mark as Hired
+Request Missing Documents
+Mark Not Approved
+Mark Fired / Inactive
+Archive
+Resend Link
+Copy Link
+Download Completed PDF
+Download Documents
+Print Package
+
+Submitted Applications Section
+
+Inside Publications > Hiring Package, add tabs:
+
+Templates
+Create Hiring Package
+Sent Packages
+Submitted Applications
+Approved / Hired
+Archived
+
+Submitted Applications should show:
+
+Employee name
+Email
+Phone
+Position
+Submitted date
+Current status
+Documents uploaded
+Policy acceptance complete
+Signature complete
+Action button: Review
+
+Approve / Hire Flow
+
+When admin approves the applicant:
+
+Status changes to Approved / Hired
+Public link shows Approved / Hired
+Admin can optionally create or connect this person to an employee profile
+All submitted documents remain stored under the hiring package record
+Do not automatically create an employee account unless admin confirms
+
+Add confirmation modal:
+
+Do you want to create an employee profile from this hiring package?
+
+Options:
+
+Create Employee Profile
+Approve Only
+Cancel
+
+Request Missing Documents Flow
+
+Admin can click Request Missing Documents.
+
+Admin selects what is missing:
+
+Government ID front
+Government ID back
+Resume
+Work permit
+Certificate
+Other
+
+Admin adds message.
+
+Employee public link shows:
+
+Action Required: Missing Documents
+
+Employee can upload the requested files.
+
+After upload, status returns to Submitted or Under Review.
+
+Fired / Inactive Status
+
+If employee was hired but later fired or inactive, admin can mark the hiring package record as:
+
+Fired / Inactive
+
+This does not delete documents.
+
+This keeps the employment file history.
+
+Add status note field:
+
+Reason / internal note
+
+This note is admin-only.
+
+Data Retention
+
+Hiring package records should be kept unless admin deletes them according to the app’s existing deletion rules.
+
+Do not automatically delete submitted hiring packages.
+
+Store:
+
+Completed PDF
+Uploaded documents
+Policy acceptance records
+Signature
+Admin review notes
+Status history
+
+Security And Privacy
+
+The public link must use secure random tokens.
+
+Do not expose internal IDs.
+
+Files must not be publicly accessible without the secure token.
+
+Admin-only documents must require authentication.
+
+Medical information should be clearly marked confidential.
+
+Government ID documents should be stored securely.
+
+Add privacy text near uploads:
+
+The documents you upload will be kept confidential and used only for employment review, identity verification, onboarding, and employment record purposes. Access is limited to authorized company personnel.
+
+PDF Requirements
+
+Final PDF must include:
+
+Company logo
+Company name
+Company address
+Hiring Package title
+Employee personal information
+Emergency contacts
+Optional medical information only if filled
+List of accepted policies
+Acceptance timestamps
+Full policy text or appendix
+Uploaded document checklist
+Final acknowledgement
+Actual drawn signature
+Signature date
+
+Do not include raw file URLs in the PDF.
+
+For uploaded documents, include a checklist:
+
+Government ID front: Uploaded
+Government ID back: Uploaded
+Resume: Uploaded
+Work permit: Uploaded if applicable
+
+Editable Template Requirements
+
+Admin should be able to edit the default Hiring Package template.
+
+Each policy must support:
+
+Title
+Objective
+Scope
+Policy body
+Employee responsibilities
+Company responsibilities
+Procedure
+Acknowledgement text
+Required acceptance checkbox
+Required or optional toggle
+
+Do not hard-code Master Commercial Cleaning only.
+
+Use dynamic company placeholders:
+
+[Company Name]
+[Company Address]
+[Manager Name]
+[Manager Email]
+[Manager Phone]
+[Employee Name]
+[Position]
+[Start Date]
+
+For the uploaded sample, default company example can show:
+
+MASTER Commercial Cleaning and Building Maintenance Services Ltd.
+
+But in production, replace with the business account company name automatically.
+
+UX Requirements For Employee Public Link
+
+Use a clean step-by-step layout.
+
+Recommended steps:
+
+Policies
+Personal Info
+Emergency Contact
+Medical Info
+Documents
+Signature
+Status
+
+Policy step should show progress:
+
+0 of 6 policies accepted
+1 of 6 policies accepted
+2 of 6 policies accepted
+
+Only unlock the next policy after current policy acceptance.
+
+Use clear buttons:
+
+Read Policy
+Agree and Continue
+Continue
+Upload Documents
+Sign and Submit
+
+Mobile must work properly.
+
+No horizontal scroll.
+Signature must work with finger.
+File upload must work on mobile.
+Policy text must be readable.
+Progress should be visible.
+
+Final Expected Result
+
+Admin goes to:
+
+Publications > Hiring Package
+
+Admin creates or sends a hiring package.
+
+Employee opens the secure public link.
+
+Employee must read and accept each company policy one by one.
+
+Employee cannot skip policies.
+
+Employee fills personal information.
+
+Employee fills emergency contacts.
+
+Employee optionally adds medical information.
+
+Employee uploads government ID front, government ID back, and resume.
+
+Employee checks final acknowledgement.
+
+Employee signs digitally.
+
+Employee submits.
+
+The public link becomes a status page showing application review status.
+
+Admin reviews the submission inside Publications > Hiring Package > Submitted Applications.
+
+Admin can preview documents, download files, review accepted policies, approve the applicant, request missing documents, mark not approved, or mark fired/inactive later.
+
+Do not break or affect anything else.

@@ -9526,7 +9526,13 @@ Return ONLY valid JSON:
     try {
       const user = (req as any).user;
       const pkgs = await storage.getHiringPackagesByCompany(user.companyId);
-      res.json(pkgs);
+      // Strip document file data from list to keep response lean
+      const safe = pkgs.map((p: any) => {
+        const { employeeResponse, ...rest } = p;
+        const safeResp = employeeResponse ? { ...employeeResponse, documentFiles: undefined } : null;
+        return { ...rest, employeeResponse: safeResp };
+      });
+      res.json(safe);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
@@ -9673,6 +9679,9 @@ Return ONLY valid JSON:
         status: pkg.status,
         templateData: pkg.templateData,
         employeeResponse: pkg.employeeResponse,
+        policyAcceptances: pkg.policyAcceptances,
+        uploadedDocuments: pkg.uploadedDocuments,
+        missingDocsMessage: pkg.missingDocsMessage,
         signatureData: pkg.signatureData,
         completedAt: pkg.completedAt,
         company: { name: company?.name || "Your Employer", logoUrl: company?.logoUrl || null, address: company?.address || null },
@@ -9684,17 +9693,63 @@ Return ONLY valid JSON:
     try {
       const pkg = await storage.getHiringPackageByToken(req.params.token);
       if (!pkg) return res.status(404).json({ message: "Not found" });
-      if (pkg.status === "completed") return res.status(400).json({ message: "Already completed" });
-      const { employeeResponse, signatureData } = req.body;
+      const terminalStatuses = ["submitted", "under_review", "approved", "not_approved", "fired_inactive", "archived", "completed"];
+      if (terminalStatuses.includes(pkg.status)) return res.status(400).json({ message: "Already submitted" });
+      const { employeeResponse, policyAcceptances, signatureData } = req.body;
       const now = new Date().toISOString();
+      // Build uploadedDocuments metadata from documentFiles in employeeResponse
+      const docFiles = employeeResponse?.documentFiles || {};
+      const uploadedDocuments = Object.entries(docFiles).map(([docType, meta]: [string, any]) => ({
+        docType,
+        filename: meta.filename || docType,
+        mimeType: meta.mimeType || "application/octet-stream",
+        size: meta.size || 0,
+        uploadedAt: now,
+      }));
       await storage.updateHiringPackage(pkg.id, {
         employeeResponse: employeeResponse || null,
+        policyAcceptances: policyAcceptances || null,
+        uploadedDocuments: uploadedDocuments.length > 0 ? uploadedDocuments as any : (pkg.uploadedDocuments as any),
         signatureData: signatureData || "",
-        status: "completed",
+        status: "submitted",
         completedAt: now,
         updatedAt: now,
       });
-      res.json({ success: true, completedAt: now });
+      res.json({ success: true, completedAt: now, status: "submitted" });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/public/hiring-packages/:token/save-progress", async (req, res) => {
+    try {
+      const pkg = await storage.getHiringPackageByToken(req.params.token);
+      if (!pkg) return res.status(404).json({ message: "Not found" });
+      const terminalStatuses = ["submitted", "under_review", "approved", "not_approved", "fired_inactive", "archived", "completed"];
+      if (terminalStatuses.includes(pkg.status)) return res.json({ success: true });
+      const now = new Date().toISOString();
+      await storage.updateHiringPackage(pkg.id, {
+        status: "started",
+        updatedAt: now,
+      });
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/admin/hiring-packages/:id/update-status", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const pkg = await storage.getHiringPackage(req.params.id);
+      if (!pkg || pkg.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const { status, statusNote, missingDocsMessage } = req.body;
+      const validStatuses = ["draft","sent","viewed","started","submitted","under_review","missing_documents","approved","not_approved","fired_inactive","archived"];
+      if (!validStatuses.includes(status)) return res.status(400).json({ message: "Invalid status" });
+      const now = new Date().toISOString();
+      const updated = await storage.updateHiringPackage(pkg.id, {
+        status,
+        statusNote: statusNote || null,
+        missingDocsMessage: missingDocsMessage || null,
+        updatedAt: now,
+      });
+      res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
