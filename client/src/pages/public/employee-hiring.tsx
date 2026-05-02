@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   CheckCircle2, Loader2, AlertCircle, ChevronDown, ChevronUp,
   Lock, Unlock, Upload, X, FileText, Pen, Check, ArrowRight, ArrowLeft,
-  Shield, User, Phone, Clock, Eye,
+  Shield, User, Phone, Clock, Eye, Download,
 } from "lucide-react";
 
 const STEPS = [
@@ -127,22 +127,32 @@ function SignaturePad({ value, onChange }: { value: string; onChange: (dataUrl: 
 }
 
 // ── Step 1: Policies ───────────────────────────────────────────────────────────
-function PoliciesStep({ policies, acceptedIds, onAccept, onContinue }: {
-  policies: any[]; acceptedIds: string[]; onAccept: (p: any) => void; onContinue: () => void;
+function PoliciesStep({ policies, acceptedIds, onAccept, onContinue, token }: {
+  policies: any[]; acceptedIds: string[]; onAccept: (p: any) => void; onContinue: () => void; token: string;
 }) {
   const [expanded, setExpanded] = useState<string | null>(policies[0]?.id || null);
   const allAccepted = policies.every(p => acceptedIds.includes(p.id));
-  const firstUnaccepted = policies.find(p => !acceptedIds.includes(p.id));
 
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold">Step 1: Company Policies</h2>
-        <p className="text-sm text-muted-foreground mt-1">Please read and accept each policy. You must accept all policies before continuing.</p>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-semibold">Step 1: Company Policies</h2>
+            <p className="text-sm text-muted-foreground mt-1">Please read and accept each policy. You must accept all policies before continuing.</p>
+          </div>
+          <Button
+            size="sm" variant="outline"
+            onClick={() => { const a = document.createElement("a"); a.href = `/api/public/employee-hiring/${token}/download-blank-pdf`; a.download = "hiring-package.pdf"; a.click(); }}
+            data-testid="button-download-blank-pdf"
+          >
+            <Download className="w-3.5 h-3.5 mr-1" />Download PDF
+          </Button>
+        </div>
         <div className="flex items-center gap-2 mt-2">
           <span className="text-sm">{acceptedIds.length} of {policies.length} accepted</span>
           <div className="flex-1 bg-gray-100 rounded-full h-1.5">
-            <div className="bg-primary h-1.5 rounded-full transition-all" style={{ width: `${(acceptedIds.length / policies.length) * 100}%` }} />
+            <div className="bg-primary h-1.5 rounded-full transition-all" style={{ width: `${policies.length > 0 ? (acceptedIds.length / policies.length) * 100 : 0}%` }} />
           </div>
         </div>
       </div>
@@ -185,7 +195,7 @@ function PoliciesStep({ policies, acceptedIds, onAccept, onContinue }: {
                       <p className="text-xs text-muted-foreground">By clicking agree, you confirm that you reviewed this policy and understand that it may form part of your confidential employment file.</p>
                       <Button onClick={() => onAccept(policy)} className="w-full" data-testid={`button-accept-policy-${policy.id}`}>
                         <Check className="w-4 h-4 mr-2" />
-                        I have read, understood, and agree to this policy
+                        {policy.acceptanceStatement || "I have read, understood, and agree to this policy"}
                       </Button>
                     </div>
                   ) : (
@@ -679,9 +689,18 @@ function StatusStep({ submission, pkg, missingDocsMessage, requestedMissingDocs,
       </div>
       {status !== "missing_documents" && (
         <Card className="max-w-sm mx-auto text-left">
-          <CardContent className="pt-4 space-y-2">
+          <CardContent className="pt-4 space-y-3">
             <p className="text-xs text-muted-foreground">Keep this link to check your application status:</p>
             <p className="text-xs font-mono bg-muted rounded p-2 break-all">{window.location.href}</p>
+            {submission?.submittedAt && (
+              <Button
+                size="sm" variant="outline" className="w-full"
+                onClick={() => { const a = document.createElement("a"); a.href = `/api/public/employee-hiring/${token}/download-completed-pdf`; a.download = "completed-hiring-package.pdf"; a.click(); }}
+                data-testid="button-download-completed-pdf"
+              >
+                <Download className="w-3.5 h-3.5 mr-1" />Download Completed Hiring Package PDF
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}
@@ -895,6 +914,7 @@ export default function PublicEmployeeHiring() {
                 acceptedIds={acceptedPolicyIds}
                 onAccept={handleAcceptPolicy}
                 onContinue={() => setStep(2)}
+                token={token}
               />
             )}
             {step === 2 && (

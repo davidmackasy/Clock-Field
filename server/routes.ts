@@ -9849,6 +9849,292 @@ Return ONLY valid JSON:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ── Admin: Download completed package PDF ─────────────────────────────────
+  app.get("/api/employee-hiring/submissions/:id/download-pdf", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getEHSubmission(req.params.id);
+      if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const pkg = await storage.getEHPackage(sub.packageId);
+      const policies = await storage.getEHPolicyAcceptances(sub.id);
+      const documents = await storage.getEHDocuments(sub.id);
+      const personal = sub.personalInfoJson as any || {};
+      const emergency = sub.emergencyContactsJson as any || {};
+      const medical = sub.medicalInfoJson as any || {};
+
+      const PDFDocument = require("pdfkit");
+      const doc = new PDFDocument({ margin: 60, size: "LETTER" });
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="hiring-package-${(personal.lastName || "applicant").toLowerCase()}.pdf"`);
+      doc.pipe(res);
+
+      const heading = (text: string) => { doc.fontSize(13).font("Helvetica-Bold").fillColor("#111").text(text); doc.moveDown(0.4); };
+      const sub2 = (text: string) => { doc.fontSize(10).font("Helvetica-Bold").fillColor("#333").text(text); doc.moveDown(0.2); };
+      const body = (text: string) => { doc.fontSize(10).font("Helvetica").fillColor("#222").text(text); doc.moveDown(0.3); };
+      const divider = () => { doc.moveTo(doc.page.margins.left, doc.y).lineTo(doc.page.width - doc.page.margins.right, doc.y).strokeColor("#cccccc").stroke(); doc.moveDown(0.6); };
+
+      // Header
+      doc.fontSize(20).font("Helvetica-Bold").fillColor("#111").text("HIRING PACKAGE", { align: "center" });
+      doc.moveDown(0.2);
+      doc.fontSize(12).font("Helvetica").fillColor("#555").text("Completed Application", { align: "center" });
+      doc.moveDown(0.5);
+      divider();
+
+      // Applicant summary
+      heading("Applicant Information");
+      body(`Name: ${personal.firstName || ""} ${personal.lastName || ""}`.trim() || pkg?.employeeName || "—");
+      if (personal.email || pkg?.employeeEmail) body(`Email: ${personal.email || pkg?.employeeEmail}`);
+      if (personal.phone) body(`Phone: ${personal.phone}`);
+      if (personal.homeAddress) body(`Address: ${personal.homeAddress}, ${personal.city || ""}, ${personal.province || ""} ${personal.postalCode || ""}`);
+      if (personal.position || pkg?.position) body(`Position: ${personal.position || pkg?.position}`);
+      if (personal.startDate) body(`Expected Start Date: ${personal.startDate}`);
+      if (sub.submittedAt) body(`Submitted: ${new Date(sub.submittedAt).toLocaleString()}`);
+      doc.moveDown(0.5);
+      divider();
+
+      // Accepted Policies
+      heading(`Accepted Policies (${policies.length})`);
+      for (const pol of policies) {
+        doc.addPage();
+        sub2(`Policy: ${pol.policyTitle}`);
+        body(`Version: ${pol.policyVersion || "1.0"} · Accepted: ${new Date(pol.acceptedAt).toLocaleString()}`);
+        doc.moveDown(0.3);
+        doc.fontSize(9).font("Helvetica").fillColor("#333").text(pol.policyContentSnapshot || "", { lineGap: 3 });
+        doc.moveDown(0.5);
+        divider();
+        doc.fontSize(10).font("Helvetica-Bold").fillColor("#111").text("Applicant Acceptance:");
+        doc.fontSize(10).font("Helvetica-Oblique").fillColor("#444").text(`Accepted on ${new Date(pol.acceptedAt).toLocaleString()}`);
+      }
+
+      // Emergency Contacts
+      if (emergency.contact1Name) {
+        doc.addPage();
+        heading("Emergency Contacts");
+        sub2("Contact 1");
+        body(`Name: ${emergency.contact1Name}`);
+        body(`Relationship: ${emergency.contact1Relationship}`);
+        body(`Phone: ${emergency.contact1Phone}`);
+        if (emergency.contact1Email) body(`Email: ${emergency.contact1Email}`);
+        if (emergency.contact2Name) {
+          doc.moveDown(0.3);
+          sub2("Contact 2");
+          body(`Name: ${emergency.contact2Name}`);
+          body(`Relationship: ${emergency.contact2Relationship}`);
+          body(`Phone: ${emergency.contact2Phone}`);
+          if (emergency.contact2Email) body(`Email: ${emergency.contact2Email}`);
+        }
+        divider();
+      }
+
+      // Medical Info
+      if (medical.allergies || medical.sensitivities || medical.medicalNotes || medical.medications || medical.emergencyNotes) {
+        heading("Medical Information (Confidential)");
+        if (medical.allergies) body(`Allergies: ${medical.allergies}`);
+        if (medical.sensitivities) body(`Sensitivities: ${medical.sensitivities}`);
+        if (medical.medicalNotes) body(`Medical Notes: ${medical.medicalNotes}`);
+        if (medical.medications) body(`Medications: ${medical.medications}`);
+        if (medical.emergencyNotes) body(`Emergency Notes: ${medical.emergencyNotes}`);
+        divider();
+      }
+
+      // Documents checklist
+      heading("Documents Checklist");
+      const DOC_LABELS: Record<string, string> = { government_id_front: "Government ID (Front)", government_id_back: "Government ID (Back)", resume_cv: "Resume / CV", work_permit: "Work Permit", certificate_license: "Certificate / Licence", other_supporting_document: "Other Supporting Document" };
+      for (const doc2 of documents) {
+        body(`✓ ${DOC_LABELS[doc2.documentType] || doc2.documentType} — ${doc2.originalName} (${(doc2.fileSize / 1024).toFixed(0)} KB)`);
+      }
+      doc.moveDown(0.5);
+      divider();
+
+      // Signature
+      if (sub.signatureData) {
+        heading("Digital Signature");
+        if (sub.signatureUploadedAt) body(`Signed: ${new Date(sub.signatureUploadedAt).toLocaleString()}`);
+        try {
+          const sigBase64 = sub.signatureData.split(",")[1];
+          if (sigBase64) {
+            const sigBuf = Buffer.from(sigBase64, "base64");
+            doc.image(sigBuf, { fit: [280, 100] });
+          }
+        } catch (_) {}
+        doc.moveDown(0.5);
+      }
+
+      doc.end();
+    } catch (e: any) { if (!res.headersSent) res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Admin: Download all docs as ZIP ───────────────────────────────────────
+  app.get("/api/employee-hiring/submissions/:id/download-zip", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const sub = await storage.getEHSubmission(req.params.id);
+      if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const documents = await storage.getEHDocuments(sub.id);
+      if (!documents.length) return res.status(404).json({ message: "No documents found" });
+
+      const archiver = require("archiver");
+      const archive = archiver("zip", { zlib: { level: 6 } });
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename="hiring-documents-${sub.id.slice(0, 8)}.zip"`);
+      archive.pipe(res);
+
+      for (const doc2 of documents) {
+        if (doc2.fileData) {
+          const base64 = doc2.fileData.split(",")[1];
+          if (base64) {
+            const buf = Buffer.from(base64, "base64");
+            archive.append(buf, { name: doc2.originalName || `${doc2.documentType}.bin` });
+          }
+        }
+      }
+      await archive.finalize();
+    } catch (e: any) { if (!res.headersSent) res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Public: Download completed package PDF (by token) ────────────────────
+  app.get("/api/public/employee-hiring/:token/download-completed-pdf", async (req, res) => {
+    try {
+      const pkg = await storage.getEHPackageByToken(req.params.token);
+      if (!pkg) return res.status(404).json({ message: "Not found" });
+      const sub = await storage.getEHSubmissionByPackage(pkg.id);
+      if (!sub || !sub.submittedAt) return res.status(400).json({ message: "Application not submitted yet" });
+      const policies = await storage.getEHPolicyAcceptances(sub.id);
+      const documents = await storage.getEHDocuments(sub.id);
+      const personal = sub.personalInfoJson as any || {};
+      const emergency = sub.emergencyContactsJson as any || {};
+      const medical = sub.medicalInfoJson as any || {};
+
+      const PDFDocument = require("pdfkit");
+      const doc = new PDFDocument({ margin: 60, size: "LETTER" });
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="completed-hiring-package.pdf"`);
+      doc.pipe(res);
+
+      const heading = (text: string) => { doc.fontSize(13).font("Helvetica-Bold").fillColor("#111").text(text); doc.moveDown(0.4); };
+      const sub2 = (text: string) => { doc.fontSize(10).font("Helvetica-Bold").fillColor("#333").text(text); doc.moveDown(0.2); };
+      const body = (text: string) => { doc.fontSize(10).font("Helvetica").fillColor("#222").text(text); doc.moveDown(0.3); };
+      const divider = () => { doc.moveTo(doc.page.margins.left, doc.y).lineTo(doc.page.width - doc.page.margins.right, doc.y).strokeColor("#cccccc").stroke(); doc.moveDown(0.6); };
+
+      doc.fontSize(20).font("Helvetica-Bold").fillColor("#111").text("HIRING PACKAGE", { align: "center" });
+      doc.moveDown(0.2);
+      doc.fontSize(12).font("Helvetica").fillColor("#555").text("Completed Application", { align: "center" });
+      doc.moveDown(0.5);
+      divider();
+
+      heading("Applicant Information");
+      body(`Name: ${personal.firstName || ""} ${personal.lastName || ""}`.trim() || pkg.employeeName || "—");
+      if (personal.email || pkg.employeeEmail) body(`Email: ${personal.email || pkg.employeeEmail}`);
+      if (personal.phone) body(`Phone: ${personal.phone}`);
+      if (personal.homeAddress) body(`Address: ${personal.homeAddress}, ${personal.city || ""}, ${personal.province || ""} ${personal.postalCode || ""}`);
+      if (personal.position || pkg.position) body(`Position: ${personal.position || pkg.position}`);
+      if (sub.submittedAt) body(`Submitted: ${new Date(sub.submittedAt).toLocaleString()}`);
+      doc.moveDown(0.3);
+      divider();
+
+      for (const pol of policies) {
+        doc.addPage();
+        sub2(`Policy: ${pol.policyTitle}`);
+        body(`Version: ${pol.policyVersion || "1.0"} · Accepted: ${new Date(pol.acceptedAt).toLocaleString()}`);
+        doc.moveDown(0.3);
+        doc.fontSize(9).font("Helvetica").fillColor("#333").text(pol.policyContentSnapshot || "", { lineGap: 3 });
+        doc.moveDown(0.5);
+        divider();
+        doc.fontSize(10).font("Helvetica-BoldOblique").fillColor("#444").text(`Accepted on ${new Date(pol.acceptedAt).toLocaleString()}`);
+      }
+
+      if (emergency.contact1Name) {
+        doc.addPage();
+        heading("Emergency Contacts");
+        sub2("Contact 1");
+        body(`Name: ${emergency.contact1Name} · Relationship: ${emergency.contact1Relationship} · Phone: ${emergency.contact1Phone}`);
+        if (emergency.contact2Name) { sub2("Contact 2"); body(`Name: ${emergency.contact2Name} · Relationship: ${emergency.contact2Relationship} · Phone: ${emergency.contact2Phone}`); }
+        divider();
+      }
+
+      if (medical.allergies || medical.medicalNotes || medical.medications) {
+        heading("Medical Information (Confidential)");
+        if (medical.allergies) body(`Allergies: ${medical.allergies}`);
+        if (medical.sensitivities) body(`Sensitivities: ${medical.sensitivities}`);
+        if (medical.medicalNotes) body(`Medical Notes: ${medical.medicalNotes}`);
+        if (medical.medications) body(`Medications: ${medical.medications}`);
+        if (medical.emergencyNotes) body(`Emergency Notes: ${medical.emergencyNotes}`);
+        divider();
+      }
+
+      heading("Documents Checklist");
+      const DOC_LABELS2: Record<string, string> = { government_id_front: "Government ID (Front)", government_id_back: "Government ID (Back)", resume_cv: "Resume / CV", work_permit: "Work Permit", certificate_license: "Certificate / Licence", other_supporting_document: "Other Supporting Document" };
+      for (const doc2 of documents) {
+        body(`✓ ${DOC_LABELS2[doc2.documentType] || doc2.documentType} — ${doc2.originalName}`);
+      }
+      divider();
+
+      if (sub.signatureData) {
+        heading("Digital Signature");
+        if (sub.signatureUploadedAt) body(`Signed: ${new Date(sub.signatureUploadedAt).toLocaleString()}`);
+        try {
+          const sigBase64 = sub.signatureData.split(",")[1];
+          if (sigBase64) { const sigBuf = Buffer.from(sigBase64, "base64"); doc.image(sigBuf, { fit: [280, 100] }); }
+        } catch (_) {}
+      }
+
+      doc.end();
+    } catch (e: any) { if (!res.headersSent) res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Public: Download blank package PDF ────────────────────────────────────
+  app.get("/api/public/employee-hiring/:token/download-blank-pdf", async (req, res) => {
+    try {
+      const pkg = await storage.getEHPackageByToken(req.params.token);
+      if (!pkg) return res.status(404).json({ message: "Not found" });
+      let template: any = null;
+      let policies: any[] = [];
+      if (pkg.templateId) template = await storage.getEHTemplate(pkg.templateId);
+      if (!template) template = await storage.getEHDefaultTemplate(pkg.companyId);
+      if (template?.policies) policies = template.policies as any[];
+
+      const PDFDocument = require("pdfkit");
+      const doc = new PDFDocument({ margin: 60, size: "LETTER" });
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="hiring-package-blank.pdf"`);
+      doc.pipe(res);
+
+      const heading = (text: string) => { doc.fontSize(13).font("Helvetica-Bold").fillColor("#111").text(text); doc.moveDown(0.4); };
+      const body = (text: string) => { doc.fontSize(10).font("Helvetica").fillColor("#222").text(text, { lineGap: 2 }); doc.moveDown(0.3); };
+      const divider = () => { doc.moveTo(doc.page.margins.left, doc.y).lineTo(doc.page.width - doc.page.margins.right, doc.y).strokeColor("#cccccc").stroke(); doc.moveDown(0.6); };
+
+      doc.fontSize(20).font("Helvetica-Bold").fillColor("#111").text("HIRING PACKAGE", { align: "center" });
+      doc.moveDown(0.2);
+      doc.fontSize(12).font("Helvetica").fillColor("#555").text("New Employee Hiring Package", { align: "center" });
+      doc.moveDown(0.3);
+      if (pkg.employeeName) doc.fontSize(11).font("Helvetica").fillColor("#333").text(`Applicant: ${pkg.employeeName}`, { align: "center" });
+      if (pkg.position) doc.fontSize(11).font("Helvetica").fillColor("#333").text(`Position: ${pkg.position}`, { align: "center" });
+      doc.moveDown(0.5);
+      divider();
+
+      for (const pol of policies) {
+        doc.addPage();
+        doc.fontSize(14).font("Helvetica-Bold").fillColor("#111").text(pol.title || "Policy");
+        doc.moveDown(0.3);
+        doc.fontSize(9).font("Helvetica").fillColor("#333").text(pol.content || "", { lineGap: 3 });
+        doc.moveDown(0.8);
+        divider();
+        doc.fontSize(10).font("Helvetica-Bold").fillColor("#111").text("Acceptance:");
+        doc.moveDown(0.2);
+        doc.fontSize(10).font("Helvetica").fillColor("#333").text(pol.acceptanceStatement || "I acknowledge that I have read and understood this policy.");
+        doc.moveDown(0.6);
+        doc.moveTo(doc.page.margins.left, doc.y).lineTo(doc.page.margins.left + 200, doc.y).strokeColor("#555").stroke();
+        doc.moveDown(0.2);
+        doc.fontSize(9).font("Helvetica").fillColor("#888").text("Signature");
+        doc.moveDown(0.3);
+        doc.moveTo(doc.page.margins.left + 220, doc.y - 18).lineTo(doc.page.margins.left + 380, doc.y - 18).strokeColor("#555").stroke();
+        doc.fontSize(9).font("Helvetica").fillColor("#888").text("Date", doc.page.margins.left + 220, doc.y - 10);
+      }
+
+      doc.end();
+    } catch (e: any) { if (!res.headersSent) res.status(500).json({ message: e.message }); }
+  });
+
   // ── Public: Submit ────────────────────────────────────────────────────────
   app.post("/api/public/employee-hiring/:token/submit", async (req, res) => {
     try {

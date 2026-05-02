@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -11,7 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -20,201 +20,291 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Plus, Send, Copy, CheckCircle2, Clock, XCircle, Archive,
-  Loader2, Eye, AlertCircle, UserPlus, Briefcase, MoreHorizontal,
-  FileText, CheckCheck, Pencil, Trash2, ExternalLink, Download,
-  RefreshCw, User, Phone, Mail, MapPin, Calendar, Shield,
-  ChevronDown, ChevronUp, X, FileCheck, Users,
+  Loader2, Eye, AlertCircle, UserPlus, Briefcase, FileText,
+  CheckCheck, Pencil, Trash2, Download, User, Phone,
+  Shield, ChevronDown, ChevronUp, X, Users,
+  RotateCcw, Copy as CopyIcon, Settings,
 } from "lucide-react";
 
-// ── Default Policy Content ─────────────────────────────────────────────────────
-export const DEFAULT_POLICIES = [
+// ── Default Policy Content ──────────────────────────────────────────────────────
+const DEFAULT_POLICIES: any[] = [
   {
     id: "rules_of_conduct",
     title: "Rules of Conduct / Conditions of Employment",
     version: "1.0",
+    required: true,
+    acceptanceStatement: "I acknowledge that I have read and understood the Rules of Conduct / Conditions of Employment. I understand that failure to follow these rules may result in disciplinary action, up to and including termination of employment.",
+    lastEdited: new Date().toISOString(),
     content: `OBJECTIVE
-The Rules of Conduct and Conditions of Employment are designed to protect employees, clients, company property, workplace safety, and the professional reputation of [Company Name].
+This policy explains the required standards of conduct for all employees of [Company Name]. These rules are intended to protect employees, clients, company property, workplace safety, service quality, and the professional reputation of [Company Name].
 
 SCOPE
-This policy applies to all employees, contractors, and workers representing [Company Name] while on duty, on client property, using company property, or acting on behalf of the company.
+This policy applies to all employees, contractors, and workers while working for [Company Name], reporting to a client site, using company property, wearing company uniform, communicating with clients, or representing the company in any way.
 
-RULES
-The following conduct is prohibited and may result in disciplinary action, up to and including termination of employment:
+POLICY
+The following actions may result in disciplinary action, up to and including termination of employment:
 
-1. Falsification of personal information supplied to the company
-2. Using incorrect personal information or identification
-3. Damaging company property, client property, or employee property
-4. Smoking in unauthorized areas or where a client does not allow smoking
-5. Being impaired at work by alcohol, drugs, medication misuse, or any substance
-6. Use of profane, threatening, or abusive language
-7. Unauthorized opening of desks, cabinets, lockers, refrigerators, or client property
-8. Threatening clients, employees, coworkers, or members of the public
-9. Unauthorized use of company phone, tools, supplies, vehicle, or equipment
-10. Removing anything from the workplace without permission
-11. Theft or attempted theft
-12. Willful damage to company or client property
-13. Leaving assigned work areas without authorization
-14. Entering client areas without permission
-15. Fighting, harassment, bullying, or unsuitable behaviour
-16. Insubordination or failure to follow instructions from a manager, supervisor, or authorized person
-17. Bringing personal possessions into client areas without approval
-18. Leaving an assigned work area before completing the shift
-19. Unauthorized use of client facilities or washrooms
-20. Working outside assigned hours without approval
-21. Signing in or out for another employee, or allowing another employee to sign in or out for you
-22. Failure to sign in or out as required
-23. Recording time other than the exact time worked
-24. Refusing to cooperate with company or client requirements
-25. Any act that may damage the reputation, trust, or business relationship of [Company Name]
+1. Falsification of personal information supplied to the company.
+2. Using incorrect or misleading personal information.
+3. Damaging company property, client property, or another employee's property.
+4. Smoking in unauthorized areas.
+5. Smoking where the client does not allow smoking.
+6. Being impaired while at work, whether through alcohol, drugs, medication misuse, or any other substance.
+7. Using profane, threatening, or abusive language.
+8. Opening desks, cabinets, lockers, refrigerators, files, storage areas, or client property without authorization.
+9. Threatening clients, coworkers, supervisors, or members of the public.
+10. Using company property, client property, telephones, computers, tools, vehicles, or equipment without permission.
+11. Removing anything from a workplace or client site without permission, regardless of value.
+12. Theft or attempted theft.
+13. Willful property damage.
+14. Failure to report damage or breakage of client or company property.
+15. Leaving assigned work areas without authorization.
+16. Entering unauthorized client areas.
+17. Allowing an unauthorized person to enter a workplace or client site.
+18. Fighting or physical confrontation.
+19. Harassment, bullying, discrimination, or unsuitable conduct.
+20. Insubordination or refusing to follow lawful instructions.
+21. Bringing personal belongings into client areas without authorization.
+22. Leaving the assigned work area before completing the shift.
+23. Unauthorized use of client washrooms, facilities, supplies, or equipment.
+24. Working outside assigned hours without approval.
+25. Signing in or out for another employee.
+26. Allowing another employee to sign in or out for you.
+27. Failing to sign in or out as required.
+28. Recording time other than the exact time worked.
+29. Refusing to cooperate with company procedures, client requirements, investigations, or safety rules.
+30. Any action that negatively affects the trust, reputation, business relationship, or professional image of [Company Name].
 
-ACKNOWLEDGEMENT
-I acknowledge that I have read and understood the Rules of Conduct / Conditions of Employment. I understand that failure to follow these rules may result in disciplinary action, up to and including termination of employment.`,
+ATTENDANCE AND PAYROLL
+Employees must work only approved schedules unless otherwise authorized.
+Employees must report hours honestly.
+Employees must follow the company's clock-in and clock-out process.
+Payments are based on approved time records, assigned schedules, and company payroll procedures.
+Any change in accommodation, contact information, banking information, or employment-related information must be reported to management as soon as possible.`,
   },
   {
     id: "code_of_ethics",
     title: "Code of Ethics",
     version: "1.0",
-    content: `PERSONAL RESPECT
-Employees must respect all individuals regardless of origin, beliefs, age, race, gender, or other protected characteristics.
+    required: true,
+    acceptanceStatement: "I acknowledge that I have read and understood the Code of Ethics. I agree to follow the ethical standards expected by [Company Name].",
+    lastEdited: new Date().toISOString(),
+    content: `OBJECTIVE
+[Company Name] is committed to strong values, professional conduct, honesty, respect, and responsible business practices. Employees are expected to follow these principles while working with coworkers, clients, management, and the public.
+
+PERSONAL RESPECT
+Employees must respect all individuals regardless of origin, beliefs, age, race, gender, background, disability, or any protected characteristic. Discrimination, harassment, bullying, or disrespectful behaviour is not accepted.
 
 RESPECT FOR CUSTOMERS
-Clients are a priority. Employees must act courteously, professionally, and respectfully toward all clients.
+Clients are a priority. Employees must be honest, efficient, courteous, and professional when serving clients. Employees must protect client property, follow client site rules, and represent [Company Name] respectfully.
 
 RESPECT FOR SOCIETY
-Employees must be honest, efficient, and courteous in all dealings with institutions, authorities, and outside organizations.
+Employees must be honest and professional in dealings with institutions, authorities, clients, coworkers, and the public.
 
 RESPECT FOR THE ENVIRONMENT
-Employees must follow applicable environmental rules and avoid pollution or unsafe disposal practices.
+Employees must follow environmental rules, waste disposal requirements, chemical handling procedures, and client-specific environmental instructions. Employees must not pollute or misuse products in a way that could harm people, property, or the environment.
 
 RESPECT FOR THE COMPANY AND ITS INTERESTS
-Employees must act honestly and loyally, avoid conflicts of interest, and protect company property and confidential information.
+Employees must be honest and loyal to [Company Name]. Employees must protect company property, company reputation, company information, client information, and confidential business processes.
 
 HONESTY AND RESPONSIBILITY
-Employees must be honest and transparent in work, reporting, time tracking, client interactions, and company communication.
+Employees must be honest in all work reports, time records, client communications, safety reports, incident reports, and company documents.
 
 COMPLIANCE WITH THE LAW
-Employees must follow applicable laws and regulations at all times.
+Employees must follow all applicable laws and regulations while working for [Company Name].
 
 COMPLIANCE WITH BUSINESS STANDARDS
-Employees must not participate in practices that could damage the company, clients, coworkers, or the public.
+Employees must not participate in practices that could harm the company, clients, coworkers, the public, or the trust placed in the company.
 
-COMPLIANCE WITH COMPANY POLICIES
-Employees must follow all corporate policies, procedures, safety rules, and instructions provided by [Company Name].
+COMPLIANCE WITH COMPANY POLICIES AND PROCEDURES
+Employees must follow all company policies, procedures, training instructions, safety rules, client instructions, and management directions.
 
-ACKNOWLEDGEMENT
-I acknowledge that I have read and understood the Code of Ethics. I agree to follow the ethical standards expected by [Company Name].`,
+REPORTING CONCERNS
+If an employee believes there has been a violation of this Code of Ethics, they should report the concern to:
+[Manager Name]
+[Manager Email]
+[Manager Phone]`,
   },
   {
     id: "dress_code",
     title: "Dress Code and Personal Hygiene Policy",
     version: "1.0",
+    required: true,
+    acceptanceStatement: "I acknowledge that I have read and understood the Dress Code and Personal Hygiene Policy. I agree to follow this policy while representing [Company Name].",
+    lastEdited: new Date().toISOString(),
     content: `OBJECTIVE
-Employees must present themselves professionally while representing [Company Name]. Dress, hygiene, and grooming standards help maintain professionalism, safety, client trust, and company image.
+[Company Name] requires employees to present themselves professionally and safely while working. Dress, hygiene, grooming, and uniform standards help maintain client trust, employee safety, and a professional company image.
 
 SCOPE
-This policy applies to all employees while working, visiting client sites, wearing company uniforms, or representing [Company Name].
+This policy applies to all employees while working for [Company Name], attending a client location, wearing company uniform, or representing the company.
 
-UNIFORM AND CLOTHING
-- Employees must wear issued uniforms while on duty if uniforms are provided
-- Uniforms must be used only for work-related purposes
-- Uniform items are company property where applicable
-- Lost or damaged uniforms must be reported
-- Employees may be responsible for replacement costs where allowed by company policy
-- Uniforms must be clean, appropriate, and in good condition
-- Shoes must be safe, clean, and appropriate for the worksite
+UNIFORM AND CLOTHING EXPECTATIONS
+Employees must wear issued uniforms while on duty if uniforms are provided.
+Uniforms must be worn for work-related purposes only.
+Uniform items may be considered company property.
+Employees are responsible for keeping uniforms clean and in good condition.
+Lost, stolen, or damaged uniforms must be reported.
+Uniforms damaged through normal wear and tear may be replaced based on company policy.
+Uniforms should be worn only during working hours and should not be worn in places that may negatively affect the company image.
+Footwear must be safe, clean, and suitable for the worksite.
 
-HYGIENE
-- Employees must maintain clean and appropriate personal hygiene
-- Employees should avoid strong perfumes, colognes, or lotions where they may affect clients or coworkers
-- Hands and body hygiene must be maintained during work
+HYGIENE REQUIREMENTS
+Employees must maintain clean and appropriate personal hygiene during working hours.
+Employees should avoid heavy perfumes, colognes, or strongly scented lotions where these may affect clients, coworkers, or people with allergies or sensitivities.
+Employees must wash hands after eating, using the restroom, handling garbage, or completing tasks where hygiene is required.
 
 PERSONAL GROOMING
-- Clothing must be clean, pressed, and fit appropriately
-- Clothing must not interfere with safe equipment operation
-- No dark glasses unless prescribed or required for safety
-- Jewelry must not create a safety hazard
+Clothing must be clean, pressed, and in good condition.
+Clothing must fit appropriately.
+Clothing must not interfere with safe operation of equipment.
+Dark glasses should not be worn unless required for medical or safety reasons.
+Jewelry must not create a safety hazard.
+Long or dangling jewelry should be avoided when it may interfere with work.
 
 INAPPROPRIATE ATTIRE
-The following are not permitted: sweatpants, jogging pants, bicycle shorts, athletic shorts, tank tops, ripped or unprofessional clothing, flip-flops, sandals, beach footwear, clothing with offensive wording or images, and inappropriate pins, buttons, or paraphernalia.
-
-ACKNOWLEDGEMENT
-I acknowledge that I have read and understood the Dress Code and Personal Hygiene Policy. I agree to follow this policy while representing [Company Name].`,
+The following items are not permitted during working hours unless specifically approved:
+Sweatpants.
+Jogging pants.
+Bicycle shorts.
+Athletic shorts.
+Tank tops.
+Crop tops.
+Midriff clothing.
+Ripped or unprofessional clothing.
+Flip-flops.
+Sandals.
+Beach footwear.
+Pins, buttons, patches, or clothing with offensive wording or images.
+Any clothing that creates a safety concern or does not meet client site expectations.`,
   },
   {
     id: "safety_boots",
     title: "Safety Boots Reimbursement Policy",
     version: "1.0",
+    required: true,
+    acceptanceStatement: "I acknowledge that I have read and understood the Safety Boots Reimbursement Policy. I agree to follow the requirements for safety footwear and reimbursement.",
+    lastEdited: new Date().toISOString(),
     content: `OBJECTIVE
-Some roles may require employees to wear CSA-approved safety boots to perform assigned duties safely.
+Employees may be required to wear CSA-approved safety boots during assigned work duties. This policy explains the eligibility, reimbursement process, expectations, and responsibilities related to safety boots.
 
 SCOPE
-This policy applies to employees who are required by [Company Name] or client site requirements to wear CSA-approved safety boots.
+This policy applies to employees who are required by [Company Name], the client, or the worksite to wear CSA-approved safety boots.
 
 GUIDELINES
-- Employees required to wear CSA-approved safety boots may be eligible for reimbursement up to the approved company amount (default: $60.00)
-- Employee must submit the original receipt
-- Employee may be required to show the approved safety boots
-- Employee must provide any required documentation within the required timeframe
-- If approved, reimbursement may be processed through payroll
-- If employment ends before the required period, reimbursement may be adjusted or forfeited based on company policy
-- Employees are responsible for maintaining their safety boots in safe and usable condition
+Employees required to wear CSA-approved safety boots may be eligible for reimbursement.
+Default reimbursement amount: $60.00.
+Employees must submit an itemized original receipt for CSA-approved safety boots.
+Employees may be required to present the safety boots to verify they are CSA-approved and acceptable for workplace use.
+Receipts and required documents must be submitted within the required company timeframe.
+If approved, reimbursement may be processed through payroll.
+Reimbursement may depend on approval from [Company Name].
+If employment ends before the required employment period, the allowance may be adjusted, withheld, or forfeited based on company policy.
+During extended leave, such as maternity leave, parental leave, extended sick leave, or other approved leave, reimbursement payment may be suspended until the employee returns to work.
 
-ACKNOWLEDGEMENT
-I acknowledge that I have read and understood the Safety Boots Reimbursement Policy. I agree to follow the requirements for safety footwear and reimbursement.`,
+RESPONSIBILITIES
+Employees are responsible for maintaining safety boots in good repair and safe working condition.
+Employees are responsible for wearing required safety footwear when assigned.
+Employees must not report to a worksite without required safety footwear where safety boots are required.`,
   },
   {
     id: "substance_abuse",
     title: "Substance Abuse Policy / Suspicion of Impairment",
     version: "1.0",
+    required: true,
+    acceptanceStatement: "I acknowledge that I have read and understood the Substance Abuse Policy / Suspicion of Impairment. I agree to follow this policy and understand that failure to comply may result in disciplinary action, up to and including termination of employment.",
+    lastEdited: new Date().toISOString(),
     content: `OBJECTIVE
 [Company Name] is committed to maintaining a safe, professional, and substance-free workplace. Employees must not report to work impaired by alcohol, drugs, medication misuse, or any substance that may affect safe and professional work performance.
 
 SCOPE
-This policy applies to all employees while working, on client property, using company equipment, driving for work, or representing [Company Name].
+This policy applies to all employees while working, reporting to work, on client property, using company property, driving for work, on breaks during work hours, or representing [Company Name].
 
 ZERO TOLERANCE
-[Company Name] uses a zero-tolerance approach to alcohol and drug use in the workplace where safety, client trust, or work performance may be affected.
+[Company Name] uses a zero-tolerance approach to alcohol and drug use in the workplace where safety, client trust, work quality, or professional conduct may be affected.
+
+DEFINITIONS
+Impaired: A changed physical or mental state caused by alcohol, drugs, medication misuse, or any substance that may affect safe work, judgment, conduct, or performance.
+Substance Abuse: The use of alcohol, drugs, medication, or other substances in a way that interferes with work duties, safety, attendance, or workplace behaviour.
+Alcohol: Includes intoxicating substances in drinks or products.
+Drugs: Includes illegal drugs, controlled substances, cannabis, medication used improperly, and any substance that may affect performance, safety, or judgment.
+Cannabis: Includes any substance containing THC, including dried leaves, oils, capsules, food products, candies, vape cartridges, creams, rubs, or similar products.
+Illegal Drugs: Any drug or substance where use, sale, possession, purchase, distribution, or exchange is restricted or prohibited by applicable law.
 
 EMPLOYEE RESPONSIBILITIES
-- Report to work fit for duty
-- Follow this policy during all working hours
-- Do not use, possess, distribute, or be under the influence of alcohol or drugs while working
-- Do not consume alcohol or drugs during paid or unpaid breaks when working
-- Tell management if a medication or health restriction could affect safe work, where appropriate
-- Cooperate with reasonable company procedures where impairment is suspected
+Employees must report to work fit for duty.
+Employees must follow this policy during all working hours.
+Employees must perform work safely during all periods worked.
+Employees must communicate any work restrictions, safety concerns, or medication-related limitations where appropriate.
+Employees must report any object, condition, or situation that creates a risk to their health, safety, or the safety of others.
+Employees must notify management if they believe another employee is impaired and may create a workplace or public safety risk.
+Employees must not use, consume, possess, distribute, purchase, or sell alcohol or drugs on company property, client property, or during working hours.
+Employees must not consume alcohol or drugs during paid or unpaid breaks.
+Employees must cooperate with reasonable procedures when impairment is suspected.
 
 COMPANY RESPONSIBILITIES
-- Protect employee health, client safety, and workplace safety
-- Protect the professional reputation of [Company Name]
-- Enforce the policy fairly and investigate and document incidents
+[Company Name] will take reasonable steps to protect employee health, client safety, workplace safety, and company reputation.
+[Company Name] will enforce this policy and ensure proper implementation.
+[Company Name] may remove an employee from a worksite if impairment is reasonably suspected.
+[Company Name] may arrange safe transportation when necessary.
+[Company Name] may assist or cooperate with support processes where required by law.
 
 SUSPICION OF IMPAIRMENT PROCEDURE
-If impairment is reasonably suspected: management may speak privately with the employee, remove the employee from the worksite for safety, arrange safe transportation, and schedule a follow-up meeting. The company may determine whether support, accommodation, or discipline is required.
+If an employee is suspected of being under the influence, management may:
+Request a second opinion from another manager or supervisor.
+Speak privately with the employee.
+Observe and document the employee's condition.
+Ask questions related to workplace safety and fitness for duty.
+Remove the employee from the worksite for safety.
+Arrange safe transportation.
+Prevent the employee from driving a personal vehicle.
+Schedule a meeting for the next working day.
+Determine next steps, including support, accommodation, investigation, discipline, or return-to-work requirements.
+
+VOLUNTARY IDENTIFICATION
+Employees are encouraged to communicate if they have an addiction or substance-related issue that may affect their work or safety. Employees who seek help may receive appropriate support where required by law. Medical information will be kept confidential except as required for safety, accommodation, or legal reasons.
+
+PRESCRIBED MEDICATION
+Employees using prescribed medication must ensure it does not affect their ability to work safely. If medication may affect safety, the employee should communicate work restrictions or safety limitations where appropriate. [Company Name] is not requesting personal medical history. Only safety-related work restrictions or emergency information should be shared where needed.
+
+SIGNS THAT MAY INDICATE IMPAIRMENT
+Absenteeism: Unplanned or unauthorized work absence, frequent delays, frequent sick leave, repeated absences especially before or after weekends, holidays, or paydays.
+Behaviour At Work: Staggering or unstable movement, eyes injected with blood, smell of alcohol or cannabis, changes in behaviour, avoiding supervision, excessive mood changes, confusion, unusual speech, signs of poor judgment, changes in physical appearance.
+Performance Issues: Failure to meet deadlines, neglected work tasks, repeated mistakes, poor judgment, work quality concerns, work completed in an unsafe or careless way.
+
+IMPORTANT NOTE
+The presence of one or more signs does not automatically prove impairment. Management must assess the situation fairly and consistently. If there is doubt, the company may investigate further.
 
 DISCIPLINARY MEASURES
-Failure to comply with this policy may result in disciplinary action, up to and including termination of employment.
-
-ACKNOWLEDGEMENT
-I acknowledge that I have read and understood the Substance Abuse Policy / Suspicion of Impairment. I agree to follow this policy and understand that failure to comply may result in disciplinary action, up to and including termination of employment.`,
+Employees who do not comply with this policy may face disciplinary action, up to and including termination of employment, depending on the seriousness of the situation.`,
   },
   {
     id: "emergency_contact_privacy",
     title: "Emergency Contact and Medical Information Privacy Notice",
     version: "1.0",
+    required: true,
+    acceptanceStatement: "I have read and understood this confidentiality notice regarding my emergency contact and medical information.",
+    lastEdited: new Date().toISOString(),
     content: `PRIVACY NOTICE
 The information you provide in the Emergency Contact and Medical Information section will be held in the strictest confidence and will only be shared on a need-to-know basis with authorized company personnel.
 
-This form is not intended to request or investigate your personal medical history. The information is collected only to help respond to an emergency, safety concern, allergy, sensitivity, or medical situation that may occur at work.
+This form is not intended to request or investigate your personal medical history. The information is collected only to help respond to an emergency, allergy, sensitivity, safety concern, or medical situation that may occur at work.
 
 All information is stored securely and access is limited to authorized personnel only.
 
-ACKNOWLEDGEMENT
-I have read and understood this confidentiality notice regarding my emergency contact and medical information.`,
+This section collects:
+- Employee name, address, and phone number
+- Up to two emergency contacts (name, relationship, phone number, optional email)
+- Optional medical information: allergies, sensitivities, special medication, or any emergency safety notes you wish to share
+
+You are not required to provide medical information. Only provide what you are comfortable sharing. The company will use this information solely to respond appropriately in the event of an emergency at or related to the workplace.`,
   },
   {
     id: "final_acknowledgement",
     title: "Final Employee Acknowledgement",
     version: "1.0",
+    required: true,
+    acceptanceStatement: "By accepting this policy, I confirm that I have reviewed and agreed to all terms in this hiring package and that all information I have provided is accurate and complete.",
+    lastEdited: new Date().toISOString(),
     content: `FINAL ACKNOWLEDGEMENT
 By accepting this policy, I confirm and acknowledge the following:
 
@@ -232,18 +322,18 @@ My digital signature on this hiring package confirms that I have reviewed, under
 ];
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
-  draft:            { label: "Draft",              color: "bg-gray-100 text-gray-600" },
-  sent:             { label: "Sent",               color: "bg-blue-100 text-blue-700" },
-  viewed:           { label: "Viewed",             color: "bg-amber-100 text-amber-700" },
-  started:          { label: "Started",            color: "bg-purple-100 text-purple-700" },
-  in_progress:      { label: "In Progress",        color: "bg-purple-100 text-purple-700" },
-  submitted:        { label: "Submitted",          color: "bg-yellow-100 text-yellow-800" },
-  under_review:     { label: "Under Review",       color: "bg-yellow-100 text-yellow-800" },
-  missing_documents:{ label: "Missing Documents",  color: "bg-orange-100 text-orange-800" },
-  approved_hired:   { label: "Approved / Hired",   color: "bg-green-100 text-green-700" },
-  not_approved:     { label: "Not Approved",       color: "bg-red-100 text-red-700" },
-  fired_inactive:   { label: "Fired / Inactive",   color: "bg-gray-200 text-gray-600" },
-  archived:         { label: "Archived",           color: "bg-gray-100 text-gray-500" },
+  draft:             { label: "Draft",              color: "bg-gray-100 text-gray-600" },
+  sent:              { label: "Sent",               color: "bg-blue-100 text-blue-700" },
+  viewed:            { label: "Viewed",             color: "bg-amber-100 text-amber-700" },
+  started:           { label: "Started",            color: "bg-purple-100 text-purple-700" },
+  in_progress:       { label: "In Progress",        color: "bg-purple-100 text-purple-700" },
+  submitted:         { label: "Submitted",          color: "bg-yellow-100 text-yellow-800" },
+  under_review:      { label: "Under Review",       color: "bg-yellow-100 text-yellow-800" },
+  missing_documents: { label: "Missing Documents",  color: "bg-orange-100 text-orange-800" },
+  approved_hired:    { label: "Approved / Hired",   color: "bg-green-100 text-green-700" },
+  not_approved:      { label: "Not Approved",       color: "bg-red-100 text-red-700" },
+  fired_inactive:    { label: "Fired / Inactive",   color: "bg-gray-200 text-gray-600" },
+  archived:          { label: "Archived",           color: "bg-gray-100 text-gray-500" },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -251,7 +341,7 @@ function StatusBadge({ status }: { status: string }) {
   return <Badge className={`text-xs font-medium ${m.color} border-0`}>{m.label}</Badge>;
 }
 
-// ── Submission Review Modal ────────────────────────────────────────────────────
+// ── Review Modal ───────────────────────────────────────────────────────────────
 function ReviewModal({ submissionId, onClose }: { submissionId: string; onClose: () => void }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -261,6 +351,8 @@ function ReviewModal({ submissionId, onClose }: { submissionId: string; onClose:
   const [showMissingForm, setShowMissingForm] = useState(false);
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [expandedPolicy, setExpandedPolicy] = useState<string | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingZip, setDownloadingZip] = useState(false);
 
   const { data, isLoading } = useQuery<any>({
     queryKey: ["/api/employee-hiring/submissions", submissionId],
@@ -305,6 +397,30 @@ function ReviewModal({ submissionId, onClose }: { submissionId: string; onClose:
   const REQUIRED_DOCS = ["government_id_front", "government_id_back", "resume_cv"];
   const ALL_DOC_TYPES = Object.keys(DOC_LABELS);
 
+  const handleDownloadPdf = async () => {
+    setDownloadingPdf(true);
+    try {
+      const a = document.createElement("a");
+      a.href = `/api/employee-hiring/submissions/${submissionId}/download-pdf`;
+      a.download = "completed-hiring-package.pdf";
+      a.click();
+    } finally {
+      setTimeout(() => setDownloadingPdf(false), 2000);
+    }
+  };
+
+  const handleDownloadZip = async () => {
+    setDownloadingZip(true);
+    try {
+      const a = document.createElement("a");
+      a.href = `/api/employee-hiring/submissions/${submissionId}/download-zip`;
+      a.download = "hiring-documents.zip";
+      a.click();
+    } finally {
+      setTimeout(() => setDownloadingZip(false), 2000);
+    }
+  };
+
   if (isLoading) return (
     <div className="space-y-3 py-4">
       {[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}
@@ -315,16 +431,35 @@ function ReviewModal({ submissionId, onClose }: { submissionId: string; onClose:
   const personalInfo = submission?.personalInfoJson || {};
   const emergency = submission?.emergencyContactsJson || {};
   const medical = submission?.medicalInfoJson || {};
+  const publicLink = pkg ? `${window.location.origin}/public/employee-hiring/${pkg.publicToken}` : "";
 
   return (
-    <div className="space-y-6 py-2 max-h-[75vh] overflow-y-auto pr-1">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-5 py-2 max-h-[75vh] overflow-y-auto pr-1">
+      {/* Header + Quick Actions */}
+      <div className="flex items-start justify-between">
         <div>
           <h3 className="font-semibold text-lg">{pkg?.employeeName || "Applicant"}</h3>
-          <p className="text-sm text-muted-foreground">{pkg?.employeeEmail} · {pkg?.position}</p>
+          <p className="text-sm text-muted-foreground">{pkg?.employeeEmail}{pkg?.position ? ` · ${pkg.position}` : ""}</p>
+          {submission?.submittedAt && <p className="text-xs text-muted-foreground mt-0.5">Submitted: {new Date(submission.submittedAt).toLocaleString()}</p>}
         </div>
         <StatusBadge status={submission?.reviewStatus || submission?.status || "started"} />
+      </div>
+
+      {/* Download + Action Bar */}
+      <div className="flex flex-wrap gap-2 pb-3 border-b">
+        <Button size="sm" variant="outline" onClick={handleDownloadPdf} disabled={downloadingPdf} data-testid="button-download-pdf">
+          {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1" />}
+          Completed PDF
+        </Button>
+        <Button size="sm" variant="outline" onClick={handleDownloadZip} disabled={downloadingZip || !documents?.length} data-testid="button-download-zip">
+          {downloadingZip ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1" />}
+          All Docs ZIP
+        </Button>
+        {publicLink && (
+          <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(publicLink); toast({ title: "Link copied" }); }} data-testid="button-copy-public-link">
+            <Copy className="w-3.5 h-3.5 mr-1" />Copy Link
+          </Button>
+        )}
       </div>
 
       {/* Personal Information */}
@@ -373,7 +508,7 @@ function ReviewModal({ submissionId, onClose }: { submissionId: string; onClose:
         </CardContent>
       </Card>
 
-      {/* Medical Information */}
+      {/* Medical Info */}
       {(medical.allergies || medical.sensitivities || medical.medicalNotes || medical.medications || medical.emergencyNotes) && (
         <Card>
           <CardContent className="pt-4 space-y-2">
@@ -392,7 +527,7 @@ function ReviewModal({ submissionId, onClose }: { submissionId: string; onClose:
       {/* Policy Acceptances */}
       <Card>
         <CardContent className="pt-4 space-y-2">
-          <h4 className="font-medium text-sm flex items-center gap-2"><CheckCheck className="w-4 h-4" />Policy Acceptances ({policies?.length || 0})</h4>
+          <h4 className="font-medium text-sm flex items-center gap-2"><CheckCheck className="w-4 h-4" />Accepted Policies ({policies?.length || 0})</h4>
           {!policies?.length ? (
             <p className="text-sm text-muted-foreground">No policies accepted yet</p>
           ) : (
@@ -446,16 +581,7 @@ function ReviewModal({ submissionId, onClose }: { submissionId: string; onClose:
                   )}
                 </div>
                 {doc && (
-                  <Button
-                    size="sm" variant="outline"
-                    onClick={() => {
-                      const a = document.createElement("a");
-                      a.href = `/api/employee-hiring/documents/${doc.id}/download`;
-                      a.download = doc.originalName;
-                      a.click();
-                    }}
-                    data-testid={`button-download-${dt}`}
-                  >
+                  <Button size="sm" variant="outline" onClick={() => { const a = document.createElement("a"); a.href = `/api/employee-hiring/documents/${doc.id}/download`; a.download = doc.originalName; a.click(); }} data-testid={`button-download-${dt}`}>
                     <Download className="w-3.5 h-3.5 mr-1" />Download
                   </Button>
                 )}
@@ -492,13 +618,7 @@ function ReviewModal({ submissionId, onClose }: { submissionId: string; onClose:
       {/* Admin Notes */}
       <div className="space-y-2">
         <Label className="text-sm font-medium">Admin Notes</Label>
-        <Textarea
-          value={adminNotes}
-          onChange={e => setAdminNotes(e.target.value)}
-          placeholder="Internal notes about this applicant..."
-          rows={3}
-          data-testid="textarea-admin-notes"
-        />
+        <Textarea value={adminNotes} onChange={e => setAdminNotes(e.target.value)} placeholder="Internal notes about this applicant..." rows={3} data-testid="textarea-admin-notes" />
         <Button size="sm" variant="outline" onClick={() => notesMutation.mutate()} disabled={notesMutation.isPending}>
           {notesMutation.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
           Save Notes
@@ -513,26 +633,14 @@ function ReviewModal({ submissionId, onClose }: { submissionId: string; onClose:
             <div className="space-y-2">
               {ALL_DOC_TYPES.map(dt => (
                 <label key={dt} className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={missingDocs.includes(dt)}
-                    onChange={e => setMissingDocs(prev => e.target.checked ? [...prev, dt] : prev.filter(x => x !== dt))}
-                  />
+                  <input type="checkbox" checked={missingDocs.includes(dt)} onChange={e => setMissingDocs(prev => e.target.checked ? [...prev, dt] : prev.filter(x => x !== dt))} />
                   {DOC_LABELS[dt]}
                 </label>
               ))}
             </div>
-            <Textarea
-              value={missingMsg}
-              onChange={e => setMissingMsg(e.target.value)}
-              placeholder="Message to applicant about what is missing..."
-              rows={2}
-              data-testid="textarea-missing-message"
-            />
+            <Textarea value={missingMsg} onChange={e => setMissingMsg(e.target.value)} placeholder="Message to applicant about what is missing..." rows={2} data-testid="textarea-missing-message" />
             <div className="flex gap-2">
-              <Button size="sm" onClick={() => statusMutation.mutate({ reviewStatus: "missing_documents", missingDocsMessage: missingMsg, requestedMissingDocs: missingDocs })} disabled={statusMutation.isPending || missingDocs.length === 0}>
-                Send Request
-              </Button>
+              <Button size="sm" onClick={() => statusMutation.mutate({ reviewStatus: "missing_documents", missingDocsMessage: missingMsg, requestedMissingDocs: missingDocs })} disabled={statusMutation.isPending || missingDocs.length === 0}>Send Request</Button>
               <Button size="sm" variant="outline" onClick={() => setShowMissingForm(false)}>Cancel</Button>
             </div>
           </CardContent>
@@ -541,52 +649,22 @@ function ReviewModal({ submissionId, onClose }: { submissionId: string; onClose:
 
       {/* Admin Decision Buttons */}
       <div className="flex flex-wrap gap-2 pt-2 border-t">
-        <Button
-          size="sm"
-          className="bg-green-600 hover:bg-green-700 text-white"
-          onClick={() => setShowApproveModal(true)}
-          disabled={statusMutation.isPending}
-          data-testid="button-approve-hired"
-        >
+        <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => setShowApproveModal(true)} disabled={statusMutation.isPending} data-testid="button-approve-hired">
           <CheckCircle2 className="w-3.5 h-3.5 mr-1" />Approve / Hired
         </Button>
-        <Button
-          size="sm" variant="outline"
-          onClick={() => setShowMissingForm(v => !v)}
-          disabled={statusMutation.isPending}
-          data-testid="button-request-missing"
-        >
+        <Button size="sm" variant="outline" onClick={() => setShowMissingForm(v => !v)} disabled={statusMutation.isPending} data-testid="button-request-missing">
           <AlertCircle className="w-3.5 h-3.5 mr-1" />Missing Docs
         </Button>
-        <Button
-          size="sm" variant="outline"
-          className="text-red-600 border-red-200 hover:bg-red-50"
-          onClick={() => statusMutation.mutate({ reviewStatus: "not_approved" })}
-          disabled={statusMutation.isPending}
-          data-testid="button-not-approved"
-        >
+        <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => statusMutation.mutate({ reviewStatus: "not_approved" })} disabled={statusMutation.isPending} data-testid="button-not-approved">
           <XCircle className="w-3.5 h-3.5 mr-1" />Not Approved
         </Button>
-        <Button
-          size="sm" variant="outline"
-          onClick={() => statusMutation.mutate({ reviewStatus: "under_review" })}
-          disabled={statusMutation.isPending}
-        >
+        <Button size="sm" variant="outline" onClick={() => statusMutation.mutate({ reviewStatus: "under_review" })} disabled={statusMutation.isPending}>
           <Clock className="w-3.5 h-3.5 mr-1" />Under Review
         </Button>
-        <Button
-          size="sm" variant="outline"
-          onClick={() => statusMutation.mutate({ reviewStatus: "archived" })}
-          disabled={statusMutation.isPending}
-          data-testid="button-archive"
-        >
+        <Button size="sm" variant="outline" onClick={() => statusMutation.mutate({ reviewStatus: "archived" })} disabled={statusMutation.isPending} data-testid="button-archive">
           <Archive className="w-3.5 h-3.5 mr-1" />Archive
         </Button>
-        <Button
-          size="sm" variant="outline"
-          onClick={() => statusMutation.mutate({ reviewStatus: "fired_inactive" })}
-          disabled={statusMutation.isPending}
-        >
+        <Button size="sm" variant="outline" onClick={() => statusMutation.mutate({ reviewStatus: "fired_inactive" })} disabled={statusMutation.isPending}>
           <X className="w-3.5 h-3.5 mr-1" />Fired / Inactive
         </Button>
       </div>
@@ -601,9 +679,7 @@ function ReviewModal({ submissionId, onClose }: { submissionId: string; onClose:
               <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => statusMutation.mutate({ reviewStatus: "approved_hired", createEmployee: true })} disabled={statusMutation.isPending}>
                 <UserPlus className="w-3.5 h-3.5 mr-1" />Create Employee Profile
               </Button>
-              <Button size="sm" onClick={() => statusMutation.mutate({ reviewStatus: "approved_hired" })} disabled={statusMutation.isPending}>
-                Approve Only
-              </Button>
+              <Button size="sm" onClick={() => statusMutation.mutate({ reviewStatus: "approved_hired" })} disabled={statusMutation.isPending}>Approve Only</Button>
               <Button size="sm" variant="outline" onClick={() => setShowApproveModal(false)}>Cancel</Button>
             </div>
           </CardContent>
@@ -613,7 +689,279 @@ function ReviewModal({ submissionId, onClose }: { submissionId: string; onClose:
   );
 }
 
-// ── Template Editor ────────────────────────────────────────────────────────────
+// ── Policies Tab ───────────────────────────────────────────────────────────────
+function PoliciesTab() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [policies, setPolicies] = useState<any[]>(DEFAULT_POLICIES);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [defaultTemplateId, setDefaultTemplateId] = useState<string | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  const { data: templates = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/employee-hiring/templates"],
+    queryFn: () => apiRequest("GET", "/api/employee-hiring/templates").then(r => r.json()),
+  });
+
+  useEffect(() => {
+    if (!templates.length) return;
+    const def = (templates as any[]).find((t: any) => t.isDefault) || templates[0];
+    if (def) {
+      setDefaultTemplateId(def.id);
+      if (def.policies?.length) setPolicies(def.policies);
+    }
+  }, [templates]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const now = new Date().toISOString();
+      const updatedPolicies = policies.map((p, i) => ({ ...p, order: i + 1, lastEdited: p.lastEdited || now }));
+      if (defaultTemplateId) {
+        await apiRequest("PATCH", `/api/employee-hiring/templates/${defaultTemplateId}`, { policies: updatedPolicies });
+      } else {
+        const res = await apiRequest("POST", "/api/employee-hiring/templates", {
+          name: "Default Template",
+          policies: updatedPolicies,
+          bootReimbursementAmount: "60.00",
+          requireDateOfBirth: false,
+          isDefault: true,
+        }).then(r => r.json());
+        setDefaultTemplateId(res.id);
+      }
+      qc.invalidateQueries({ queryKey: ["/api/employee-hiring/templates"] });
+      toast({ title: "Policies saved successfully" });
+      setPolicies(updatedPolicies);
+    } catch (e: any) {
+      toast({ title: "Error saving policies", description: e.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updatePolicy = (id: string, updates: any) => {
+    setPolicies(prev => prev.map(p => p.id === id ? { ...p, ...updates, lastEdited: new Date().toISOString() } : p));
+  };
+
+  const addPolicy = () => {
+    const newId = `custom_${Date.now()}`;
+    const newPol = { id: newId, title: "New Policy", version: "1.0", required: true, content: "", acceptanceStatement: "I acknowledge that I have read and understood this policy.", lastEdited: new Date().toISOString() };
+    setPolicies(prev => [...prev, newPol]);
+    setEditingId(newId);
+  };
+
+  const duplicatePolicy = (pol: any) => {
+    const newId = `${pol.id}_copy_${Date.now()}`;
+    const copy = { ...pol, id: newId, title: `${pol.title} (Copy)`, lastEdited: new Date().toISOString() };
+    setPolicies(prev => {
+      const idx = prev.findIndex(p => p.id === pol.id);
+      const next = [...prev];
+      next.splice(idx + 1, 0, copy);
+      return next;
+    });
+  };
+
+  const removePolicy = (id: string) => {
+    setPolicies(prev => prev.filter(p => p.id !== id));
+    setDeleteConfirmId(null);
+    if (editingId === id) setEditingId(null);
+  };
+
+  const movePolicy = (id: string, dir: -1 | 1) => {
+    setPolicies(prev => {
+      const idx = prev.findIndex(p => p.id === id);
+      if (idx + dir < 0 || idx + dir >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[idx + dir]] = [next[idx + dir], next[idx]];
+      return next;
+    });
+  };
+
+  const previewPolicy = policies.find(p => p.id === previewId);
+  const editingPolicy = policies.find(p => p.id === editingId);
+
+  if (isLoading) return <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-14 w-full" />)}</div>;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-muted-foreground">{policies.length} polic{policies.length !== 1 ? "ies" : "y"} · Editing the default template</p>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setConfirmReset(true)} data-testid="button-restore-defaults">
+            <RotateCcw className="w-3.5 h-3.5 mr-1" />Restore Defaults
+          </Button>
+          <Button size="sm" variant="outline" onClick={addPolicy} data-testid="button-add-policy">
+            <Plus className="w-3.5 h-3.5 mr-1" />Add Policy
+          </Button>
+          <Button size="sm" onClick={handleSave} disabled={saving} data-testid="button-save-policies">
+            {saving ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
+            Save Policies
+          </Button>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {policies.map((pol, idx) => (
+          <div key={pol.id} className="border rounded-lg bg-white">
+            <div className="flex items-center gap-2 p-3">
+              <div className="flex flex-col gap-0.5 shrink-0">
+                <button onClick={() => movePolicy(pol.id, -1)} disabled={idx === 0} className="text-muted-foreground hover:text-foreground disabled:opacity-30 p-0.5" aria-label="Move up">
+                  <ChevronUp className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => movePolicy(pol.id, 1)} disabled={idx === policies.length - 1} className="text-muted-foreground hover:text-foreground disabled:opacity-30 p-0.5" aria-label="Move down">
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground shrink-0 w-5">{idx + 1}.</span>
+                  <span className="font-medium text-sm truncate">{pol.title}</span>
+                  <Badge className={`text-xs border-0 shrink-0 ${pol.required !== false ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>
+                    {pol.required !== false ? "Required" : "Optional"}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground shrink-0">v{pol.version || "1.0"}</span>
+                </div>
+                {pol.lastEdited && (
+                  <p className="text-xs text-muted-foreground mt-0.5 ml-5">Last edited: {new Date(pol.lastEdited).toLocaleDateString()}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <Button size="sm" variant="ghost" onClick={() => setPreviewId(previewId === pol.id ? null : pol.id)} data-testid={`button-preview-policy-${pol.id}`}>
+                  <Eye className="w-3.5 h-3.5" />
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => duplicatePolicy(pol)} data-testid={`button-duplicate-policy-${pol.id}`}>
+                  <CopyIcon className="w-3.5 h-3.5" />
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setEditingId(editingId === pol.id ? null : pol.id)} data-testid={`button-edit-policy-${pol.id}`}>
+                  <Pencil className="w-3.5 h-3.5" />
+                </Button>
+                <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700" onClick={() => setDeleteConfirmId(pol.id)} data-testid={`button-delete-policy-${pol.id}`}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Edit Panel */}
+            {editingId === pol.id && (
+              <div className="px-4 pb-4 border-t pt-3 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Policy Title</Label>
+                    <Input value={pol.title} onChange={e => updatePolicy(pol.id, { title: e.target.value })} className="text-sm" data-testid={`input-policy-title-${pol.id}`} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Version</Label>
+                    <Input value={pol.version || "1.0"} onChange={e => updatePolicy(pol.id, { version: e.target.value })} className="text-sm" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <Switch checked={pol.required !== false} onCheckedChange={v => updatePolicy(pol.id, { required: v })} data-testid={`switch-required-${pol.id}`} />
+                    Required policy
+                  </label>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Policy Content</Label>
+                  <Textarea
+                    value={pol.content}
+                    onChange={e => updatePolicy(pol.id, { content: e.target.value })}
+                    rows={14}
+                    className="text-xs font-mono"
+                    placeholder="Enter full policy text here..."
+                    data-testid={`textarea-policy-content-${pol.id}`}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Acceptance Statement (shown to applicant)</Label>
+                  <Textarea
+                    value={pol.acceptanceStatement || ""}
+                    onChange={e => updatePolicy(pol.id, { acceptanceStatement: e.target.value })}
+                    rows={2}
+                    className="text-xs"
+                    placeholder="I acknowledge that I have read and understood this policy..."
+                    data-testid={`textarea-acceptance-${pol.id}`}
+                  />
+                </div>
+                <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>
+                  Done Editing
+                </Button>
+              </div>
+            )}
+
+            {/* Preview Panel */}
+            {previewId === pol.id && editingId !== pol.id && (
+              <div className="px-4 pb-4 border-t pt-3 space-y-3">
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Preview (as applicant sees it)</p>
+                <div className="border rounded bg-white p-4 text-sm max-h-72 overflow-y-auto whitespace-pre-wrap leading-relaxed">
+                  {pol.content || <span className="text-muted-foreground italic">No content yet</span>}
+                </div>
+                {pol.acceptanceStatement && (
+                  <div className="bg-green-50 border border-green-200 rounded p-3">
+                    <p className="text-xs text-green-800 font-medium mb-1">Acceptance statement:</p>
+                    <p className="text-sm text-green-900">{pol.acceptanceStatement}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {policies.length === 0 && (
+        <div className="text-center py-12 text-muted-foreground border rounded-lg">
+          <Settings className="w-8 h-8 mx-auto mb-2 opacity-40" />
+          <p>No policies yet. Add a policy or restore defaults.</p>
+          <Button size="sm" className="mt-3" onClick={addPolicy}>Add First Policy</Button>
+        </div>
+      )}
+
+      <div className="flex gap-2 pt-2 border-t">
+        <Button onClick={handleSave} disabled={saving} data-testid="button-save-policies-bottom">
+          {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+          Save All Policies
+        </Button>
+        <Button variant="outline" onClick={addPolicy}>
+          <Plus className="w-4 h-4 mr-1" />Add Policy
+        </Button>
+      </div>
+
+      {/* Restore Defaults Confirm */}
+      <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restore Default Policies?</AlertDialogTitle>
+            <AlertDialogDescription>This will reset all policies to the built-in defaults. Your current edits will be lost. This does not affect already-sent packages.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setPolicies(DEFAULT_POLICIES); setConfirmReset(false); setEditingId(null); }}>Restore Defaults</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Policy Confirm */}
+      <AlertDialog open={!!deleteConfirmId} onOpenChange={o => !o && setDeleteConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Policy?</AlertDialogTitle>
+            <AlertDialogDescription>This will remove the policy from the list. Already-sent packages are not affected. Click Save to persist this change.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteConfirmId && removePolicy(deleteConfirmId)} className="bg-destructive hover:bg-destructive/90">Remove</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+// ── Templates Tab ──────────────────────────────────────────────────────────────
 function TemplatesTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -625,8 +973,7 @@ function TemplatesTab() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ name: "", bootReimbursementAmount: "60.00", requireDateOfBirth: false, isDefault: false, policies: DEFAULT_POLICIES });
-  const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
+  const [form, setForm] = useState({ name: "", bootReimbursementAmount: "60.00", requireDateOfBirth: false, isDefault: false });
 
   const saveMutation = useMutation({
     mutationFn: (data: any) => editingId
@@ -635,8 +982,7 @@ function TemplatesTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/employee-hiring/templates"] });
       toast({ title: editingId ? "Template saved" : "Template created" });
-      setEditingId(null);
-      setCreating(false);
+      setEditingId(null); setCreating(false);
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -648,35 +994,31 @@ function TemplatesTab() {
   });
 
   const openEdit = (t: any) => {
-    setForm({ name: t.name, bootReimbursementAmount: t.bootReimbursementAmount || "60.00", requireDateOfBirth: t.requireDateOfBirth || false, isDefault: t.isDefault || false, policies: t.policies || DEFAULT_POLICIES });
-    setEditingId(t.id);
-    setCreating(true);
+    setForm({ name: t.name, bootReimbursementAmount: t.bootReimbursementAmount || "60.00", requireDateOfBirth: t.requireDateOfBirth || false, isDefault: t.isDefault || false });
+    setEditingId(t.id); setCreating(true);
   };
 
   const openCreate = () => {
-    setForm({ name: "Default Template", bootReimbursementAmount: "60.00", requireDateOfBirth: false, isDefault: templates.length === 0, policies: DEFAULT_POLICIES });
-    setEditingId(null);
-    setCreating(true);
+    setForm({ name: "Default Template", bootReimbursementAmount: "60.00", requireDateOfBirth: false, isDefault: (templates as any[]).length === 0 });
+    setEditingId(null); setCreating(true);
   };
 
   if (creating) {
     return (
-      <div className="space-y-4 max-w-3xl">
+      <div className="space-y-4 max-w-md">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold">{editingId ? "Edit Template" : "New Template"}</h3>
           <Button variant="ghost" size="sm" onClick={() => { setCreating(false); setEditingId(null); }}>
             <X className="w-4 h-4 mr-1" />Cancel
           </Button>
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <Label>Template Name</Label>
-            <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} data-testid="input-template-name" />
-          </div>
-          <div className="space-y-1">
-            <Label>Safety Boot Reimbursement Amount ($)</Label>
-            <Input value={form.bootReimbursementAmount} onChange={e => setForm(p => ({ ...p, bootReimbursementAmount: e.target.value }))} data-testid="input-boot-amount" />
-          </div>
+        <div className="space-y-1">
+          <Label>Template Name</Label>
+          <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} data-testid="input-template-name" />
+        </div>
+        <div className="space-y-1">
+          <Label>Safety Boot Reimbursement Amount ($)</Label>
+          <Input value={form.bootReimbursementAmount} onChange={e => setForm(p => ({ ...p, bootReimbursementAmount: e.target.value }))} data-testid="input-boot-amount" />
         </div>
         <div className="flex items-center gap-6">
           <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -685,40 +1027,10 @@ function TemplatesTab() {
           </label>
           <label className="flex items-center gap-2 text-sm cursor-pointer">
             <Switch checked={form.isDefault} onCheckedChange={v => setForm(p => ({ ...p, isDefault: v }))} />
-            Set as Default Template
+            Set as Default
           </label>
         </div>
-
-        <div className="space-y-3">
-          <h4 className="font-medium text-sm">Policies ({form.policies.length})</h4>
-          {form.policies.map((pol, idx) => (
-            <div key={pol.id} className="border rounded-lg">
-              <button className="w-full flex items-center justify-between p-3 text-sm text-left" onClick={() => setEditingPolicyId(editingPolicyId === pol.id ? null : pol.id)}>
-                <span className="font-medium">{idx + 1}. {pol.title}</span>
-                {editingPolicyId === pol.id ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
-              </button>
-              {editingPolicyId === pol.id && (
-                <div className="px-3 pb-3 border-t pt-2 space-y-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Title</Label>
-                      <Input value={pol.title} onChange={e => setForm(p => ({ ...p, policies: p.policies.map(pl => pl.id === pol.id ? { ...pl, title: e.target.value } : pl) }))} className="text-sm" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Version</Label>
-                      <Input value={pol.version} onChange={e => setForm(p => ({ ...p, policies: p.policies.map(pl => pl.id === pol.id ? { ...pl, version: e.target.value } : pl) }))} className="text-sm" />
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Content</Label>
-                    <Textarea value={pol.content} onChange={e => setForm(p => ({ ...p, policies: p.policies.map(pl => pl.id === pol.id ? { ...pl, content: e.target.value } : pl) }))} rows={12} className="text-xs font-mono" />
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
+        <p className="text-xs text-muted-foreground">Tip: Edit policy content in the Policies tab. Templates use the current default policies when creating packages.</p>
         <div className="flex gap-2 pt-2 border-t">
           <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending || !form.name} data-testid="button-save-template">
             {saveMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
@@ -733,14 +1045,14 @@ function TemplatesTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">{templates.length} template{templates.length !== 1 ? "s" : ""}</p>
+        <p className="text-sm text-muted-foreground">{(templates as any[]).length} template{(templates as any[]).length !== 1 ? "s" : ""}</p>
         <Button size="sm" onClick={openCreate} data-testid="button-new-template">
           <Plus className="w-4 h-4 mr-1" />New Template
         </Button>
       </div>
       {isLoading ? (
         <div className="space-y-2">{[1,2].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
-      ) : templates.length === 0 ? (
+      ) : (templates as any[]).length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <FileText className="w-8 h-8 mx-auto mb-2 opacity-40" />
           <p>No templates yet. Create your first template to start sending hiring packages.</p>
@@ -748,7 +1060,7 @@ function TemplatesTab() {
         </div>
       ) : (
         <div className="space-y-2">
-          {templates.map(t => (
+          {(templates as any[]).map((t: any) => (
             <Card key={t.id} className="hover:shadow-sm transition-shadow">
               <CardContent className="p-4 flex items-center justify-between">
                 <div>
@@ -792,6 +1104,7 @@ function CreatePackageTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [form, setForm] = useState({ employeeName: "", employeeEmail: "", position: "", templateId: "" });
+  const [created, setCreated] = useState<any>(null);
 
   const { data: templates = [] } = useQuery<any[]>({
     queryKey: ["/api/employee-hiring/templates"],
@@ -800,10 +1113,9 @@ function CreatePackageTab() {
 
   const createMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/employee-hiring/packages", data).then(r => r.json()),
-    onSuccess: (created) => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["/api/employee-hiring/packages"] });
-      const link = `${window.location.origin}/public/employee-hiring/${created.publicToken}`;
-      toast({ title: "Package created!", description: "Copy the link to share with the applicant." });
+      setCreated(res);
       setForm({ employeeName: "", employeeEmail: "", position: "", templateId: "" });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -811,7 +1123,23 @@ function CreatePackageTab() {
 
   return (
     <div className="max-w-md space-y-4">
-      <p className="text-sm text-muted-foreground">Create a new hiring package to send to an applicant. They will receive a secure link to complete their application.</p>
+      <p className="text-sm text-muted-foreground">Create a new hiring package link for an applicant. They will receive a secure link to complete their application.</p>
+
+      {created && (
+        <Card className="border-green-200 bg-green-50">
+          <CardContent className="pt-4 space-y-2">
+            <p className="text-sm font-medium text-green-800">Package created!</p>
+            <p className="text-xs text-green-700 break-all">{window.location.origin}/public/employee-hiring/{created.publicToken}</p>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/public/employee-hiring/${created.publicToken}`); toast({ title: "Link copied" }); }}>
+                <Copy className="w-3.5 h-3.5 mr-1" />Copy Link
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setCreated(null)}>Create Another</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="space-y-1">
         <Label>Applicant Name <span className="text-red-500">*</span></Label>
         <Input value={form.employeeName} onChange={e => setForm(p => ({ ...p, employeeName: e.target.value }))} placeholder="Jane Smith" data-testid="input-applicant-name" />
@@ -828,7 +1156,7 @@ function CreatePackageTab() {
         <Label>Template</Label>
         <select className="w-full border rounded-md px-3 py-2 text-sm" value={form.templateId} onChange={e => setForm(p => ({ ...p, templateId: e.target.value }))} data-testid="select-template">
           <option value="">Use default template</option>
-          {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          {(templates as any[]).map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
       </div>
       <Button onClick={() => createMutation.mutate(form)} disabled={createMutation.isPending || !form.employeeName || !form.employeeEmail} data-testid="button-create-package">
@@ -839,8 +1167,8 @@ function CreatePackageTab() {
   );
 }
 
-// ── Packages List Tab ──────────────────────────────────────────────────────────
-function PackagesTab({ filterStatuses, title }: { filterStatuses?: string[]; title: string }) {
+// ── Packages / Applications List Tab ──────────────────────────────────────────
+function PackagesTab({ filterStatuses, title, isSubmitted }: { filterStatuses?: string[]; title: string; isSubmitted?: boolean }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [reviewId, setReviewId] = useState<string | null>(null);
@@ -858,11 +1186,7 @@ function PackagesTab({ filterStatuses, title }: { filterStatuses?: string[]; tit
 
   const sendMutation = useMutation({
     mutationFn: (id: string) => apiRequest("POST", `/api/employee-hiring/packages/${id}/send`).then(r => r.json()),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/employee-hiring/packages"] });
-      toast({ title: "Email sent successfully" });
-      setSendingId(null);
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/employee-hiring/packages"] }); toast({ title: "Email sent successfully" }); setSendingId(null); },
     onError: (e: any) => { toast({ title: "Error", description: e.message, variant: "destructive" }); setSendingId(null); },
   });
 
@@ -873,29 +1197,35 @@ function PackagesTab({ filterStatuses, title }: { filterStatuses?: string[]; tit
   });
 
   const filtered = filterStatuses
-    ? packages.filter(p => filterStatuses.includes(p.status))
-    : packages;
+    ? (packages as any[]).filter((p: any) => filterStatuses.includes(p.status))
+    : (packages as any[]);
 
-  const getSubmission = (pkg: any) => submissions.find((s: any) => s.packageId === pkg.id);
+  const getSubmission = (pkg: any) => (submissions as any[]).find((s: any) => s.packageId === pkg.id);
+
+  const countLabel = isSubmitted
+    ? `${filtered.length} application${filtered.length !== 1 ? "s" : ""}`
+    : `${filtered.length} package${filtered.length !== 1 ? "s" : ""}`;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">{filtered.length} package{filtered.length !== 1 ? "s" : ""}</p>
+        <p className="text-sm text-muted-foreground">{countLabel}</p>
       </div>
       {isLoading ? (
         <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-20 w-full" />)}</div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Briefcase className="w-8 h-8 mx-auto mb-2 opacity-40" />
-          <p>No packages in {title.toLowerCase()} yet.</p>
+          <p>No {isSubmitted ? "applications" : "packages"} in {title.toLowerCase()} yet.</p>
         </div>
       ) : (
         <div className="space-y-2">
-          {filtered.map(pkg => {
+          {filtered.map((pkg: any) => {
             const sub = getSubmission(pkg);
             const displayStatus = sub?.reviewStatus || pkg.status;
             const link = `${window.location.origin}/public/employee-hiring/${pkg.publicToken}`;
+            const policiesAccepted = sub?.acceptedPoliciesCount || 0;
+            const docsUploaded = sub?.documentsCount || 0;
             return (
               <Card key={pkg.id} className="hover:shadow-sm transition-shadow" data-testid={`card-package-${pkg.id}`}>
                 <CardContent className="p-4">
@@ -905,14 +1235,18 @@ function PackagesTab({ filterStatuses, title }: { filterStatuses?: string[]; tit
                         <span className="font-medium text-sm">{pkg.employeeName}</span>
                         <StatusBadge status={displayStatus} />
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">{pkg.employeeEmail}{pkg.position ? ` · ${pkg.position}` : ""}</p>
-                      {pkg.sentAt && <p className="text-xs text-muted-foreground">Sent: {new Date(pkg.sentAt).toLocaleDateString()}</p>}
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                        <p className="text-xs text-muted-foreground">{pkg.employeeEmail}</p>
+                        {pkg.position && <p className="text-xs text-muted-foreground">{pkg.position}</p>}
+                        {pkg.sentAt && <p className="text-xs text-muted-foreground">Sent: {new Date(pkg.sentAt).toLocaleDateString()}</p>}
+                      </div>
                       {sub && (
-                        <p className="text-xs text-muted-foreground">
-                          {sub.personalInfoJson ? "✓ Info " : ""}
-                          {sub.signatureData ? "✓ Signed " : ""}
-                          {sub.submittedAt ? `· Submitted ${new Date(sub.submittedAt).toLocaleDateString()}` : ""}
-                        </p>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                          {sub.personalInfoJson && <span className="text-xs text-green-700">✓ Info</span>}
+                          {sub.signatureData && <span className="text-xs text-green-700">✓ Signed</span>}
+                          {sub.submittedAt && <span className="text-xs text-muted-foreground">Submitted: {new Date(sub.submittedAt).toLocaleDateString()}</span>}
+                          {(sub.emergencyContactsJson) && <span className="text-xs text-green-700">✓ Emergency</span>}
+                        </div>
                       )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
@@ -921,11 +1255,7 @@ function PackagesTab({ filterStatuses, title }: { filterStatuses?: string[]; tit
                           <Eye className="w-3.5 h-3.5 mr-1" />Review
                         </Button>
                       )}
-                      <Button
-                        size="sm" variant="outline"
-                        onClick={() => { navigator.clipboard.writeText(link); toast({ title: "Link copied" }); }}
-                        data-testid={`button-copy-link-${pkg.id}`}
-                      >
+                      <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(link); toast({ title: "Link copied" }); }} data-testid={`button-copy-link-${pkg.id}`}>
                         <Copy className="w-3.5 h-3.5" />
                       </Button>
                       <Button
@@ -936,12 +1266,7 @@ function PackagesTab({ filterStatuses, title }: { filterStatuses?: string[]; tit
                       >
                         {sendMutation.isPending && sendingId === pkg.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                       </Button>
-                      <Button
-                        size="sm" variant="outline"
-                        className="text-red-600 border-red-200"
-                        onClick={() => setDeleteId(pkg.id)}
-                        data-testid={`button-delete-pkg-${pkg.id}`}
-                      >
+                      <Button size="sm" variant="outline" className="text-red-600 border-red-200" onClick={() => setDeleteId(pkg.id)} data-testid={`button-delete-pkg-${pkg.id}`}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>
@@ -981,61 +1306,48 @@ function PackagesTab({ filterStatuses, title }: { filterStatuses?: string[]; tit
 
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function AdminEmployeeHiring() {
-  const tabs = [
-    { id: "sent",      label: "Sent Packages",          statuses: ["draft","sent","viewed","started","in_progress"] },
-    { id: "submitted", label: "Submitted Applications", statuses: ["submitted","under_review","missing_documents"] },
-    { id: "approved",  label: "Approved / Hired",       statuses: ["approved_hired"] },
-    { id: "archived",  label: "Archived",               statuses: ["archived","not_approved","fired_inactive"] },
-  ];
-
   const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "sent");
+
+  const tabs = [
+    { id: "templates",  label: "Templates",              icon: <FileText className="w-4 h-4" /> },
+    { id: "policies",   label: "Policies",               icon: <Settings className="w-4 h-4" /> },
+    { id: "create",     label: "Create Package",         icon: <Plus className="w-4 h-4" /> },
+    { id: "sent",       label: "Sent Packages",          icon: <Send className="w-4 h-4" />,          statuses: ["draft","sent","viewed","started","in_progress"] },
+    { id: "submitted",  label: "Submitted Applications", icon: <Users className="w-4 h-4" />,         statuses: ["submitted","under_review","missing_documents"], isSubmitted: true },
+    { id: "approved",   label: "Approved / Hired",       icon: <CheckCircle2 className="w-4 h-4" />, statuses: ["approved_hired"] },
+    { id: "archived",   label: "Archived",               icon: <Archive className="w-4 h-4" />,       statuses: ["archived","not_approved","fired_inactive"] },
+  ];
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
       <div className="max-w-5xl mx-auto w-full px-4 py-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold flex items-center gap-2">
-              <Briefcase className="w-5 h-5" />
-              Hiring Package
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Send secure hiring packages to applicants and track their progress.</p>
-          </div>
+        <div>
+          <h1 className="text-xl font-semibold flex items-center gap-2">
+            <Briefcase className="w-5 h-5" />Hiring Package
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Send secure hiring packages to applicants and track their progress.</p>
         </div>
 
-        <div className="flex gap-1 border-b pb-0 -mb-6 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab("templates")}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === "templates" ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
-            data-testid="tab-templates"
-          >
-            <FileText className="w-4 h-4" />Templates
-          </button>
-          <button
-            onClick={() => setActiveTab("create")}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === "create" ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
-            data-testid="tab-create-package"
-          >
-            <Plus className="w-4 h-4" />Create Package
-          </button>
+        <div className="flex gap-0 border-b overflow-x-auto">
           {tabs.map(t => (
             <button
               key={t.id}
               onClick={() => setActiveTab(t.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === t.id ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+              className={`flex items-center gap-1.5 px-3 py-2.5 text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === t.id ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
               data-testid={`tab-${t.id}`}
             >
-              {t.label}
+              {t.icon}{t.label}
             </button>
           ))}
         </div>
 
-        <div className="pt-6">
+        <div className="pt-2">
           {activeTab === "templates" && <TemplatesTab />}
+          {activeTab === "policies" && <PoliciesTab />}
           {activeTab === "create" && <CreatePackageTab />}
-          {tabs.map(t => activeTab === t.id && (
-            <PackagesTab key={t.id} filterStatuses={t.statuses} title={t.label} />
+          {tabs.filter(t => t.statuses).map(t => activeTab === t.id && (
+            <PackagesTab key={t.id} filterStatuses={t.statuses} title={t.label} isSubmitted={t.isSubmitted} />
           ))}
         </div>
       </div>

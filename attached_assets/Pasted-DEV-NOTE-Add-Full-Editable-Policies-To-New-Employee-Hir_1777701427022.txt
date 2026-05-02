@@ -1,0 +1,675 @@
+DEV NOTE: Add Full Editable Policies To New Employee Hiring Package
+Reference document:
+Use the uploaded 12-page hiring package as the base policy package. It includes the full hiring package cover page, Rules of Conduct, Code of Ethics, Dress Code and Personal Hygiene Policy, Safety Boots Reimbursement Policy, Substance Abuse Policy, and Emergency Contact / Medical Information Form. 
+Goal:
+Update the new Employee > Hiring Package feature so it includes all policies from the uploaded hiring package document, with detailed editable policy content, required step-by-step acceptance, downloadable package PDF, and a proper submitted applications review area.
+Do not touch authentication.
+Do not touch login.
+Do not touch logout.
+Do not touch sessions.
+Do not touch Stripe.
+Do not touch payments.
+Do not touch attendance.
+Do not touch payroll.
+Do not touch schedules.
+Do not touch Field Notes.
+Do not touch Forms.
+Do not touch Agreements.
+Do not touch Proposals.
+Do not touch Publications.
+Do not touch global middleware.
+Do not reuse the deleted old Hiring Package files.
+Only update the new Employee > Hiring Package feature.
+
+
+Main Problem To Fix
+
+
+The current new Hiring Package is missing the full policies.
+The applicant must be required to read and accept every policy before moving forward.
+The policies must be detailed and based on the uploaded hiring package document.
+The admin must be able to edit policies, add policies, reorder policies, and save them as part of a reusable hiring package template.
+
+
+New Admin Navigation Structure
+
+
+Inside Employee > Hiring Package, organize the page clearly.
+Use these tabs:
+Templates
+Policies
+Create Package
+Sent Packages
+Submitted Applications
+Approved / Hired
+Archived
+Rename anything unclear.
+Current issue:
+“1 package submitted” is confusing.
+Change wording to:
+1 applicant submitted
+or
+1 application submitted
+Sent Packages should mean:
+Hiring package links that were created and sent to applicants but have not been fully submitted yet.
+Create Package should mean:
+Create a new hiring package link for a specific applicant.
+Templates should mean:
+Reusable hiring package templates.
+Policies should mean:
+Editable company policies used inside the hiring package.
+
+
+Policies Tab
+
+
+Add a full Policies tab inside Employee > Hiring Package.
+Admin must be able to:
+View all policies
+Edit policy title
+Edit policy content
+Edit objective
+Edit scope
+Edit responsibilities
+Edit acknowledgement text
+Add new policy
+Remove custom policies
+Reorder policies
+Duplicate policy
+Mark policy required or optional
+Preview policy as applicant
+Save changes
+Restore default policy content
+Save as reusable template
+Each policy should have:
+Policy title
+Policy version
+Required toggle
+Order number
+Policy body
+Acceptance statement
+Last edited date
+
+
+Required Default Policies
+
+
+Add these policies from the uploaded document:
+
+
+Rules of Conduct / Conditions of Employment
+
+
+Code of Ethics
+
+
+Dress Code and Personal Hygiene Policy
+
+
+Safety Boots Reimbursement Policy
+
+
+Substance Abuse Policy / Suspicion of Impairment
+
+
+Emergency Contact and Medical Information Privacy Notice
+
+
+Final Employee Acknowledgement
+
+
+These must appear in the public applicant flow.
+The applicant must accept each one before moving to the next.
+
+
+Public Applicant Policy Flow
+
+
+On the public hiring link, show a step-by-step policy acceptance flow.
+Example:
+Step 1: Policies
+Policy 1 of 6:
+Rules of Conduct / Conditions of Employment
+Button:
+I have read, understood, and agree to this policy.
+After applicant accepts, unlock the next policy.
+Do not allow applicant to skip policies.
+Do not allow applicant to continue to Personal Information until all required policies are accepted.
+If the applicant refreshes the page, accepted policies must stay accepted.
+
+
+Policy Acceptance Storage
+
+
+Each acceptance must save to the backend immediately.
+Store:
+submission_id
+package_id
+policy_id
+policy_title
+policy_version
+policy_content_snapshot
+accepted_at
+accepted_by_name if available
+accepted_by_email if available
+ip_address if available
+user_agent if available
+Important:
+Save the full policy snapshot at the time of acceptance.
+If admin edits the policy later, the applicant’s accepted version must not change.
+
+
+Default Policy Content: Rules of Conduct / Conditions of Employment
+
+
+Create this as a detailed editable policy.
+Title:
+Rules of Conduct / Conditions of Employment
+Objective:
+This policy explains the required standards of conduct for all employees of [Company Name]. These rules are intended to protect employees, clients, company property, workplace safety, service quality, and the professional reputation of [Company Name].
+Scope:
+This policy applies to all employees, contractors, and workers while working for [Company Name], reporting to a client site, using company property, wearing company uniform, communicating with clients, or representing the company in any way.
+Policy:
+The following actions may result in disciplinary action, up to and including termination of employment:
+Falsification of personal information supplied to the company.
+Using incorrect or misleading personal information.
+Damaging company property, client property, or another employee’s property.
+Smoking in unauthorized areas.
+Smoking where the client does not allow smoking.
+Being impaired while at work, whether through alcohol, drugs, medication misuse, or any other substance.
+Using profane, threatening, or abusive language.
+Opening desks, cabinets, lockers, refrigerators, files, storage areas, or client property without authorization.
+Threatening clients, coworkers, supervisors, or members of the public.
+Using company property, client property, telephones, computers, tools, vehicles, or equipment without permission.
+Removing anything from a workplace or client site without permission, regardless of value.
+Theft or attempted theft.
+Willful property damage.
+Failure to report damage or breakage of client or company property.
+Leaving assigned work areas without authorization.
+Entering unauthorized client areas.
+Allowing an unauthorized person to enter a workplace or client site.
+Fighting or physical confrontation.
+Harassment, bullying, discrimination, or unsuitable conduct.
+Insubordination or refusing to follow lawful instructions.
+Bringing personal belongings into client areas without authorization.
+Leaving the assigned work area before completing the shift.
+Unauthorized use of client washrooms, facilities, supplies, or equipment.
+Working outside assigned hours without approval.
+Signing in or out for another employee.
+Allowing another employee to sign in or out for you.
+Failing to sign in or out as required.
+Recording time other than the exact time worked.
+Refusing to cooperate with company procedures, client requirements, investigations, or safety rules.
+Any action that negatively affects the trust, reputation, business relationship, or professional image of [Company Name].
+Attendance and Payroll:
+Employees must work only approved schedules unless otherwise authorized.
+Employees must report hours honestly.
+Employees must follow the company’s clock-in and clock-out process.
+Payments are based on approved time records, assigned schedules, and company payroll procedures.
+Any change in accommodation, contact information, banking information, or employment-related information must be reported to management as soon as possible.
+Acknowledgement:
+I acknowledge that I have read and understood the Rules of Conduct / Conditions of Employment. I understand that failure to follow these rules may result in disciplinary action, up to and including termination of employment.
+
+
+Default Policy Content: Code of Ethics
+
+
+Title:
+Code of Ethics
+Objective:
+[Company Name] is committed to strong values, professional conduct, honesty, respect, and responsible business practices. Employees are expected to follow these principles while working with coworkers, clients, management, and the public.
+Personal Respect:
+Employees must respect all individuals regardless of origin, beliefs, age, race, gender, background, disability, or any protected characteristic. Discrimination, harassment, bullying, or disrespectful behaviour is not accepted.
+Respect For Customers:
+Clients are a priority. Employees must be honest, efficient, courteous, and professional when serving clients. Employees must protect client property, follow client site rules, and represent [Company Name] respectfully.
+Respect For Society:
+Employees must be honest and professional in dealings with institutions, authorities, clients, coworkers, and the public.
+Respect For The Environment:
+Employees must follow environmental rules, waste disposal requirements, chemical handling procedures, and client-specific environmental instructions. Employees must not pollute or misuse products in a way that could harm people, property, or the environment.
+Respect For The Company And Its Interests:
+Employees must be honest and loyal to [Company Name]. Employees must protect company property, company reputation, company information, client information, and confidential business processes.
+Honesty And Responsibility:
+Employees must be honest in all work reports, time records, client communications, safety reports, incident reports, and company documents.
+Compliance With The Law:
+Employees must follow all applicable laws and regulations while working for [Company Name].
+Compliance With Business Standards:
+Employees must not participate in practices that could harm the company, clients, coworkers, the public, or the trust placed in the company.
+Compliance With Company Policies And Procedures:
+Employees must follow all company policies, procedures, training instructions, safety rules, client instructions, and management directions.
+Reporting Concerns:
+If an employee believes there has been a violation of this Code of Ethics, they should report the concern to:
+[Manager Name]
+[Manager Email]
+[Manager Phone]
+Acknowledgement:
+I acknowledge that I have read and understood the Code of Ethics. I agree to follow the ethical standards expected by [Company Name].
+
+
+Default Policy Content: Dress Code And Personal Hygiene Policy
+
+
+Title:
+Dress Code and Personal Hygiene Policy
+Objective:
+[Company Name] requires employees to present themselves professionally and safely while working. Dress, hygiene, grooming, and uniform standards help maintain client trust, employee safety, and a professional company image.
+Scope:
+This policy applies to all employees while working for [Company Name], attending a client location, wearing company uniform, or representing the company.
+Uniform and Clothing Expectations:
+Employees must wear issued uniforms while on duty if uniforms are provided.
+Uniforms must be worn for work-related purposes only.
+Uniform items may be considered company property.
+Employees are responsible for keeping uniforms clean and in good condition.
+Lost, stolen, or damaged uniforms must be reported.
+Uniforms damaged through normal wear and tear may be replaced based on company policy.
+Uniforms should be worn only during working hours and should not be worn in places that may negatively affect the company image.
+Footwear must be safe, clean, and suitable for the worksite.
+Hygiene Requirements:
+Employees must maintain clean and appropriate personal hygiene during working hours.
+Employees should avoid heavy perfumes, colognes, or strongly scented lotions where these may affect clients, coworkers, or people with allergies or sensitivities.
+Employees must wash hands after eating, using the restroom, handling garbage, or completing tasks where hygiene is required.
+Personal Grooming:
+Clothing must be clean, pressed, and in good condition.
+Clothing must fit appropriately.
+Clothing must not interfere with safe operation of equipment.
+Dark glasses should not be worn unless required for medical or safety reasons.
+Jewelry must not create a safety hazard.
+Long or dangling jewelry should be avoided when it may interfere with work.
+Inappropriate Attire:
+The following items are not permitted during working hours unless specifically approved:
+Sweatpants.
+Jogging pants.
+Bicycle shorts.
+Athletic shorts.
+Tank tops.
+Crop tops.
+Midriff clothing.
+Ripped or unprofessional clothing.
+Flip-flops.
+Sandals.
+Beach footwear.
+Pins, buttons, patches, or clothing with offensive wording or images.
+Any clothing that creates a safety concern or does not meet client site expectations.
+Acknowledgement:
+I acknowledge that I have read and understood the Dress Code and Personal Hygiene Policy. I agree to follow this policy while representing [Company Name].
+
+
+Default Policy Content: Safety Boots Reimbursement Policy
+
+
+Title:
+Safety Boots Reimbursement Policy
+Objective:
+Employees may be required to wear CSA-approved safety boots during assigned work duties. This policy explains the eligibility, reimbursement process, expectations, and responsibilities related to safety boots.
+Scope:
+This policy applies to employees who are required by [Company Name], the client, or the worksite to wear CSA-approved safety boots.
+Guidelines:
+Employees required to wear CSA-approved safety boots may be eligible for reimbursement.
+Default reimbursement amount: $60.00.
+Admin must be able to edit the reimbursement amount.
+Employees must submit an itemized original receipt for CSA-approved safety boots.
+Employees may be required to present the safety boots to verify they are CSA-approved and acceptable for workplace use.
+Receipts and required documents must be submitted within the required company timeframe.
+If approved, reimbursement may be processed through payroll.
+Reimbursement may depend on approval from [Company Name].
+If employment ends before the required employment period, the allowance may be adjusted, withheld, or forfeited based on company policy.
+During extended leave, such as maternity leave, parental leave, extended sick leave, or other approved leave, reimbursement payment may be suspended until the employee returns to work.
+Responsibilities:
+Employees are responsible for maintaining safety boots in good repair and safe working condition.
+Employees are responsible for wearing required safety footwear when assigned.
+Employees must not report to a worksite without required safety footwear where safety boots are required.
+Acknowledgement:
+I acknowledge that I have read and understood the Safety Boots Reimbursement Policy. I agree to follow the requirements for safety footwear and reimbursement.
+
+
+Default Policy Content: Substance Abuse Policy / Suspicion of Impairment
+
+
+Title:
+Substance Abuse Policy / Suspicion of Impairment
+Objective:
+[Company Name] is committed to maintaining a safe, professional, and substance-free workplace. Employees must not report to work impaired by alcohol, drugs, medication misuse, or any substance that may affect safe and professional work performance.
+Scope:
+This policy applies to all employees while working, reporting to work, on client property, using company property, driving for work, on breaks during work hours, or representing [Company Name].
+Zero Tolerance:
+[Company Name] uses a zero-tolerance approach to alcohol and drug use in the workplace where safety, client trust, work quality, or professional conduct may be affected.
+Definitions:
+Impaired:
+A changed physical or mental state caused by alcohol, drugs, medication misuse, or any substance that may affect safe work, judgment, conduct, or performance.
+Substance Abuse:
+The use of alcohol, drugs, medication, or other substances in a way that interferes with work duties, safety, attendance, or workplace behaviour.
+Alcohol:
+Includes intoxicating substances in drinks or products.
+Drugs:
+Includes illegal drugs, controlled substances, cannabis, medication used improperly, and any substance that may affect performance, safety, or judgment.
+Cannabis:
+Includes any substance containing THC, including dried leaves, oils, capsules, food products, candies, vape cartridges, creams, rubs, or similar products.
+Illegal Drugs:
+Any drug or substance where use, sale, possession, purchase, distribution, or exchange is restricted or prohibited by applicable law.
+Employee Responsibilities:
+Employees must report to work fit for duty.
+Employees must follow this policy during all working hours.
+Employees must perform work safely during all periods worked.
+Employees must communicate any work restrictions, safety concerns, or medication-related limitations where appropriate.
+Employees must report any object, condition, or situation that creates a risk to their health, safety, or the safety of others.
+Employees must notify management if they believe another employee is impaired and may create a workplace or public safety risk.
+Employees must not use, consume, possess, distribute, purchase, or sell alcohol or drugs on company property, client property, or during working hours.
+Employees must not consume alcohol or drugs during paid or unpaid breaks.
+Employees must cooperate with reasonable procedures when impairment is suspected.
+Employees must not identify themselves as an employee of [Company Name] while consuming, buying, possessing, distributing, or selling drugs or alcohol outside of work in a way that harms the company or client reputation.
+Company Responsibilities:
+[Company Name] will take reasonable steps to protect employee health, client safety, workplace safety, and company reputation.
+[Company Name] will enforce this policy and ensure proper implementation.
+[Company Name] may remove an employee from a worksite if impairment is reasonably suspected.
+[Company Name] may provide a safe work environment.
+[Company Name] may advise Human Resources or management where policy concerns are identified.
+[Company Name] may arrange safe transportation when necessary.
+[Company Name] may assist or cooperate with support processes where required by law.
+[Company Name] may ensure employees receiving assistance are not disciplined only for seeking help, unless workplace rules or safety requirements have been violated.
+Suspicion of Impairment Procedure:
+If an employee is suspected of being under the influence, management may:
+Request a second opinion from another manager or supervisor.
+Speak privately with the employee.
+Observe and document the employee’s condition.
+Ask questions related to workplace safety and fitness for duty.
+Remove the employee from the worksite for safety.
+Arrange safe transportation.
+Prevent the employee from driving a personal vehicle.
+Notify the employee that transportation has been arranged.
+Schedule a meeting for the next working day.
+Determine next steps, including support, accommodation, investigation, discipline, or return-to-work requirements.
+Voluntary Identification:
+Employees are encouraged to communicate if they have an addiction or substance-related issue that may affect their work or safety. Employees who seek help may receive appropriate support where required by law. Medical information will be kept confidential except as required for safety, accommodation, or legal reasons.
+Prescribed Medication:
+Employees using prescribed medication must ensure it does not affect their ability to work safely. If medication may affect safety, the employee should communicate work restrictions or safety limitations where appropriate. [Company Name] is not requesting personal medical history. Only safety-related work restrictions or emergency information should be shared where needed.
+Signs That May Indicate Impairment:
+Absenteeism:
+Unplanned or unauthorized work absence.
+Frequent delays.
+Frequent sick leave.
+Repeated absences, especially before or after weekends, holidays, or paydays.
+Unplanned frequent absences due to personal emergencies.
+Repeated unexplained absence from the workstation.
+Behaviour At Work:
+Staggering or unstable movement.
+Eyes injected with blood.
+Smell of alcohol.
+Smell of cannabis.
+Changes in behaviour.
+Avoiding supervision.
+Excessive mood changes.
+Confusion.
+Unusual speech.
+Inappropriate approach.
+Laughing or joking in an inappropriate way.
+Signs of poor judgment.
+Changes in physical appearance.
+Changes in words, tone, or behaviour.
+Labour Relations:
+Tense relationship with coworkers.
+Employee may become aggressive.
+Employee may become angry.
+Employee may become moody or irritable.
+Employee may become lonely or isolated.
+Complaints from coworkers or supervisors.
+Reduced teamwork.
+Performance Issues:
+Failure to meet deadlines.
+Important or neglected work tasks.
+Production objectives not respected.
+Repeated mistakes.
+Poor judgment.
+Work quality concerns.
+Work completed in an unsafe or careless way.
+Important Note:
+The presence of one or more signs does not automatically prove impairment. Management must assess the situation fairly and consistently. If there is doubt, the company may investigate further.
+Disciplinary Measures:
+Employees who do not comply with this policy may face disciplinary action, up to and including termination of employment, depending on the seriousness of the situation.
+Acknowledgement:
+I acknowledge that I have read and understood the Substance Abuse Policy / Suspicion of Impairment. I agree to follow this policy and understand that failure to comply may result in disciplinary action, up to and including termination of employment.
+
+
+Emergency Contact And Medical Information Form
+
+
+This should be a form step, but it should also have a privacy notice that must be accepted.
+Title:
+Emergency Contact and Medical Information Privacy Notice
+Privacy Notice:
+The information you provide in this section will be held in the strictest confidence and will only be shared on a need-to-know basis with authorized company personnel. This form is not intended to request or investigate your personal medical history. The information is collected only to help respond to an emergency, allergy, sensitivity, safety concern, or medical situation that may occur at work.
+Acceptance button:
+I have read and understood this confidentiality notice.
+Emergency contact fields:
+Employee name
+Employee address
+Employee phone number
+Cell phone number
+First point of contact:
+Name
+Relationship
+Phone number
+Email optional
+Second point of contact:
+Name
+Relationship
+Phone number
+Email optional
+Optional medical information:
+Relevant medical information
+Allergies
+Special medication
+Sensitivity information
+Any information the employee wants [Company Name] to know in case of emergency
+Make this section optional except emergency contacts.
+
+
+Downloadable Hiring Package
+
+
+Add a button on the public link:
+Download Blank Hiring Package PDF
+This should allow the applicant to download the hiring package and read it offline.
+Add another button after submission:
+Download Completed Hiring Package PDF
+The completed PDF must include:
+Company name
+Company logo if available
+Applicant name
+All accepted policies
+Policy acceptance timestamps
+Personal information
+Emergency contacts
+Optional medical info only if filled
+Uploaded document checklist
+Final acknowledgement
+Actual drawn signature
+Signature date
+
+
+Editable Policy Builder
+
+
+Admin must be able to create a new policy.
+Add button:
+Add Policy
+Fields:
+Policy title
+Policy description
+Policy content
+Acceptance statement
+Required toggle
+Order position
+Admin can include other policies later, for example:
+Workplace Safety Policy
+Confidentiality Policy
+Client Property Policy
+Time Tracking Policy
+Equipment Use Policy
+Attendance Policy
+Payroll Policy
+The public applicant flow should automatically include all required policies in the order set by the admin.
+
+
+Submitted Applications Area
+
+
+Inside Employee > Hiring Package > Submitted Applications, show all completed applicant submissions.
+Use this wording:
+Submitted Applications
+Not “packages submitted.”
+Application card/table should show:
+Applicant name
+Email
+Phone
+Position
+Submitted date
+Application status
+Policies accepted count
+Documents uploaded count
+Signature status
+Review button
+Example:
+1 applicant submitted
+or
+1 application submitted
+
+
+Admin Review Page
+
+
+When admin opens an application, show:
+Application Summary
+Accepted Policies
+Uploaded Documents
+Personal Information
+Emergency Contacts
+Medical Information
+Signature
+Admin Decision
+Accepted Policies section must show:
+Policy title
+Accepted status
+Accepted timestamp
+View accepted policy snapshot
+Download accepted policy PDF if possible
+Uploaded Documents section must show:
+Government ID Front
+Government ID Back
+Resume / CV
+Work Permit if uploaded
+Certificate / Licence if uploaded
+Other Supporting Document if uploaded
+Each file should support:
+Preview
+Download
+File name
+File size
+Uploaded date
+Signature section:
+Show actual drawn signature image.
+Show signature date.
+Admin actions:
+Approve / Mark as Hired
+Request Missing Documents
+Mark Not Approved
+Archive
+Download Completed Package PDF
+Download All Documents
+Download All As ZIP
+Copy Public Link
+Resend Link
+
+
+Public Link Step Locking
+
+
+Applicant cannot skip ahead.
+Required order:
+Policies
+Personal Information
+Emergency Contact
+Medical Information
+Documents
+Final Acknowledgement
+Signature
+Status
+Rules:
+All required policies must be accepted before personal info unlocks.
+Personal info must be completed before emergency contact unlocks.
+Emergency contact must be completed before documents unlock.
+Required documents must be uploaded before signature unlocks.
+Final acknowledgement must be checked before submission.
+Signature must be completed before submit.
+
+
+Required Document Uploads
+
+
+Keep the current document upload system, but make sure it supports:
+Government ID Front
+Government ID Back
+Resume / CV
+Optional:
+Work Permit
+Certificate / Licence
+Other Supporting Document
+Accepted file types:
+Government ID:
+JPG, JPEG, PNG, PDF
+Resume:
+PDF, DOC, DOCX
+Optional documents:
+JPG, JPEG, PNG, PDF, DOC, DOCX where needed
+Upload size:
+100 MB per file
+Do not break the upload system that is currently working.
+
+
+Backend Save Requirement
+
+
+Everything must persist after refresh.
+Save:
+Accepted policies
+Current step
+Personal information
+Emergency contacts
+Medical information
+Uploaded documents
+Signature
+Submission status
+Review status
+Backend database must be the source of truth.
+Do not rely only on localStorage.
+
+
+Final Expected Result
+
+
+Admin goes to:
+Employee > Hiring Package
+Admin can open Policies and edit all policy content.
+Admin can add new policies.
+Admin can create and send a hiring package to an applicant.
+Applicant opens the public link.
+Applicant must read and accept every policy one by one.
+Applicant cannot skip policies.
+Applicant can download the blank hiring package.
+Applicant fills personal information.
+Applicant fills emergency contact information.
+Applicant adds optional medical information.
+Applicant uploads required documents.
+Applicant signs digitally.
+Applicant submits.
+Admin sees the submitted application inside Submitted Applications.
+Admin can view all accepted policies, uploaded documents, personal information, emergency contacts, medical information, and signature.
+Admin can download the completed package PDF.
+Do not touch authentication.
+Do not touch Stripe.
+Do not touch attendance.
+Do not touch payroll.
+Do not touch Forms.
+Do not touch Field Notes.
+Do not touch Agreements.
+Do not touch Proposals.
+Do not touch Publications.
+Do not affect anything else.
