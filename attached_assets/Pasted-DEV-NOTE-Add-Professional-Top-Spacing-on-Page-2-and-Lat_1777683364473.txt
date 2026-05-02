@@ -1,0 +1,119 @@
+DEV NOTE: Add Professional Top Spacing on Page 2 and Later Pages Only
+
+Task:
+Improve the final Service Agreement PDF page spacing so every page after page 1 has proper top margin before the next section starts.
+
+Important:
+Do not break or affect anything else.
+Do not change the agreement content.
+Do not change the section order.
+Do not change the admin side.
+Do not change the signing flow.
+Do not affect proposals, publications, forms, or other PDF exports unless they use the exact same agreement PDF template and need the same fix.
+
+Current issue:
+On page 2, the next section starts too close to the top of the page.
+
+Example:
+“6. Termination Policy” appears too close to the top edge of page 2.
+
+This makes the PDF look less professional.
+
+Required fix:
+Add consistent top padding or top margin to every page after the first page.
+
+Expected result:
+Page 1 can stay the same.
+Page 2 and any pages after it should start lower, with clean breathing space above the first section on that page.
+
+Recommended spacing:
+Add about 40px to 60px top spacing on pages after page 1.
+
+Implementation guidance:
+
+If using CSS print styles, add a print-safe page margin:
+
+@media print {
+@page {
+margin: 60px 48px 60px 48px;
+}
+}
+
+If page 1 needs a different layout, use a wrapper class:
+
+@media print {
+.pdf-page {
+page-break-after: always;
+padding: 48px 56px;
+box-sizing: border-box;
+}
+
+.pdf-page:not(:first-child) {
+padding-top: 64px;
+}
+}
+
+If the PDF is generated from one long HTML document and content naturally flows across pages:
+Use a safer print layout with larger top page margin:
+
+@media print {
+@page {
+margin-top: 70px;
+margin-right: 48px;
+margin-bottom: 60px;
+margin-left: 48px;
+}
+}
+
+If using Puppeteer or Playwright:
+Increase the PDF top margin:
+
+await page.pdf({
+format: "A4",
+printBackground: true,
+margin: {
+top: "70px",
+right: "48px",
+bottom: "60px",
+left: "48px"
+}
+});
+
+If using html2pdf:
+Update the margin option:
+
+html2pdf()
+.set({
+margin: [0.7, 0.5, 0.6, 0.5],
+filename: "service-agreement.pdf",
+html2canvas: { scale: 2 },
+jsPDF: { unit: "in", format: "letter", orientation: "portrait" }
+});
+
+Also check:
+Make sure section headings do not split awkwardly across pages.
+Make sure a heading is not left alone at the bottom of a page.
+Use:
+
+@media print {
+h2, h3, .section-title {
+break-after: avoid;
+page-break-after: avoid;
+}
+
+.agreement-section {
+break-inside: avoid;
+page-break-inside: avoid;
+}
+}
+
+Acceptance checklist:
+Page 2 starts with proper top spacing.
+Page 3 and later pages also have proper top spacing.
+No section heading is stuck too close to the top edge.
+No footer overlaps content.
+Clockfield footer remains visible.
+Page numbers remain visible.
+Agreement ID remains hidden from the client-facing PDF.
+Browser date/time remains hidden.
+All agreement content stays unchanged.

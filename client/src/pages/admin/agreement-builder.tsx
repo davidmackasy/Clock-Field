@@ -327,16 +327,17 @@ function openPrintPreview(agr: Agreement, sections: SectionsData, businessName: 
   <title>Clockfield</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    @page { size: A4; margin: 0; }
-    body { font-family: Georgia, "Times New Roman", serif; font-size: 11pt; color: #111; line-height: 1.65; padding: 22mm 20mm 28mm 20mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    @page { size: A4; margin: 16mm 20mm 20mm 20mm; }
+    @page :first { margin-top: 0; }
+    body { font-family: Georgia, "Times New Roman", serif; font-size: 11pt; color: #111; line-height: 1.65; padding: 22mm 0 18mm 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .header { border-bottom: 2px solid #1a1a1a; padding-bottom: 12pt; margin-bottom: 18pt; }
     .header h1 { font-size: 18pt; font-weight: bold; margin-bottom: 4pt; }
     .header .meta { font-size: 9pt; color: #555; }
     .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 24pt; margin-bottom: 18pt; padding: 12pt; background: #f9f9f9; border: 1px solid #ddd; }
     .party-block h4 { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.5pt; color: #666; margin-bottom: 4pt; }
     .party-block p { font-size: 10pt; margin: 1pt 0; }
-    .section { margin-bottom: 14pt; page-break-inside: avoid; }
-    .section h3 { font-size: 11pt; font-weight: bold; margin-bottom: 4pt; color: #1a1a1a; }
+    .section { margin-bottom: 14pt; page-break-inside: avoid; break-inside: avoid; }
+    .section h3 { font-size: 11pt; font-weight: bold; margin-bottom: 4pt; color: #1a1a1a; break-after: avoid; page-break-after: avoid; }
     .section p { font-size: 10pt; }
     .sig-block { margin-top: 30pt; border-top: 2px solid #1a1a1a; padding-top: 20pt; page-break-inside: avoid; }
     .sig-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20pt; margin-top: 14pt; }
@@ -345,7 +346,7 @@ function openPrintPreview(agr: Agreement, sections: SectionsData, businessName: 
     .sig-img { max-height: 50pt; border-bottom: 1.5px solid #1a1a1a; display: block; }
     .sig-col .name { font-size: 10pt; font-weight: bold; margin-top: 4pt; }
     .sig-col .date-signed { font-size: 9pt; color: #555; }
-    .print-footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 6pt 20mm; display: flex; justify-content: space-between; align-items: center; font-size: 8pt; color: #999; border-top: 1px solid #e0e0e0; background: #fff; }
+    .print-footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 5pt 0; display: flex; justify-content: space-between; align-items: center; font-size: 8pt; color: #999; }
     @media print {
       .no-print { display: none; }
     }
