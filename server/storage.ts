@@ -71,6 +71,13 @@ import {
   type AgreementActivityLog, type InsertAgreementActivityLog,
   hiringPackages,
   type HiringPackage, type InsertHiringPackage,
+  employeeHiringTemplates, employeeHiringPackages, employeeHiringSubmissions,
+  employeeHiringPolicyAcceptances, employeeHiringDocuments,
+  type EmployeeHiringTemplate, type InsertEmployeeHiringTemplate,
+  type EmployeeHiringPackage, type InsertEmployeeHiringPackage,
+  type EmployeeHiringSubmission, type InsertEmployeeHiringSubmission,
+  type EmployeeHiringPolicyAcceptance, type InsertEmployeeHiringPolicyAcceptance,
+  type EmployeeHiringDocument, type InsertEmployeeHiringDocument,
   quoteRequestWalkthroughs, quoteRequestWalkthroughPhotos, quoteRequestWalkthroughSections,
   type QuoteRequestWalkthrough, type InsertQuoteRequestWalkthrough,
   type QuoteRequestWalkthroughPhoto, type InsertQuoteRequestWalkthroughPhoto,
@@ -401,6 +408,36 @@ export interface IStorage {
   createHiringPackage(data: InsertHiringPackage): Promise<HiringPackage>;
   updateHiringPackage(id: string, data: Partial<InsertHiringPackage>): Promise<HiringPackage | undefined>;
   deleteHiringPackage(id: string): Promise<void>;
+  // Employee Hiring Templates
+  getEHTemplatesByCompany(companyId: string): Promise<EmployeeHiringTemplate[]>;
+  getEHTemplate(id: string): Promise<EmployeeHiringTemplate | undefined>;
+  getEHDefaultTemplate(companyId: string): Promise<EmployeeHiringTemplate | undefined>;
+  createEHTemplate(data: InsertEmployeeHiringTemplate): Promise<EmployeeHiringTemplate>;
+  updateEHTemplate(id: string, data: Partial<InsertEmployeeHiringTemplate>): Promise<EmployeeHiringTemplate | undefined>;
+  deleteEHTemplate(id: string): Promise<void>;
+  // Employee Hiring Packages
+  getEHPackagesByCompany(companyId: string): Promise<EmployeeHiringPackage[]>;
+  getEHPackage(id: string): Promise<EmployeeHiringPackage | undefined>;
+  getEHPackageByToken(token: string): Promise<EmployeeHiringPackage | undefined>;
+  createEHPackage(data: InsertEmployeeHiringPackage): Promise<EmployeeHiringPackage>;
+  updateEHPackage(id: string, data: Partial<InsertEmployeeHiringPackage>): Promise<EmployeeHiringPackage | undefined>;
+  deleteEHPackage(id: string): Promise<void>;
+  // Employee Hiring Submissions
+  getEHSubmissionsByCompany(companyId: string): Promise<EmployeeHiringSubmission[]>;
+  getEHSubmission(id: string): Promise<EmployeeHiringSubmission | undefined>;
+  getEHSubmissionByToken(token: string): Promise<EmployeeHiringSubmission | undefined>;
+  getEHSubmissionByPackage(packageId: string): Promise<EmployeeHiringSubmission | undefined>;
+  createEHSubmission(data: InsertEmployeeHiringSubmission): Promise<EmployeeHiringSubmission>;
+  updateEHSubmission(id: string, data: Partial<InsertEmployeeHiringSubmission>): Promise<EmployeeHiringSubmission | undefined>;
+  // Employee Hiring Policy Acceptances
+  getEHPolicyAcceptances(submissionId: string): Promise<EmployeeHiringPolicyAcceptance[]>;
+  createEHPolicyAcceptance(data: InsertEmployeeHiringPolicyAcceptance): Promise<EmployeeHiringPolicyAcceptance>;
+  deleteEHPolicyAcceptance(submissionId: string, policyId: string): Promise<void>;
+  // Employee Hiring Documents
+  getEHDocuments(submissionId: string): Promise<EmployeeHiringDocument[]>;
+  getEHDocument(id: string): Promise<EmployeeHiringDocument | undefined>;
+  upsertEHDocument(submissionId: string, documentType: string, data: InsertEmployeeHiringDocument): Promise<EmployeeHiringDocument>;
+  deleteEHDocument(submissionId: string, documentType: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2047,6 +2084,112 @@ export class DatabaseStorage implements IStorage {
   }
   async deleteHiringPackage(id: string): Promise<void> {
     await db.delete(hiringPackages).where(eq(hiringPackages.id, id));
+  }
+
+  // ── Employee Hiring Templates ──────────────────────────────────────────────
+  async getEHTemplatesByCompany(companyId: string): Promise<EmployeeHiringTemplate[]> {
+    return db.select().from(employeeHiringTemplates).where(eq(employeeHiringTemplates.companyId, companyId)).orderBy(desc(employeeHiringTemplates.createdAt));
+  }
+  async getEHTemplate(id: string): Promise<EmployeeHiringTemplate | undefined> {
+    const [row] = await db.select().from(employeeHiringTemplates).where(eq(employeeHiringTemplates.id, id));
+    return row;
+  }
+  async getEHDefaultTemplate(companyId: string): Promise<EmployeeHiringTemplate | undefined> {
+    const [row] = await db.select().from(employeeHiringTemplates).where(and(eq(employeeHiringTemplates.companyId, companyId), eq(employeeHiringTemplates.isDefault, true)));
+    return row;
+  }
+  async createEHTemplate(data: InsertEmployeeHiringTemplate): Promise<EmployeeHiringTemplate> {
+    const [row] = await db.insert(employeeHiringTemplates).values(data as any).returning();
+    return row;
+  }
+  async updateEHTemplate(id: string, data: Partial<InsertEmployeeHiringTemplate>): Promise<EmployeeHiringTemplate | undefined> {
+    const [row] = await db.update(employeeHiringTemplates).set(data as any).where(eq(employeeHiringTemplates.id, id)).returning();
+    return row;
+  }
+  async deleteEHTemplate(id: string): Promise<void> {
+    await db.delete(employeeHiringTemplates).where(eq(employeeHiringTemplates.id, id));
+  }
+
+  // ── Employee Hiring Packages ───────────────────────────────────────────────
+  async getEHPackagesByCompany(companyId: string): Promise<EmployeeHiringPackage[]> {
+    return db.select().from(employeeHiringPackages).where(eq(employeeHiringPackages.companyId, companyId)).orderBy(desc(employeeHiringPackages.createdAt));
+  }
+  async getEHPackage(id: string): Promise<EmployeeHiringPackage | undefined> {
+    const [row] = await db.select().from(employeeHiringPackages).where(eq(employeeHiringPackages.id, id));
+    return row;
+  }
+  async getEHPackageByToken(token: string): Promise<EmployeeHiringPackage | undefined> {
+    const [row] = await db.select().from(employeeHiringPackages).where(eq(employeeHiringPackages.publicToken, token));
+    return row;
+  }
+  async createEHPackage(data: InsertEmployeeHiringPackage): Promise<EmployeeHiringPackage> {
+    const [row] = await db.insert(employeeHiringPackages).values(data as any).returning();
+    return row;
+  }
+  async updateEHPackage(id: string, data: Partial<InsertEmployeeHiringPackage>): Promise<EmployeeHiringPackage | undefined> {
+    const [row] = await db.update(employeeHiringPackages).set(data as any).where(eq(employeeHiringPackages.id, id)).returning();
+    return row;
+  }
+  async deleteEHPackage(id: string): Promise<void> {
+    await db.delete(employeeHiringPackages).where(eq(employeeHiringPackages.id, id));
+  }
+
+  // ── Employee Hiring Submissions ────────────────────────────────────────────
+  async getEHSubmissionsByCompany(companyId: string): Promise<EmployeeHiringSubmission[]> {
+    return db.select().from(employeeHiringSubmissions).where(eq(employeeHiringSubmissions.companyId, companyId)).orderBy(desc(employeeHiringSubmissions.createdAt));
+  }
+  async getEHSubmission(id: string): Promise<EmployeeHiringSubmission | undefined> {
+    const [row] = await db.select().from(employeeHiringSubmissions).where(eq(employeeHiringSubmissions.id, id));
+    return row;
+  }
+  async getEHSubmissionByToken(token: string): Promise<EmployeeHiringSubmission | undefined> {
+    const [row] = await db.select().from(employeeHiringSubmissions).where(eq(employeeHiringSubmissions.publicToken, token));
+    return row;
+  }
+  async getEHSubmissionByPackage(packageId: string): Promise<EmployeeHiringSubmission | undefined> {
+    const [row] = await db.select().from(employeeHiringSubmissions).where(eq(employeeHiringSubmissions.packageId, packageId));
+    return row;
+  }
+  async createEHSubmission(data: InsertEmployeeHiringSubmission): Promise<EmployeeHiringSubmission> {
+    const [row] = await db.insert(employeeHiringSubmissions).values(data as any).returning();
+    return row;
+  }
+  async updateEHSubmission(id: string, data: Partial<InsertEmployeeHiringSubmission>): Promise<EmployeeHiringSubmission | undefined> {
+    const [row] = await db.update(employeeHiringSubmissions).set(data as any).where(eq(employeeHiringSubmissions.id, id)).returning();
+    return row;
+  }
+
+  // ── Employee Hiring Policy Acceptances ─────────────────────────────────────
+  async getEHPolicyAcceptances(submissionId: string): Promise<EmployeeHiringPolicyAcceptance[]> {
+    return db.select().from(employeeHiringPolicyAcceptances).where(eq(employeeHiringPolicyAcceptances.submissionId, submissionId)).orderBy(asc(employeeHiringPolicyAcceptances.acceptedAt));
+  }
+  async createEHPolicyAcceptance(data: InsertEmployeeHiringPolicyAcceptance): Promise<EmployeeHiringPolicyAcceptance> {
+    const [row] = await db.insert(employeeHiringPolicyAcceptances).values(data as any).returning();
+    return row;
+  }
+  async deleteEHPolicyAcceptance(submissionId: string, policyId: string): Promise<void> {
+    await db.delete(employeeHiringPolicyAcceptances).where(and(eq(employeeHiringPolicyAcceptances.submissionId, submissionId), eq(employeeHiringPolicyAcceptances.policyId, policyId)));
+  }
+
+  // ── Employee Hiring Documents ──────────────────────────────────────────────
+  async getEHDocuments(submissionId: string): Promise<EmployeeHiringDocument[]> {
+    return db.select().from(employeeHiringDocuments).where(eq(employeeHiringDocuments.submissionId, submissionId)).orderBy(asc(employeeHiringDocuments.uploadedAt));
+  }
+  async getEHDocument(id: string): Promise<EmployeeHiringDocument | undefined> {
+    const [row] = await db.select().from(employeeHiringDocuments).where(eq(employeeHiringDocuments.id, id));
+    return row;
+  }
+  async upsertEHDocument(submissionId: string, documentType: string, data: InsertEmployeeHiringDocument): Promise<EmployeeHiringDocument> {
+    const existing = await db.select().from(employeeHiringDocuments).where(and(eq(employeeHiringDocuments.submissionId, submissionId), eq(employeeHiringDocuments.documentType, documentType)));
+    if (existing.length > 0) {
+      const [row] = await db.update(employeeHiringDocuments).set(data as any).where(eq(employeeHiringDocuments.id, existing[0].id)).returning();
+      return row;
+    }
+    const [row] = await db.insert(employeeHiringDocuments).values(data as any).returning();
+    return row;
+  }
+  async deleteEHDocument(submissionId: string, documentType: string): Promise<void> {
+    await db.delete(employeeHiringDocuments).where(and(eq(employeeHiringDocuments.submissionId, submissionId), eq(employeeHiringDocuments.documentType, documentType)));
   }
 }
 

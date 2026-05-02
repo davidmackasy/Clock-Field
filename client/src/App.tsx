@@ -75,6 +75,8 @@ import LandingPage from "@/pages/landing";
 import EmployeeScheduledFieldNotesList from "@/pages/employee/scheduled-field-notes-list";
 import EmployeeScheduledFieldNotesCapture from "@/pages/employee/scheduled-field-notes-capture";
 import PublicScheduledFieldNoteReport from "@/pages/public/scheduled-field-note-report";
+import AdminEmployeeHiring from "@/pages/admin/employee-hiring";
+import PublicEmployeeHiring from "@/pages/public/employee-hiring";
 
 function LoadingScreen() {
   return (
@@ -105,6 +107,7 @@ function AdminLayout() {
           <main className="flex-1 flex flex-col min-h-0 pt-14 pb-16 md:pt-0 md:pb-0">
             <Switch>
               <Route path="/admin" component={AdminDashboard} />
+              <Route path="/admin/employees/hiring-package" component={AdminEmployeeHiring} />
               <Route path="/admin/employees" component={AdminEmployees} />
               <Route path="/admin/schedule" component={AdminSchedule} />
               <Route path="/admin/attendance" component={AdminAttendance} />
@@ -340,6 +343,14 @@ function AppRouter() {
     return (
       <Switch>
         <Route path="/v/:token" component={PublicReviewShare} />
+      </Switch>
+    );
+  }
+
+  if (location.startsWith("/public/employee-hiring/")) {
+    return (
+      <Switch>
+        <Route path="/public/employee-hiring/:token" component={PublicEmployeeHiring} />
       </Switch>
     );
   }

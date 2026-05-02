@@ -21,12 +21,13 @@ import {
   DollarSign, Building2,
   Settings, LogOut, Clock, Users2, BookOpen,
   CreditCard, Bell, ShieldAlert, ChevronRight, Package, Newspaper,
-  FileInput,
+  FileInput, Briefcase,
 } from "lucide-react";
 
 const navItems = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
   { title: "Employees", url: "/admin/employees", icon: Users },
+  { title: "Hiring Package", url: "/admin/employees/hiring-package", icon: Briefcase },
   { title: "Schedule", url: "/admin/schedule", icon: Calendar },
   { title: "Attendance", url: "/admin/attendance", icon: ClipboardList },
   { title: "Payroll", url: "/admin/payroll", icon: DollarSign },

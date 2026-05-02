@@ -1859,3 +1859,104 @@ export const hiringPackages = pgTable("hiring_packages", {
 export const insertHiringPackageSchema = createInsertSchema(hiringPackages).omit({ id: true });
 export type HiringPackage = typeof hiringPackages.$inferSelect;
 export type InsertHiringPackage = z.infer<typeof insertHiringPackageSchema>;
+
+// ── Employee Hiring (New Clean Implementation) ────────────────────────────────
+export const employeeHiringTemplates = pgTable("employee_hiring_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  name: text("name").notNull().default("Default Template"),
+  policies: json("policies"),
+  bootReimbursementAmount: text("boot_reimbursement_amount").notNull().default("60.00"),
+  requireDateOfBirth: boolean("require_date_of_birth").notNull().default(false),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const employeeHiringPackages = pgTable("employee_hiring_packages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  templateId: varchar("template_id"),
+  employeeName: text("employee_name").notNull().default(""),
+  employeeEmail: text("employee_email").notNull().default(""),
+  position: text("position").notNull().default(""),
+  publicToken: text("public_token").notNull().unique(),
+  status: text("status").notNull().default("draft"),
+  sentAt: text("sent_at"),
+  expiresAt: text("expires_at"),
+  createdBy: varchar("created_by"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const employeeHiringSubmissions = pgTable("employee_hiring_submissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  packageId: varchar("package_id").notNull(),
+  publicToken: text("public_token").notNull(),
+  currentStep: integer("current_step").notNull().default(1),
+  status: text("status").notNull().default("started"),
+  reviewStatus: text("review_status"),
+  personalInfoJson: json("personal_info_json"),
+  emergencyContactsJson: json("emergency_contacts_json"),
+  medicalInfoJson: json("medical_info_json"),
+  finalAcknowledgement: boolean("final_acknowledgement").notNull().default(false),
+  signatureData: text("signature_data"),
+  signatureUploadedAt: text("signature_uploaded_at"),
+  submittedAt: text("submitted_at"),
+  lastSavedAt: text("last_saved_at"),
+  adminNotes: text("admin_notes"),
+  missingDocsMessage: text("missing_docs_message"),
+  requestedMissingDocs: json("requested_missing_docs"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const employeeHiringPolicyAcceptances = pgTable("employee_hiring_policy_acceptances", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  submissionId: varchar("submission_id").notNull(),
+  policyId: text("policy_id").notNull(),
+  policyTitle: text("policy_title").notNull(),
+  policyVersion: text("policy_version").notNull().default("1.0"),
+  policyContentSnapshot: text("policy_content_snapshot").notNull(),
+  acceptedAt: text("accepted_at").notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const employeeHiringDocuments = pgTable("employee_hiring_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  submissionId: varchar("submission_id").notNull(),
+  documentType: text("document_type").notNull(),
+  originalName: text("original_name").notNull(),
+  fileName: text("file_name").notNull(),
+  mimeType: text("mime_type").notNull().default(""),
+  fileSize: integer("file_size").notNull().default(0),
+  fileData: text("file_data").notNull(),
+  required: boolean("required").notNull().default(false),
+  uploadedAt: text("uploaded_at").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertEmployeeHiringTemplateSchema = createInsertSchema(employeeHiringTemplates).omit({ id: true });
+export type EmployeeHiringTemplate = typeof employeeHiringTemplates.$inferSelect;
+export type InsertEmployeeHiringTemplate = z.infer<typeof insertEmployeeHiringTemplateSchema>;
+
+export const insertEmployeeHiringPackageSchema = createInsertSchema(employeeHiringPackages).omit({ id: true });
+export type EmployeeHiringPackage = typeof employeeHiringPackages.$inferSelect;
+export type InsertEmployeeHiringPackage = z.infer<typeof insertEmployeeHiringPackageSchema>;
+
+export const insertEmployeeHiringSubmissionSchema = createInsertSchema(employeeHiringSubmissions).omit({ id: true });
+export type EmployeeHiringSubmission = typeof employeeHiringSubmissions.$inferSelect;
+export type InsertEmployeeHiringSubmission = z.infer<typeof insertEmployeeHiringSubmissionSchema>;
+
+export const insertEmployeeHiringPolicyAcceptanceSchema = createInsertSchema(employeeHiringPolicyAcceptances).omit({ id: true });
+export type EmployeeHiringPolicyAcceptance = typeof employeeHiringPolicyAcceptances.$inferSelect;
+export type InsertEmployeeHiringPolicyAcceptance = z.infer<typeof insertEmployeeHiringPolicyAcceptanceSchema>;
+
+export const insertEmployeeHiringDocumentSchema = createInsertSchema(employeeHiringDocuments).omit({ id: true });
+export type EmployeeHiringDocument = typeof employeeHiringDocuments.$inferSelect;
+export type InsertEmployeeHiringDocument = z.infer<typeof insertEmployeeHiringDocumentSchema>;

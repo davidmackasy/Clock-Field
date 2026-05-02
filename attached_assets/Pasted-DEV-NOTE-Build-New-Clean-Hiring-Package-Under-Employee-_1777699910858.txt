@@ -1,0 +1,1062 @@
+DEV NOTE: Build New Clean Hiring Package Under Employee Dropdown
+Goal:
+Build a brand-new Hiring Package feature from scratch.
+This is not the same removed Hiring Package.
+Do not restore the deleted files.
+Do not reuse the broken old upload route.
+Do not reuse the old broken public hiring package implementation.
+Build this cleanly with a new path, new route structure, and proper backend persistence.
+Critical production warning:
+This app is live.
+People are actively using it.
+Do not touch authentication.
+Do not touch login.
+Do not touch logout.
+Do not touch sessions.
+Do not touch auth middleware.
+Do not touch Stripe.
+Do not touch payments.
+Do not touch subscriptions.
+Do not touch attendance.
+Do not touch payroll.
+Do not touch schedules.
+Do not touch Field Notes.
+Do not touch Forms.
+Do not touch Agreements.
+Do not touch Proposals.
+Do not touch regular Publications.
+Do not touch public client links.
+Do not touch existing upload systems.
+Do not touch global middleware.
+Do not touch Vite setup.
+Do not touch server-wide route registration unless only adding this feature route safely.
+Only build the new Hiring Package feature.
+
+
+New Menu Location
+
+
+Move the new Hiring Package feature under Employee.
+Employee should remain clickable and still open the current Employee page.
+Add a dropdown item under Employee:
+Employee
+Hiring Package
+Expected behavior:
+Click Employee:
+Opens the existing Employee page.
+Click the dropdown arrow or dropdown item:
+Shows Hiring Package option.
+Click Hiring Package:
+Opens the new Hiring Package page.
+Do not remove or change the existing Employee page.
+Do not break current employee list, employee details, employee profile, or employee management.
+Suggested route:
+/employees
+Existing employee page stays here.
+/employees/hiring-package
+New Hiring Package admin page.
+Public employee link route:
+/public/employee-hiring/:token
+Use a new public path.
+Do not reuse the old deleted public route.
+
+
+Main Admin Hiring Package Page
+
+
+Create a new page:
+Employee > Hiring Package
+This page should include tabs:
+Templates
+Create Package
+Sent Packages
+Submitted Applications
+Approved / Hired
+Archived
+Keep the UI clean, mobile-friendly, and consistent with Clockfield.
+
+
+Purpose Of Hiring Package
+
+
+This feature allows a business/admin to send a secure hiring package to a new employee or applicant.
+The applicant can:
+Open a public link without logging in
+Read each company policy one by one
+Accept each policy
+Fill personal information
+Fill emergency contacts
+Add optional medical information
+Upload required documents
+Sign digitally
+Submit the package
+Return to the same link to check status
+Admin can:
+Create and send hiring package
+Edit template content
+See accepted policies
+See uploaded documents
+See personal information
+See emergency contacts
+See medical information
+See signature
+Approve applicant
+Request missing documents
+Mark not approved
+Mark hired
+Archive
+Download PDF
+Download documents
+
+
+Do Not Use Old Concept
+
+
+Do not bring back the removed implementation.
+Do not reuse old broken upload route names.
+Do not reuse old frontend upload logic.
+Do not reuse old document state names if they caused mismatch.
+Do not reuse old public route.
+Do not reuse old files unless the code is reviewed and copied only if safe.
+Build clean with these new route names and keys.
+Recommended admin route:
+/employees/hiring-package
+Recommended public route:
+/public/employee-hiring/:token
+Recommended API routes:
+GET /api/employee-hiring/templates
+POST /api/employee-hiring/templates
+POST /api/employee-hiring/packages
+GET /api/employee-hiring/packages
+GET /api/employee-hiring/submissions
+GET /api/employee-hiring/submissions/:id
+PATCH /api/employee-hiring/submissions/:id/status
+Public API routes:
+GET /api/public/employee-hiring/:token
+POST /api/public/employee-hiring/:token/save-progress
+POST /api/public/employee-hiring/:token/accept-policy
+POST /api/public/employee-hiring/:token/upload-document
+POST /api/public/employee-hiring/:token/sign
+POST /api/public/employee-hiring/:token/submit
+
+
+Required Hiring Package Steps For Applicant
+
+
+The public link must use a clear step flow:
+Step 1: Policies
+Step 2: Personal Information
+Step 3: Emergency Contacts
+Step 4: Optional Medical Information
+Step 5: Documents
+Step 6: Final Acknowledgement and Signature
+Step 7: Status
+The applicant must not be able to skip required steps.
+Progress must save to the backend at every step.
+Refreshing the page must not reset progress.
+
+
+Policy Acceptance Flow
+
+
+The applicant must read and accept every policy one by one.
+Policy list:
+Rules of Conduct / Conditions of Employment
+Code of Ethics
+Dress Code and Personal Hygiene Policy
+Safety Boots Reimbursement Policy
+Substance Abuse Policy / Suspicion of Impairment
+Emergency Contact and Medical Information Privacy Notice
+Final Employee Acknowledgement
+Behavior:
+Only the first policy is unlocked at the beginning.
+After the applicant accepts policy 1, policy 2 unlocks.
+After policy 2 is accepted, policy 3 unlocks.
+Continue until all policies are accepted.
+The applicant cannot continue to Personal Information until every required policy is accepted.
+Acceptance button text:
+I have read, understood, and agree to this policy.
+Acceptance helper text:
+By clicking agree, you confirm that you reviewed this policy and understand that it may form part of your confidential employment file.
+
+
+Save Policy Acceptance Permanently
+
+
+Each policy acceptance must save immediately to the backend.
+Store:
+policy_id
+policy_title
+policy_version
+policy_content_snapshot
+accepted: true
+accepted_at
+public_token
+submission_id
+employee_name if available
+employee_email if available
+ip_address if available
+user_agent if available
+Important:
+Store a snapshot of the policy text at the time of acceptance. If the admin edits the policy later, the accepted version must remain unchanged.
+
+
+Default Policy Content
+
+
+Use the uploaded 12-page hiring package as the base structure.
+The default template should include detailed editable policies, not short summaries.
+Use dynamic placeholders:
+[Company Name]
+[Company Address]
+[Manager Name]
+[Manager Email]
+[Manager Phone]
+[Employee Name]
+[Position]
+[Start Date]
+Do not hard-code only one business name.
+The sample can show Master Cleaning, but production must pull the company name from the business account.
+
+
+Rules of Conduct / Conditions of Employment
+
+
+Default policy should include:
+Objective:
+The Rules of Conduct and Conditions of Employment are designed to protect employees, clients, company property, workplace safety, and the professional reputation of [Company Name].
+Scope:
+This policy applies to all employees, contractors, and workers representing [Company Name] while on duty, on client property, using company property, or acting on behalf of the company.
+Include rule items:
+Falsification of personal information supplied to the company
+Using incorrect personal information or identification
+Damaging company property, client property, or employee property
+Smoking in unauthorized areas
+Smoking where a client does not allow smoking
+Being impaired at work by alcohol, drugs, medication misuse, or any substance
+Use of profane, threatening, or abusive language
+Unauthorized opening of desks, cabinets, lockers, refrigerators, or client property
+Threatening clients, employees, coworkers, or members of the public
+Unauthorized use of company phone, tools, supplies, vehicle, or equipment
+Removing anything from the workplace without permission
+Theft or attempted theft
+Willful damage to company or client property
+Leaving assigned work areas without authorization
+Entering client areas without permission
+Fighting, harassment, bullying, or unsuitable behaviour
+Insubordination
+Failure to follow instructions from a manager, supervisor, or authorized person
+Bringing personal possessions into client areas without approval
+Leaving an assigned work area before completing the shift
+Unauthorized use of client facilities or washrooms
+Working outside assigned hours without approval
+Signing in or out for another employee
+Allowing another employee to sign in or out for you
+Failure to sign in or out as required
+Recording time other than the exact time worked
+Refusing to cooperate with company or client requirements
+Any act that may damage the reputation, trust, or business relationship of [Company Name]
+Acknowledgement:
+I acknowledge that I have read and understood the Rules of Conduct / Conditions of Employment. I understand that failure to follow these rules may result in disciplinary action, up to and including termination of employment.
+
+
+Code of Ethics
+
+
+Default policy should include:
+Personal Respect:
+Employees must respect all individuals regardless of origin, beliefs, age, race, gender, or other protected characteristics.
+Respect for Customers:
+Clients are a priority. Employees must act courteously, professionally, and respectfully toward all clients.
+Respect for Society:
+Employees must be honest, efficient, and courteous in all dealings with institutions, authorities, and outside organizations.
+Respect for the Environment:
+Employees must follow applicable environmental rules and avoid pollution or unsafe disposal practices.
+Respect for the Company and Its Interests:
+Employees must act honestly and loyally, avoid conflicts of interest, and protect company property and confidential information.
+Honesty and Responsibility:
+Employees must be honest and transparent in work, reporting, time tracking, client interactions, and company communication.
+Compliance With The Law:
+Employees must follow applicable laws and regulations.
+Compliance With Business Standards:
+Employees must not participate in practices that could damage the company, clients, coworkers, or the public.
+Compliance With Company Policies:
+Employees must follow all corporate policies, procedures, safety rules, and instructions.
+Acknowledgement:
+I acknowledge that I have read and understood the Code of Ethics. I agree to follow the ethical standards expected by [Company Name].
+
+
+Dress Code and Personal Hygiene Policy
+
+
+Default policy should include:
+Objective:
+Employees must present themselves professionally while representing [Company Name]. Dress, hygiene, and grooming standards help maintain professionalism, safety, client trust, and company image.
+Scope:
+This policy applies to all employees while working, visiting client sites, wearing company uniforms, or representing [Company Name].
+Uniform and clothing expectations:
+Employees must wear issued uniforms while on duty if uniforms are provided.
+Uniforms must be used only for work-related purposes.
+Uniform items are company property where applicable.
+Lost or damaged uniforms must be reported.
+Employees may be responsible for replacement costs where allowed by company policy.
+Uniforms must be clean, appropriate, and in good condition.
+Uniforms should not be worn in places that could negatively affect company image.
+Shoes must be safe, clean, and appropriate for the worksite.
+Hygiene expectations:
+Employees must maintain clean and appropriate personal hygiene.
+Employees should avoid strong perfumes, colognes, or lotions where they may affect clients or coworkers.
+Hands and body hygiene must be maintained during work.
+Personal grooming expectations:
+Clothing must be clean, pressed, and fit appropriately.
+Clothing must not interfere with safe equipment operation.
+No dark glasses unless prescribed or required for safety.
+Jewelry must not create a safety hazard.
+Inappropriate attire:
+Sweatpants
+Jogging pants
+Bicycle shorts
+Athletic shorts
+Tank tops
+Ripped or unprofessional clothing
+Flip-flops
+Sandals
+Beach footwear
+Offensive wording or images on clothing
+Pins, buttons, or inappropriate paraphernalia
+Acknowledgement:
+I acknowledge that I have read and understood the Dress Code and Personal Hygiene Policy. I agree to follow this policy while representing [Company Name].
+
+
+Safety Boots Reimbursement Policy
+
+
+Default policy should include:
+Objective:
+Some roles may require employees to wear CSA-approved safety boots to perform assigned duties safely.
+Scope:
+This policy applies to employees who are required by [Company Name] or client site requirements to wear CSA-approved safety boots.
+Guidelines:
+Employees required to wear CSA-approved safety boots may be eligible for reimbursement up to the approved company amount.
+Default reimbursement amount: $60.00.
+Admin must be able to edit this amount.
+Employee must submit the original receipt.
+Employee may be required to show the approved safety boots.
+Employee must provide any required documentation within the required timeframe.
+If approved, reimbursement may be processed through payroll.
+If employment ends before the required period, reimbursement may be adjusted or forfeited based on company policy.
+Employees are responsible for maintaining their safety boots in safe and usable condition.
+Acknowledgement:
+I acknowledge that I have read and understood the Safety Boots Reimbursement Policy. I agree to follow the requirements for safety footwear and reimbursement.
+
+
+Substance Abuse Policy / Suspicion of Impairment
+
+
+Default policy should include:
+Objective:
+[Company Name] is committed to maintaining a safe, professional, and substance-free workplace. Employees must not report to work impaired by alcohol, drugs, medication misuse, or any substance that may affect safe and professional work performance.
+Scope:
+This policy applies to all employees while working, on client property, using company equipment, driving for work, or representing [Company Name].
+Zero tolerance:
+[Company Name] uses a zero-tolerance approach to alcohol and drug use in the workplace where safety, client trust, or work performance may be affected.
+Definitions:
+Impaired:
+A changed physical or mental state caused by alcohol, drugs, medication misuse, or any substance that affects safe work performance.
+Substance abuse:
+The use of alcohol, drugs, medication, or other substances in a way that interferes with work duties, safety, or workplace conduct.
+Alcohol:
+Includes intoxicating substances in drinks or products.
+Drugs:
+Includes legal or illegal substances, controlled substances, cannabis, or medication used improperly.
+Employee responsibilities:
+Report to work fit for duty.
+Follow this policy during all working hours.
+Do not use, possess, distribute, or be under the influence of alcohol or drugs while working.
+Do not consume alcohol or drugs during paid or unpaid breaks when working.
+Tell management if a medication or health restriction could affect safe work, where appropriate.
+Cooperate with reasonable company procedures where impairment is suspected.
+Do not identify yourself as an employee of [Company Name] when using, possessing, distributing, or selling drugs or alcohol outside of work in a way that harms the company’s reputation.
+Company responsibilities:
+Protect employee health and safety.
+Protect client safety.
+Protect workplace safety.
+Protect the professional reputation of [Company Name].
+Enforce the policy fairly.
+Remove an employee from the worksite if impairment is reasonably suspected.
+Arrange safe transportation when required.
+Prevent an impaired employee from driving from the site.
+Investigate and document incidents.
+Support accommodation where required by law.
+Suspicion of impairment procedure:
+Management may request a second opinion from another manager or supervisor.
+Management may speak privately with the employee.
+Management may observe and document signs of impairment.
+The employee may be removed from the worksite for safety.
+The company may arrange taxi, rideshare, or other safe transportation.
+The employee may not be allowed to drive a personal vehicle.
+A meeting may be scheduled for the next working day.
+The company may determine whether support, accommodation, or discipline is required.
+Signs that may indicate impairment:
+Absenteeism:
+Unplanned or unauthorized work absence
+Frequent delays
+Frequent sick leave
+Repeated absences, especially before or after weekends, holidays, or paydays
+Frequent absences due to personal emergencies
+Behaviour at work:
+Staggering or unstable movement
+Eyes injected with blood
+Smell of alcohol or cannabis
+Changes in behaviour
+Avoiding supervision
+Excessive mood changes
+Confusion
+Unusual speech
+Inappropriate or unusual behaviour
+Labour relations:
+Poor relationships with coworkers
+Becoming aggressive, argumentative, or uncooperative
+Complaints from others
+Reduced teamwork
+Performance issues:
+Failure to meet deadlines
+Important or neglected work tasks
+Production objectives not respected
+Repeated mistakes
+Poor judgment
+Work quality concerns
+Disciplinary measures:
+Failure to comply with this policy may result in disciplinary action, up to and including termination of employment, depending on the seriousness of the situation.
+Acknowledgement:
+I acknowledge that I have read and understood the Substance Abuse Policy / Suspicion of Impairment. I agree to follow this policy and understand that failure to comply may result in disciplinary action, up to and including termination of employment.
+
+
+Emergency Contact and Medical Information Privacy Notice
+
+
+Before the applicant fills medical information, show this notice:
+The information you provide in this section will be held in the strictest confidence and will only be shared on a need-to-know basis with authorized company personnel. This form is not intended to request or investigate your personal medical history. The information is collected only to help respond to an emergency, safety concern, allergy, sensitivity, or medical situation that may occur at work.
+Acceptance button:
+I have read and understood this confidentiality notice.
+
+
+Personal Information Form
+
+
+Required fields:
+Legal first name
+Legal last name
+Preferred name optional
+Email
+Phone number
+Home address
+City
+Province / State
+Postal code
+Country
+Position / job title
+Expected start date
+Optional fields:
+Employee ID
+Date of birth, only if admin enables it
+Save this data to the backend when the applicant continues.
+Reload it after refresh.
+
+
+Emergency Contact Form
+
+
+Required:
+Emergency contact 1 name
+Emergency contact 1 relationship
+Emergency contact 1 phone
+Emergency contact 1 email optional
+Emergency contact 2 name
+Emergency contact 2 relationship
+Emergency contact 2 phone
+Emergency contact 2 email optional
+Save this data to the backend when the applicant continues.
+Reload it after refresh.
+
+
+Optional Medical Information Form
+
+
+This section must be optional.
+Fields:
+Allergies
+Sensitivities
+Medical notes relevant to workplace safety
+Medication or special note the employee wants the company to know
+Emergency safety notes
+Do not force medical fields as required.
+Show privacy notice above the fields.
+Save this data to the backend if provided.
+Reload it after refresh.
+
+
+Required Document Uploads
+
+
+The applicant must upload:
+Government ID Front
+Government ID Back
+Resume / CV
+Optional uploads:
+Work Permit
+Certificate / Licence
+Other Supporting Document
+Document keys must be standardized:
+government_id_front
+government_id_back
+resume_cv
+work_permit
+certificate_license
+other_supporting_document
+Use these exact keys everywhere:
+Frontend
+Backend
+Database
+Validation
+Admin review
+PDF generation
+
+
+Upload File Types
+
+
+Government ID Front:
+JPG, JPEG, PNG, PDF
+Government ID Back:
+JPG, JPEG, PNG, PDF
+Resume / CV:
+PDF, DOC, DOCX
+Work Permit:
+JPG, JPEG, PNG, PDF, DOC, DOCX
+Certificate / Licence:
+JPG, JPEG, PNG, PDF
+Other Supporting Document:
+JPG, JPEG, PNG, PDF, DOC, DOCX
+Allow MIME type or file extension validation.
+Do not reject a valid file only because MIME type is blank.
+Mobile uploads may return a blank or unusual MIME type.
+
+
+Upload Size
+
+
+Set maximum upload size:
+100 MB per file
+Show UI text:
+Maximum file size: 100 MB
+Check every layer:
+Frontend validation
+Backend multipart parser
+Server upload limit
+Storage helper
+Route-level limit
+Any proxy limit the app controls
+Do not change global app upload behavior.
+Only apply this limit to the new employee hiring upload route.
+
+
+Upload Route Must Be Clean And New
+
+
+Use this new public upload endpoint:
+POST /api/public/employee-hiring/:token/upload-document
+Do not reuse:
+/api/public/hiring-package/:token/upload-document
+/api/public/hiring-packages/:token/upload-document
+The route must be registered before any SPA fallback.
+The route must not require login.
+Security comes from the secure public token.
+The route must parse multipart/form-data correctly.
+Recommended FormData:
+formData.append("file", file)
+formData.append("documentType", documentType)
+Do not manually set Content-Type.
+Do not send file as JSON.
+
+
+Backend Upload Handling
+
+
+Backend must:
+Validate public token
+Find hiring package
+Find or create the correct submission
+Read multipart/form-data
+Validate file exists
+Validate documentType
+Validate size under 100 MB
+Validate extension or MIME
+Upload to storage using the app’s working storage helper
+Save metadata to submission
+Return saved metadata
+Returned JSON:
+{
+"success": true,
+"document": {
+"documentType": "government_id_front",
+"fileName": "id-front.pdf",
+"originalName": "id-front.pdf",
+"storageKey": "employee-hiring/...",
+"mimeType": "application/pdf",
+"fileSize": 123456,
+"uploadedAt": "..."
+}
+}
+On failure, return JSON with a clear error.
+Do not return HTML.
+
+
+Upload UI Behavior
+
+
+Each document card must have its own file input.
+Use unique IDs:
+upload-government_id_front
+upload-government_id_back
+upload-resume_cv
+upload-work_permit
+upload-certificate_license
+upload-other_supporting_document
+After upload succeeds, show:
+Uploaded: filename.ext
+Replace
+Remove
+Clear the error for that document.
+Required validation must disappear after upload.
+The applicant can continue only when these three exist:
+government_id_front
+government_id_back
+resume_cv
+Optional documents must not block continuation.
+
+
+Save Progress And Reload After Refresh
+
+
+Backend must be the source of truth.
+Do not rely on localStorage as the main save system.
+Every public link should have one submission record.
+On page load:
+GET /api/public/employee-hiring/:token
+Response includes:
+Package details
+Template policies
+Submission status
+Accepted policies
+Personal info
+Emergency contacts
+Medical info
+Uploaded documents
+Signature status
+Current step
+Frontend must hydrate state from backend.
+If the applicant refreshes:
+Accepted policies stay accepted.
+Personal information stays filled.
+Emergency contacts stay filled.
+Medical information stays filled.
+Uploaded documents stay visible.
+Signature stays saved.
+Submitted status stays submitted.
+
+
+Final Acknowledgement And Signature
+
+
+Before final signature, show:
+I confirm that the information I provided is accurate to the best of my knowledge. I confirm that I have read, understood, and agreed to all required company policies in this hiring package. I understand that this hiring package and all accepted policies may become part of my confidential employment file.
+Required checkbox:
+I agree and confirm.
+Signature requirements:
+Draw with mouse
+Draw with finger on mobile
+Clear signature
+Re-sign
+Save actual drawn signature image
+Do not save only text.
+Signature must appear in admin review and final PDF.
+
+
+Submit Flow
+
+
+When applicant submits:
+Validate all required policies accepted
+Validate personal information complete
+Validate emergency contact complete
+Validate required documents uploaded
+Validate final acknowledgement checked
+Validate signature exists
+Update submission:
+status: submitted
+review_status: under_review
+submitted_at: timestamp
+After submission, public link becomes status page.
+Show:
+Your hiring package has been submitted and is under review.
+Please keep this link. You can return to this page to check your application status.
+Current status:
+Under Review
+
+
+Admin Submitted Applications
+
+
+Under:
+Employee > Hiring Package > Submitted Applications
+Show:
+Employee name
+Email
+Phone
+Position
+Submitted date
+Policies accepted count
+Documents uploaded count
+Signature status
+Review status
+Action: Review
+
+
+Admin Review Page
+
+
+When admin clicks Review, show:
+Application Summary
+Policy Acceptance Records
+Personal Information
+Emergency Contacts
+Medical Information
+Uploaded Documents
+Signature
+Admin Decision
+Policy Acceptance Records should show:
+Policy title
+Accepted status
+Accepted timestamp
+Policy version
+View accepted policy snapshot
+Uploaded Documents should show:
+Government ID Front
+Government ID Back
+Resume / CV
+Work Permit if uploaded
+Certificate / Licence if uploaded
+Other Supporting Document if uploaded
+Each file should support:
+Preview
+Download
+File name
+File size
+Uploaded date
+Preview logic:
+JPG/PNG: show image preview
+PDF: show PDF preview if browser supports it
+DOC/DOCX: show download button only if preview is not supported
+Signature:
+Show actual drawn signature image
+Show signature date
+
+
+Admin Decisions
+
+
+Admin actions:
+Approve / Mark as Hired
+Request Missing Documents
+Mark Not Approved
+Mark Fired / Inactive
+Archive
+Download Completed PDF
+Download Documents
+Download All Documents as ZIP
+Copy Public Link
+Resend Link
+Do not automatically create an employee profile unless admin confirms.
+When admin clicks Approve / Mark as Hired, show modal:
+Do you want to create an employee profile from this hiring package?
+Options:
+Create Employee Profile
+Approve Only
+Cancel
+
+
+Missing Documents Flow
+
+
+Admin can request missing documents.
+Admin selects:
+Government ID Front
+Government ID Back
+Resume / CV
+Work Permit
+Certificate / Licence
+Other Supporting Document
+Admin adds message.
+Submission status becomes:
+missing_documents
+Public link shows:
+Action Required: Missing Documents
+Employee can upload requested missing documents.
+After upload, status returns to:
+under_review
+
+
+Status Values
+
+
+Use these statuses:
+draft
+sent
+viewed
+started
+in_progress
+submitted
+under_review
+missing_documents
+approved_hired
+not_approved
+fired_inactive
+archived
+
+
+Database Suggestion
+
+
+Create clean new tables or models.
+Suggested tables:
+employee_hiring_packages
+employee_hiring_templates
+employee_hiring_submissions
+employee_hiring_policy_acceptances
+employee_hiring_documents
+Suggested employee_hiring_packages fields:
+id
+business_id
+template_id
+employee_name
+employee_email
+position
+public_token
+status
+sent_at
+expires_at
+created_by
+created_at
+updated_at
+Suggested employee_hiring_submissions fields:
+id
+business_id
+package_id
+public_token
+current_step
+status
+review_status
+personal_info_json
+emergency_contacts_json
+medical_info_json
+final_acknowledgement
+signature_storage_key
+signature_uploaded_at
+submitted_at
+last_saved_at
+admin_notes
+created_at
+updated_at
+Suggested employee_hiring_policy_acceptances fields:
+id
+business_id
+submission_id
+policy_id
+policy_title
+policy_version
+policy_content_snapshot
+accepted_at
+ip_address
+user_agent
+created_at
+Suggested employee_hiring_documents fields:
+id
+business_id
+submission_id
+document_type
+original_name
+file_name
+storage_key
+mime_type
+file_size
+required
+uploaded_at
+created_at
+
+
+PDF Generation
+
+
+Final PDF should include:
+Company logo
+Company name
+Company address
+Hiring Package title
+Employee personal information
+Emergency contacts
+Optional medical information only if filled
+Accepted policy list
+Acceptance timestamps
+Full policy text or appendix
+Uploaded document checklist
+Final acknowledgement
+Actual drawn signature
+Signature date
+Do not include raw file URLs.
+Document checklist example:
+Government ID Front: Uploaded
+Government ID Back: Uploaded
+Resume / CV: Uploaded
+Work Permit: Uploaded if provided
+Certificate / Licence: Uploaded if provided
+
+
+Email Sending
+
+
+When admin sends package, email applicant:
+Subject:
+Your Hiring Package from [Company Name]
+Body:
+Hi [Employee Name],
+Please review and complete your hiring package using the secure link below.
+[Complete Hiring Package]
+You can fill it out online, review each company policy, upload your required documents, sign digitally, and return to the same link to check your application status.
+Thank you,
+[Company Name]
+
+
+Privacy Text Near Uploads
+
+
+Show this text near document uploads:
+The documents you upload will be kept confidential and used only for employment review, identity verification, onboarding, and employment record purposes. Access is limited to authorized company personnel.
+
+
+Public Link Security
+
+
+Use a secure random token.
+Do not expose internal database IDs.
+Public link must not require login.
+Public link must only allow access to that one hiring package.
+Uploaded files must not be publicly accessible without token validation or admin authentication.
+
+
+Testing Requirements
+
+
+Test before marking complete.
+Test 1: Navigation
+Employee page still works.
+Employee dropdown opens.
+Hiring Package opens from dropdown.
+No other menu item changed.
+Test 2: Create package
+Admin creates hiring package.
+Admin sends link.
+Public link opens.
+Test 3: Policy persistence
+Accept first policy.
+Refresh.
+Policy remains accepted.
+Accept all policies.
+Refresh.
+System moves to next incomplete step, not back to first policy.
+Test 4: Personal info persistence
+Fill personal info.
+Continue.
+Refresh.
+Fields remain saved.
+Test 5: Emergency contact persistence
+Fill emergency contacts.
+Continue.
+Refresh.
+Fields remain saved.
+Test 6: Medical info persistence
+Fill optional medical info.
+Continue.
+Refresh.
+Fields remain saved.
+Test 7: Upload documents
+Upload Government ID Front as JPG.
+Upload Government ID Back as PNG.
+Upload Resume as PDF.
+Confirm UI shows uploaded file names.
+Refresh.
+Confirm files still show as uploaded.
+Test 8: Resume DOC/DOCX
+Upload DOC resume.
+Confirm it works.
+Replace with DOCX.
+Confirm it works.
+Test 9: PDF ID
+Upload Government ID Front as PDF.
+Upload Government ID Back as PDF.
+Confirm both work.
+Test 10: File size
+Upload file under 100 MB.
+Confirm it works.
+Upload file over 100 MB.
+Show clean error.
+Test 11: Continue to signature
+Upload all required files.
+Click Continue.
+Confirm it allows signature.
+Test 12: Signature
+Sign with mouse.
+Refresh before submit.
+Signature remains saved.
+Test on mobile with finger.
+Test 13: Submit
+Submit package.
+Public link shows Under Review.
+Refresh.
+Still shows Under Review.
+Test 14: Admin review
+Go to Employee > Hiring Package > Submitted Applications.
+Open submission.
+Confirm policies, documents, personal info, emergency contacts, medical info, and signature are visible.
+Test 15: Admin decision
+Approve applicant.
+Public link shows Approved / Hired.
+Request missing document.
+Public link shows Action Required.
+
+
+Final Expected Result
+
+
+The new Hiring Package feature is cleanly built under Employee dropdown.
+Employee page still works normally.
+Hiring Package has templates, create package, sent packages, submitted applications, approved/hired, and archived.
+Applicant can read and accept every policy.
+Applicant cannot skip policies.
+Everything saves after refresh.
+Document upload works for JPG, PNG, PDF, DOC, and DOCX.
+Upload limit is 100 MB per file.
+Admin can view accepted policies, uploaded documents, personal information, emergency contacts, medical information, and signature.
+Admin can approve, request missing documents, mark not approved, archive, or mark fired/inactive.
+No old broken Hiring Package implementation is reused.
+Do not touch authentication.
+Do not touch Stripe.
+Do not touch attendance.
+Do not touch payroll.
+Do not touch Field Notes.
+Do not touch Forms.
+Do not touch Agreements.
+Do not touch Proposals.
+Do not touch regular Publications.
+Do not touch global middleware.
+Do not affect anything else.
