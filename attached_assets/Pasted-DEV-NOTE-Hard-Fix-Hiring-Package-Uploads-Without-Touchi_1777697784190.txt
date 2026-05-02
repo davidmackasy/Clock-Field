@@ -1,0 +1,475 @@
+DEV NOTE: Hard Fix Hiring Package Uploads Without Touching Anything Else
+Issue:
+The Hiring Package flow still does not accept uploaded documents. The user can reach Step 5, click Upload, select a file, but the UI does not show the file as uploaded. When they continue, the system still says:
+Government ID Front is required.
+Government ID Back is required.
+Resume / CV is required.
+This means the upload is failing silently, not saving to backend, not updating frontend state, or the frontend and backend document keys do not match.
+Scope:
+Only fix this inside:
+Public hiring package link
+Step 5 document upload
+Hiring package submission persistence
+Publications > Hiring Package admin submission review
+Do not touch anything else.
+Do not change the policies flow.
+Do not change personal info flow unless needed for persistence.
+Do not touch Agreements, Proposals, Publications outside Hiring Package, Forms, Field Notes, Auth, Stripe, Payroll, Attendance, or Employee app.
+Do not redesign the app.
+Do not delete existing data.
+Main fix:
+Make document uploads work reliably and persist after refresh.
+
+
+Increase upload limit to 100 MB
+
+
+Set max file size to:
+100 MB per file
+Update all upload limits involved:
+Frontend validation
+Backend multipart/form-data parser
+Server request body limit
+API route config
+Storage upload limit if app-level limit exists
+Any proxy/body parser limit in the app
+Update UI text:
+Maximum file size: 100 MB
+
+
+Do not rely only on hidden file input
+
+
+The current Upload button may be opening file picker but not properly sending the selected file.
+Check that every upload button is correctly connected to the correct file input.
+Each document card must have a real file input:
+government_id_front
+government_id_back
+resume_cv
+work_permit
+certificate_license
+other_supporting_document
+Each button must trigger its own input, not the wrong input.
+Common bug to check:
+All upload buttons may be pointing to the same input ID.
+The selected file may not be passed to the upload function.
+The onChange handler may not fire because input value is not reset after failed upload.
+The upload function may receive document label instead of document key.
+Fix input IDs:
+upload-government_id_front
+upload-government_id_back
+upload-resume_cv
+upload-work_permit
+upload-certificate_license
+upload-other_supporting_document
+
+
+Standardize document keys everywhere
+
+
+Use the same document keys in frontend, backend, database, validation, and admin review.
+Required document keys:
+government_id_front
+government_id_back
+resume_cv
+Optional document keys:
+work_permit
+certificate_license
+other_supporting_document
+Search for and remove mismatches like:
+governmentIdFront
+governmentIdBack
+resume
+resumeCv
+id_front
+id_back
+cv
+government_front
+government_back
+Map old keys if needed, but new upload state must use the standard keys.
+
+
+Fix frontend upload handler
+
+
+When a user selects a file, the frontend must:
+Get the selected file
+Validate size under 100 MB
+Validate allowed extension and MIME
+Create FormData
+Append file
+Append documentType
+POST to public upload endpoint
+Wait for success response
+Update uploadedDocuments state
+Clear error for that document
+Show uploaded file name immediately
+Persist returned file metadata
+Expected frontend behavior:
+User selects government ID front.
+Card changes to:
+Uploaded: filename.jpg
+Replace
+Remove
+The red error for Government ID Front disappears immediately.
+
+
+Correct FormData payload
+
+
+Send multipart/form-data.
+FormData should include:
+file
+documentType
+Example:
+formData.append("file", file)
+formData.append("documentType", "government_id_front")
+Do not send file inside JSON.
+Do not manually set Content-Type to application/json.
+Do not manually set multipart boundary.
+Let the browser set Content-Type automatically.
+
+
+Fix backend public upload endpoint
+
+
+Create or fix endpoint similar to:
+POST /api/public/hiring-package/:token/upload-document
+Backend must:
+Validate public token
+Find hiring package
+Find or create one submission record
+Read multipart/form-data
+Read documentType
+Read file
+Validate file exists
+Validate documentType is allowed
+Validate file size under 100 MB
+Validate file extension and MIME
+Upload file to storage
+Save file metadata to submission
+Return saved document metadata
+Important:
+Do not require admin authentication for this endpoint.
+This is a public employee link.
+Security must come from the secure public token.
+
+
+File types allowed
+
+
+Government ID Front:
+jpg, jpeg, png, pdf
+Government ID Back:
+jpg, jpeg, png, pdf
+Resume / CV:
+pdf, doc, docx
+Work Permit:
+jpg, jpeg, png, pdf, doc, docx
+Certificate / Licence:
+jpg, jpeg, png, pdf
+Other Supporting Document:
+jpg, jpeg, png, pdf, doc, docx
+MIME types allowed:
+image/jpeg
+image/png
+application/pdf
+application/msword
+application/vnd.openxmlformats-officedocument.wordprocessingml.document
+Also allow blank MIME type if the file extension is valid.
+This is important for mobile uploads and some browsers.
+
+
+Fix validation fallback
+
+
+Do not reject valid uploads just because file.type is empty or weird.
+Validation should pass if either:
+file extension is allowed
+or
+MIME type is allowed
+Best logic:
+const extension = file.name.split(".").pop()?.toLowerCase()
+const mime = file.type
+if extension is allowed for this document type, accept it.
+If MIME is allowed for this document type, accept it.
+If neither matches, reject it.
+
+
+Save uploaded file metadata correctly
+
+
+In the submission record, store:
+documentType
+fileName
+originalName
+storageKey
+fileUrl or secure download route
+mimeType
+fileSize
+uploadedAt
+required
+Example:
+uploaded_documents_json = {
+"government_id_front": {
+"documentType": "government_id_front",
+"fileName": "id-front.pdf",
+"storageKey": "hiring-packages/...",
+"mimeType": "application/pdf",
+"fileSize": 123456,
+"uploadedAt": "..."
+},
+"government_id_back": {},
+"resume_cv": {}
+}
+
+
+Fix frontend uploaded state mapping
+
+
+After successful upload, frontend state must use the same keys.
+Example:
+setUploadedDocuments(prev => ({
+...prev,
+[documentType]: uploadedFile
+}))
+Required validation must check:
+uploadedDocuments.government_id_front
+uploadedDocuments.government_id_back
+uploadedDocuments.resume_cv
+Do not check old keys.
+This is likely the current bug.
+
+
+Save and reload after refresh
+
+
+On page load, fetch saved submission.
+Endpoint:
+GET /api/public/hiring-package/:token/submission
+Response must include uploadedDocuments.
+Frontend should hydrate:
+setUploadedDocuments(submission.uploaded_documents_json || {})
+After refresh, document cards should still show:
+Uploaded: filename.pdf
+Required errors should not show for uploaded required documents.
+
+
+Add visible upload loading and error states
+
+
+Each document card needs its own upload state.
+When uploading:
+Uploading...
+Disable only that specific upload button.
+On success:
+Uploaded: filename.ext
+On fail:
+Show clear error under the same document card.
+Examples:
+Upload failed. Please try again.
+This file type is not supported for this document.
+File is too large. Maximum file size is 100 MB.
+The upload endpoint could not save this file. Please try again.
+Do not fail silently.
+
+
+Add temporary debug logging during development
+
+
+Add console logs only during development, then remove or keep behind dev flag.
+Log:
+Selected file name
+Selected file type
+Selected file size
+Document type
+Upload endpoint response
+Upload endpoint error body
+Backend log:
+Received token
+Received documentType
+Received file name
+Received file size
+Validation result
+Storage upload result
+Database update result
+This will show exactly where the upload breaks.
+
+
+Check route method and path mismatch
+
+
+Confirm frontend is posting to the exact route backend supports.
+Common issue:
+Frontend posts to:
+/api/public/hiring-packages/:token/upload
+Backend expects:
+/api/public/hiring-package/:token/upload-document
+Fix so both match exactly.
+Recommended route:
+POST /api/public/hiring-package/:token/upload-document
+
+
+Check storage permissions
+
+
+Make sure uploaded files are stored in the current app storage system.
+Do not only store in memory.
+Do not store under a temp folder that gets wiped.
+Do not require admin auth to write files from public link.
+Do not expose public file URLs without token protection.
+If using object storage, save storage key and create secure preview/download route for admin.
+
+
+Check server body limits
+
+
+If using Express, check:
+app.use(express.json({ limit: "100mb" }))
+app.use(express.urlencoded({ limit: "100mb", extended: true }))
+But do not use JSON parser for file uploads.
+For multer or busboy, set:
+fileSize: 100 * 1024 * 1024
+If using Next.js API route, disable default body parser for multipart route if needed.
+If using Vite/Replit server, check request size or multer config.
+
+
+Add remove and replace
+
+
+Each uploaded document card should support:
+Replace
+Remove
+Replace uploads a new file and updates the same documentType.
+Remove deletes or marks old file removed and clears the document state.
+Required validation should return if required file is removed.
+
+
+Continue button must use saved state
+
+
+Continue to Signature should validate based on uploadedDocuments object with standard keys.
+Correct validation:
+missing = []
+if !uploadedDocuments.government_id_front -> missing Government ID Front
+if !uploadedDocuments.government_id_back -> missing Government ID Back
+if !uploadedDocuments.resume_cv -> missing Resume / CV
+If missing length is 0, continue.
+Do not check old local variables.
+
+
+Admin submitted applications section
+
+
+Inside:
+Publications > Hiring Package
+Add or fix:
+Submitted Applications
+This section must show hiring package submissions.
+Admin should see:
+Employee name
+Email
+Phone
+Position
+Submitted date
+Status
+Policies accepted count
+Documents uploaded count
+Signature status
+Review button
+Review page must show:
+Accepted policies
+Personal info
+Emergency contacts
+Medical info
+Uploaded documents
+Signature
+For documents, admin must be able to:
+Preview
+Download
+Replace only if admin permission allows
+Download all as ZIP
+
+
+Test plan before marking complete
+
+
+Test this exact flow:
+Test A: JPG ID upload
+Open public hiring package link.
+Go to Step 5.
+Upload government ID front as JPG.
+Confirm card changes to uploaded.
+Refresh page.
+Confirm file still shows uploaded.
+Test B: PNG ID upload
+Upload government ID back as PNG.
+Confirm card changes to uploaded.
+Refresh page.
+Confirm file still shows uploaded.
+Test C: PDF ID upload
+Replace government ID front with PDF.
+Confirm PDF uploads.
+Refresh page.
+Confirm PDF still shows uploaded.
+Test D: Resume PDF
+Upload resume as PDF.
+Confirm it uploads.
+Confirm required error disappears.
+Refresh page.
+Confirm it persists.
+Test E: Resume DOC
+Replace resume with DOC.
+Confirm it uploads.
+Test F: Resume DOCX
+Replace resume with DOCX.
+Confirm it uploads.
+Test G: 100 MB limit
+Upload a file under 100 MB.
+Confirm it uploads.
+Upload file over 100 MB.
+Confirm clear error appears.
+Test H: Continue to signature
+Upload all required documents.
+Click Continue to Signature.
+Confirm it works.
+Test I: Submit final package
+Sign.
+Submit.
+Confirm status becomes Under Review.
+Test J: Admin review
+Open Publications > Hiring Package > Submitted Applications.
+Open submission.
+Confirm uploaded documents are visible and downloadable.
+
+
+Most likely root causes to check first
+
+
+Check these first because the UI shows no upload state at all:
+Upload button is not connected to file input.
+File input onChange is not firing.
+Frontend sends wrong documentType key.
+Frontend posts to wrong endpoint.
+Backend route requires auth and rejects public upload.
+Backend does not parse multipart/form-data.
+Backend rejects MIME type because DOC/DOCX or PDF MIME is missing.
+Backend saves upload but frontend checks wrong key.
+Upload succeeds but uploaded_documents_json is not returned or hydrated.
+Required validation checks old state names.
+
+
+Final expected result
+
+
+Employee can upload:
+Government ID front as JPG, PNG, or PDF.
+Government ID back as JPG, PNG, or PDF.
+Resume as PDF, DOC, or DOCX.
+Files up to 100 MB work.
+After upload, the UI immediately shows the uploaded file name.
+After refresh, uploaded files are still shown.
+The employee can continue to signature only after required documents are uploaded.
+After final submit, admin sees the submission inside Publications > Hiring Package > Submitted Applications.
+Admin can preview and download the uploaded documents.
+Do not break or affect anything else.

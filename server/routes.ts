@@ -137,6 +137,12 @@ const upload = multer({
   },
 });
 
+// Multer for hiring package documents — memory storage, 100 MB per file
+const hiringDocUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 },
+});
+
 const logoUpload = multer({
   dest: UPLOADS_DIR,
   limits: { fileSize: 5 * 1024 * 1024, files: 1 },
@@ -9718,6 +9724,101 @@ Return ONLY valid JSON:
       res.json({ success: true, completedAt: now, status: "submitted" });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
+
+  // ── Public document upload (multipart/form-data, 100 MB per file) ──────────
+  app.post("/api/public/hiring-packages/:token/upload-document",
+    hiringDocUpload.single("file"),
+    async (req: any, res) => {
+      try {
+        const pkg = await storage.getHiringPackageByToken(req.params.token);
+        if (!pkg) return res.status(404).json({ message: "Not found" });
+
+        const terminalStatuses = ["submitted", "under_review", "approved", "not_approved", "fired_inactive", "archived", "completed"];
+        if (terminalStatuses.includes(pkg.status)) return res.status(400).json({ message: "Package already submitted" });
+
+        const file = req.file;
+        const documentType: string = req.body?.documentType || "";
+
+        if (!file) return res.status(400).json({ message: "No file received" });
+        if (!documentType) return res.status(400).json({ message: "documentType is required" });
+
+        const validDocTypes = ["government_id_front","government_id_back","resume_cv","work_permit","certificate_license","other_supporting_document"];
+        if (!validDocTypes.includes(documentType)) return res.status(400).json({ message: "Invalid document type" });
+
+        // Extension-first validation (handles empty/wrong MIME from mobile browsers)
+        const ext = (file.originalname.split(".").pop() || "").toLowerCase();
+        const mime = (file.mimetype || "").toLowerCase();
+        const allowedByType: Record<string, string[]> = {
+          government_id_front: ["jpg","jpeg","png","pdf"],
+          government_id_back:  ["jpg","jpeg","png","pdf"],
+          resume_cv:           ["pdf","doc","docx"],
+          work_permit:         ["jpg","jpeg","png","pdf","doc","docx"],
+          certificate_license: ["jpg","jpeg","png","pdf"],
+          other_supporting_document: ["jpg","jpeg","png","pdf","doc","docx"],
+        };
+        const allowedMimes = ["image/jpeg","image/png","application/pdf","application/msword",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+
+        const extOk = allowedByType[documentType]?.includes(ext);
+        const mimeOk = allowedMimes.includes(mime);
+        if (!extOk && !mimeOk) {
+          return res.status(400).json({ message: `File type .${ext} is not allowed for ${documentType.replace(/_/g, " ")}` });
+        }
+
+        // Encode file buffer as base64 data URI for DB storage
+        const inferredMime = mime || ({
+          jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
+          pdf: "application/pdf", doc: "application/msword",
+          docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        }[ext] || "application/octet-stream");
+
+        const base64Data = `data:${inferredMime};base64,${file.buffer.toString("base64")}`;
+        const now = new Date().toISOString();
+
+        // Merge into existing employeeResponse.documentFiles
+        const existing = (pkg.employeeResponse as any) || {};
+        const existingDocFiles = existing.documentFiles || {};
+        const updatedDocFiles = {
+          ...existingDocFiles,
+          [documentType]: {
+            filename: file.originalname,
+            mimeType: inferredMime,
+            size: file.size,
+            data: base64Data,
+            uploadedAt: now,
+          },
+        };
+
+        const updatedDocumentsMetadata = Object.entries(updatedDocFiles).map(([dt, meta]: [string, any]) => ({
+          docType: dt,
+          filename: meta.filename,
+          mimeType: meta.mimeType,
+          size: meta.size,
+          uploadedAt: meta.uploadedAt || now,
+        }));
+
+        await storage.updateHiringPackage(pkg.id, {
+          employeeResponse: { ...existing, documentFiles: updatedDocFiles } as any,
+          uploadedDocuments: updatedDocumentsMetadata as any,
+          status: ["draft","sent","viewed"].includes(pkg.status) ? "started" : pkg.status,
+          updatedAt: now,
+        });
+
+        // Return metadata only (no base64 data — keep that in DB)
+        res.json({
+          success: true,
+          documentType,
+          filename: file.originalname,
+          mimeType: inferredMime,
+          size: file.size,
+          uploadedAt: now,
+        });
+      } catch (e: any) {
+        if (e.code === "LIMIT_FILE_SIZE") return res.status(413).json({ message: "File is too large. Maximum size is 100 MB." });
+        res.status(500).json({ message: e.message });
+      }
+    }
+  );
 
   app.post("/api/public/hiring-packages/:token/save-progress", async (req, res) => {
     try {

@@ -10,14 +10,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Check, CheckCircle2, AlertCircle, Building2,
+  Check, CheckCircle2, AlertCircle,
   FileText, User, Phone, Pen, Upload, X,
   Clock, Printer, AlertTriangle, Lock, Shield, Image, FileIcon,
 } from "lucide-react";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const STEPS = ["Policies", "Personal Info", "Emergency Contacts", "Medical Info", "Documents", "Signature"];
-const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25 MB
+const MAX_FILE_BYTES = 100 * 1024 * 1024; // 100 MB
 
 const DOC_TYPES: { key: string; label: string; required: boolean; accept: string; allowedExts: string[]; hint: string }[] = [
   {
@@ -26,7 +26,7 @@ const DOC_TYPES: { key: string; label: string; required: boolean; accept: string
     required: true,
     accept: ".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf",
     allowedExts: ["jpg","jpeg","png","pdf"],
-    hint: "Driver's licence, passport, or government-issued ID — front side. JPG, PNG, or PDF. Max 25 MB.",
+    hint: "Driver's licence, passport, or government-issued ID — front side. JPG, PNG, or PDF. Max 100 MB.",
   },
   {
     key: "government_id_back",
@@ -34,7 +34,7 @@ const DOC_TYPES: { key: string; label: string; required: boolean; accept: string
     required: true,
     accept: ".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf",
     allowedExts: ["jpg","jpeg","png","pdf"],
-    hint: "Back of the same government-issued ID. JPG, PNG, or PDF. Max 25 MB.",
+    hint: "Back of the same government-issued ID. JPG, PNG, or PDF. Max 100 MB.",
   },
   {
     key: "resume_cv",
@@ -42,7 +42,7 @@ const DOC_TYPES: { key: string; label: string; required: boolean; accept: string
     required: true,
     accept: ".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     allowedExts: ["pdf","doc","docx"],
-    hint: "PDF, DOC, or DOCX — max 25 MB.",
+    hint: "PDF, DOC, or DOCX — max 100 MB.",
   },
   {
     key: "work_permit",
@@ -70,7 +70,7 @@ const DOC_TYPES: { key: string; label: string; required: boolean; accept: string
   },
 ];
 
-const SUBMITTED_STATUSES = ["submitted", "under_review", "missing_documents", "approved", "not_approved", "fired_inactive", "archived", "completed"];
+const SUBMITTED_STATUSES = ["submitted","under_review","missing_documents","approved","not_approved","fired_inactive","archived","completed"];
 
 const STATUS_DISPLAY: Record<string, { label: string; color: string; bg: string; border: string; icon: any }> = {
   submitted:         { label: "Under Review",              color: "text-amber-800",  bg: "bg-amber-50",  border: "border-amber-200", icon: Clock },
@@ -83,20 +83,20 @@ const STATUS_DISPLAY: Record<string, { label: string; color: string; bg: string;
   completed:         { label: "Under Review",              color: "text-amber-800",  bg: "bg-amber-50",  border: "border-amber-200", icon: Clock },
 };
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(r.result as string);
-    r.onerror = rej;
-    r.readAsDataURL(file);
-  });
-}
+// ── Metadata type (no base64 data — that lives in DB only) ────────────────────
+type DocMeta = { filename: string; mimeType: string; size: number; uploadedAt?: string };
+type DocFiles = Record<string, DocMeta | null>;
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
 function fileSizeLabel(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function isExtAllowed(filename: string, allowedExts: string[]): boolean {
+  const ext = filename.split(".").pop()?.toLowerCase() || "";
+  return allowedExts.includes(ext);
 }
 
 // ── Signature Canvas ───────────────────────────────────────────────────────────
@@ -116,7 +116,6 @@ function SignatureCanvas({ onSign, existingSignature }: { onSign: (data: string)
     ctx.lineWidth = 2;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    // If there's an existing signature, restore it
     if (existingSignature) {
       const img = new window.Image();
       img.onload = () => ctx.drawImage(img, 0, 0);
@@ -129,15 +128,9 @@ function SignatureCanvas({ onSign, existingSignature }: { onSign: (data: string)
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     if ("touches" in e) {
-      return {
-        x: (e.touches[0].clientX - rect.left) * scaleX,
-        y: (e.touches[0].clientY - rect.top) * scaleY,
-      };
+      return { x: (e.touches[0].clientX - rect.left) * scaleX, y: (e.touches[0].clientY - rect.top) * scaleY };
     }
-    return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY,
-    };
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
   }
 
   function startDraw(e: React.MouseEvent | React.TouchEvent) {
@@ -164,8 +157,8 @@ function SignatureCanvas({ onSign, existingSignature }: { onSign: (data: string)
   function stopDraw() {
     if (!drawing.current) return;
     drawing.current = false;
-    if (hasDrawn || canvasRef.current) {
-      const data = canvasRef.current!.toDataURL("image/png");
+    if (canvasRef.current) {
+      const data = canvasRef.current.toDataURL("image/png");
       onSign(data);
     }
   }
@@ -183,17 +176,9 @@ function SignatureCanvas({ onSign, existingSignature }: { onSign: (data: string)
     <div className="space-y-2">
       <div className="border-2 border-dashed border-gray-300 rounded-xl overflow-hidden bg-white touch-none relative">
         <canvas
-          ref={canvasRef}
-          width={600}
-          height={180}
-          className="w-full block cursor-crosshair"
-          onMouseDown={startDraw}
-          onMouseMove={draw}
-          onMouseUp={stopDraw}
-          onMouseLeave={stopDraw}
-          onTouchStart={startDraw}
-          onTouchMove={draw}
-          onTouchEnd={stopDraw}
+          ref={canvasRef} width={600} height={180} className="w-full block cursor-crosshair"
+          onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
+          onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
           data-testid="canvas-signature"
         />
         {!hasDrawn && !existingSignature && (
@@ -205,8 +190,8 @@ function SignatureCanvas({ onSign, existingSignature }: { onSign: (data: string)
         )}
       </div>
       {(hasDrawn || existingSignature) && (
-        <Button variant="ghost" size="sm" className="text-xs text-gray-400 hover:text-red-500 gap-1.5" onClick={clearCanvas}
-          data-testid="button-clear-signature">
+        <Button variant="ghost" size="sm" className="text-xs text-gray-400 hover:text-red-500 gap-1.5"
+          onClick={clearCanvas} data-testid="button-clear-signature">
           <X className="w-3 h-3" /> Clear signature
         </Button>
       )}
@@ -216,66 +201,71 @@ function SignatureCanvas({ onSign, existingSignature }: { onSign: (data: string)
 
 // ── Upload Slot ────────────────────────────────────────────────────────────────
 function UploadSlot({
-  docType, label, required, accept, allowedExts, hint, file, onFile, disabled,
+  docType, label, required, accept, allowedExts, hint, file, token, onUploaded, onRemove, disabled,
 }: {
-  docType: string; label: string; required: boolean; accept: string; allowedExts: string[]; hint: string;
-  file?: { filename: string; mimeType: string; size: number; data: string } | null;
-  onFile: (docType: string, file: { filename: string; mimeType: string; size: number; data: string } | null) => void;
+  docType: string;
+  label: string;
+  required: boolean;
+  accept: string;
+  allowedExts: string[];
+  hint: string;
+  file?: DocMeta | null;
+  token: string;
+  onUploaded: (docType: string, meta: DocMeta) => void;
+  onRemove: (docType: string) => void;
   disabled?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  function isFileTypeAllowed(f: File): boolean {
-    const ext = f.name.split(".").pop()?.toLowerCase() || "";
-    if (allowedExts.includes(ext)) return true;
-    if (!f.type) return false;
-    const mime = f.type.toLowerCase();
-    if (allowedExts.some(e => ["jpg","jpeg"].includes(e)) && mime.includes("jpeg")) return true;
-    if (allowedExts.includes("png") && mime === "image/png") return true;
-    if (allowedExts.includes("pdf") && mime === "application/pdf") return true;
-    if (allowedExts.includes("doc") && mime === "application/msword") return true;
-    if (allowedExts.includes("docx") && mime.includes("wordprocessingml")) return true;
-    return false;
-  }
-
   async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
+    // Always reset input value so same file can be re-selected after error
+    e.target.value = "";
     if (!f) return;
     setUploadError(null);
 
-    if (!isFileTypeAllowed(f)) {
+    // Client-side validation: extension first, then MIME as fallback
+    if (!isExtAllowed(f.name, allowedExts)) {
       const extList = allowedExts.map(x => x.toUpperCase()).join(", ");
-      setUploadError(`File type not supported. Please upload: ${extList}.`);
-      e.target.value = "";
+      setUploadError(`File type not supported. Allowed: ${extList}.`);
       return;
     }
     if (f.size > MAX_FILE_BYTES) {
-      setUploadError("File is too large. Maximum size is 25 MB.");
-      e.target.value = "";
+      setUploadError("File is too large. Maximum size is 100 MB.");
       return;
     }
 
     setLoading(true);
     try {
-      const data = await readFileAsDataUrl(f);
-      let mimeType = f.type;
-      if (!mimeType) {
-        const ext = f.name.split(".").pop()?.toLowerCase() || "";
-        const extMime: Record<string, string> = {
-          jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
-          pdf: "application/pdf", doc: "application/msword",
-          docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        };
-        mimeType = extMime[ext] || "application/octet-stream";
+      const formData = new FormData();
+      formData.append("file", f);
+      formData.append("documentType", docType);
+
+      const resp = await fetch(`/api/public/hiring-packages/${token}/upload-document`, {
+        method: "POST",
+        body: formData,
+        // Do NOT set Content-Type — browser sets it automatically with boundary
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ message: "Upload failed" }));
+        setUploadError(err.message || "Upload failed. Please try again.");
+        return;
       }
-      onFile(docType, { filename: f.name, mimeType, size: f.size, data });
+
+      const result = await resp.json();
+      onUploaded(docType, {
+        filename: result.filename || f.name,
+        mimeType: result.mimeType || f.type,
+        size: result.size || f.size,
+        uploadedAt: result.uploadedAt,
+      });
     } catch {
-      setUploadError("Upload failed. Please try again.");
+      setUploadError("Upload failed. Please check your connection and try again.");
     } finally {
       setLoading(false);
-      e.target.value = "";
     }
   }
 
@@ -286,14 +276,17 @@ function UploadSlot({
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-2 flex-1 min-w-0">
           <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${uploadError ? "bg-red-100" : file ? "bg-green-100" : "bg-gray-100"}`}>
-            {uploadError ? <AlertCircle className="w-4 h-4 text-red-500" /> : file ? <Check className="w-4 h-4 text-green-600" /> : isImage ? <Image className="w-4 h-4 text-gray-400" /> : <FileIcon className="w-4 h-4 text-gray-400" />}
+            {uploadError ? <AlertCircle className="w-4 h-4 text-red-500" /> :
+             file ? <Check className="w-4 h-4 text-green-600" /> :
+             isImage ? <Image className="w-4 h-4 text-gray-400" /> :
+             <FileIcon className="w-4 h-4 text-gray-400" />}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-gray-800">
               {label} {required && <span className="text-red-500">*</span>}
             </p>
             {uploadError ? (
-              <p className="text-xs text-red-600 mt-0.5">{uploadError}</p>
+              <p className="text-xs text-red-600 mt-0.5 leading-relaxed">{uploadError}</p>
             ) : file ? (
               <p className="text-xs text-green-700 mt-0.5 truncate">{file.filename} ({fileSizeLabel(file.size)})</p>
             ) : (
@@ -304,7 +297,8 @@ function UploadSlot({
         <div className="flex items-center gap-1 shrink-0">
           {file && (
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-red-500"
-              onClick={() => { onFile(docType, null); setUploadError(null); }} disabled={disabled}>
+              onClick={() => { onRemove(docType); setUploadError(null); }} disabled={disabled || loading}
+              data-testid={`button-remove-${docType}`}>
               <X className="w-3.5 h-3.5" />
             </Button>
           )}
@@ -316,12 +310,23 @@ function UploadSlot({
             disabled={disabled || loading}
             data-testid={`button-upload-${docType}`}
           >
-            {loading ? <span className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-            {file ? "Replace" : "Upload"}
+            {loading
+              ? <span className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+              : <Upload className="w-3.5 h-3.5" />}
+            {loading ? "Uploading…" : file ? "Replace" : "Upload"}
           </Button>
         </div>
       </div>
-      <input ref={inputRef} type="file" accept={accept} className="hidden" onChange={handleChange} />
+      {/* Hidden file input — each UploadSlot has its own, keyed to docType */}
+      <input
+        ref={inputRef}
+        id={`upload-input-${docType}`}
+        type="file"
+        accept={accept}
+        className="hidden"
+        onChange={handleChange}
+        data-testid={`input-file-${docType}`}
+      />
     </div>
   );
 }
@@ -343,7 +348,6 @@ function StatusPage({ status, company, employeeName, completedAt, missingDocsMes
 }) {
   const meta = STATUS_DISPLAY[status] || STATUS_DISPLAY.submitted;
   const Icon = meta.icon;
-
   return (
     <div className="space-y-6">
       <div className={`rounded-2xl border p-5 ${meta.bg} ${meta.border}`}>
@@ -359,7 +363,7 @@ function StatusPage({ status, company, employeeName, completedAt, missingDocsMes
                 <p className="text-sm text-orange-700 leading-relaxed whitespace-pre-line">{missingDocsMessage}</p>
               </div>
             ) : status === "approved" ? (
-              <p className="text-sm mt-1 text-green-700">Congratulations! Your hiring package has been reviewed and approved. Your employer will contact you with next steps.</p>
+              <p className="text-sm mt-1 text-green-700">Congratulations! Your application was approved. Your employer will contact you with next steps.</p>
             ) : status === "not_approved" ? (
               <p className="text-sm mt-1 text-red-700">After reviewing your application, the employer has decided not to proceed. Please contact your employer if you have questions.</p>
             ) : (
@@ -371,7 +375,6 @@ function StatusPage({ status, company, employeeName, completedAt, missingDocsMes
           </div>
         </div>
       </div>
-
       <div className="rounded-xl border bg-white p-4 space-y-3">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Application Summary</p>
         <div className="space-y-2 text-sm">
@@ -380,7 +383,6 @@ function StatusPage({ status, company, employeeName, completedAt, missingDocsMes
           <div className="flex justify-between"><span className="text-gray-500">Employer</span><span className="font-medium text-gray-900">{company?.name || "Your Employer"}</span></div>
         </div>
       </div>
-
       <Button variant="outline" className="w-full gap-2" onClick={() => window.print()} data-testid="button-print-copy">
         <Printer className="w-4 h-4" /> Print / Download Copy
       </Button>
@@ -414,7 +416,10 @@ export default function PublicHiringPackage() {
   const [ec1, setEc1] = useState({ name: "", relationship: "", phone: "", email: "" });
   const [ec2, setEc2] = useState({ name: "", relationship: "", phone: "", email: "" });
   const [medical, setMedical] = useState({ allergies: "", sensitivities: "", medicalNotes: "", medicationNote: "" });
-  const [docFiles, setDocFiles] = useState<Record<string, { filename: string; mimeType: string; size: number; data: string } | null>>({});
+
+  // docFiles stores METADATA only — the actual file data lives in the DB
+  const [docFiles, setDocFiles] = useState<DocFiles>({});
+
   const [agreedToAck, setAgreedToAck] = useState(false);
   const [signature, setSignature] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -427,7 +432,7 @@ export default function PublicHiringPackage() {
   const company = pkg?.company || {};
   const isAlreadySubmitted = SUBMITTED_STATUSES.includes(pkg?.status || "");
 
-  // ── Restore ALL saved progress when pkg loads ─────────────────────────────
+  // ── Restore ALL saved progress on load ────────────────────────────────────
   useEffect(() => {
     if (!pkg || submitted || hasRestoredRef.current) return;
     hasRestoredRef.current = true;
@@ -436,7 +441,7 @@ export default function PublicHiringPackage() {
     const savedPolicies = Array.isArray(pkg.policyAcceptances) ? pkg.policyAcceptances : [];
     const nameParts = (pkg.employeeName || "").split(" ");
 
-    // ── Restore form ──────────────────────────────────────────────────────
+    // Restore form fields
     setForm({
       firstName:     resp?.firstName     || nameParts[0] || "",
       lastName:      resp?.lastName      || nameParts.slice(1).join(" ") || "",
@@ -452,128 +457,118 @@ export default function PublicHiringPackage() {
       startDate:     resp?.startDate     || pkg.startDate || "",
     });
 
-    // ── Restore emergency contacts ────────────────────────────────────────
+    // Restore emergency contacts
     if (resp?.emergencyContact1) setEc1(resp.emergencyContact1);
     if (resp?.emergencyContact2) setEc2(resp.emergencyContact2);
 
-    // ── Restore medical ───────────────────────────────────────────────────
+    // Restore medical info
     if (resp) {
       setMedical({
-        allergies:     resp.allergies     || "",
-        sensitivities: resp.sensitivities || "",
-        medicalNotes:  resp.medicalNotes  || "",
+        allergies:      resp.allergies      || "",
+        sensitivities:  resp.sensitivities  || "",
+        medicalNotes:   resp.medicalNotes   || "",
         medicationNote: resp.medicationNote || "",
       });
     }
 
-    // ── Restore uploaded documents ────────────────────────────────────────
+    // Restore uploaded documents — store METADATA only (strip base64 data from state)
     const savedDocFiles = resp?.documentFiles;
     if (savedDocFiles && typeof savedDocFiles === "object") {
-      const restored: typeof docFiles = {};
+      const restored: DocFiles = {};
       for (const [key, val] of Object.entries(savedDocFiles)) {
-        if (val && typeof val === "object" && (val as any).data) {
-          restored[key] = val as any;
+        if (val && typeof val === "object") {
+          const v = val as any;
+          if (v.filename) {
+            // Store only metadata, not the base64 data
+            restored[key] = { filename: v.filename, mimeType: v.mimeType || "", size: v.size || 0, uploadedAt: v.uploadedAt };
+          }
         }
       }
       setDocFiles(restored);
     }
 
-    // ── Restore signature ─────────────────────────────────────────────────
+    // Restore signature
     const savedSig = pkg.signatureData || resp?.signatureData || "";
     if (savedSig) setSignature(savedSig);
 
-    // ── Restore policy acceptances ────────────────────────────────────────
+    // Restore policy acceptances
     if (savedPolicies.length > 0) {
       setPolicyAcceptances(savedPolicies);
-      // Advance policyStep to the first unaccepted policy (or last if all done)
       const secs = (Array.isArray(pkg.templateData) ? pkg.templateData : []).filter((s: any) => s.enabled !== false);
       const acceptedIds = new Set(savedPolicies.map((a: any) => a.sectionId));
-      const firstUnacceptedIdx = secs.findIndex((s: any) => !acceptedIds.has(s.id));
-      setPolicyStep(firstUnacceptedIdx === -1 ? Math.max(0, secs.length - 1) : firstUnacceptedIdx);
+      const firstUnaccepted = secs.findIndex((s: any) => !acceptedIds.has(s.id));
+      setPolicyStep(firstUnaccepted === -1 ? Math.max(0, secs.length - 1) : firstUnaccepted);
     }
 
-    // ── Restore step ──────────────────────────────────────────────────────
-    // Prefer explicitly saved currentStep, else infer from progress
+    // Restore step
     if (typeof resp?.currentStep === "number" && resp.currentStep > 0) {
       setStep(resp.currentStep);
     } else if (savedPolicies.length > 0) {
       const secs = (Array.isArray(pkg.templateData) ? pkg.templateData : []).filter((s: any) => s.enabled !== false);
-      const allAccepted = secs.length > 0 && savedPolicies.length >= secs.length;
-      if (allAccepted) setStep(1); // At minimum move past policies
+      if (secs.length === 0 || savedPolicies.length >= secs.length) setStep(1);
     }
   }, [pkg]);
 
-  // ── Core save-progress function ──────────────────────────────────────────
+  // ── Core save-progress (form data, policies, step — NO file data) ─────────
   const saveProgress = useCallback(async (overrides: {
     currentStep?: number;
     newPolicies?: any[];
     newSignature?: string;
-    formOverride?: typeof form;
-    ec1Override?: typeof ec1;
-    ec2Override?: typeof ec2;
-    medicalOverride?: typeof medical;
   } = {}) => {
     if (!token || isAlreadySubmitted) return;
-    const currentFormData = overrides.formOverride ?? form;
-    const currentEc1 = overrides.ec1Override ?? ec1;
-    const currentEc2 = overrides.ec2Override ?? ec2;
-    const currentMedical = overrides.medicalOverride ?? medical;
-    const currentStep_ = overrides.currentStep ?? step;
-    const currentPolicies = overrides.newPolicies ?? policyAcceptances;
-    const currentSig = overrides.newSignature ?? signature;
-
     try {
       await fetch(`/api/public/hiring-packages/${token}/save-progress`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          currentStep: currentStep_,
+          currentStep: overrides.currentStep ?? step,
           policyStep,
-          policyAcceptances: currentPolicies,
+          policyAcceptances: overrides.newPolicies ?? policyAcceptances,
           employeeResponse: {
-            firstName: currentFormData.firstName,
-            lastName: currentFormData.lastName,
-            fullName: `${currentFormData.firstName} ${currentFormData.lastName}`.trim(),
-            preferredName: currentFormData.preferredName,
-            email: currentFormData.email,
-            phone: currentFormData.phone,
-            address: currentFormData.address,
-            city: currentFormData.city,
-            province: currentFormData.province,
-            postalCode: currentFormData.postalCode,
-            country: currentFormData.country,
-            jobTitle: currentFormData.jobTitle,
-            startDate: currentFormData.startDate,
-            emergencyContact1: currentEc1,
-            emergencyContact2: currentEc2,
-            allergies: currentMedical.allergies,
-            sensitivities: currentMedical.sensitivities,
-            medicalNotes: currentMedical.medicalNotes,
-            medicationNote: currentMedical.medicationNote,
+            firstName: form.firstName,
+            lastName: form.lastName,
+            fullName: `${form.firstName} ${form.lastName}`.trim(),
+            preferredName: form.preferredName,
+            email: form.email,
+            phone: form.phone,
+            address: form.address,
+            city: form.city,
+            province: form.province,
+            postalCode: form.postalCode,
+            country: form.country,
+            jobTitle: form.jobTitle,
+            startDate: form.startDate,
+            emergencyContact1: ec1,
+            emergencyContact2: ec2,
+            allergies: medical.allergies,
+            sensitivities: medical.sensitivities,
+            medicalNotes: medical.medicalNotes,
+            medicationNote: medical.medicationNote,
           },
-          ...(currentSig ? { signatureData: currentSig } : {}),
+          ...(overrides.newSignature !== undefined ? { signatureData: overrides.newSignature } : {}),
         }),
       });
-    } catch {
-      // non-fatal
-    }
-  }, [token, isAlreadySubmitted, form, ec1, ec2, medical, step, policyStep, policyAcceptances, signature]);
+    } catch { /* non-fatal */ }
+  }, [token, isAlreadySubmitted, form, ec1, ec2, medical, step, policyStep, policyAcceptances]);
 
-  // ── Persist uploaded document files ─────────────────────────────────────
-  async function persistDocFiles(updatedDocs: typeof docFiles) {
+  // ── Remove a document from DB ─────────────────────────────────────────────
+  async function removeDocFile(docType: string) {
     if (!token || isAlreadySubmitted) return;
-    const documentFiles: Record<string, any> = {};
-    DOC_TYPES.forEach(d => {
-      if (updatedDocs[d.key]) documentFiles[d.key] = updatedDocs[d.key];
-      else documentFiles[d.key] = null; // explicitly remove deleted files
-    });
+    setDocFiles(prev => ({ ...prev, [docType]: null }));
     try {
       await fetch(`/api/public/hiring-packages/${token}/save-progress`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ documentFiles }),
+        body: JSON.stringify({ documentFiles: { [docType]: null } }),
       });
     } catch { /* non-fatal */ }
+  }
+
+  // ── Called by UploadSlot after successful backend upload ──────────────────
+  function handleUploaded(docType: string, meta: DocMeta) {
+    setDocFiles(prev => ({ ...prev, [docType]: meta }));
+    // Clear validation errors if any
+    setErrors(prev => prev.filter(e => !e.toLowerCase().includes(DOC_TYPES.find(d => d.key === docType)?.label?.toLowerCase() || "")));
   }
 
   // ── Policy acceptance ─────────────────────────────────────────────────────
@@ -587,29 +582,17 @@ export default function PublicHiringPackage() {
     };
     const newAcceptances = [...policyAcceptances, acceptance];
     setPolicyAcceptances(newAcceptances);
-    const nextIdx = policyStep < sections.length - 1 ? policyStep + 1 : policyStep;
-    setPolicyStep(nextIdx);
-    // Save immediately to backend
+    if (policyStep < sections.length - 1) setPolicyStep(policyStep + 1);
     saveProgress({ newPolicies: newAcceptances });
   }
 
-  function allPoliciesAccepted() { return policyAcceptances.length >= sections.length; }
+  function allPoliciesAccepted() { return sections.length === 0 || policyAcceptances.length >= sections.length; }
   function isPolicyAccepted(section: any) { return policyAcceptances.some(a => a.sectionId === section.id); }
 
-  // ── Document file handler ─────────────────────────────────────────────────
-  function handleDocFile(docType: string, file: { filename: string; mimeType: string; size: number; data: string } | null) {
-    // Compute the update outside the state setter to avoid calling async code inside React's updater
-    const updatedDocs = { ...docFiles, [docType]: file };
-    setDocFiles(updatedDocs);
-    persistDocFiles(updatedDocs);
-  }
-
-  // ── Signature handler ─────────────────────────────────────────────────────
+  // ── Signature ─────────────────────────────────────────────────────────────
   function handleSign(data: string) {
     setSignature(data);
-    if (data) {
-      saveProgress({ newSignature: data });
-    }
+    if (data) saveProgress({ newSignature: data });
   }
 
   // ── Validation ────────────────────────────────────────────────────────────
@@ -643,15 +626,13 @@ export default function PublicHiringPackage() {
     setErrors([]);
     const nextStep = step + 1;
     setStep(nextStep);
-    // Save all current state including the new step
     saveProgress({ currentStep: nextStep });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function goBack() {
     setErrors([]);
-    const prevStep = Math.max(0, step - 1);
-    setStep(prevStep);
+    setStep(s => Math.max(0, s - 1));
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -662,8 +643,9 @@ export default function PublicHiringPackage() {
     setErrors([]);
     setSubmitting(true);
     try {
-      const documentFiles: Record<string, any> = {};
-      DOC_TYPES.forEach(d => { if (docFiles[d.key]) documentFiles[d.key] = docFiles[d.key]; });
+      // Build metadata-only documentFiles for submission (no base64 — already in DB)
+      const documentFilesMeta: Record<string, any> = {};
+      DOC_TYPES.forEach(d => { if (docFiles[d.key]) documentFilesMeta[d.key] = docFiles[d.key]; });
 
       const employeeResponse = {
         firstName: form.firstName,
@@ -685,7 +667,6 @@ export default function PublicHiringPackage() {
         sensitivities: medical.sensitivities,
         medicalNotes: medical.medicalNotes,
         medicationNote: medical.medicationNote,
-        documentFiles,
         completedAt: new Date().toISOString(),
       };
 
@@ -795,21 +776,28 @@ export default function PublicHiringPackage() {
               )}
             </div>
 
-            <div className="flex items-center justify-between px-1">
-              <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                <FileText className="w-4 h-4" /> Company Policies
-              </h2>
-              <span className="text-xs text-gray-500 font-medium">
-                {policyAcceptances.length} of {sections.length} accepted
-              </span>
-            </div>
+            {sections.length > 0 && (
+              <div className="flex items-center justify-between px-1">
+                <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <FileText className="w-4 h-4" /> Company Policies
+                </h2>
+                <span className="text-xs text-gray-500 font-medium">
+                  {policyAcceptances.length} of {sections.length} accepted
+                </span>
+              </div>
+            )}
+
+            {sections.length === 0 && (
+              <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 text-sm text-blue-700">
+                No policies are included in this package. You can proceed to the next step.
+              </div>
+            )}
 
             <div className="space-y-3">
               {sections.map((section: any, idx: number) => {
                 const accepted = isPolicyAccepted(section);
                 const isCurrent = idx === policyStep && !accepted;
                 const isLocked = idx > policyStep && !accepted;
-
                 return (
                   <div key={section.id || idx}
                     className={`rounded-xl border overflow-hidden transition-all ${
@@ -832,7 +820,6 @@ export default function PublicHiringPackage() {
                       {accepted && <Badge className="bg-green-100 text-green-700 text-xs px-2 py-0 h-5 rounded-full">Accepted</Badge>}
                       {isLocked && <Lock className="w-3.5 h-3.5 text-gray-300 shrink-0" />}
                     </div>
-
                     {isCurrent && (
                       <div className="border-t px-4 pb-4">
                         <div className="max-h-72 overflow-y-auto bg-white rounded-lg border border-gray-100 p-4 mt-3">
@@ -857,7 +844,7 @@ export default function PublicHiringPackage() {
               })}
             </div>
 
-            {allPoliciesAccepted() && (
+            {allPoliciesAccepted() && sections.length > 0 && (
               <div className="rounded-xl bg-green-50 border border-green-200 p-4 flex items-center gap-3">
                 <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
                 <div>
@@ -959,7 +946,7 @@ export default function PublicHiringPackage() {
               <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                 <Phone className="w-5 h-5 text-blue-600" /> Emergency Contacts
               </h2>
-              <p className="text-sm text-gray-500 mt-1">Provide at least one emergency contact. This information will only be used in the event of an emergency.</p>
+              <p className="text-sm text-gray-500 mt-1">Provide at least one emergency contact. This will only be used in an emergency.</p>
             </div>
             <Card>
               <CardContent className="p-4 space-y-3">
@@ -1025,7 +1012,7 @@ export default function PublicHiringPackage() {
               <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                 <Shield className="w-5 h-5 text-blue-600" /> Medical Information
               </h2>
-              <p className="text-sm text-gray-500 mt-1">This section is optional. Please share only what is relevant to your workplace safety or emergency response. All information is confidential.</p>
+              <p className="text-sm text-gray-500 mt-1">This section is optional. All information is confidential.</p>
             </div>
             <Card>
               <CardContent className="p-4 space-y-3">
@@ -1042,7 +1029,7 @@ export default function PublicHiringPackage() {
                 <div>
                   <Label className="text-xs text-gray-500">Medical Notes (optional)</Label>
                   <Textarea value={medical.medicalNotes} onChange={e => setMedical(p => ({ ...p, medicalNotes: e.target.value }))}
-                    placeholder="Any relevant medical information your employer should be aware of in an emergency" className="mt-1 text-sm min-h-[60px] resize-none" data-testid="input-medicalNotes" />
+                    placeholder="Any relevant medical information" className="mt-1 text-sm min-h-[60px] resize-none" data-testid="input-medicalNotes" />
                 </div>
                 <div>
                   <Label className="text-xs text-gray-500">Medication Note (optional)</Label>
@@ -1069,13 +1056,37 @@ export default function PublicHiringPackage() {
             <div className="space-y-3">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Required Documents</p>
               {DOC_TYPES.filter(d => d.required).map(d => (
-                <UploadSlot key={d.key} {...d} file={docFiles[d.key] || null} onFile={handleDocFile} />
+                <UploadSlot
+                  key={d.key}
+                  docType={d.key}
+                  label={d.label}
+                  required={d.required}
+                  accept={d.accept}
+                  allowedExts={d.allowedExts}
+                  hint={d.hint}
+                  file={docFiles[d.key] || null}
+                  token={token}
+                  onUploaded={handleUploaded}
+                  onRemove={removeDocFile}
+                />
               ))}
             </div>
             <div className="space-y-3">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Optional Documents</p>
               {DOC_TYPES.filter(d => !d.required).map(d => (
-                <UploadSlot key={d.key} {...d} file={docFiles[d.key] || null} onFile={handleDocFile} />
+                <UploadSlot
+                  key={d.key}
+                  docType={d.key}
+                  label={d.label}
+                  required={d.required}
+                  accept={d.accept}
+                  allowedExts={d.allowedExts}
+                  hint={d.hint}
+                  file={docFiles[d.key] || null}
+                  token={token}
+                  onUploaded={handleUploaded}
+                  onRemove={removeDocFile}
+                />
               ))}
             </div>
           </div>
@@ -1091,7 +1102,6 @@ export default function PublicHiringPackage() {
               <p className="text-sm text-gray-500 mt-1">Review the summary below, draw your signature, and submit your hiring package.</p>
             </div>
 
-            {/* Summary */}
             <Card>
               <CardContent className="p-4 space-y-3 text-sm">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Summary</p>
@@ -1102,9 +1112,11 @@ export default function PublicHiringPackage() {
                   {form.jobTitle && <div><span className="text-gray-400 text-xs block">Position</span>{form.jobTitle}</div>}
                 </div>
                 <div className="pt-2 border-t flex gap-4 flex-wrap text-xs">
-                  <span className="flex items-center gap-1 text-green-700">
-                    <Check className="w-3.5 h-3.5" /> {policyAcceptances.length} polic{policyAcceptances.length === 1 ? "y" : "ies"} accepted
-                  </span>
+                  {sections.length > 0 && (
+                    <span className="flex items-center gap-1 text-green-700">
+                      <Check className="w-3.5 h-3.5" /> {policyAcceptances.length} polic{policyAcceptances.length === 1 ? "y" : "ies"} accepted
+                    </span>
+                  )}
                   <span className="flex items-center gap-1 text-green-700">
                     <Check className="w-3.5 h-3.5" /> {Object.values(docFiles).filter(Boolean).length} document{Object.values(docFiles).filter(Boolean).length === 1 ? "" : "s"} uploaded
                   </span>
@@ -1112,22 +1124,16 @@ export default function PublicHiringPackage() {
               </CardContent>
             </Card>
 
-            {/* Signature */}
             <div className="space-y-2">
               <Label className="text-sm font-medium text-gray-700">Your Signature <span className="text-red-500">*</span></Label>
               <p className="text-xs text-gray-500">Draw your signature below using your mouse or finger on mobile.</p>
               <SignatureCanvas onSign={handleSign} existingSignature={signature || undefined} />
             </div>
 
-            {/* Acknowledgement */}
             <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
               <div className="flex items-start gap-3">
-                <Checkbox
-                  id="ack"
-                  checked={agreedToAck}
-                  onCheckedChange={v => setAgreedToAck(v as boolean)}
-                  data-testid="checkbox-ack"
-                />
+                <Checkbox id="ack" checked={agreedToAck} onCheckedChange={v => setAgreedToAck(v as boolean)}
+                  data-testid="checkbox-ack" />
                 <Label htmlFor="ack" className="text-sm text-blue-900 leading-relaxed cursor-pointer">
                   I confirm that the information I provided is accurate to the best of my knowledge. I confirm that I have read, understood, and agreed to all required company policies in this hiring package. I understand that this hiring package and all accepted policies may become part of my confidential employment file.
                 </Label>
