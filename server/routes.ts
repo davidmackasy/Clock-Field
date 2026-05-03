@@ -12,7 +12,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { isNotNull, eq, and, isNull, inArray, desc, sql } from "drizzle-orm";
-import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments, supplies, supplyUpdates, inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses } from "@shared/schema";
+import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments, supplies, supplyUpdates, inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses, trainingPublicLearners } from "@shared/schema";
 import { getPlan } from "./plans";
 import { generateReviewOgImage } from "./og-image";
 
@@ -9946,7 +9946,29 @@ Return ONLY valid JSON:
       const started = new Set(completions.filter(c => c.employeeId).map(c => c.employeeId)).size;
       const completed = completedEmployees.size;
       const completionPct = assigned > 0 ? Math.round((completed / assigned) * 100) : 0;
-      res.json({ course, modules, assignments, completions, stats: { assigned, started, completed, completionPct } });
+
+      // Enrich completions with actorName + moduleTitle for the activity pulse view
+      const moduleMap = new Map(modules.map((m: any) => [m.id, m.title]));
+      const empNameMap = new Map(assignments.map((a: any) => [a.employeeId, a.employeeName]));
+      const publicLearnerIds = Array.from(new Set(completions.filter(c => c.publicLearnerId).map(c => c.publicLearnerId as string)));
+      let publicNameMap = new Map<string, string>();
+      if (publicLearnerIds.length > 0) {
+        const publicRows = await db.select({ id: trainingPublicLearners.id, name: trainingPublicLearners.name })
+          .from(trainingPublicLearners)
+          .where(inArray(trainingPublicLearners.id, publicLearnerIds));
+        publicNameMap = new Map(publicRows.map(r => [r.id, r.name]));
+      }
+      const completionsEnriched = completions.map(c => ({
+        ...c,
+        moduleTitle: moduleMap.get(c.moduleId) ?? "Unknown module",
+        actorName: c.employeeId
+          ? (empNameMap.get(c.employeeId) ?? "Unknown")
+          : c.publicLearnerId
+          ? (publicNameMap.get(c.publicLearnerId) ?? "Public learner")
+          : "Unknown",
+      }));
+
+      res.json({ course, modules, assignments, completions: completionsEnriched, stats: { assigned, started, completed, completionPct } });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 

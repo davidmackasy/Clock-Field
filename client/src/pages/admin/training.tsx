@@ -14,7 +14,7 @@ import {
   Globe, Lock, Copy, ExternalLink, Play, FileText, Image, CheckCircle2,
   BarChart3, Loader2, X, GripVertical, Eye, EyeOff, Award, Search,
   ChevronDown, ChevronUp, Upload, AlertCircle, Check, ShieldCheck,
-  Sparkles, Wrench, GraduationCap, HeartHandshake,
+  Sparkles, Wrench, GraduationCap, HeartHandshake, Activity,
 } from "lucide-react";
 
 type Course = {
@@ -158,7 +158,7 @@ function CohortRoster({
 }: { learners: RosterLearner[]; totalAssigned: number; totalModules: number; onAssign: () => void }) {
   if (totalAssigned === 0) {
     return (
-      <div className="bg-card border border-border rounded-xl p-5">
+      <div className="bg-card border border-border rounded-xl p-5" data-testid="card-cohort-roster">
         <h3 className="font-semibold text-foreground mb-1">Cohort Roster</h3>
         <p className="text-xs text-muted-foreground mb-4">No employees assigned yet</p>
         <div className="text-center py-6 border border-dashed border-border rounded-lg">
@@ -315,6 +315,183 @@ function shortName(s: string) {
   if (!s) return "";
   const w = s.split(/\s+/)[0] ?? s;
   return w.length > 7 ? w.slice(0, 7) : w;
+}
+
+function relativeTime(iso: string | Date | null | undefined): string {
+  if (!iso) return "";
+  const t = typeof iso === "string" ? new Date(iso).getTime() : iso.getTime();
+  const diff = Date.now() - t;
+  if (diff < 0) return "just now";
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
+function LiveActivityPulse({
+  completions,
+  onManage,
+}: {
+  completions: any[];
+  onManage: () => void;
+}) {
+  const now = new Date();
+  const sorted = [...completions]
+    .filter((c) => c.completedAt)
+    .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
+
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  const last24h = sorted.filter(
+    (c) => now.getTime() - new Date(c.completedAt).getTime() <= oneDayMs,
+  );
+
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const todayCount = sorted.filter(
+    (c) => new Date(c.completedAt).getTime() >= startOfToday,
+  ).length;
+
+  // 7-day buckets ending today (oldest -> today)
+  const days: { label: string; count: number; isToday: boolean }[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i).getTime();
+    const dayEnd = dayStart + oneDayMs;
+    const count = sorted.filter((c) => {
+      const t = new Date(c.completedAt).getTime();
+      return t >= dayStart && t < dayEnd;
+    }).length;
+    const labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const d = new Date(dayStart);
+    days.push({
+      label: i === 0 ? "Today" : labels[d.getDay()],
+      count,
+      isToday: i === 0,
+    });
+  }
+  const maxCount = Math.max(1, ...days.map((d) => d.count));
+
+  const featured = last24h[0];
+  const earlierToday = sorted
+    .filter((c) => {
+      const t = new Date(c.completedAt).getTime();
+      return t >= startOfToday && c !== featured;
+    })
+    .slice(0, 4);
+
+  if (last24h.length === 0 && todayCount === 0) {
+    return (
+      <div className="bg-card border border-border rounded-xl overflow-hidden" data-testid="card-pulse">
+        <div className="bg-emerald-50 dark:bg-emerald-950/30 border-b border-emerald-100 dark:border-emerald-900 px-5 py-2.5 flex items-center gap-2">
+          <span className="relative flex h-2 w-2">
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-muted-foreground/40" />
+          </span>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Live activity
+          </span>
+          <span className="ml-auto text-[11px] text-muted-foreground">last 24h</span>
+        </div>
+        <div className="px-5 py-6 text-center">
+          <Activity className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">No activity in the last 24 hours.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-xl overflow-hidden" data-testid="card-pulse">
+      <div className="bg-emerald-50 dark:bg-emerald-950/30 border-b border-emerald-100 dark:border-emerald-900 px-5 py-2.5 flex items-center gap-2">
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+        </span>
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+          Live activity
+        </span>
+        <span className="ml-auto text-[11px] text-emerald-700/70 dark:text-emerald-400/70">last 24h</span>
+      </div>
+
+      {featured && (
+        <div className="px-5 pt-4 pb-3" data-testid="text-pulse-latest">
+          <div className="text-[15px] leading-snug text-foreground">
+            <span className="font-semibold">{featured.actorName}</span>
+            <span className="text-muted-foreground"> finished </span>
+            <span className="font-medium">{featured.moduleTitle}</span>
+          </div>
+          <div className="text-xs text-muted-foreground mt-0.5">{relativeTime(featured.completedAt)}</div>
+        </div>
+      )}
+
+      <div className="px-5 pb-3">
+        <div className="flex items-end gap-1 h-10" data-testid="chart-pulse-spark">
+          {days.map((d, i) => (
+            <div key={i} className="flex-1 flex flex-col justify-end h-full" title={`${d.label}: ${d.count}`}>
+              <div
+                className="rounded-sm bg-gradient-to-t from-emerald-200 to-emerald-400 dark:from-emerald-900 dark:to-emerald-500"
+                style={{
+                  height: `${Math.max(6, (d.count / maxCount) * 100)}%`,
+                  opacity: 0.45 + (i / days.length) * 0.55,
+                }}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-between text-[10px] text-muted-foreground mt-1.5">
+          {days.map((d, i) => (
+            <span key={i} className={d.isToday ? "font-medium text-foreground" : ""}>
+              {d.label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {earlierToday.length > 0 && (
+        <div className="px-5 pb-4">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+            Earlier today
+          </div>
+          <div className="space-y-1.5">
+            {earlierToday.map((a, i) => (
+              <div key={a.id ?? i} className="flex items-center gap-2 text-[12px]" data-testid={`row-pulse-event-${i}`}>
+                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 flex-shrink-0" />
+                <span className="text-foreground min-w-0 truncate">
+                  <span className="font-medium">{a.actorName}</span>{" "}
+                  <span className="text-muted-foreground">finished</span>{" "}
+                  <span className="text-muted-foreground">{a.moduleTitle}</span>
+                </span>
+                <span className="ml-auto text-[11px] text-muted-foreground flex-shrink-0">
+                  {relativeTime(a.completedAt)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="border-t border-border px-5 py-3 flex items-center gap-3 bg-muted/30">
+        <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+          <Activity className="w-3.5 h-3.5" />
+          <span>
+            <span className="font-semibold text-foreground" data-testid="text-pulse-today-count">
+              {todayCount}
+            </span>{" "}
+            {todayCount === 1 ? "event" : "events"} today
+          </span>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="ml-auto h-7"
+          onClick={onManage}
+          data-testid="btn-pulse-manage"
+        >
+          Manage <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function CourseCard({ course, onClick }: { course: Course; onClick: () => void }) {
@@ -785,6 +962,15 @@ export default function AdminTrainingHub() {
                     </div>
                   </div>
                 </div>
+
+                {/* Live activity pulse */}
+                <LiveActivityPulse
+                  completions={detail.completions}
+                  onManage={() => {
+                    const el = document.querySelector('[data-testid="cohort-roster"], [data-testid="card-cohort-roster"]');
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                />
 
                 {/* Modules */}
                 <div className="bg-card border border-border rounded-xl p-5">
