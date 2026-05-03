@@ -1,0 +1,158 @@
+DEV NOTE: Clean Certificate PDF for Professional Output
+
+Scope
+Only update Training Hub certificate generation.
+Do not touch anything else.
+
+Issue
+Printed/downloaded certificate shows unwanted UI elements:
+
+Top left timestamp (date + time)
+Top right “Certificate” label
+Bottom left “Public link”
+Bottom right page info
+
+These make the certificate look unprofessional.
+
+Fix Requirements
+
+Remove all UI/debug elements from certificate export
+
+The certificate PDF/print version must ONLY include:
+
+Certificate design
+Employee name
+Course title
+Completion date
+Company name
+Certificate ID
+Optional logo
+
+REMOVE:
+
+Timestamp (top left)
+“Certificate” label (top right)
+“Public link” (bottom left)
+Any footer UI from app
+Any navigation or browser UI bleed
+Use Print-Only Clean Layout
+
+Create a dedicated print/export layout.
+
+Do NOT reuse the screen UI.
+
+Option A (recommended):
+Create a separate hidden component:
+
+CertificatePrintView
+
+Option B:
+Use print CSS with strict isolation.
+
+Add Print CSS Rules
+
+Apply:
+
+@media print {
+body * {
+visibility: hidden;
+}
+
+.certificate-container,
+.certificate-container * {
+visibility: visible;
+}
+
+.certificate-container {
+position: absolute;
+top: 0;
+left: 0;
+width: 100%;
+}
+}
+
+Remove unwanted elements via class targeting
+
+Wrap anything not part of certificate with:
+
+.no-print
+
+Then:
+
+@media print {
+.no-print {
+display: none !important;
+}
+}
+
+Apply .no-print to:
+
+Top header
+Timestamps
+Buttons
+Navigation
+Public link text
+Any debug labels
+
+Fix PDF Export (IMPORTANT)
+
+If using:
+
+window.print()
+html2pdf
+puppeteer
+or similar
+
+Ensure:
+
+Only the certificate container is rendered
+
+If using html2canvas/html2pdf:
+
+Target ONLY:
+.certificate-container
+
+NOT:
+document.body
+
+Lock Certificate Dimensions
+
+Use fixed layout:
+
+Width: 1123px
+Height: 794px (landscape A4)
+
+Center content.
+
+No overflow.
+
+Final Certificate Should Look Like
+
+Clean white background
+Blue border
+Centered text
+No UI elements
+No timestamps
+No extra labels
+
+Only:
+
+CERTIFICATE OF COMPLETION
+“This is to certify that”
+Employee Name
+Course Title
+Completion Date
+Company Name
+Certificate ID
+
+Expected Result
+
+User clicks Download / Print
+Certificate exports clean
+No timestamps
+No “Certificate” label
+No “Public link”
+No UI clutter
+Fully professional output
+
+Do not affect anything else in Training Hub or ClockField

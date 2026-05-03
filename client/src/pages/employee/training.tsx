@@ -12,6 +12,7 @@ import {
 import { QuizRunner, type QuizPayload, type QuizSubmitResult } from "@/components/training/quiz-runner";
 import { AudioPlayer } from "@/components/training/audio-player";
 import { apiRequest } from "@/lib/queryClient";
+import { downloadCertificate } from "@/lib/certificate";
 
 type MyCourse = {
   id: string;
@@ -92,48 +93,7 @@ function CourseCard({ course, onClick }: { course: MyCourse; onClick: () => void
   );
 }
 
-function printCertificate(cert: any, course: MyCourse, name: string) {
-  const win = window.open("", "_blank");
-  if (!win) return;
-  const date = new Date(cert.issuedAt).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" });
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Certificate</title><style>
-    @page { size: A4 landscape; margin: 0; }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Georgia, 'Times New Roman', serif; background: #fff; width: 297mm; height: 210mm; display: flex; align-items: center; justify-content: center; }
-    .cert { border: 8px solid #1e40af; border-radius: 12px; padding: 40px 60px; text-align: center; width: 260mm; height: 185mm; display: flex; flex-direction: column; align-items: center; justify-content: space-between; background: linear-gradient(135deg, #eff6ff 0%, #fff 50%, #eff6ff 100%); }
-    .header { color: #1e40af; font-size: 13px; text-transform: uppercase; letter-spacing: 3px; }
-    .logo { font-size: 22px; font-weight: bold; color: #1e40af; margin-bottom: 4px; }
-    .title { font-size: 36px; color: #1e3a8a; font-style: italic; margin: 8px 0; }
-    .subtitle { font-size: 14px; color: #6b7280; }
-    .name { font-size: 42px; color: #111827; font-style: italic; border-bottom: 2px solid #1e40af; padding-bottom: 4px; margin: 12px 0; }
-    .course { font-size: 20px; color: #1e40af; font-weight: bold; margin: 8px 0; }
-    .date { font-size: 13px; color: #6b7280; margin-top: 4px; }
-    .footer { font-size: 10px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 8px; width: 100%; }
-    .code { font-family: monospace; font-size: 11px; color: #9ca3af; }
-    .seal { width: 60px; height: 60px; border-radius: 50%; background: #1e40af; display: flex; align-items: center; justify-content: center; margin: 0 auto 8px; }
-  </style></head><body>
-  <div class="cert">
-    <div>
-      <div class="header">Certificate of Completion</div>
-      <div class="title">This is to certify that</div>
-    </div>
-    <div>
-      <div class="name">${name}</div>
-      <div class="subtitle">has successfully completed the training course</div>
-      <div class="course">${course.title}</div>
-      <div class="date">Completed on ${date}</div>
-    </div>
-    <div class="footer">
-      <div style="display:flex;justify-content:space-between;align-items:center;width:100%">
-        <div class="logo">ClockField Training</div>
-        <div class="code">Certificate ID: ${cert.certificateCode}</div>
-      </div>
-    </div>
-  </div>
-  </body></html>`);
-  win.document.close();
-  setTimeout(() => win.print(), 500);
-}
+// Certificate export is handled by `downloadCertificate` in `@/lib/certificate`.
 
 export default function EmployeeTraining() {
   const { toast } = useToast();
@@ -419,7 +379,7 @@ export default function EmployeeTraining() {
                   <div className="font-semibold text-foreground text-sm">Course Completed!</div>
                   <div className="text-xs text-muted-foreground">Certificate earned · {new Date(course.certificate.issuedAt).toLocaleDateString()}</div>
                 </div>
-                <Button size="sm" variant="outline" className="border-amber-400 text-amber-700" onClick={() => printCertificate(course.certificate, course, "Employee")} data-testid="btn-download-cert">
+                <Button size="sm" variant="outline" className="border-amber-400 text-amber-700" onClick={() => downloadCertificate({ name: "Employee", courseTitle: course.title, certificateCode: course.certificate!.certificateCode, issuedAt: course.certificate!.issuedAt })} data-testid="btn-download-cert">
                   Download
                 </Button>
               </div>
