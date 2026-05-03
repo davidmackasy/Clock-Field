@@ -94,10 +94,222 @@ const LEARNER_PALETTE = [
   "bg-rose-400", "bg-amber-400", "bg-sky-400",
   "bg-violet-400", "bg-emerald-400", "bg-pink-400",
 ];
-function colorForLearner(id: string) {
+const LEARNER_PALETTE_HEX = [
+  "#fb7185", "#fbbf24", "#38bdf8",
+  "#a78bfa", "#34d399", "#f472b6",
+];
+function learnerHash(id: string) {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return LEARNER_PALETTE[h % LEARNER_PALETTE.length];
+  return h;
+}
+function colorForLearner(id: string) {
+  return LEARNER_PALETTE[learnerHash(id) % LEARNER_PALETTE.length];
+}
+function colorHexForLearner(id: string) {
+  return LEARNER_PALETTE_HEX[learnerHash(id) % LEARNER_PALETTE_HEX.length];
+}
+function initialsFromName(name: string) {
+  const parts = (name ?? "").trim().split(/\s+/);
+  const a = parts[0]?.[0] ?? "?";
+  const b = parts.length > 1 ? parts[parts.length - 1][0] : "";
+  return (a + b).toUpperCase();
+}
+
+function ProgressRing({
+  progress, color, initials, size = 60,
+}: { progress: number; color: string; initials: string; size?: number }) {
+  const stroke = 5;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const offset = c - (Math.max(0, Math.min(100, progress)) / 100) * c;
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={r} className="stroke-muted" strokeWidth={stroke} fill="none" />
+        <circle
+          cx={size / 2} cy={size / 2} r={r}
+          stroke={color} strokeWidth={stroke} strokeLinecap="round" fill="none"
+          strokeDasharray={c} strokeDashoffset={offset}
+          style={{ transition: "stroke-dashoffset 600ms ease" }}
+        />
+      </svg>
+      <div
+        className="absolute inset-[5px] rounded-full flex items-center justify-center text-white text-[13px] font-semibold tracking-wide"
+        style={{ backgroundColor: color }}
+      >
+        {initials}
+      </div>
+    </div>
+  );
+}
+
+type RosterLearner = {
+  id: string;
+  name: string;
+  role: string;
+  progress: number;
+  initials: string;
+  color: string;
+};
+
+function CohortRoster({
+  learners, totalAssigned, totalModules, onAssign,
+}: { learners: RosterLearner[]; totalAssigned: number; totalModules: number; onAssign: () => void }) {
+  if (totalAssigned === 0) {
+    return (
+      <div className="bg-card border border-border rounded-xl p-5">
+        <h3 className="font-semibold text-foreground mb-1">Cohort Roster</h3>
+        <p className="text-xs text-muted-foreground mb-4">No employees assigned yet</p>
+        <div className="text-center py-6 border border-dashed border-border rounded-lg">
+          <Users className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground mb-3">Assign your first learners to start tracking</p>
+          <Button size="sm" variant="outline" onClick={onAssign} data-testid="btn-roster-assign-first">
+            Assign Employees
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const sorted = [...learners].sort((a, b) => b.progress - a.progress);
+  const featured = sorted.slice(0, 4);
+  const overflow = sorted.slice(4);
+  const stackVisible = overflow.slice(0, 5);
+  const stackHidden = Math.max(0, overflow.length - stackVisible.length);
+
+  const cohortAvg = sorted.length > 0
+    ? Math.round(sorted.reduce((s, l) => s + l.progress, 0) / sorted.length)
+    : 0;
+
+  const doneCount = sorted.filter(l => l.progress >= 100).length;
+  const inProgressCount = sorted.filter(l => l.progress > 0 && l.progress < 100).length;
+  const notStartedCount = Math.max(0, totalAssigned - sorted.length) + sorted.filter(l => l.progress === 0).length;
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5" data-testid="cohort-roster">
+      {/* Tiny header */}
+      <div className="flex items-center gap-2 mb-5">
+        <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
+        <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground font-medium">Cohort</div>
+        <div className="text-[11px] text-muted-foreground/70">·</div>
+        <div className="text-[11px] text-muted-foreground">{totalAssigned} enrolled · {totalModules} module{totalModules === 1 ? "" : "s"}</div>
+      </div>
+
+      {/* Featured rings */}
+      <div className={`grid gap-3 mb-5 ${featured.length === 1 ? "grid-cols-1" : featured.length === 2 ? "grid-cols-2" : featured.length === 3 ? "grid-cols-3" : "grid-cols-4"}`}>
+        {featured.map((l) => (
+          <div key={l.id} className="flex flex-col items-center text-center" data-testid={`ring-${l.id}`}>
+            <ProgressRing progress={l.progress} color={l.color} initials={l.initials} />
+            <div className="mt-2 text-[12px] font-medium text-foreground leading-tight truncate w-full" title={l.name}>
+              {l.name.split(/\s+/)[0]}
+            </div>
+            <div className="text-[10px] text-muted-foreground tabular-nums">{l.progress}%</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Stacked overflow */}
+      {(overflow.length > 0 || totalAssigned > sorted.length) && (
+        <div className="flex items-center gap-3 py-3 border-y border-border">
+          <div className="flex -space-x-2">
+            {stackVisible.map((l) => (
+              <div
+                key={l.id}
+                className="h-8 w-8 rounded-full ring-2 ring-card flex items-center justify-center text-white text-[10px] font-semibold"
+                style={{ backgroundColor: l.color }}
+                title={l.name}
+                data-testid={`stack-avatar-${l.id}`}
+              >
+                {l.initials}
+              </div>
+            ))}
+            {stackHidden > 0 && (
+              <div className="h-8 w-8 rounded-full ring-2 ring-card bg-muted flex items-center justify-center text-foreground text-[10px] font-semibold">
+                +{stackHidden}
+              </div>
+            )}
+          </div>
+          <div className="text-[11px] text-muted-foreground leading-tight">
+            <div>and {overflow.length} more</div>
+            <div className="text-muted-foreground/70">enrolled in this course</div>
+          </div>
+        </div>
+      )}
+
+      {/* Cohort summary */}
+      <div className="flex items-end gap-4 mt-5">
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Cohort avg</div>
+          <div className="text-3xl font-bold text-foreground tabular-nums leading-none mt-1" data-testid="text-cohort-avg">
+            {cohortAvg}<span className="text-base text-muted-foreground font-medium">%</span>
+          </div>
+        </div>
+        <div className="flex-1">
+          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+            <div className="h-full bg-foreground rounded-full" style={{ width: `${cohortAvg}%` }} />
+          </div>
+          <div className="flex justify-between text-[10px] text-muted-foreground mt-1.5 tabular-nums">
+            <span data-testid="text-roster-done">{doneCount} done</span>
+            <span data-testid="text-roster-inprogress">{inProgressCount} in progress</span>
+            <span data-testid="text-roster-notstarted">{notStartedCount} not started</span>
+          </div>
+        </div>
+      </div>
+
+      <Button variant="ghost" size="sm" className="w-full mt-4 h-8 text-muted-foreground hover:text-foreground justify-between" onClick={onAssign} data-testid="btn-manage-cohort">
+        <span>Manage cohort</span>
+        <ChevronRight className="w-3.5 h-3.5" />
+      </Button>
+
+      {/* Full learner list — collapsible to preserve per-employee detail */}
+      {sorted.length > 0 && (
+        <RosterFullList learners={sorted} />
+      )}
+    </div>
+  );
+}
+
+function RosterFullList({ learners }: { learners: RosterLearner[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-3 border-t border-border pt-3">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between text-[11px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+        data-testid="btn-toggle-full-roster"
+      >
+        <span>All learners ({learners.length})</span>
+        {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+      </button>
+      {open && (
+        <div className="mt-3 space-y-2 max-h-64 overflow-y-auto pr-1">
+          {learners.map((l) => (
+            <div key={l.id} className="flex items-center gap-3" data-testid={`row-learner-${l.id}`}>
+              <div
+                className="h-7 w-7 rounded-full flex items-center justify-center text-white text-[10px] font-semibold flex-shrink-0"
+                style={{ backgroundColor: l.color }}
+              >
+                {l.initials}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-foreground truncate">{l.name}</div>
+                <div className="w-full h-1 bg-muted rounded-full mt-1 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${l.progress >= 100 ? "bg-emerald-500" : ""}`}
+                    style={{ width: `${l.progress}%`, backgroundColor: l.progress < 100 ? l.color : undefined }}
+                  />
+                </div>
+              </div>
+              <div className="text-xs text-muted-foreground flex-shrink-0 tabular-nums">{l.progress}%</div>
+              {l.progress >= 100 && <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 function shortName(s: string) {
   if (!s) return "";
@@ -621,70 +833,30 @@ export default function AdminTrainingHub() {
                 </div>
               </div>
 
-              {/* Right: stats + completions */}
+              {/* Right: cohort roster + public learners */}
               <div className="space-y-4">
-                {/* Stats */}
-                <div className="bg-card border border-border rounded-xl p-5">
-                  <h3 className="font-semibold text-foreground mb-4">Completion Stats</h3>
-                  <div className="space-y-3">
-                    {[
-                      { label: "Assigned", value: detail.stats.assigned, color: "bg-blue-500" },
-                      { label: "Started", value: detail.stats.started, color: "bg-amber-500" },
-                      { label: "Completed", value: detail.stats.completed, color: "bg-green-500" },
-                    ].map(s => (
-                      <div key={s.label}>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="text-muted-foreground">{s.label}</span>
-                          <span className="font-medium text-foreground">{s.value}</span>
-                        </div>
-                        <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${s.color}`} style={{ width: `${detail.stats.assigned > 0 ? (s.value / detail.stats.assigned) * 100 : 0}%` }} />
-                        </div>
-                      </div>
-                    ))}
-                    {detail.stats.assigned > 0 && (
-                      <div className="pt-2 border-t border-border text-center">
-                        <span className="text-2xl font-bold text-foreground">{detail.stats.completionPct}%</span>
-                        <p className="text-xs text-muted-foreground">completion rate</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Employee completions */}
-                <div className="bg-card border border-border rounded-xl p-5">
-                  <h3 className="font-semibold text-foreground mb-4">Employee Progress</h3>
-                  {detail.assignments.length === 0 ? (
-                    <div className="text-center py-6">
-                      <Users className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">No employees assigned yet</p>
-                      <Button size="sm" variant="outline" className="mt-3" onClick={() => setAssignDialog(true)}>Assign Employees</Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-2 max-h-64 overflow-y-auto">
-                      {detail.assignments.map((a: any) => {
-                        const completedModules = detail.completions.filter(c => c.employeeId === a.employeeId).length;
-                        const total = detail.modules.length;
-                        const pct = total > 0 ? Math.round((completedModules / total) * 100) : 0;
-                        return (
-                          <div key={a.id} className="flex items-center gap-3">
-                            <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary flex-shrink-0">
-                              {a.employeeName?.charAt(0) ?? "?"}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium text-foreground truncate">{a.employeeName}</div>
-                              <div className="w-full h-1 bg-muted rounded-full mt-1">
-                                <div className={`h-full rounded-full ${pct === 100 ? "bg-green-500" : "bg-primary"}`} style={{ width: `${pct}%` }} />
-                              </div>
-                            </div>
-                            <div className="text-xs text-muted-foreground flex-shrink-0">{pct}%</div>
-                            {pct === 100 && <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                <CohortRoster
+                  learners={detail.assignments.map((a: any) => {
+                    const completedModules = new Set(
+                      detail.completions
+                        .filter(c => c.employeeId === a.employeeId)
+                        .map(c => c.moduleId)
+                    ).size;
+                    const total = detail.modules.length;
+                    const pct = total > 0 ? Math.round((completedModules / total) * 100) : 0;
+                    return {
+                      id: a.employeeId ?? a.id,
+                      name: a.employeeName ?? "Unknown",
+                      role: "",
+                      progress: pct,
+                      initials: initialsFromName(a.employeeName ?? ""),
+                      color: colorHexForLearner(a.employeeId ?? a.id),
+                    };
+                  })}
+                  totalAssigned={detail.stats.assigned}
+                  totalModules={detail.modules.length}
+                  onAssign={() => setAssignDialog(true)}
+                />
 
                 {/* Public learners */}
                 {course.publicLinkEnabled && (
