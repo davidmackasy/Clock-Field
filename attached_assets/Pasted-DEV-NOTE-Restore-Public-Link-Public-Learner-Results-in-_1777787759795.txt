@@ -1,0 +1,145 @@
+DEV NOTE: Restore Public Link + Public Learner Results in Training Hub
+Scope:
+Only update Training Hub.
+Do not touch:
+Payroll
+Schedule
+Attendance
+Work Log
+Forms
+Supplies
+Publications
+Employee app logic outside Training Hub
+Admin navigation
+Database tables outside Training Hub
+Issue:
+After generating a course, the Public Link option is missing.
+Admins need to:
+Share a course with someone outside the employee account
+Let public learners enter name and email
+Track their course progress
+See their quiz result and completion status inside the course cohort/results panel
+Requirements:
+
+
+Restore Public Link button
+
+
+On course detail page, add:
+Copy Public Link
+Place it near:
+Assign
+Unpublish
+Delete
+Use route format:
+/training/public/:publicCourseId
+or current existing public training route if already created.
+
+
+Public learner entry screen
+
+
+When someone opens public link, show:
+Company name/logo
+Course title
+Course description
+Estimated duration
+Name field
+Email field
+Start Course button
+Require:
+Name
+Email
+
+
+Track public learners
+
+
+When public learner starts course, create or reuse public learner record by:
+course_id
+business_id
+email
+Track:
+name
+email
+started_at
+completed_at
+quiz_score
+quiz_passed
+certificate_id if passed
+
+
+Public learner progress
+
+
+Public learners must be able to:
+Complete modules
+Unlock final quiz
+Take quiz
+Retake quiz if allowed
+Download certificate if passed
+Same rules as employee:
+Course is not completed until modules are done and quiz is passed.
+
+
+Show public learners in admin course panel
+
+
+In the cohort/results panel, show both:
+Assigned employees
+Public learners
+Separate sections:
+Employees
+Public Link Learners
+For each public learner show:
+Name
+Email
+Progress %
+Modules completed
+Quiz score
+Passed/Failed
+Certificate status
+Last activity
+
+
+Public link result activity
+
+
+If a public learner completes a module, log:
+[Name] completed module [Module Name]
+If they pass quiz, log:
+[Name] completed course [Course Name]
+If they fail quiz, log:
+[Name] attempted quiz and scored [Score]%
+
+
+Course card/details must show Public Link
+
+
+On course detail header, show:
+Public Link enabled
+Copy Link
+If public link is disabled, show:
+Enable Public Link
+
+
+Do not expose private data
+
+
+Public link page must not show:
+Employee list
+Admin data
+Business private info
+Other learner results
+
+
+Expected result
+
+
+Admin creates course.
+Admin clicks Copy Public Link.
+Public learner opens link.
+Learner enters name/email.
+Learner completes modules and quiz.
+Admin sees learner in Public Link Learners section with result.
+Do not affect anything else in ClockField.

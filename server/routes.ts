@@ -10127,6 +10127,19 @@ Return ONLY valid JSON:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // GET /api/training/courses/:id/public-learners — admin roster of public learners
+  // Returns name / email / progress / quiz score / pass-fail / certificate /
+  // last activity. Tenant-scoped via the company check on the parent course.
+  app.get("/api/training/courses/:id/public-learners", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const course = await storage.getTrainingCourse(req.params.id);
+      if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const learners = await storage.listPublicLearnersForCourse(course.id, user.companyId);
+      res.json(learners);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // PATCH /api/training/courses/:id
   app.patch("/api/training/courses/:id", requireAuth, requireRole("admin"), async (req, res) => {
     try {

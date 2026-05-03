@@ -513,6 +513,9 @@ export interface IStorage {
 
   // Per-employee training summary (read-only aggregation, admin view)
   getEmployeeTrainingSummary(employeeId: string, companyId: string): Promise<any[]>;
+
+  // Public-learner roster for a course (admin view, read-only aggregation)
+  listPublicLearnersForCourse(courseId: string, companyId: string): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2660,6 +2663,68 @@ export class DatabaseStorage implements IStorage {
     // Reuse the same logic as the employee's own "my-courses" list so the admin
     // sees identical progress/status/certificate state for that employee.
     return this.getMyTrainingCourses(employeeId, companyId);
+  }
+
+  // ── Public-learner roster (admin, read-only aggregation) ────────────────
+  // Aggregates name / email / progress / quiz / certificate / last activity
+  // for every public learner of a single course. Tenant-scoped.
+  async listPublicLearnersForCourse(courseId: string, companyId: string): Promise<any[]> {
+    const learners = await db.select().from(trainingPublicLearners)
+      .where(and(eq(trainingPublicLearners.courseId, courseId), eq(trainingPublicLearners.companyId, companyId)))
+      .orderBy(desc(trainingPublicLearners.startedAt));
+    if (learners.length === 0) return [];
+    const learnerIds = learners.map(l => l.id);
+
+    const moduleRows = await db.select({ id: trainingModules.id })
+      .from(trainingModules).where(eq(trainingModules.courseId, courseId));
+    const totalModules = moduleRows.length;
+
+    const progressRows = await db.select().from(trainingProgress)
+      .where(and(eq(trainingProgress.courseId, courseId), inArray(trainingProgress.publicLearnerId, learnerIds)));
+
+    const [quiz] = await db.select().from(trainingQuizzes).where(eq(trainingQuizzes.courseId, courseId));
+    let attempts: any[] = [];
+    if (quiz) {
+      attempts = await db.select().from(trainingQuizAttempts)
+        .where(and(eq(trainingQuizAttempts.quizId, quiz.id), inArray(trainingQuizAttempts.publicLearnerId, learnerIds)));
+    }
+
+    const certs = await db.select().from(trainingCertificates)
+      .where(and(eq(trainingCertificates.courseId, courseId), inArray(trainingCertificates.publicLearnerId, learnerIds)));
+
+    return learners.map(l => {
+      const myProgress = progressRows.filter(p => p.publicLearnerId === l.id);
+      const modulesCompleted = new Set(myProgress.map(p => p.moduleId)).size;
+      const myAttempts = attempts.filter(a => a.publicLearnerId === l.id);
+      const completedAttempts = myAttempts.filter(a => a.completedAt && a.score != null);
+      const bestQuizScore = completedAttempts.length > 0 ? Math.max(...completedAttempts.map((a: any) => a.score as number)) : null;
+      const quizPassed = myAttempts.some(a => a.passed);
+      const cert = certs.find(c => c.publicLearnerId === l.id);
+      const candidates: string[] = [l.startedAt];
+      for (const p of myProgress) if (p.completedAt) candidates.push(p.completedAt);
+      for (const a of myAttempts) {
+        if (a.completedAt) candidates.push(a.completedAt);
+        else if (a.startedAt) candidates.push(a.startedAt);
+      }
+      if (cert?.issuedAt) candidates.push(cert.issuedAt);
+      const lastActivity = candidates.sort().pop() ?? l.startedAt;
+      return {
+        id: l.id,
+        name: l.name,
+        email: l.email,
+        startedAt: l.startedAt,
+        completedAt: l.completedAt,
+        modulesCompleted,
+        totalModules,
+        progressPct: totalModules > 0 ? Math.round((modulesCompleted / totalModules) * 100) : 0,
+        bestQuizScore,
+        quizPassed,
+        quizAttempts: myAttempts.length,
+        certificateId: cert?.id ?? null,
+        certificateCode: cert?.certificateCode ?? null,
+        lastActivity,
+      };
+    });
   }
 }
 

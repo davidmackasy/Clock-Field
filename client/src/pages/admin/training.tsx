@@ -15,8 +15,25 @@ import {
   Globe, Lock, Copy, ExternalLink, Play, FileText, Image, CheckCircle2,
   BarChart3, Loader2, X, GripVertical, Eye, EyeOff, Award, Search,
   ChevronDown, ChevronUp, Upload, AlertCircle, Check, ShieldCheck,
-  Sparkles, Wrench, GraduationCap, HeartHandshake, Activity,
+  Sparkles, Wrench, GraduationCap, HeartHandshake, Activity, Mail, XCircle,
 } from "lucide-react";
+
+type PublicLearnerRow = {
+  id: string;
+  name: string;
+  email: string;
+  startedAt: string;
+  completedAt: string | null;
+  modulesCompleted: number;
+  totalModules: number;
+  progressPct: number;
+  bestQuizScore: number | null;
+  quizPassed: boolean;
+  quizAttempts: number;
+  certificateId: string | null;
+  certificateCode: string | null;
+  lastActivity: string;
+};
 
 type Course = {
   id: string;
@@ -312,6 +329,107 @@ function RosterFullList({ learners }: { learners: RosterLearner[] }) {
     </div>
   );
 }
+function PublicLearnersRoster({
+  learners, publicLink, onCopy,
+}: { learners: PublicLearnerRow[]; publicLink: string | null; onCopy: () => void }) {
+  const passed = learners.filter(l => l.quizPassed).length;
+  const inProgress = learners.filter(l => !l.quizPassed && l.modulesCompleted > 0).length;
+  return (
+    <div className="bg-card border border-border rounded-xl p-5" data-testid="card-public-learners">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Globe className="w-4 h-4 text-blue-600" />
+            <h3 className="font-semibold text-foreground">Public Link Learners</h3>
+          </div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">
+            {learners.length} learner{learners.length === 1 ? "" : "s"} · {passed} passed · {inProgress} in progress
+          </div>
+        </div>
+      </div>
+
+      {publicLink && (
+        <div className="mb-3">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Public link</div>
+          <div className="flex items-center gap-1">
+            <code className="text-xs bg-muted px-2 py-1 rounded flex-1 truncate" data-testid="text-public-link">{publicLink}</code>
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onCopy} data-testid="btn-copy-public-link-roster">
+              <Copy className="w-3.5 h-3.5" />
+            </Button>
+            <a href={publicLink} target="_blank" rel="noopener noreferrer">
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" data-testid="btn-open-public-link">
+                <ExternalLink className="w-3.5 h-3.5" />
+              </Button>
+            </a>
+          </div>
+        </div>
+      )}
+
+      {learners.length === 0 ? (
+        <div className="py-6 border border-dashed border-border rounded-lg text-center" data-testid="empty-public-learners">
+          <Globe className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
+          <p className="text-xs text-muted-foreground">No public learners yet — share the link to start tracking.</p>
+        </div>
+      ) : (
+        <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+          {learners.map(l => {
+            const initials = initialsFromName(l.name);
+            const color = colorHexForLearner(l.id);
+            return (
+              <div key={l.id} className="border border-border rounded-lg p-3 hover:bg-muted/30 transition-colors" data-testid={`row-public-learner-${l.id}`}>
+                <div className="flex items-start gap-3">
+                  <div
+                    className="h-8 w-8 rounded-full flex items-center justify-center text-white text-[11px] font-semibold flex-shrink-0"
+                    style={{ backgroundColor: color }}
+                  >
+                    {initials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="text-sm font-medium text-foreground truncate" data-testid={`text-public-learner-name-${l.id}`}>{l.name}</div>
+                      {l.quizPassed && <Badge className="bg-emerald-500 text-white text-[10px] h-4 px-1">Passed</Badge>}
+                      {l.quizAttempts > 0 && !l.quizPassed && <Badge variant="outline" className="text-[10px] h-4 px-1 text-amber-600 border-amber-300">Failed</Badge>}
+                      {l.certificateId && <Badge variant="outline" className="text-[10px] h-4 px-1 gap-0.5"><Award className="w-2.5 h-2.5" />Cert</Badge>}
+                    </div>
+                    <div className="flex items-center gap-1 text-[11px] text-muted-foreground mt-0.5 truncate">
+                      <Mail className="w-3 h-3 flex-shrink-0" />
+                      <span className="truncate" data-testid={`text-public-learner-email-${l.id}`}>{l.email}</span>
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-sm font-bold tabular-nums" data-testid={`text-public-learner-progress-${l.id}`}>{l.progressPct}%</div>
+                    <div className="text-[10px] text-muted-foreground">{l.modulesCompleted}/{l.totalModules} mods</div>
+                  </div>
+                </div>
+                <div className="w-full h-1.5 bg-muted rounded-full mt-2 overflow-hidden">
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: `${l.progressPct}%`, backgroundColor: l.progressPct >= 100 ? "#10b981" : color }}
+                  />
+                </div>
+                <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-2 flex-wrap">
+                  {l.bestQuizScore != null ? (
+                    <span className="flex items-center gap-1">
+                      {l.quizPassed
+                        ? <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                        : <XCircle className="w-3 h-3 text-amber-500" />}
+                      Quiz: <span className="font-medium text-foreground tabular-nums">{l.bestQuizScore}%</span>
+                      {l.quizAttempts > 1 && <span className="text-muted-foreground">({l.quizAttempts} attempts)</span>}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">Quiz: not started</span>
+                  )}
+                  <span className="ml-auto">Last activity: {relativeTime(l.lastActivity)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function shortName(s: string) {
   if (!s) return "";
   const w = s.split(/\s+/)[0] ?? s;
@@ -693,6 +811,10 @@ export default function AdminTrainingHub() {
     queryKey: ["/api/employees"],
     enabled: assignDialog,
   });
+  const { data: publicLearners = [] } = useQuery<PublicLearnerRow[]>({
+    queryKey: ["/api/training/courses", selectedId, "public-learners"],
+    enabled: !!selectedId,
+  });
 
   const createCourseMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/training/courses", data),
@@ -961,12 +1083,19 @@ export default function AdminTrainingHub() {
                       <Button variant="outline" size="sm" onClick={() => setAssignDialog(true)} data-testid="btn-assign-employees">
                         <Users className="w-3.5 h-3.5 mr-1" /> Assign
                       </Button>
-                      {course.publicLinkEnabled && course.publicId && (
+                      {course.publicLinkEnabled && course.publicId ? (
                         <Button variant="outline" size="sm" onClick={() => {
                           navigator.clipboard.writeText(getPublicLink(course.publicId!));
                           toast({ title: "Link copied!" });
                         }} data-testid="btn-copy-public-link">
                           <Copy className="w-3.5 h-3.5 mr-1" /> Copy Link
+                        </Button>
+                      ) : (
+                        <Button variant="outline" size="sm"
+                          onClick={() => updateCourseMutation.mutate({ id: course.id, data: { publicLinkEnabled: true } })}
+                          disabled={updateCourseMutation.isPending}
+                          data-testid="btn-enable-public-link">
+                          <Globe className="w-3.5 h-3.5 mr-1" /> Enable Public Link
                         </Button>
                       )}
                       <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/5"
@@ -1058,25 +1187,17 @@ export default function AdminTrainingHub() {
                   onAssign={() => setAssignDialog(true)}
                 />
 
-                {/* Public learners */}
+                {/* Public Link Learners */}
                 {course.publicLinkEnabled && (
-                  <div className="bg-card border border-border rounded-xl p-5">
-                    <h3 className="font-semibold text-foreground mb-3">Public Completions</h3>
-                    <div className="text-sm text-muted-foreground">
-                      {detail.completions.filter(c => c.publicLearnerId).length} public learner completions
-                    </div>
-                    {course.publicId && (
-                      <div className="mt-3">
-                        <div className="text-xs text-muted-foreground mb-1">Public link</div>
-                        <div className="flex items-center gap-1">
-                          <code className="text-xs bg-muted px-2 py-1 rounded flex-1 truncate">{getPublicLink(course.publicId)}</code>
-                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { navigator.clipboard.writeText(getPublicLink(course.publicId!)); toast({ title: "Copied!" }); }}>
-                            <Copy className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <PublicLearnersRoster
+                    learners={publicLearners}
+                    publicLink={course.publicId ? getPublicLink(course.publicId) : null}
+                    onCopy={() => {
+                      if (!course.publicId) return;
+                      navigator.clipboard.writeText(getPublicLink(course.publicId));
+                      toast({ title: "Link copied!" });
+                    }}
+                  />
                 )}
               </div>
             </div>
