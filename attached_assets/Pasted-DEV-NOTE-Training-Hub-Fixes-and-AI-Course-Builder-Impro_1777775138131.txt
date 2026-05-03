@@ -1,0 +1,202 @@
+DEV NOTE: Training Hub Fixes and AI Course Builder Improvements
+
+Scope:
+Only update Training Hub.
+Do not touch or affect anything else in ClockField.
+
+Main issues to fix:
+
+AI must generate final quizzes automatically
+
+When AI generates a course, it must generate everything in one flow:
+
+Course title
+Course description
+Learning objectives
+Module titles
+Longer module lessons
+Key points
+Checklist
+Optional video/picture placeholders
+Final quiz questions
+Correct answers
+Explanations
+
+Add fields before AI generation:
+
+Number of modules
+Number of final quiz questions
+Question types:
+Multiple choice
+True/false
+Short answer
+
+Default:
+5 modules
+15 final quiz questions
+80% passing score
+
+The quiz must be based on the AI-generated module content.
+Do not make admin manually create quizzes after AI creates the course.
+
+Add video and image support inside AI course creation
+
+In the AI course wizard, add optional fields:
+
+Do you want to add videos?
+Admin can paste YouTube unlisted link per module
+
+Do you want to add images/slides?
+Admin can upload module image or slide images
+
+Each AI-generated module should have:
+
+Video URL field
+Module image field
+Slides/images field
+AI lesson content
+Checklist
+Key points
+
+If no video is added, show image/slides at the top of the module.
+
+Make modules longer and more useful
+
+Update AI prompt so modules are not too short.
+
+Each module should include:
+
+Overview
+What the employee will learn
+Detailed lesson content
+Step-by-step process
+Common mistakes
+Safety reminders
+Checklist
+Key takeaways
+
+The AI should generate practical cleaning/service training, not short generic text.
+
+Fix Save Failed error
+
+Investigate and fix course saving inside Training Hub only.
+
+Check:
+
+Frontend payload matches backend schema
+Quiz questions are included correctly
+Module fields are not missing required values
+Empty video/image fields do not break save
+JSON fields are valid
+Passing score saves as number
+Question options save correctly
+Correct answer saves correctly
+Public link fields save correctly
+AI-generated content saves the same way as manual content
+
+Add better error handling:
+
+Show exact missing field if save fails
+Log backend validation error
+Prevent generic “save failed” unless unknown
+Do not lose the admin’s course draft after save fails
+
+Improve quiz UI
+
+Current quiz section looks too manual.
+
+Update it so when AI generates quiz questions:
+
+Questions are already filled
+Options are already filled
+Correct answer is selected
+Explanation is filled if available
+
+Admin can still edit, add, or delete questions.
+
+Add button:
+Regenerate Quiz with AI
+
+Add button:
+Generate More Questions
+
+Required save behavior
+
+Admin should be able to:
+
+Generate course with AI
+Review course
+Add YouTube links/images
+Review generated quiz
+Click Save
+Course saves successfully
+Course appears in Training Hub list
+Public link works
+Employee course view works
+
+Important:
+Do not require videos to save.
+Do not require images to save.
+Do not require every optional explanation to save.
+Only require:
+Course title
+At least 1 module
+Module title
+Module lesson content
+If quiz enabled, at least 1 valid question
+
+AI JSON output structure
+
+AI response should return clean structured JSON:
+
+course
+modules
+quiz
+
+Example:
+
+{
+"title": "",
+"description": "",
+"objectives": [],
+"modules": [
+{
+"title": "",
+"description": "",
+"overview": "",
+"lesson": "",
+"steps": [],
+"commonMistakes": [],
+"safetyNotes": [],
+"checklist": [],
+"keyTakeaways": [],
+"videoUrl": "",
+"imagePrompt": ""
+}
+],
+"quiz": {
+"title": "",
+"passingScore": 80,
+"questions": []
+}
+}
+
+Do not break existing Training Hub work
+
+Keep what already works.
+Only improve:
+
+AI generation
+Quiz generation
+Course/module length
+Video/image fields
+Save failed issue
+Quiz editing UI
+
+Final expected result:
+AI creates the full course and final quiz in one generation.
+Admin can choose number of modules and quiz questions.
+Admin can add YouTube unlisted links and images per module.
+Modules are longer and more professional.
+Course saves without errors.
+The Training Hub remains isolated from the rest of ClockField.

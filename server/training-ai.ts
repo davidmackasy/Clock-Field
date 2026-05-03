@@ -13,6 +13,12 @@ const MODEL = "gpt-4o-mini";
 
 export type ToneOption = "simple" | "professional" | "safety_focused" | "beginner_friendly";
 
+export type QuestionTypeMix = {
+  multiple_choice?: boolean;
+  true_false?: boolean;
+  short_answer?: boolean;
+};
+
 export interface GenerateCourseInput {
   topic: string;
   industry?: string;
@@ -20,6 +26,11 @@ export interface GenerateCourseInput {
   trainingGoal?: string;
   moduleCount?: number;
   includeQuiz?: boolean;
+  quizQuestionCount?: number;
+  questionTypeMix?: QuestionTypeMix;
+  passingScore?: number;
+  wantVideos?: boolean;
+  wantImages?: boolean;
   tone?: ToneOption;
 }
 
@@ -34,10 +45,15 @@ export interface AIQuizQuestion {
 export interface AIModuleDraft {
   title: string;
   description: string;
+  overview: string;
   lessonText: string;
+  stepByStep: string[];
   keyPoints: string[];
   checklist: string[];
+  commonMistakes: string[];
   safetyNotes: string[];
+  keyTakeaways: string[];
+  imagePrompt?: string;
 }
 
 export interface AICourseDraft {
@@ -99,53 +115,84 @@ async function chatText(systemPrompt: string, userPrompt: string, maxTokens = 40
   return completion.choices[0]?.message?.content?.trim() || "";
 }
 
-// ── Course draft (wizard step 2) ────────────────────────────────────────────
+function buildTypeMixGuidance(mix: QuestionTypeMix | undefined, count: number): string {
+  const enabled: string[] = [];
+  if (mix?.multiple_choice !== false) enabled.push("multiple_choice");
+  if (mix?.true_false !== false) enabled.push("true_false");
+  if (mix?.short_answer !== false) enabled.push("short_answer");
+  if (enabled.length === 0) enabled.push("multiple_choice");
+  if (enabled.length === 1) {
+    return `All ${count} questions must be ${enabled[0]}.`;
+  }
+  // Suggest a balanced mix among enabled types.
+  const lines: string[] = ["Use ONLY these question types:"];
+  if (enabled.includes("multiple_choice")) lines.push("- multiple_choice (4 plausible options each, exactly one correct)");
+  if (enabled.includes("true_false")) lines.push("- true_false");
+  if (enabled.includes("short_answer")) lines.push("- short_answer (correctAnswer 1-5 words)");
+  lines.push(`Distribute the ${count} questions roughly evenly across the enabled types.`);
+  return lines.join("\n");
+}
+
+// ── Course draft (full course + final quiz in one shot) ─────────────────────
 export async function generateCourseDraft(input: GenerateCourseInput): Promise<AICourseDraft> {
   const moduleCount = Math.max(2, Math.min(12, input.moduleCount ?? 5));
   const includeQuiz = input.includeQuiz !== false;
-  const quizCount = includeQuiz ? 10 : 0;
+  const quizCount = includeQuiz ? Math.max(3, Math.min(30, input.quizQuestionCount ?? 15)) : 0;
+  const passingScore = typeof input.passingScore === "number" ? Math.max(0, Math.min(100, input.passingScore)) : 80;
+  const wantImages = !!input.wantImages;
 
   const system = [
-    "You are an expert instructional designer building employee training courses.",
+    "You are a senior instructional designer building professional employee training courses for service industries (cleaning, janitorial, field services, hospitality).",
     tonePreamble(input.tone),
     "Always return valid JSON matching the requested schema. Never invent specific regulation citations or proprietary product names.",
-    "Lesson text should be 80-160 words per module — practical and direct, not fluffy.",
+    "Modules must be PRACTICAL, DETAILED, and USEFUL — not generic filler. Each lesson should give an employee everything they need to do the work correctly.",
+    "Lesson text MUST be 200-400 words per module, organized as flowing paragraphs (not bullets).",
   ].join(" ");
 
+  const typeMixGuidance = includeQuiz ? buildTypeMixGuidance(input.questionTypeMix, quizCount) : "";
+
   const user = [
-    `Generate a training course draft for the following topic.`,
+    `Generate a complete training course for the topic below. Generate EVERYTHING in one pass: course meta, modules with rich content, and final quiz (if requested).`,
     ``,
     `Topic: ${input.topic}`,
     input.industry ? `Industry: ${input.industry}` : "",
-    input.employeeLevel ? `Employee level: ${input.employeeLevel}` : "",
+    input.employeeLevel ? `Audience: ${input.employeeLevel}` : "",
     input.trainingGoal ? `Training goal: ${input.trainingGoal}` : "",
     `Number of modules: ${moduleCount}`,
-    includeQuiz ? `Include a final quiz with ${quizCount} questions (mix of multiple_choice, true_false, and short_answer).` : `Do NOT include a quiz; return suggestedQuiz: [].`,
+    includeQuiz
+      ? `Final quiz: ${quizCount} questions based on the modules you generate. Passing score: ${passingScore}%. ${typeMixGuidance}`
+      : `Do NOT include a quiz; return suggestedQuiz: [].`,
+    wantImages ? `For each module include an "imagePrompt" — a short visual description an admin could use to find or generate a relevant header image.` : `imagePrompt may be empty string.`,
     ``,
-    `Return JSON exactly matching this shape (no extra fields):`,
+    `Return JSON exactly matching this shape:`,
     `{`,
     `  "title": string,                     // ~6 words, action-oriented`,
     `  "description": string,               // 2-3 sentences`,
-    `  "category": string,                  // one of: Compliance, Safety, Skills, Onboarding, Operations`,
+    `  "category": string,                  // one of: Compliance, Safety, Skills, Onboarding, Operations, Cleaning, Customer Service, Equipment`,
     `  "estimatedDuration": string,         // e.g. "30 min", "1 hour", "2 hours"`,
     `  "learningObjectives": string[],      // 3-6 outcome-based bullets starting with verbs (Identify, Demonstrate, Apply...)`,
     `  "modules": [`,
     `    {`,
     `      "title": string,`,
     `      "description": string,           // 1 sentence`,
-    `      "lessonText": string,            // 80-160 words, practical, no fluff`,
-    `      "keyPoints": string[],           // 3-5 short bullets`,
-    `      "checklist": string[],           // 3-6 actionable verify-items`,
-    `      "safetyNotes": string[]          // 0-3 cautions; empty array if not safety-relevant`,
+    `      "overview": string,              // 2-3 sentences: what this module covers and why it matters`,
+    `      "lessonText": string,            // 200-400 words of practical, detailed teaching content`,
+    `      "stepByStep": string[],          // 4-8 ordered steps the employee performs`,
+    `      "keyPoints": string[],           // 3-5 short reinforcement bullets`,
+    `      "checklist": string[],           // 3-6 actionable verify-items the employee can tick off on the job`,
+    `      "commonMistakes": string[],      // 2-4 frequent errors to avoid`,
+    `      "safetyNotes": string[],         // 0-3 cautions; empty array if not safety-relevant`,
+    `      "keyTakeaways": string[],        // 2-4 final-summary bullets`,
+    `      "imagePrompt": string            // short visual description, or "" if none`,
     `    }`,
     `  ],`,
     `  "suggestedQuiz": [`,
     `    {`,
-    `      "questionText": string,`,
+    `      "questionText": string,          // anchored in the module content above`,
     `      "questionType": "multiple_choice" | "true_false" | "short_answer",`,
     `      "options": string[],             // 4 options for multiple_choice; ["True","False"] for true_false; omit for short_answer`,
     `      "correctAnswer": string,         // for short_answer: a 1-5 word ideal answer; for others: the exact option text`,
-    `      "explanation": string            // 1 sentence why`,
+    `      "explanation": string            // 1 sentence why — required for every question`,
     `    }`,
     `  ],`,
     `  "certificateText": string,           // 1-2 sentence official certificate body, no signatures`,
@@ -153,22 +200,13 @@ export async function generateCourseDraft(input: GenerateCourseInput): Promise<A
     `}`,
   ].filter(Boolean).join("\n");
 
-  const data = await chatJSON(system, user, 3500);
+  const data = await chatJSON(system, user, 6000);
   return normalizeCourseDraft(data, moduleCount);
 }
 
 function normalizeCourseDraft(data: any, expectedModules: number): AICourseDraft {
-  const modules: AIModuleDraft[] = Array.isArray(data?.modules) ? data.modules.slice(0, 12).map((m: any) => ({
-    title: String(m?.title ?? "Untitled module"),
-    description: String(m?.description ?? ""),
-    lessonText: String(m?.lessonText ?? ""),
-    keyPoints: Array.isArray(m?.keyPoints) ? m.keyPoints.map(String) : [],
-    checklist: Array.isArray(m?.checklist) ? m.checklist.map(String) : [],
-    safetyNotes: Array.isArray(m?.safetyNotes) ? m.safetyNotes.map(String) : [],
-  })) : [];
-
-  const suggestedQuiz: AIQuizQuestion[] = Array.isArray(data?.suggestedQuiz) ? data.suggestedQuiz.slice(0, 25).map(normalizeQuestion).filter(Boolean) as AIQuizQuestion[] : [];
-
+  const modules: AIModuleDraft[] = Array.isArray(data?.modules) ? data.modules.slice(0, 12).map(normalizeModule) : [];
+  const suggestedQuiz: AIQuizQuestion[] = Array.isArray(data?.suggestedQuiz) ? data.suggestedQuiz.slice(0, 30).map(normalizeQuestion).filter(Boolean) as AIQuizQuestion[] : [];
   return {
     title: String(data?.title ?? "Untitled Course"),
     description: String(data?.description ?? ""),
@@ -182,8 +220,28 @@ function normalizeCourseDraft(data: any, expectedModules: number): AICourseDraft
   };
 }
 
+function asStringArray(v: any): string[] {
+  return Array.isArray(v) ? v.map(String).filter(s => s.trim().length > 0) : [];
+}
+
+function normalizeModule(m: any): AIModuleDraft {
+  return {
+    title: String(m?.title ?? "Untitled module"),
+    description: String(m?.description ?? ""),
+    overview: String(m?.overview ?? ""),
+    lessonText: String(m?.lessonText ?? ""),
+    stepByStep: asStringArray(m?.stepByStep),
+    keyPoints: asStringArray(m?.keyPoints),
+    checklist: asStringArray(m?.checklist),
+    commonMistakes: asStringArray(m?.commonMistakes),
+    safetyNotes: asStringArray(m?.safetyNotes),
+    keyTakeaways: asStringArray(m?.keyTakeaways),
+    imagePrompt: typeof m?.imagePrompt === "string" ? m.imagePrompt : "",
+  };
+}
+
 function normalizeQuestion(q: any): AIQuizQuestion | null {
-  if (!q || typeof q.questionText !== "string") return null;
+  if (!q || typeof q.questionText !== "string" || !q.questionText.trim()) return null;
   const type = q.questionType === "true_false" || q.questionType === "short_answer" ? q.questionType : "multiple_choice";
   let options: string[] | undefined;
   if (type === "multiple_choice") {
@@ -193,7 +251,7 @@ function normalizeQuestion(q: any): AIQuizQuestion | null {
     options = ["True", "False"];
   }
   return {
-    questionText: String(q.questionText),
+    questionText: String(q.questionText).trim(),
     questionType: type,
     options,
     correctAnswer: typeof q.correctAnswer === "string" ? q.correctAnswer : Array.isArray(q.correctAnswer) ? q.correctAnswer.map(String) : String(q.correctAnswer ?? ""),
@@ -201,7 +259,7 @@ function normalizeQuestion(q: any): AIQuizQuestion | null {
   };
 }
 
-// ── Single-text actions (improve / professional / shorter / clearer / safety / grammar) ──
+// ── Single-text actions ─────────────────────────────────────────────────────
 export type ImproveAction =
   | "improve" | "fix_grammar" | "make_clearer" | "make_shorter"
   | "make_professional" | "make_safety_focused" | "make_beginner_friendly"
@@ -226,26 +284,27 @@ export async function improveText(text: string, action: ImproveAction, _context?
   return chatText(prompt, text, 500);
 }
 
-// ── Quiz generation from course context ─────────────────────────────────────
+// ── Quiz generation from existing course modules ────────────────────────────
 export async function generateQuizFromCourse(args: {
   courseTitle: string;
   courseDescription?: string | null;
   modules: { title: string; description?: string | null; lessonText?: string | null }[];
   count?: number;
+  questionTypeMix?: QuestionTypeMix;
   tone?: ToneOption;
 }): Promise<AIQuizQuestion[]> {
   const count = Math.max(3, Math.min(30, args.count ?? 15));
   const system = [
     "You are an expert quiz designer for employee training courses.",
     tonePreamble(args.tone),
-    "Each question must be answerable from the course content provided. Avoid trick questions. Mix question types.",
+    "Each question must be answerable from the course content provided. Avoid trick questions.",
     "Return valid JSON only.",
   ].join(" ");
 
   const moduleSummary = args.modules.map((m, i) => {
     const parts = [`Module ${i + 1}: ${m.title}`];
     if (m.description) parts.push(`  Description: ${m.description}`);
-    if (m.lessonText) parts.push(`  Content: ${m.lessonText.slice(0, 600)}`);
+    if (m.lessonText) parts.push(`  Content: ${m.lessonText.slice(0, 800)}`);
     return parts.join("\n");
   }).join("\n\n");
 
@@ -258,20 +317,19 @@ export async function generateQuizFromCourse(args: {
     ``,
     `IMPORTANT: Only generate questions whose answers are explicitly supported by the module content above. Do not invent facts, regulations, or specifications that are not stated.`,
     ``,
-    `Generate ${count} quiz questions covering the modules above. Aim for roughly:`,
-    `- 60% multiple_choice (4 options each)`,
-    `- 25% true_false`,
-    `- 15% short_answer (correctAnswer should be 1-5 words)`,
+    `Generate ${count} quiz questions covering the modules above.`,
+    buildTypeMixGuidance(args.questionTypeMix, count),
+    `Every question must include a 1-sentence explanation.`,
     ``,
     `Return JSON: { "questions": [ { "questionText", "questionType", "options"?, "correctAnswer", "explanation" } ] }`,
   ].filter(Boolean).join("\n");
 
-  const data = await chatJSON(system, user, 3000);
+  const data = await chatJSON(system, user, 4000);
   const questions = Array.isArray(data?.questions) ? data.questions : [];
   return questions.map(normalizeQuestion).filter(Boolean) as AIQuizQuestion[];
 }
 
-// ── Module content generation ───────────────────────────────────────────────
+// ── Single-module generation (richer, structured) ───────────────────────────
 export async function generateModuleContent(args: {
   moduleTitle: string;
   courseTitle?: string;
@@ -279,9 +337,9 @@ export async function generateModuleContent(args: {
   tone?: ToneOption;
 }): Promise<AIModuleDraft> {
   const system = [
-    "You are an instructional designer writing a single training module.",
+    "You are an instructional designer writing a single, detailed training module.",
     tonePreamble(args.tone),
-    "Be concrete and practical. No filler. Return valid JSON only.",
+    "Be concrete, practical, and useful for a service-industry employee. No filler. Return valid JSON only.",
   ].join(" ");
 
   const user = [
@@ -293,22 +351,20 @@ export async function generateModuleContent(args: {
     `{`,
     `  "title": string,                 // refined title`,
     `  "description": string,           // 1 sentence`,
-    `  "lessonText": string,            // 80-160 words`,
-    `  "keyPoints": string[],           // 3-5 bullets`,
+    `  "overview": string,              // 2-3 sentences`,
+    `  "lessonText": string,            // 200-400 words of detailed teaching content`,
+    `  "stepByStep": string[],          // 4-8 ordered steps`,
+    `  "keyPoints": string[],           // 3-5 reinforcement bullets`,
     `  "checklist": string[],           // 3-6 verify-items`,
-    `  "safetyNotes": string[]          // 0-3; empty array if N/A`,
+    `  "commonMistakes": string[],     // 2-4 errors to avoid`,
+    `  "safetyNotes": string[],         // 0-3; empty array if N/A`,
+    `  "keyTakeaways": string[],       // 2-4 summary bullets`,
+    `  "imagePrompt": string            // short visual description, or ""`,
     `}`,
   ].filter(Boolean).join("\n");
 
-  const data = await chatJSON(system, user, 1200);
-  return {
-    title: String(data?.title ?? args.moduleTitle),
-    description: String(data?.description ?? ""),
-    lessonText: String(data?.lessonText ?? ""),
-    keyPoints: Array.isArray(data?.keyPoints) ? data.keyPoints.map(String) : [],
-    checklist: Array.isArray(data?.checklist) ? data.checklist.map(String) : [],
-    safetyNotes: Array.isArray(data?.safetyNotes) ? data.safetyNotes.map(String) : [],
-  };
+  const data = await chatJSON(system, user, 2000);
+  return normalizeModule({ ...data, title: data?.title ?? args.moduleTitle });
 }
 
 export function isAIAvailable(): boolean {

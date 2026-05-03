@@ -13,7 +13,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { isNotNull, eq, and, isNull, inArray, desc, sql } from "drizzle-orm";
-import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments, supplies, supplyUpdates, inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses, trainingPublicLearners, trainingCourses, trainingModules, trainingQuizzes, trainingQuizQuestions } from "@shared/schema";
+import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments, supplies, supplyUpdates, inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses, trainingPublicLearners, trainingCourses, trainingModules, trainingModuleAssets, trainingQuizzes, trainingQuizQuestions } from "@shared/schema";
 import { getPlan } from "./plans";
 import { generateReviewOgImage } from "./og-image";
 
@@ -10497,17 +10497,22 @@ Return ONLY valid JSON:
   app.post("/api/training/ai/generate-course", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       if (!isAIAvailable()) return res.status(503).json({ message: "AI not available" });
-      const { topic, industry, employeeLevel, trainingGoal, moduleCount, includeQuiz, tone } = req.body || {};
+      const { topic, industry, employeeLevel, audience, trainingGoal, moduleCount, includeQuiz, quizQuestionCount, questionTypeMix, passingScore, wantVideos, wantImages, tone } = req.body || {};
       if (!topic || typeof topic !== "string" || topic.trim().length < 3) {
         return res.status(400).json({ message: "topic is required (min 3 chars)" });
       }
       const draft = await generateCourseDraft({
         topic: topic.trim(),
         industry: industry || undefined,
-        employeeLevel: employeeLevel || undefined,
+        employeeLevel: (employeeLevel ?? audience) || undefined,
         trainingGoal: trainingGoal || undefined,
         moduleCount: typeof moduleCount === "number" ? moduleCount : undefined,
         includeQuiz: includeQuiz !== false,
+        quizQuestionCount: typeof quizQuestionCount === "number" ? quizQuestionCount : undefined,
+        questionTypeMix: questionTypeMix && typeof questionTypeMix === "object" ? questionTypeMix : undefined,
+        passingScore: typeof passingScore === "number" ? passingScore : undefined,
+        wantVideos: !!wantVideos,
+        wantImages: !!wantImages,
         tone: tone as ToneOption | undefined,
       });
       res.json(draft);
@@ -10564,33 +10569,39 @@ Return ONLY valid JSON:
       for (let i = 0; i < moduleInputs.length; i++) {
         const m = moduleInputs[i];
         if (!m || typeof m.title !== "string" || !m.title.trim()) {
-          return res.status(400).json({ message: `Module #${i + 1} is missing a title` });
+          return res.status(400).json({ message: `Module #${i + 1} is missing a title`, field: `modules[${i}].title` });
+        }
+        if (typeof m.lessonText !== "string" || !m.lessonText.trim()) {
+          return res.status(400).json({ message: `Module #${i + 1} ("${m.title}") is missing lesson content`, field: `modules[${i}].lessonText` });
         }
       }
-      if (quizInput && Array.isArray(quizInput.questions)) {
+      if (quizInput && quizInput.enabled !== false && Array.isArray(quizInput.questions)) {
+        if (quizInput.questions.length === 0) {
+          return res.status(400).json({ message: `Quiz is enabled but has no questions. Add at least one question or disable the quiz.`, field: `quiz.questions` });
+        }
         for (let i = 0; i < quizInput.questions.length; i++) {
           const q = quizInput.questions[i];
           if (!q || typeof q.questionText !== "string" || !q.questionText.trim()) {
-            return res.status(400).json({ message: `Quiz question #${i + 1} is missing text` });
+            return res.status(400).json({ message: `Quiz question #${i + 1} is missing text`, field: `quiz.questions[${i}].questionText` });
           }
           if (!["multiple_choice", "true_false", "short_answer"].includes(q.questionType)) {
-            return res.status(400).json({ message: `Quiz question #${i + 1} has invalid type` });
+            return res.status(400).json({ message: `Quiz question #${i + 1} has invalid type`, field: `quiz.questions[${i}].questionType` });
           }
           if (q.questionType === "multiple_choice") {
             const opts = Array.isArray(q.options) ? q.options.filter((o: any) => typeof o === "string" && o.trim()) : [];
             if (opts.length < 2) {
-              return res.status(400).json({ message: `Quiz question #${i + 1} needs at least 2 options` });
+              return res.status(400).json({ message: `Quiz question #${i + 1} needs at least 2 options`, field: `quiz.questions[${i}].options` });
             }
             if (!q.correctAnswer || !opts.includes(q.correctAnswer)) {
-              return res.status(400).json({ message: `Quiz question #${i + 1} needs a correct answer that matches one of the options` });
+              return res.status(400).json({ message: `Quiz question #${i + 1} needs a correct answer that matches one of the options`, field: `quiz.questions[${i}].correctAnswer` });
             }
           } else if (q.questionType === "true_false") {
             if (q.correctAnswer !== "True" && q.correctAnswer !== "False") {
-              return res.status(400).json({ message: `Quiz question #${i + 1} needs a True/False answer` });
+              return res.status(400).json({ message: `Quiz question #${i + 1} needs a True/False answer`, field: `quiz.questions[${i}].correctAnswer` });
             }
           } else if (q.questionType === "short_answer") {
             if (typeof q.correctAnswer !== "string" || !q.correctAnswer.trim()) {
-              return res.status(400).json({ message: `Quiz question #${i + 1} needs an expected answer` });
+              return res.status(400).json({ message: `Quiz question #${i + 1} needs an expected answer`, field: `quiz.questions[${i}].correctAnswer` });
             }
           }
         }
@@ -10618,10 +10629,11 @@ Return ONLY valid JSON:
           updatedAt: now,
         } as any).returning();
 
+        const insertedModuleIds: string[] = [];
         for (let i = 0; i < moduleInputs.length; i++) {
           const m = moduleInputs[i];
           const embedId = m.youtubeUrl ? parseYoutubeId(String(m.youtubeUrl)) : null;
-          await tx.insert(trainingModules).values({
+          const [insertedModule] = await tx.insert(trainingModules).values({
             courseId: course.id,
             companyId: user.companyId,
             title: String(m.title).trim(),
@@ -10633,10 +10645,30 @@ Return ONLY valid JSON:
             isRequired: m.isRequired !== false,
             createdAt: now,
             updatedAt: now,
-          } as any);
+          } as any).returning();
+          insertedModuleIds.push(insertedModule.id);
+
+          if (Array.isArray(m.assets) && m.assets.length > 0) {
+            const assetRows = m.assets
+              .map((a: any, ai: number) => {
+                const data = typeof a === "string" ? a : a?.assetData;
+                if (!data || typeof data !== "string") return null;
+                return {
+                  moduleId: insertedModule.id,
+                  assetData: data,
+                  assetType: (a && typeof a === "object" && a.assetType) ? String(a.assetType) : "image",
+                  sortOrder: ai,
+                  createdAt: now,
+                };
+              })
+              .filter(Boolean);
+            if (assetRows.length > 0) {
+              await tx.insert(trainingModuleAssets).values(assetRows as any);
+            }
+          }
         }
 
-        if (quizInput && Array.isArray(quizInput.questions) && quizInput.questions.length > 0) {
+        if (quizInput && quizInput.enabled !== false && Array.isArray(quizInput.questions) && quizInput.questions.length > 0) {
           const [quiz] = await tx.insert(trainingQuizzes).values({
             courseId: course.id,
             companyId: user.companyId,
@@ -10675,20 +10707,43 @@ Return ONLY valid JSON:
     try {
       if (!isAIAvailable()) return res.status(503).json({ message: "AI not available" });
       const user = (req as any).user;
-      const { courseId, count, tone } = req.body || {};
-      if (!courseId) return res.status(400).json({ message: "courseId required" });
-      const course = await storage.getTrainingCourse(courseId);
-      if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Course not found" });
-      const modules = await storage.getTrainingModules(courseId);
-      const modulesWithContent = modules.filter(m => (m.lessonText && m.lessonText.trim().length > 20) || (m.description && m.description.trim().length > 10));
+      const { courseId, count, questionTypeMix, tone, modules: inlineModules, courseTitle, courseDescription } = req.body || {};
+
+      // Two modes:
+      //   (a) courseId provided → load saved course + modules from DB (existing behavior).
+      //   (b) inlineModules provided → score modules from the wizard before save (regenerate quiz preview).
+      let titleForPrompt: string;
+      let descriptionForPrompt: string | null = null;
+      let modulesWithContent: { title: string; description?: string | null; lessonText?: string | null }[];
+
+      if (courseId) {
+        const course = await storage.getTrainingCourse(courseId);
+        if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Course not found" });
+        const dbModules = await storage.getTrainingModules(courseId);
+        modulesWithContent = dbModules
+          .filter(m => (m.lessonText && m.lessonText.trim().length > 20) || (m.description && m.description.trim().length > 10))
+          .map(m => ({ title: m.title, description: m.description, lessonText: m.lessonText }));
+        titleForPrompt = course.title;
+        descriptionForPrompt = course.description ?? null;
+      } else if (Array.isArray(inlineModules) && inlineModules.length > 0) {
+        modulesWithContent = inlineModules
+          .filter((m: any) => m && typeof m.title === "string" && ((m.lessonText && String(m.lessonText).trim().length > 20) || (m.description && String(m.description).trim().length > 10)))
+          .map((m: any) => ({ title: String(m.title), description: m.description ? String(m.description) : null, lessonText: m.lessonText ? String(m.lessonText) : null }));
+        titleForPrompt = typeof courseTitle === "string" && courseTitle.trim() ? courseTitle.trim() : "Training Course";
+        descriptionForPrompt = typeof courseDescription === "string" ? courseDescription : null;
+      } else {
+        return res.status(400).json({ message: "Either courseId or modules array is required" });
+      }
+
       if (modulesWithContent.length === 0) {
-        return res.status(400).json({ message: "Course has no module content yet. Add lesson text or descriptions to at least one module before generating a quiz." });
+        return res.status(400).json({ message: "No module has enough content to generate quiz questions yet. Add lesson text to at least one module before generating a quiz." });
       }
       const questions = await generateQuizFromCourse({
-        courseTitle: course.title,
-        courseDescription: course.description,
-        modules: modulesWithContent.map(m => ({ title: m.title, description: m.description, lessonText: m.lessonText })),
+        courseTitle: titleForPrompt,
+        courseDescription: descriptionForPrompt,
+        modules: modulesWithContent,
         count: typeof count === "number" ? count : 15,
+        questionTypeMix: questionTypeMix && typeof questionTypeMix === "object" ? questionTypeMix : undefined,
         tone: tone as ToneOption | undefined,
       });
       res.json({ questions });
