@@ -81,9 +81,12 @@ import {
   trainingCourses, trainingModules, trainingModuleAssets, trainingAssignments,
   trainingProgress, trainingPublicLearners, trainingCertificates,
   trainingQuizzes, trainingQuizQuestions, trainingQuizAttempts,
+  trainingLessonBlocks, trainingModuleAudio,
   type TrainingCourse, type InsertTrainingCourse,
   type TrainingModule, type InsertTrainingModule,
   type TrainingModuleAsset, type InsertTrainingModuleAsset,
+  type TrainingLessonBlock, type InsertTrainingLessonBlock,
+  type TrainingModuleAudio, type InsertTrainingModuleAudio,
   type TrainingAssignment, type InsertTrainingAssignment,
   type TrainingProgress, type InsertTrainingProgress,
   type TrainingPublicLearner, type InsertTrainingPublicLearner,
@@ -504,6 +507,19 @@ export interface IStorage {
   getTrainingQuizAttempt(id: string): Promise<TrainingQuizAttempt | undefined>;
   getTrainingQuizAttempts(quizId: string, employeeId?: string, publicLearnerId?: string): Promise<TrainingQuizAttempt[]>;
   hasPassedTrainingQuiz(quizId: string, employeeId?: string, publicLearnerId?: string): Promise<boolean>;
+
+  // Training lesson blocks
+  listLessonBlocksByModule(moduleId: string): Promise<TrainingLessonBlock[]>;
+  listLessonBlocksByCourse(courseId: string): Promise<TrainingLessonBlock[]>;
+  createLessonBlock(data: InsertTrainingLessonBlock): Promise<TrainingLessonBlock>;
+  updateLessonBlock(id: string, data: Partial<InsertTrainingLessonBlock>): Promise<TrainingLessonBlock | undefined>;
+  deleteLessonBlock(id: string): Promise<void>;
+  reorderLessonBlocks(moduleId: string, orderedIds: string[]): Promise<void>;
+  getLessonBlock(id: string): Promise<TrainingLessonBlock | undefined>;
+
+  // Training module audio cache
+  getCachedModuleAudio(moduleId: string, contentHash: string): Promise<TrainingModuleAudio | undefined>;
+  upsertModuleAudio(data: InsertTrainingModuleAudio): Promise<TrainingModuleAudio>;
 
   // Employee documents (HR/profile files)
   listEmployeeDocuments(employeeId: string, companyId: string): Promise<Omit<EmployeeDocument, "fileData">[]>;
@@ -2398,11 +2414,16 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
-  async getTrainingModules(courseId: string): Promise<(TrainingModule & { assets: TrainingModuleAsset[] })[]> {
+  async getTrainingModules(courseId: string): Promise<(TrainingModule & { assets: TrainingModuleAsset[]; blocks: TrainingLessonBlock[] })[]> {
     const mods = await db.select().from(trainingModules).where(eq(trainingModules.courseId, courseId)).orderBy(asc(trainingModules.sortOrder));
-    return Promise.all(mods.map(async m => {
-      const assets = await db.select().from(trainingModuleAssets).where(eq(trainingModuleAssets.moduleId, m.id)).orderBy(asc(trainingModuleAssets.sortOrder));
-      return { ...m, assets };
+    if (mods.length === 0) return [];
+    const moduleIds = mods.map(m => m.id);
+    const allAssets = await db.select().from(trainingModuleAssets).where(inArray(trainingModuleAssets.moduleId, moduleIds)).orderBy(asc(trainingModuleAssets.sortOrder));
+    const allBlocks = await db.select().from(trainingLessonBlocks).where(inArray(trainingLessonBlocks.moduleId, moduleIds)).orderBy(asc(trainingLessonBlocks.sortOrder));
+    return mods.map(m => ({
+      ...m,
+      assets: allAssets.filter(a => a.moduleId === m.id),
+      blocks: allBlocks.filter(b => b.moduleId === m.id),
     }));
   }
 
@@ -2418,6 +2439,8 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTrainingModule(id: string): Promise<void> {
     await db.delete(trainingModuleAssets).where(eq(trainingModuleAssets.moduleId, id));
+    await db.delete(trainingLessonBlocks).where(eq(trainingLessonBlocks.moduleId, id));
+    await db.delete(trainingModuleAudio).where(eq(trainingModuleAudio.moduleId, id));
     await db.delete(trainingProgress).where(eq(trainingProgress.moduleId, id));
     await db.delete(trainingModules).where(eq(trainingModules.id, id));
   }
@@ -2725,6 +2748,67 @@ export class DatabaseStorage implements IStorage {
         lastActivity,
       };
     });
+  }
+
+  // ── Training Lesson Blocks ────────────────────────────────────────────────
+  async listLessonBlocksByModule(moduleId: string): Promise<TrainingLessonBlock[]> {
+    return await db.select().from(trainingLessonBlocks)
+      .where(eq(trainingLessonBlocks.moduleId, moduleId))
+      .orderBy(asc(trainingLessonBlocks.sortOrder));
+  }
+
+  async listLessonBlocksByCourse(courseId: string): Promise<TrainingLessonBlock[]> {
+    const mods = await db.select({ id: trainingModules.id }).from(trainingModules).where(eq(trainingModules.courseId, courseId));
+    if (mods.length === 0) return [];
+    return await db.select().from(trainingLessonBlocks)
+      .where(inArray(trainingLessonBlocks.moduleId, mods.map(m => m.id)))
+      .orderBy(asc(trainingLessonBlocks.sortOrder));
+  }
+
+  async createLessonBlock(data: InsertTrainingLessonBlock): Promise<TrainingLessonBlock> {
+    const [row] = await db.insert(trainingLessonBlocks).values(data as any).returning();
+    return row;
+  }
+
+  async updateLessonBlock(id: string, data: Partial<InsertTrainingLessonBlock>): Promise<TrainingLessonBlock | undefined> {
+    const [row] = await db.update(trainingLessonBlocks).set(data as any).where(eq(trainingLessonBlocks.id, id)).returning();
+    return row;
+  }
+
+  async deleteLessonBlock(id: string): Promise<void> {
+    await db.delete(trainingLessonBlocks).where(eq(trainingLessonBlocks.id, id));
+  }
+
+  async reorderLessonBlocks(moduleId: string, orderedIds: string[]): Promise<void> {
+    const now = new Date().toISOString();
+    // Atomic — wrap in a transaction so concurrent reorders or crashes can't
+    // leave the sortOrder column in a partial / corrupt state.
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < orderedIds.length; i++) {
+        await tx.update(trainingLessonBlocks)
+          .set({ sortOrder: i, updatedAt: now })
+          .where(and(eq(trainingLessonBlocks.id, orderedIds[i]), eq(trainingLessonBlocks.moduleId, moduleId)));
+      }
+    });
+  }
+
+  async getLessonBlock(id: string): Promise<TrainingLessonBlock | undefined> {
+    const [row] = await db.select().from(trainingLessonBlocks).where(eq(trainingLessonBlocks.id, id));
+    return row;
+  }
+
+  // ── Training Module Audio Cache ───────────────────────────────────────────
+  async getCachedModuleAudio(moduleId: string, contentHash: string): Promise<TrainingModuleAudio | undefined> {
+    const [row] = await db.select().from(trainingModuleAudio)
+      .where(and(eq(trainingModuleAudio.moduleId, moduleId), eq(trainingModuleAudio.contentHash, contentHash)));
+    return row;
+  }
+
+  async upsertModuleAudio(data: InsertTrainingModuleAudio): Promise<TrainingModuleAudio> {
+    // One cache row per module — replace any existing rows.
+    await db.delete(trainingModuleAudio).where(eq(trainingModuleAudio.moduleId, data.moduleId));
+    const [row] = await db.insert(trainingModuleAudio).values(data as any).returning();
+    return row;
   }
 }
 

@@ -13,7 +13,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { isNotNull, eq, and, isNull, inArray, desc, sql } from "drizzle-orm";
-import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments, supplies, supplyUpdates, inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses, trainingPublicLearners, trainingCourses, trainingModules, trainingModuleAssets, trainingQuizzes, trainingQuizQuestions } from "@shared/schema";
+import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments, supplies, supplyUpdates, inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses, trainingPublicLearners, trainingCourses, trainingModules, trainingModuleAssets, trainingQuizzes, trainingQuizQuestions, trainingLessonBlocks, trainingModuleAudio } from "@shared/schema";
 import { getPlan } from "./plans";
 import { generateReviewOgImage } from "./og-image";
 
@@ -10224,6 +10224,297 @@ Return ONLY valid JSON:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ── Lesson Blocks (admin CRUD) ────────────────────────────────────────────
+  // Tenant scoping: every block operation resolves the parent module → course
+  // and verifies course.companyId === user.companyId before reading/writing.
+  async function authorizeModuleForAdmin(moduleId: string, companyId: string) {
+    const mod = await storage.getTrainingModule(moduleId);
+    if (!mod) return null;
+    const course = await storage.getTrainingCourse(mod.courseId);
+    if (!course || course.companyId !== companyId) return null;
+    return { module: mod, course };
+  }
+
+  async function authorizeBlockForAdmin(blockId: string, companyId: string) {
+    const block = await storage.getLessonBlock(blockId);
+    if (!block || block.companyId !== companyId) return null;
+    const ok = await authorizeModuleForAdmin(block.moduleId, companyId);
+    if (!ok) return null;
+    return { block, ...ok };
+  }
+
+  // GET /api/training/modules/:id/blocks
+  app.get("/api/training/modules/:id/blocks", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const ok = await authorizeModuleForAdmin(req.params.id, user.companyId);
+      if (!ok) return res.status(404).json({ message: "Not found" });
+      const blocks = await storage.listLessonBlocksByModule(req.params.id);
+      res.json(blocks);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Validate block payloads — guards against ridiculously large image data
+  // URLs and similar abuse. Caps are intentionally generous for normal use.
+  const MAX_TEXT = 20_000;          // any single text field
+  const MAX_IMAGE_DATA = 8_000_000; // ~6MB image base64 data URL
+  const MAX_JSON_FIELD = 12_000_000; // gallery JSON of multiple images
+  function validateBlockPayload(body: any): { ok: true } | { ok: false; message: string } {
+    const lenOK = (v: any, max: number) => v == null || (typeof v === "string" && v.length <= max);
+    if (!lenOK(body?.title, 500)) return { ok: false, message: "Title too long" };
+    if (!lenOK(body?.content, MAX_TEXT)) return { ok: false, message: "Content too long" };
+    if (!lenOK(body?.caption, 1000)) return { ok: false, message: "Caption too long" };
+    if (!lenOK(body?.imagePrompt, 2000)) return { ok: false, message: "Image prompt too long" };
+    if (!lenOK(body?.assetData, MAX_IMAGE_DATA)) return { ok: false, message: "Image too large" };
+    if (!lenOK(body?.galleryJson, MAX_JSON_FIELD)) return { ok: false, message: "Gallery too large" };
+    if (!lenOK(body?.checklistJson, MAX_TEXT)) return { ok: false, message: "Checklist too long" };
+    if (!lenOK(body?.stepsJson, MAX_TEXT * 4)) return { ok: false, message: "Steps too long" };
+    return { ok: true };
+  }
+
+  // POST /api/training/modules/:id/blocks
+  app.post("/api/training/modules/:id/blocks", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const ok = await authorizeModuleForAdmin(req.params.id, user.companyId);
+      if (!ok) return res.status(404).json({ message: "Not found" });
+      const allowed = ["text", "image", "gallery", "safety_tip", "checklist", "step_by_step", "ai_explanation", "image_prompt"];
+      if (!allowed.includes(req.body?.type)) return res.status(400).json({ message: "Invalid block type" });
+      const v = validateBlockPayload(req.body);
+      if (!v.ok) return res.status(400).json({ message: v.message });
+      const existing = await storage.listLessonBlocksByModule(req.params.id);
+      const now = trainingNow();
+      const block = await storage.createLessonBlock({
+        moduleId: req.params.id,
+        companyId: user.companyId,
+        type: String(req.body.type),
+        title: req.body.title ?? null,
+        content: req.body.content ?? null,
+        assetData: req.body.assetData ?? null,
+        caption: req.body.caption ?? null,
+        imagePrompt: req.body.imagePrompt ?? null,
+        galleryJson: req.body.galleryJson ?? null,
+        checklistJson: req.body.checklistJson ?? null,
+        stepsJson: req.body.stepsJson ?? null,
+        sortOrder: typeof req.body.sortOrder === "number" ? req.body.sortOrder : existing.length,
+        createdAt: now,
+        updatedAt: now,
+      } as any);
+      res.json(block);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // PATCH /api/training/blocks/:id
+  app.patch("/api/training/blocks/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const ok = await authorizeBlockForAdmin(req.params.id, user.companyId);
+      if (!ok) return res.status(404).json({ message: "Not found" });
+      const v = validateBlockPayload(req.body);
+      if (!v.ok) return res.status(400).json({ message: v.message });
+      const update: any = { updatedAt: trainingNow() };
+      const editable = ["title", "content", "assetData", "caption", "imagePrompt", "galleryJson", "checklistJson", "stepsJson", "sortOrder"];
+      for (const k of editable) if (k in req.body) update[k] = req.body[k];
+      const block = await storage.updateLessonBlock(req.params.id, update);
+      res.json(block);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // DELETE /api/training/blocks/:id
+  app.delete("/api/training/blocks/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const ok = await authorizeBlockForAdmin(req.params.id, user.companyId);
+      if (!ok) return res.status(404).json({ message: "Not found" });
+      await storage.deleteLessonBlock(req.params.id);
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/training/modules/:id/blocks/reorder
+  app.post("/api/training/modules/:id/blocks/reorder", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const ok = await authorizeModuleForAdmin(req.params.id, user.companyId);
+      if (!ok) return res.status(404).json({ message: "Not found" });
+      const orderedIds = Array.isArray(req.body?.orderedIds) ? req.body.orderedIds.map((x: any) => String(x)) : [];
+      // Confirm every id belongs to this module before reordering
+      const existing = await storage.listLessonBlocksByModule(req.params.id);
+      const existingSet = new Set(existing.map(b => b.id));
+      if (orderedIds.some((id: string) => !existingSet.has(id))) {
+        return res.status(400).json({ message: "Invalid block ids" });
+      }
+      await storage.reorderLessonBlocks(req.params.id, orderedIds);
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Module audio (premium TTS w/ caching) ─────────────────────────────────
+  function buildModuleScript(mod: any, blocks: any[]): string {
+    const parts: string[] = [];
+    if (mod?.title) parts.push(String(mod.title) + ".");
+    if (mod?.description) parts.push(String(mod.description));
+    const sorted = [...(blocks || [])].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    if (sorted.length === 0 && mod?.lessonText) {
+      parts.push(String(mod.lessonText));
+    } else {
+      for (const b of sorted) {
+        if (b.title) parts.push(String(b.title) + ".");
+        if (b.type === "text" || b.type === "safety_tip" || b.type === "ai_explanation") {
+          if (b.content) parts.push(String(b.content));
+        } else if (b.type === "image" || b.type === "image_prompt") {
+          if (b.caption) parts.push(String(b.caption));
+        } else if (b.type === "gallery") {
+          try {
+            const items = JSON.parse(b.galleryJson || "[]");
+            for (const it of items) if (it?.caption) parts.push(String(it.caption));
+          } catch {}
+        } else if (b.type === "checklist") {
+          try {
+            const items = JSON.parse(b.checklistJson || "[]");
+            if (Array.isArray(items) && items.length > 0) {
+              parts.push("Checklist: " + items.map((s: any) => String(s)).join(". "));
+            }
+          } catch {}
+        } else if (b.type === "step_by_step") {
+          try {
+            const steps = JSON.parse(b.stepsJson || "[]");
+            for (let i = 0; i < steps.length; i++) {
+              const s = steps[i];
+              parts.push(`Step ${i + 1}. ${s?.title ?? ""}. ${s?.description ?? ""}`);
+            }
+          } catch {}
+        }
+      }
+    }
+    return parts.filter(Boolean).join(" ").slice(0, 4000); // cap script length
+  }
+
+  async function generateOrLoadModuleAudio(moduleId: string, companyId: string, mod: any, blocks: any[]) {
+    const script = buildModuleScript(mod, blocks);
+    if (!script || script.trim().length < 5) return { script: "", supported: false as const };
+    const contentHash = createHash("sha256").update(script).digest("hex");
+    const cached = await storage.getCachedModuleAudio(moduleId, contentHash);
+    if (cached) return { audioData: cached.audioData, format: cached.format, voice: cached.voice, cached: true, script, supported: true as const };
+    if (!process.env.OPENAI_API_KEY) return { script, supported: false as const };
+    try {
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const speech = await openai.audio.speech.create({
+        model: "tts-1",
+        voice: "alloy",
+        input: script,
+        response_format: "mp3",
+      });
+      const buf = Buffer.from(await speech.arrayBuffer());
+      const audioData = `data:audio/mpeg;base64,${buf.toString("base64")}`;
+      const now = trainingNow();
+      await storage.upsertModuleAudio({
+        moduleId,
+        companyId,
+        contentHash,
+        voice: "alloy",
+        format: "mp3",
+        audioData,
+        createdAt: now,
+        updatedAt: now,
+      } as any);
+      return { audioData, format: "mp3", voice: "alloy", cached: false, script, supported: true as const };
+    } catch (e: any) {
+      console.error("[training/audio] OpenAI TTS failed:", e?.message);
+      return { script, supported: false as const, error: e?.message };
+    }
+  }
+
+  // POST /api/training/modules/:id/audio (employee + admin)
+  app.post("/api/training/modules/:id/audio", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const mod = await storage.getTrainingModule(req.params.id);
+      if (!mod) return res.status(404).json({ message: "Not found" });
+      const course = await storage.getTrainingCourse(mod.courseId);
+      if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const blocks = await storage.listLessonBlocksByModule(req.params.id);
+      const result = await generateOrLoadModuleAudio(req.params.id, user.companyId, mod, blocks);
+      if (!result.supported) return res.status(503).json({ message: "Premium audio unavailable", fallback: true });
+      res.json({ audioData: result.audioData, format: result.format, voice: result.voice, cached: result.cached });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/public/training/:publicId/modules/:moduleId/audio (public learners)
+  app.post("/api/public/training/:publicId/modules/:moduleId/audio", async (req, res) => {
+    try {
+      const course = await storage.getTrainingCourseByPublicId(req.params.publicId);
+      if (!course || !course.publicLinkEnabled || !course.isPublished) return res.status(404).json({ message: "Course not found" });
+      const mod = await storage.getTrainingModule(req.params.moduleId);
+      if (!mod || mod.courseId !== course.id) return res.status(404).json({ message: "Module not found" });
+      const blocks = await storage.listLessonBlocksByModule(req.params.moduleId);
+      const result = await generateOrLoadModuleAudio(req.params.moduleId, course.companyId, mod, blocks);
+      if (!result.supported) return res.status(503).json({ message: "Premium audio unavailable", fallback: true });
+      res.json({ audioData: result.audioData, format: result.format, voice: result.voice, cached: result.cached });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── AI block helpers ──────────────────────────────────────────────────────
+  // POST /api/training/ai/generate-blocks — produce a structured array of
+  // lesson blocks from a module's title/context. Admin only.
+  app.post("/api/training/ai/generate-blocks", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      if (!isAIAvailable()) return res.status(503).json({ message: "AI not available" });
+      const { moduleTitle, courseTitle, courseDescription, tone } = req.body || {};
+      if (!moduleTitle || typeof moduleTitle !== "string") return res.status(400).json({ message: "moduleTitle required" });
+      // Reuse the rich module draft, then fold it into structured blocks.
+      const draft: any = await generateModuleContent({
+        moduleTitle,
+        courseTitle: courseTitle || undefined,
+        courseDescription: courseDescription || null,
+        tone: tone as ToneOption | undefined,
+      });
+      const blocks: any[] = [];
+      if (draft?.overview) blocks.push({ type: "text", title: "Overview", content: String(draft.overview) });
+      if (draft?.lessonText) blocks.push({ type: "text", title: "Lesson", content: String(draft.lessonText) });
+      if (draft?.imagePrompt) blocks.push({ type: "image_prompt", title: "Suggested image", imagePrompt: String(draft.imagePrompt) });
+      if (Array.isArray(draft?.stepByStep) && draft.stepByStep.length > 0) {
+        blocks.push({
+          type: "step_by_step",
+          title: "Step-by-step",
+          stepsJson: JSON.stringify(draft.stepByStep.map((s: any, i: number) => ({
+            title: typeof s === "string" ? `Step ${i + 1}` : (s.title ?? `Step ${i + 1}`),
+            description: typeof s === "string" ? s : (s.description ?? ""),
+          }))),
+        });
+      }
+      if (Array.isArray(draft?.safetyNotes) && draft.safetyNotes.length > 0) {
+        blocks.push({ type: "safety_tip", title: "Safety notes", content: draft.safetyNotes.join("\n• ") });
+      }
+      if (Array.isArray(draft?.checklist) && draft.checklist.length > 0) {
+        blocks.push({ type: "checklist", title: "Checklist", checklistJson: JSON.stringify(draft.checklist) });
+      }
+      if (Array.isArray(draft?.commonMistakes) && draft.commonMistakes.length > 0) {
+        blocks.push({ type: "text", title: "Common mistakes", content: "• " + draft.commonMistakes.join("\n• ") });
+      }
+      if (Array.isArray(draft?.keyTakeaways) && draft.keyTakeaways.length > 0) {
+        blocks.push({ type: "text", title: "Key takeaways", content: "• " + draft.keyTakeaways.join("\n• ") });
+      }
+      res.json({ blocks, draft });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "AI block generation failed" });
+    }
+  });
+
+  // POST /api/training/ai/improve-block — improve / rewrite a single block's content
+  app.post("/api/training/ai/improve-block", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      if (!isAIAvailable()) return res.status(503).json({ message: "AI not available" });
+      const { content, action, moduleTitle } = req.body || {};
+      if (!content || typeof content !== "string") return res.status(400).json({ message: "content required" });
+      const validAction: ImproveAction = (["improve", "shorten", "expand", "rephrase"].includes(action) ? action : "improve") as ImproveAction;
+      const improved = await improveText(content, validAction, moduleTitle ? `Training module: ${moduleTitle}` : undefined);
+      res.json({ content: improved });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "AI improve failed" });
+    }
+  });
+
   // POST /api/training/courses/:id/assign
   app.post("/api/training/courses/:id/assign", requireAuth, requireRole("admin"), async (req, res) => {
     try {
@@ -10330,6 +10621,7 @@ Return ONLY valid JSON:
           lessonText: m.lessonText,
           sortOrder: m.sortOrder,
           assets: m.assets,
+          blocks: m.blocks,
         })),
       });
     } catch (e: any) { res.status(500).json({ message: e.message }); }

@@ -1,0 +1,214 @@
+DEV NOTE: Improve Training Hub Lesson Blocks + Premium Audio
+
+Scope:
+Only update Training Hub lesson/module content system.
+Do not affect anything else in ClockField.
+
+Goal:
+Make modules more visual, structured, and engaging instead of showing one long boring text block.
+
+Add Lesson Blocks Inside Each Module
+
+Each module should support multiple lesson blocks.
+
+A module can include:
+
+Video on top
+Lesson text block
+Image block
+Image gallery block
+Safety tip block
+Checklist block
+Step-by-step block
+AI-generated explanation block
+
+Example module structure:
+
+Module 1: Understanding Workplace Hazards
+
+Video: optional, always shown first
+
+Block 1:
+Text lesson explaining workplace hazards
+
+Block 2:
+Image showing wet floor hazard
+
+Block 3:
+Text lesson explaining slips and trips
+
+Block 4:
+Image gallery showing examples
+
+Block 5:
+Checklist
+
+Block 6:
+Key takeaways
+
+Admin Module Builder Update
+
+Inside admin course/module editor, add:
+
+Add Lesson Block
+Add Image Block
+Add Gallery
+Add Checklist
+Generate Block with AI
+
+Admin should be able to:
+
+Add multiple lesson sections
+Upload images per block
+Add captions to images
+Reorder blocks
+Delete blocks
+Edit each block
+Generate one block with AI
+Improve one block with AI
+
+Do not force one big lesson textarea only.
+
+AI Course Generator Update
+
+When AI generates modules, it should generate lesson blocks.
+
+AI output should include:
+
+module title
+module intro
+videoUrl empty field
+blocks array
+
+Each block should have:
+
+type
+title
+content
+imagePrompt optional
+caption optional
+checklist optional
+
+Example:
+
+blocks: [
+{
+type: "text",
+title: "What workplace hazards mean",
+content: "..."
+},
+{
+type: "image_prompt",
+title: "Example hazard image",
+imagePrompt: "A wet floor sign near a washroom entrance"
+},
+{
+type: "checklist",
+title: "Hazard inspection checklist",
+checklist: [...]
+}
+]
+
+Important:
+AI should suggest where images should go.
+Admin can upload real images later.
+
+Employee/Public Course Viewer Update
+
+Render module blocks beautifully.
+
+Use:
+
+Text cards
+Large image cards
+Image captions
+Checklist cards
+Safety note cards
+Step-by-step cards
+Good spacing between sections
+
+Video remains at the top if available.
+
+No more single long text box.
+
+Image Handling
+
+Admin can upload:
+
+One image
+Multiple images
+Slides/gallery images
+
+Images should display inside the lesson at the exact block position.
+
+If no image is uploaded but AI suggested an image:
+Show placeholder:
+“Image suggested: wet floor hazard example”
+Admin can replace with upload.
+
+Premium Text-to-Audio
+
+Current browser voice sounds robotic.
+
+Add OpenAI TTS option for Training Hub module audio.
+
+Behavior:
+
+If OpenAI TTS is configured:
+Use OpenAI premium voice audio.
+
+If not configured:
+Fallback to browser text-to-speech.
+
+Audio should read the full module in order:
+
+Module title
+Block 1 text
+Block 2 caption
+Block 3 text
+Checklist
+Key takeaways
+
+Controls:
+
+Play
+Pause
+Stop
+Speed:
+0.75x
+1x
+1.25x
+1.5x
+
+Audio Caching
+
+To control cost:
+
+Generate audio only when user clicks “Generate Audio” or “Listen”
+Cache audio URL per module version
+Reuse cached audio unless module content changes
+
+Do not regenerate every time user opens the course.
+
+Do Not Break Existing Data
+
+Keep old modules working.
+
+Migration/fallback:
+
+If old module has lesson_text only:
+Render it as one text block automatically.
+
+If new module has blocks:
+Render blocks.
+
+Do not delete existing lessons.
+
+Expected Result
+
+Admin can build modules with multiple lesson sections and images.
+AI can create structured lesson blocks.
+Employees see a more visual course.
+Modules feel professional and easier to understand.
+Audio sounds better using OpenAI TTS when available.
+Nothing outside Training Hub is affected.

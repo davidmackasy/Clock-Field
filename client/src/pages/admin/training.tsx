@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { AdminBlockEditor } from "@/components/training/admin-block-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1380,38 +1381,30 @@ export default function AdminTrainingHub() {
                 )}
               </div>
 
-              {/* Lesson text */}
-              <div>
-                <Label>Lesson Text (optional)</Label>
-                <Textarea className="mt-1" rows={5} placeholder="Write lesson content, steps, or instructions..." value={editingModule.lessonText ?? ""} onChange={e => setEditingModule(m => ({ ...m, lessonText: e.target.value }))} data-testid="input-lesson-text" />
-              </div>
-
-              {/* Assets */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label>Images / Slides (optional)</Label>
-                  <label className="cursor-pointer">
-                    <input ref={assetRef} type="file" accept="image/*" className="sr-only" onChange={handleAssetUpload} />
-                    <Button variant="outline" size="sm" type="button" onClick={() => assetRef.current?.click()} disabled={assetUploading} data-testid="btn-upload-asset">
-                      {assetUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Image className="w-3.5 h-3.5 mr-1" />Add Image</>}
-                    </Button>
-                  </label>
+              {/* Lesson Blocks (replaces flat lessonText + assets). Legacy
+                  lessonText/assets are still rendered for older modules via
+                  the public/employee viewers, but new content uses blocks. */}
+              {editingModule.id ? (
+                <AdminBlockEditor
+                  moduleId={editingModule.id}
+                  moduleTitle={editingModule.title ?? ""}
+                  courseTitle={detail?.course?.title}
+                  courseDescription={detail?.course?.description}
+                />
+              ) : (
+                <div className="border border-dashed border-border rounded-lg p-4 text-sm text-muted-foreground text-center">
+                  Save the module first to add lesson blocks (text, images, checklists, steps, AI-generated content, and more).
                 </div>
-                {(editingModule.assets?.length ?? 0) > 0 && (
-                  <div className="grid grid-cols-3 gap-2">
-                    {editingModule.assets?.map((a, i) => (
-                      <div key={i} className="relative aspect-video rounded-md overflow-hidden border border-border bg-muted">
-                        <img src={a.assetData} alt="" className="w-full h-full object-cover" />
-                        <Button
-                          variant="ghost" size="sm" className="absolute top-0.5 right-0.5 w-5 h-5 p-0 bg-black/50 hover:bg-black/70 text-white"
-                          onClick={() => setEditingModule(m => ({ ...m, assets: m?.assets?.filter((_, idx) => idx !== i) }))}>
-                          <X className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              )}
+
+              {/* Legacy lesson text — still editable for backwards compat */}
+              {(editingModule.lessonText ?? "").trim() && (
+                <details className="border border-border rounded-lg p-3">
+                  <summary className="text-sm font-medium cursor-pointer">Legacy lesson text (deprecated)</summary>
+                  <Textarea className="mt-2" rows={4} value={editingModule.lessonText ?? ""} onChange={e => setEditingModule(m => ({ ...m, lessonText: e.target.value }))} data-testid="input-lesson-text" />
+                  <p className="text-[11px] text-muted-foreground mt-1">This is shown only when no blocks exist. New content should use blocks.</p>
+                </details>
+              )}
 
               <div className="flex items-center gap-3 p-3 border border-border rounded-lg">
                 <Switch checked={editingModule.isRequired ?? true} onCheckedChange={v => setEditingModule(m => ({ ...m, isRequired: v }))} data-testid="switch-module-required" />

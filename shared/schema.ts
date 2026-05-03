@@ -2132,6 +2132,60 @@ export const insertTrainingQuizAttemptSchema = createInsertSchema(trainingQuizAt
 export type TrainingQuizAttempt = typeof trainingQuizAttempts.$inferSelect;
 export type InsertTrainingQuizAttempt = z.infer<typeof insertTrainingQuizAttemptSchema>;
 
+// ── Training Lesson Blocks ───────────────────────────────────────────────────
+// Multiple ordered content blocks per module. Backwards-compatible: old
+// modules with only `lessonText` continue to render via fallback.
+//
+// type values:
+//   "text"           — paragraph(s) in `content`
+//   "image"          — single image (assetData), with optional caption
+//   "gallery"        — multiple images stored as JSON in galleryJson
+//   "safety_tip"     — highlighted safety/warning text in `content`
+//   "checklist"      — JSON array of strings in checklistJson
+//   "step_by_step"   — JSON array of {title, description} in stepsJson
+//   "ai_explanation" — AI-generated explanation in `content`
+//   "image_prompt"   — placeholder describing an image to upload (in imagePrompt)
+export const trainingLessonBlocks = pgTable("training_lesson_blocks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  moduleId: varchar("module_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  type: text("type").notNull(),
+  title: text("title"),
+  content: text("content"),
+  assetData: text("asset_data"),
+  caption: text("caption"),
+  imagePrompt: text("image_prompt"),
+  galleryJson: text("gallery_json"),
+  checklistJson: text("checklist_json"),
+  stepsJson: text("steps_json"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const insertTrainingLessonBlockSchema = createInsertSchema(trainingLessonBlocks).omit({ id: true });
+export type TrainingLessonBlock = typeof trainingLessonBlocks.$inferSelect;
+export type InsertTrainingLessonBlock = z.infer<typeof insertTrainingLessonBlockSchema>;
+
+// ── Training Module Audio Cache ──────────────────────────────────────────────
+// Caches premium OpenAI TTS output per module. Keyed by (moduleId, contentHash).
+// Regenerated when contentHash changes (i.e. module content edited).
+export const trainingModuleAudio = pgTable("training_module_audio", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  moduleId: varchar("module_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  contentHash: text("content_hash").notNull(),
+  voice: text("voice").notNull().default("alloy"),
+  format: text("format").notNull().default("mp3"),
+  audioData: text("audio_data").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const insertTrainingModuleAudioSchema = createInsertSchema(trainingModuleAudio).omit({ id: true });
+export type TrainingModuleAudio = typeof trainingModuleAudio.$inferSelect;
+export type InsertTrainingModuleAudio = z.infer<typeof insertTrainingModuleAudioSchema>;
+
 // ── Employee Documents ───────────────────────────────────────────────────────
 // HR/profile documents (resume, ID, certifications, contracts, etc.)
 // Files are stored as base64 in fileData (consistent with trainingModuleAssets).

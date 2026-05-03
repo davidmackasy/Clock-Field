@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { QuizRunner, type QuizPayload, type QuizSubmitResult } from "@/components/training/quiz-runner";
 import { AudioPlayer } from "@/components/training/audio-player";
+import { LessonBlocks, buildLessonScript, type LessonBlock } from "@/components/training/lesson-blocks";
 import { apiRequest } from "@/lib/queryClient";
 import { downloadCertificate } from "@/lib/certificate";
 
@@ -42,6 +43,7 @@ type CourseView = {
     sortOrder: number;
     isRequired: boolean;
     assets: { id: string; assetData: string; sortOrder: number }[];
+    blocks?: LessonBlock[];
     completed: boolean;
   }[];
 };
@@ -331,32 +333,20 @@ export default function EmployeeTraining() {
                 {mod.description && <p className="text-sm text-muted-foreground mt-1">{mod.description}</p>}
               </div>
 
-              {/* Audio player (TTS) — show when there's lesson text but no video */}
-              {!mod.youtubeEmbedId && mod.lessonText && (
-                <AudioPlayer text={mod.lessonText} title={mod.title} />
+              {/* Audio player (TTS) — premium when available, browser fallback */}
+              {!mod.youtubeEmbedId && (mod.lessonText || (mod.blocks?.length ?? 0) > 0) && (
+                <AudioPlayer
+                  text={buildLessonScript({ title: mod.title, description: mod.description, lessonText: mod.lessonText, blocks: mod.blocks })}
+                  title={mod.title}
+                  moduleId={mod.id}
+                />
               )}
 
-              {/* Lesson text */}
-              {mod.lessonText && (
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <div className="bg-muted/30 rounded-lg p-4 text-sm text-foreground leading-relaxed whitespace-pre-wrap">{mod.lessonText}</div>
-                </div>
-              )}
-
-              {/* Images */}
-              {(mod.assets?.length ?? 0) > 0 && (
-                <div className="space-y-2">
-                  <div className="text-sm font-medium text-foreground flex items-center gap-1"><Image className="w-4 h-4 text-muted-foreground" />Reference Images</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {mod.assets?.map(a => (
-                      <img key={a.id} src={a.assetData} alt="" className="rounded-lg border border-border w-full object-cover aspect-video" />
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Lesson blocks (with backwards-compat fallback to lessonText + assets) */}
+              <LessonBlocks blocks={mod.blocks} fallbackText={mod.lessonText} fallbackAssets={mod.assets} />
 
               {/* No content placeholder */}
-              {!mod.youtubeEmbedId && !mod.lessonText && (mod.assets?.length ?? 0) === 0 && (
+              {!mod.youtubeEmbedId && !mod.lessonText && (mod.assets?.length ?? 0) === 0 && (mod.blocks?.length ?? 0) === 0 && (
                 <div className="flex flex-col items-center py-10 text-muted-foreground text-sm">
                   <FileText className="w-8 h-8 mb-2" />
                   Read through this module and mark it complete when ready.
