@@ -1,0 +1,339 @@
+FINAL PRODUCT DIRECTION
+
+Product identity:
+
+“Prove You Understand” AI
+
+Not a study app
+Not a notes app
+Not a summarizer
+
+This is a performance engine
+
+Everything revolves around one action:
+
+User explains → AI judges → user improves
+
+CORE RULE (DO NOT BREAK THIS)
+
+Every feature must answer this:
+
+“Does this help the user explain better?”
+
+If not → remove it
+
+HOW GPT-4 / GPT-5 IS USED
+
+You are not building tools.
+You are building a learning loop engine
+
+Use GPT for:
+
+Input → Structuring → Challenge → Feedback → Improvement
+
+Flow:
+
+Input ingestion
+Topic extraction
+Simplification
+Challenge generation
+User explanation
+AI critique
+Retry loop
+FULL SYSTEM FLOW
+1. INPUT LAYER
+
+User can input:
+
+PDF
+Audio
+Video
+Text
+YouTube link
+Image
+
+Processing:
+
+Transcription (audio/video)
+OCR (images)
+Text extraction (PDF)
+Chunking into topics
+Topic ranking (importance + difficulty)
+
+Output:
+
+Topic list
+Key ideas
+Learning map
+2. AI PREP LAYER
+
+For each topic:
+
+Generate:
+
+Ultra simple explanation (Feynman style)
+Key points
+Common misunderstandings
+“Trap questions”
+Real-world examples
+
+This is NOT shown as boring notes.
+
+This is shown as:
+
+“Here’s what you THINK it means”
+
+3. CHALLENGE ENGINE (CORE EXPERIENCE)
+
+User taps a topic.
+
+UI switches to challenge mode
+
+Screen:
+
+Topic title
+Prompt:
+“Explain this like you’re teaching someone who knows nothing.”
+
+Input options:
+
+Voice (primary)
+Text (secondary)
+4. AI JUDGMENT ENGINE
+
+This is where GPT shines.
+
+Analyze:
+
+Accuracy
+Completeness
+Clarity
+Simplicity
+Confidence
+
+Then output:
+
+Score:
+
+0–100
+
+Breakdown:
+
+You understood:
+You missed:
+You confused:
+You overcomplicated:
+
+Then:
+
+Rewrite user answer simply
+Highlight missing idea
+Give 1 retry instruction
+
+Example:
+
+“You explained the process, but you didn’t explain WHY it happens.
+Try again using one simple example.”
+
+5. RETRY LOOP
+
+User retries.
+
+System tracks:
+
+Attempts
+Score improvement
+Weak areas
+
+Gamify:
+
+“First try: 62”
+“Second try: 81”
+“Mastered: 90+”
+6. SUPPORT FEATURES (ALL SECONDARY)
+
+Everything below supports explaining better:
+
+Flashcards:
+
+Built from weak points
+
+Quiz:
+
+Based on missed ideas
+
+Mind map:
+
+Shows structure of understanding
+
+Notes:
+
+Only “simple explanation” format
+
+Audio:
+
+Convert explanations into voice practice
+UI / UX DIRECTION (CRITICAL)
+
+You said it right:
+
+“Shouldn’t feel like other apps”
+
+So don’t build dashboards.
+
+Build states
+
+STATE 1: ENTRY
+
+Minimal
+
+Input box
+Upload button
+“Prove you understand something”
+
+No clutter
+No menus overload
+
+STATE 2: TOPIC SELECTION
+Clean cards
+Each topic shows:
+Title
+Difficulty
+“Most people fail this”
+STATE 3: CHALLENGE MODE (MAIN SCREEN)
+
+This is your hero UI.
+
+Design:
+
+Full screen focus
+Dark background
+Centered topic
+Big record button
+
+Feels like:
+
+Interview
+Test
+Performance
+
+No distractions
+
+STATE 4: RESULT
+
+Animated reveal:
+
+Score appears
+Feedback fades in
+Mistakes highlighted
+
+Add:
+
+“Try again” (primary CTA)
+
+STATE 5: PROGRESS
+Simple progress bar
+Weak topics
+Improvement chart
+
+No complex dashboards
+
+FIGMA-STYLE DESIGN RULES
+
+Use:
+
+Large spacing
+2xl rounded cards
+Soft shadows
+Smooth transitions
+Minimal text
+Bold typography
+Clean icon system
+Gradient accents
+Glass blur effects (optional)
+
+Avoid:
+
+Tables
+Dense text blocks
+Traditional LMS layouts
+Ugly forms
+Long scroll pages
+MOBILE-FIRST RULES
+
+This MUST feel like a phone app.
+
+Bottom navigation
+One action per screen
+Large buttons
+Voice first UX
+Swipe interactions
+No horizontal overflow
+
+Challenge mode:
+
+Full screen
+Tap to record
+Instant feedback
+WHAT MAKES THIS DIFFERENT
+
+Every other app:
+“Here’s your notes”
+
+Your app:
+“Prove you actually understand”
+
+MVP YOU SHOULD BUILD TODAY
+
+Do NOT overbuild.
+
+Build this only:
+
+Input box
+Topic extraction (simple)
+One topic challenge
+Voice or text explanation
+GPT feedback + score
+Retry button
+Share result
+
+That’s enough to test viral potential.
+
+VIRAL MECHANIC
+
+You need shareability.
+
+Add:
+
+Score card
+“AI said this about me”
+Screenshot layout
+Share button
+
+People will post:
+
+“AI exposed me for not understanding this”
+
+That’s your growth loop.
+
+FINAL POSITIONING
+
+Do not call it:
+
+Notes app
+Study tool
+AI summarizer
+
+Call it:
+
+“Explain it. Or you don’t understand it.”
+
+If you want next step:
+
+I can write you exact GPT prompts for:
+
+Topic extraction
+Feedback scoring
+Feynman critique engine
+
+So your output feels consistent and premium.

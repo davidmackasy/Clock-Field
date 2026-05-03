@@ -1,0 +1,334 @@
+DEV NOTE: Upgrade Employee Profile System (UI + Documents + Training Tracking)
+
+CRITICAL RULES
+Do not break anything
+Do not modify existing logic
+Do not touch:
+
+Attendance system
+Schedule system
+Payroll
+Timesheets
+Existing APIs
+Database structure (only extend)
+Auth
+Employee status logic
+
+This is a UI + feature extension only.
+
+OBJECTIVE
+
+Transform current employee slide panel into:
+
+Professional CRM-style profile view
+Edit mode (separate, not default)
+Document management system
+Training + course tracking panel
+Cleaner employee list UI (CRM-style)
+CURRENT ISSUE
+
+Right now:
+
+Overview = editable form (bad UX)
+No real “profile feel”
+No document storage
+No training visibility
+Feels like a settings panel, not a profile
+NEW STRUCTURE
+EMPLOYEE PROFILE DRAWER (UPDATED)
+
+Keep slide behavior. Do NOT change how it opens.
+
+Replace tabs:
+
+OLD:
+Overview | Schedule | Attendance
+
+NEW:
+Profile | Schedule | Attendance | Documents | Training
+
+Do NOT modify Schedule or Attendance logic or UI beyond minor spacing polish.
+
+1. PROFILE TAB (READ-ONLY FIRST)
+
+Default state = VIEW MODE (NOT EDITABLE)
+
+Layout:
+
+Top section:
+
+Avatar (circle with initials or uploaded image later)
+Full Name
+Employee ID badge
+Status badge (Active/Inactive)
+
+Right side:
+
+“Edit Profile” button (primary CTA)
+Profile Info Cards
+
+Use clean card layout (2-column desktop, 1-column mobile)
+
+Card 1: Basic Info
+
+First Name
+Last Name
+Email
+Phone
+
+Card 2: Work Info
+
+Position
+Hourly Rate
+Status toggle (display only, disabled)
+
+Card 3 (optional future-safe):
+
+Start Date
+Department
+EDIT MODE
+
+When clicking “Edit Profile”:
+
+Switch entire Profile tab into edit mode
+Show SAME fields you already have
+Keep same backend bindings
+
+Buttons:
+
+Save Changes
+Cancel
+
+IMPORTANT:
+Do NOT change form logic
+Do NOT change validation
+Do NOT change API calls
+
+Only toggle between:
+View Mode ↔ Edit Mode
+
+2. DOCUMENTS TAB (NEW FEATURE)
+PURPOSE
+
+Allow admin to upload and manage employee files:
+
+Resume
+Government ID
+Certifications
+Contracts
+Any custom document
+UI STRUCTURE
+
+Top:
+
+“Upload Document” button
+
+Below:
+Grid/List of documents
+
+Each document card:
+
+File name
+Type (auto or manual tag)
+Upload date
+Uploaded by
+Actions:
+View
+Download
+Delete
+UPLOAD FLOW
+
+Click Upload:
+
+Modal:
+
+File upload input
+Document type dropdown:
+Resume
+ID
+Certification
+Other
+Notes (optional)
+
+Save → store in DB + storage
+
+DATABASE ADDITION
+
+Create new table:
+
+employee_documents
+
+Fields:
+
+id
+employee_id
+file_url
+file_name
+file_type
+notes
+uploaded_by
+created_at
+
+Do NOT modify existing tables.
+
+3. TRAINING TAB (NEW FEATURE)
+PURPOSE
+
+Show all training data from your Training App inside employee profile
+
+DATA TO SHOW
+
+Pull from training system:
+
+For each employee:
+
+Assigned courses
+Completed courses
+In-progress courses
+Missing courses
+UI STRUCTURE
+
+Top Summary Cards:
+
+Total Courses Assigned
+Completed
+In Progress
+Missing
+COURSE LIST
+
+Each course card:
+
+Course name
+Status badge:
+Completed (green)
+In Progress (yellow)
+Not Started (gray)
+Missing (red)
+Progress bar
+Quiz score (if available)
+Completion date (if completed)
+
+Actions:
+
+View course
+View results
+IMPORTANT LOGIC
+
+DO NOT modify training system
+
+Only READ data
+
+If training system does not expose API:
+
+Create read-only endpoint
+OPTIONAL (HIGH VALUE)
+
+Add “Compliance Alert”:
+
+If required course is not completed:
+Show:
+
+“Employee missing required training”
+
+4. EMPLOYEE LIST PAGE (CRM STYLE UPGRADE)
+
+Do NOT change logic. Only UI.
+
+CURRENT ISSUE
+Feels basic
+Not scannable
+Not premium
+NEW UI
+
+Switch to card/grid or enhanced table
+
+Each employee row/card:
+
+Left:
+
+Avatar
+Name
+Position
+
+Middle:
+
+Email
+Phone
+
+Right:
+
+Status badge
+Quick stats:
+Courses completed %
+Last activity
+
+Actions:
+
+View Profile (primary)
+More menu (3 dots)
+ADD SEARCH + FILTER
+
+Top bar:
+
+Search (name/email)
+Filter:
+Active / Inactive
+Position
+Training status
+5. UI / UX RULES (VERY IMPORTANT)
+
+Make it look like:
+
+Modern CRM
+Clean SaaS dashboard
+Premium
+DESIGN SYSTEM
+
+Use:
+
+Rounded cards (16px+)
+Soft shadows
+Clean spacing
+Section separation
+Bold headers
+Subtle dividers
+Status badges with color
+DO NOT USE
+Raw forms as main UI
+Crowded layouts
+Tiny inputs
+Default browser styles
+6. MOBILE BEHAVIOR
+
+Profile drawer must:
+
+Be full screen on mobile
+Tabs become scrollable horizontally
+Cards stack vertically
+Buttons full width
+Document upload works on phone
+Training list scrollable cleanly
+7. PERFORMANCE RULES
+Lazy load Documents tab
+Lazy load Training tab
+Do NOT fetch everything at once
+8. SAFETY CHECKLIST
+
+Before shipping:
+
+Editing profile still works exactly the same
+Attendance unchanged
+Schedule unchanged
+No API broken
+No data overwritten
+Existing employees load correctly
+No permission issues
+FINAL RESULT
+
+You will have:
+
+A real employee profile (not a form)
+Document storage per employee
+Full training visibility inside profile
+Clean CRM-style employee list
+Premium UI without breaking anything
