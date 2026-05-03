@@ -13,7 +13,8 @@ import {
   Plus, BookOpen, Users, Trophy, Clock, ChevronRight, Pencil, Trash2,
   Globe, Lock, Copy, ExternalLink, Play, FileText, Image, CheckCircle2,
   BarChart3, Loader2, X, GripVertical, Eye, EyeOff, Award, Search,
-  ChevronDown, ChevronUp, Upload, AlertCircle,
+  ChevronDown, ChevronUp, Upload, AlertCircle, Check, ShieldCheck,
+  Sparkles, Wrench, GraduationCap, HeartHandshake,
 } from "lucide-react";
 
 type Course = {
@@ -35,6 +36,9 @@ type Course = {
   moduleCount?: number;
   assignedCount?: number;
   completedCount?: number;
+  modules?: { id: string; title: string; sortOrder: number; completedCount: number }[];
+  activeLearners?: { employeeId: string; name: string; initials: string; currentModuleIndex: number }[];
+  cohortProgress?: number;
 };
 
 type Module = {
@@ -75,40 +79,186 @@ function parseYoutubeId(url: string): string | null {
   return null;
 }
 
+const CATEGORY_ICONS: Record<string, any> = {
+  Onboarding: GraduationCap,
+  Safety: ShieldCheck,
+  "Cleaning Techniques": Sparkles,
+  Equipment: Wrench,
+  "Customer Service": HeartHandshake,
+  Compliance: ShieldCheck,
+  Leadership: Trophy,
+  Other: BookOpen,
+};
+
+const LEARNER_PALETTE = [
+  "bg-rose-400", "bg-amber-400", "bg-sky-400",
+  "bg-violet-400", "bg-emerald-400", "bg-pink-400",
+];
+function colorForLearner(id: string) {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return LEARNER_PALETTE[h % LEARNER_PALETTE.length];
+}
+function shortName(s: string) {
+  if (!s) return "";
+  const w = s.split(/\s+/)[0] ?? s;
+  return w.length > 7 ? w.slice(0, 7) : w;
+}
+
 function CourseCard({ course, onClick }: { course: Course; onClick: () => void }) {
+  const Icon = CATEGORY_ICONS[course.category ?? "Other"] ?? BookOpen;
+  const modules = course.modules ?? [];
+  const activeLearners = course.activeLearners ?? [];
+  const moduleCount = course.moduleCount ?? 0;
+  const assignedCount = course.assignedCount ?? 0;
+  const cohortProgress = course.cohortProgress ?? 0;
+  const totalLearners = assignedCount;
+
+  const MAX_DOTS = 8;
+  const displayModules = modules.slice(0, MAX_DOTS);
+  const overflow = modules.length - displayModules.length;
+
   return (
     <div
-      className="bg-card border border-border rounded-xl overflow-hidden cursor-pointer hover:shadow-md transition-all group"
+      className="bg-card border border-border rounded-xl p-5 cursor-pointer hover:shadow-md transition-all group"
       onClick={onClick}
       data-testid={`card-course-${course.id}`}>
-      <div className="h-36 bg-gradient-to-br from-primary/10 to-primary/5 relative overflow-hidden">
-        {course.thumbnailData ? (
-          <img src={course.thumbnailData} alt={course.title} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <BookOpen className="w-12 h-12 text-primary/30" />
+      {/* Header */}
+      <div className="flex items-start gap-3">
+        <div className="h-9 w-9 rounded-lg bg-foreground text-background flex items-center justify-center shrink-0">
+          <Icon className="w-4 h-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[15px] font-semibold text-foreground leading-tight line-clamp-1 group-hover:text-primary transition-colors" data-testid={`text-course-title-${course.id}`}>
+            {course.title}
           </div>
+          <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
+            {course.category ?? "Uncategorized"} · {moduleCount} module{moduleCount === 1 ? "" : "s"} · {assignedCount} learner{assignedCount === 1 ? "" : "s"}
+          </div>
+        </div>
+        <div className="text-right shrink-0" data-testid={`text-cohort-progress-${course.id}`}>
+          <div className="text-2xl font-bold text-foreground leading-none tabular-nums">{cohortProgress}%</div>
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">cohort</div>
+        </div>
+      </div>
+
+      {/* Status badges */}
+      <div className="flex items-center flex-wrap gap-1 mt-3">
+        {course.isPublished
+          ? <Badge className="bg-green-500 text-white text-[10px] h-5 px-1.5">Published</Badge>
+          : <Badge variant="secondary" className="text-[10px] h-5 px-1.5">Draft</Badge>}
+        {course.isRequired && <Badge className="bg-red-500 text-white text-[10px] h-5 px-1.5">Required</Badge>}
+        {course.publicLinkEnabled && (
+          <Badge variant="outline" className="text-[10px] h-5 px-1.5 gap-1">
+            <Globe className="w-2.5 h-2.5" />Public
+          </Badge>
         )}
-        <div className="absolute top-2 right-2 flex gap-1">
-          {course.isRequired && <Badge className="bg-red-500 text-white text-xs">Required</Badge>}
-          {course.isPublished
-            ? <Badge className="bg-green-500 text-white text-xs">Published</Badge>
-            : <Badge variant="secondary" className="text-xs">Draft</Badge>}
-        </div>
+        {course.estimatedDuration && (
+          <Badge variant="outline" className="text-[10px] h-5 px-1.5 gap-1">
+            <Clock className="w-2.5 h-2.5" />{course.estimatedDuration}
+          </Badge>
+        )}
       </div>
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-2 mb-1">
-          <h3 className="font-semibold text-foreground text-sm leading-tight line-clamp-2 group-hover:text-primary transition-colors">{course.title}</h3>
-        </div>
-        {course.category && <p className="text-xs text-muted-foreground mb-2">{course.category}</p>}
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          {course.estimatedDuration && (
-            <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{course.estimatedDuration}</span>
-          )}
-          <span className="flex items-center gap-1"><FileText className="w-3 h-3" />{course.moduleCount ?? 0} modules</span>
-          <span className="flex items-center gap-1"><Users className="w-3 h-3" />{course.assignedCount ?? 0}</span>
-        </div>
+
+      {/* Module path */}
+      <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground mt-5 mb-3">
+        Module path
       </div>
+      {modules.length === 0 ? (
+        <div className="py-6 border border-dashed border-border rounded-lg text-center text-xs text-muted-foreground" data-testid={`empty-modules-${course.id}`}>
+          No modules yet — open to add the first one
+        </div>
+      ) : (
+        <div className="relative px-1 pt-2 pb-1">
+          {/* Connecting line */}
+          <div className="absolute left-3 right-3 top-[14px] h-[2px] bg-border">
+            <div
+              className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400"
+              style={{ width: `${cohortProgress}%` }}
+            />
+          </div>
+          {/* Checkpoints */}
+          <div className="relative flex justify-between items-start gap-1">
+            {displayModules.map((m, i) => {
+              const pct = totalLearners > 0 ? m.completedCount / totalLearners : 0;
+              const isDone = totalLearners > 0 && pct >= 0.95;
+              const isActive = pct > 0.1 && pct < 0.95;
+              const isLocked = !isDone && !isActive;
+              return (
+                <div key={m.id} className="flex flex-col items-center gap-1.5 flex-1 min-w-0" data-testid={`module-dot-${m.id}`}>
+                  <div className={`relative z-10 h-7 w-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                    isDone
+                      ? "bg-emerald-500 border-emerald-500 text-white"
+                      : isActive
+                      ? "bg-card border-emerald-500 text-emerald-700 dark:text-emerald-400 shadow-sm"
+                      : "bg-card border-border text-muted-foreground"
+                  }`}>
+                    {isDone ? <Check className="w-3.5 h-3.5" /> : isLocked && totalLearners > 0 ? <Lock className="w-3 h-3" /> : i + 1}
+                  </div>
+                  <div className={`text-[10px] text-center leading-tight truncate w-full ${isLocked ? "text-muted-foreground" : "text-foreground"}`} title={m.title}>
+                    {shortName(m.title)}
+                  </div>
+                  <div className="text-[9px] text-muted-foreground tabular-nums">
+                    {m.completedCount}/{totalLearners}
+                  </div>
+                </div>
+              );
+            })}
+            {overflow > 0 && (
+              <div className="flex flex-col items-center gap-1.5 shrink-0" style={{ width: 36 }}>
+                <div className="relative z-10 h-7 w-7 rounded-full border-2 bg-card border-border flex items-center justify-center text-[9px] font-bold text-muted-foreground">
+                  +{overflow}
+                </div>
+                <div className="text-[10px] text-muted-foreground">more</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* In-flight learners */}
+      {activeLearners.length > 0 ? (
+        <div className="mt-5 rounded-lg bg-muted/40 border border-border px-4 py-3">
+          <div className="flex items-center gap-2 mb-2">
+            <Users className="w-3.5 h-3.5 text-muted-foreground" />
+            <div className="text-[11px] font-medium text-foreground">Currently in flight</div>
+            <div className="ml-auto text-[11px] text-muted-foreground">{activeLearners.length} active</div>
+          </div>
+          <div className="space-y-1.5">
+            {activeLearners.map((l) => {
+              const color = colorForLearner(l.employeeId);
+              const moduleAt = modules[l.currentModuleIndex];
+              const pct = moduleCount > 0 ? (l.currentModuleIndex / moduleCount) * 100 : 0;
+              return (
+                <div key={l.employeeId} className="flex items-center gap-2.5" data-testid={`learner-flight-${l.employeeId}`}>
+                  <div className={`h-6 w-6 rounded-full ${color} text-white text-[10px] font-semibold flex items-center justify-center shrink-0`} title={l.name}>
+                    {l.initials}
+                  </div>
+                  <div className="flex-1 h-1.5 rounded-full bg-border overflow-hidden">
+                    <div className={`h-full ${color} opacity-80`} style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="text-[10px] text-muted-foreground tabular-nums w-14 text-right truncate" title={moduleAt?.title ?? "Done"}>
+                    {moduleAt ? shortName(moduleAt.title) : "Done"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : assignedCount === 0 ? (
+        <div className="mt-5 rounded-lg bg-muted/30 border border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground" data-testid={`empty-learners-${course.id}`}>
+          No learners enrolled yet
+        </div>
+      ) : (
+        <div className="mt-5 rounded-lg bg-muted/30 border border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground">
+          {assignedCount} enrolled · waiting to start
+        </div>
+      )}
+
+      <Button variant="ghost" size="sm" className="w-full mt-3 h-8 text-muted-foreground hover:text-foreground justify-between pointer-events-none" tabIndex={-1}>
+        <span>Walk the path</span>
+        <ChevronRight className="w-3.5 h-3.5" />
+      </Button>
     </div>
   );
 }
@@ -357,7 +507,7 @@ export default function AdminTrainingHub() {
               </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
               {filtered.map(c => (
                 <CourseCard key={c.id} course={c} onClick={() => { setSelectedId(c.id); setView("detail"); }} />
               ))}

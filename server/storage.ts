@@ -445,7 +445,14 @@ export interface IStorage {
 
   // ── Training Hub ────────────────────────────────────────────────────────────
   createTrainingCourse(data: InsertTrainingCourse): Promise<TrainingCourse>;
-  getTrainingCourses(companyId: string): Promise<(TrainingCourse & { moduleCount: number; assignedCount: number; completedCount: number })[]>;
+  getTrainingCourses(companyId: string): Promise<(TrainingCourse & {
+    moduleCount: number;
+    assignedCount: number;
+    completedCount: number;
+    modules: { id: string; title: string; sortOrder: number; completedCount: number }[];
+    activeLearners: { employeeId: string; name: string; initials: string; currentModuleIndex: number }[];
+    cohortProgress: number;
+  })[]>;
   getTrainingCourse(id: string): Promise<TrainingCourse | undefined>;
   getTrainingCourseByPublicId(publicId: string): Promise<TrainingCourse | undefined>;
   updateTrainingCourse(id: string, data: Partial<InsertTrainingCourse>): Promise<TrainingCourse | undefined>;
@@ -2226,21 +2233,85 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
-  async getTrainingCourses(companyId: string): Promise<(TrainingCourse & { moduleCount: number; assignedCount: number; completedCount: number })[]> {
+  async getTrainingCourses(companyId: string): Promise<(TrainingCourse & {
+    moduleCount: number;
+    assignedCount: number;
+    completedCount: number;
+    modules: { id: string; title: string; sortOrder: number; completedCount: number }[];
+    activeLearners: { employeeId: string; name: string; initials: string; currentModuleIndex: number }[];
+    cohortProgress: number;
+  })[]> {
     const courses = await db.select().from(trainingCourses).where(eq(trainingCourses.companyId, companyId)).orderBy(desc(trainingCourses.createdAt));
     const result = await Promise.all(courses.map(async c => {
-      const [{ count: modCount }] = await db.select({ count: sql<number>`count(*)::int` }).from(trainingModules).where(eq(trainingModules.courseId, c.id));
-      const [{ count: assignCount }] = await db.select({ count: sql<number>`count(*)::int` }).from(trainingAssignments).where(eq(trainingAssignments.courseId, c.id));
-      const completedEmployees = await db.selectDistinct({ employeeId: trainingProgress.employeeId }).from(trainingProgress).where(and(eq(trainingProgress.courseId, c.id), sql`${trainingProgress.employeeId} is not null`));
-      const reqModules = await db.select({ id: trainingModules.id }).from(trainingModules).where(and(eq(trainingModules.courseId, c.id), eq(trainingModules.isRequired, true)));
-      let completedCount = 0;
-      for (const emp of completedEmployees) {
-        if (!emp.employeeId) continue;
-        if (reqModules.length === 0) { completedCount++; continue; }
-        const done = await db.select({ count: sql<number>`count(*)::int` }).from(trainingProgress).where(and(eq(trainingProgress.courseId, c.id), eq(trainingProgress.employeeId, emp.employeeId)));
-        if ((done[0]?.count ?? 0) >= reqModules.length) completedCount++;
-      }
-      return { ...c, moduleCount: modCount ?? 0, assignedCount: assignCount ?? 0, completedCount };
+      const moduleRows = await db.select({ id: trainingModules.id, title: trainingModules.title, sortOrder: trainingModules.sortOrder })
+        .from(trainingModules).where(eq(trainingModules.courseId, c.id)).orderBy(asc(trainingModules.sortOrder));
+      const moduleCount = moduleRows.length;
+
+      const assignmentRows = await db.select({ employeeId: trainingAssignments.employeeId })
+        .from(trainingAssignments).where(eq(trainingAssignments.courseId, c.id));
+      const assignedCount = assignmentRows.length;
+
+      // Per-module completion (distinct employees) — batched in one grouped query
+      const moduleIds = moduleRows.map(m => m.id);
+      const moduleCounts = moduleIds.length > 0
+        ? await db.select({
+            moduleId: trainingProgress.moduleId,
+            count: sql<number>`count(distinct ${trainingProgress.employeeId})::int`,
+          })
+            .from(trainingProgress)
+            .where(and(inArray(trainingProgress.moduleId, moduleIds), sql`${trainingProgress.employeeId} is not null`))
+            .groupBy(trainingProgress.moduleId)
+        : [];
+      const moduleCountMap = new Map(moduleCounts.map(r => [r.moduleId, r.count ?? 0]));
+      const modules = moduleRows.map(m => ({
+        id: m.id, title: m.title, sortOrder: m.sortOrder, completedCount: moduleCountMap.get(m.id) ?? 0,
+      }));
+
+      // Per-employee progress — batched in one grouped query
+      const employeeIds = assignmentRows.map(a => a.employeeId).filter((id): id is string => !!id);
+      const learnerCounts = employeeIds.length > 0
+        ? await db.select({
+            employeeId: trainingProgress.employeeId,
+            count: sql<number>`count(distinct ${trainingProgress.moduleId})::int`,
+          })
+            .from(trainingProgress)
+            .where(and(eq(trainingProgress.courseId, c.id), inArray(trainingProgress.employeeId, employeeIds)))
+            .groupBy(trainingProgress.employeeId)
+        : [];
+      const learnerCountMap = new Map(learnerCounts.map(r => [r.employeeId as string, r.count ?? 0]));
+      const learnerProgress = employeeIds.map(eid => ({
+        employeeId: eid, completedModules: learnerCountMap.get(eid) ?? 0,
+      }));
+
+      const completedCount = moduleCount > 0
+        ? learnerProgress.filter(l => l.completedModules >= moduleCount).length
+        : 0;
+
+      // Active learners (in-flight): top 3 by progress, not yet completed
+      const activeOnes = learnerProgress
+        .filter(l => moduleCount > 0 && l.completedModules > 0 && l.completedModules < moduleCount)
+        .sort((a, b) => b.completedModules - a.completedModules)
+        .slice(0, 3);
+      const activeIds = activeOnes.map(l => l.employeeId);
+      const activeUsers = activeIds.length > 0
+        ? await db.select({ id: users.id, firstName: users.firstName, lastName: users.lastName })
+            .from(users).where(inArray(users.id, activeIds))
+        : [];
+      const userMap = new Map(activeUsers.map(u => [u.id, u]));
+      const activeLearners = activeOnes.map(l => {
+        const emp = userMap.get(l.employeeId);
+        const first = emp?.firstName ?? "";
+        const last = emp?.lastName ?? "";
+        const name = `${first} ${last}`.trim() || "Unknown";
+        const initials = ((first[0] ?? "?") + (last[0] ?? "")).toUpperCase();
+        return { employeeId: l.employeeId, name, initials, currentModuleIndex: l.completedModules };
+      });
+
+      const totalPossible = assignedCount * moduleCount;
+      const totalActual = learnerProgress.reduce((s, l) => s + l.completedModules, 0);
+      const cohortProgress = totalPossible > 0 ? Math.round((totalActual / totalPossible) * 100) : 0;
+
+      return { ...c, moduleCount, assignedCount, completedCount, modules, activeLearners, cohortProgress };
     }));
     return result;
   }
