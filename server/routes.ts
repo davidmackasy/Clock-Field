@@ -9882,6 +9882,65 @@ Return ONLY valid JSON:
 
   function trainingNow() { return new Date().toISOString(); }
   function genCertCode() { return "CERT-" + Math.random().toString(36).substring(2, 10).toUpperCase(); }
+
+  function scoreTrainingQuestion(q: { questionType: string; correctAnswerJson: string }, answer: any): boolean {
+    if (answer === undefined || answer === null || answer === "") return false;
+    let correct: any;
+    try { correct = JSON.parse(q.correctAnswerJson); } catch { return false; }
+    const norm = (v: any) => String(v ?? "").toLowerCase().trim();
+    switch (q.questionType) {
+      case "multiple_choice": return String(answer).trim() === String(correct).trim();
+      case "true_false":      return norm(answer) === norm(correct);
+      case "short_answer":    return norm(answer) === norm(correct);
+      default: return false;
+    }
+  }
+
+  // Idempotent cert issuance gated on (a) all required modules complete, (b) if quiz exists & required → must have passed.
+  // Returns the cert summary if issued/already-issued and gates pass, otherwise null.
+  async function tryIssueTrainingCertificate(opts: {
+    courseId: string;
+    companyId: string;
+    employeeId?: string | null;
+    publicLearnerId?: string | null;
+    learnerName: string;
+  }): Promise<{ certificateCode: string; issuedAt: string } | null> {
+    const course = await storage.getTrainingCourse(opts.courseId);
+    if (!course || !course.certificateEnabled) return null;
+
+    const modules = await storage.getTrainingModules(opts.courseId);
+    if (modules.length === 0) return null;
+    const required = modules.filter(m => m.isRequired);
+    const progress = await storage.getTrainingProgress(opts.courseId, opts.employeeId ?? undefined, opts.publicLearnerId ?? undefined);
+    const completedIds = new Set(progress.map(p => p.moduleId));
+    const moduleCheck = required.length > 0
+      ? required.every(m => completedIds.has(m.id))
+      : modules.every(m => completedIds.has(m.id));
+    if (!moduleCheck) return null;
+
+    const quiz = await storage.getTrainingQuizByCourse(opts.courseId);
+    if (quiz && quiz.isRequired) {
+      const passed = await storage.hasPassedTrainingQuiz(quiz.id, opts.employeeId ?? undefined, opts.publicLearnerId ?? undefined);
+      if (!passed) return null;
+    }
+
+    const existing = await storage.getTrainingCertificate(opts.courseId, opts.employeeId ?? undefined, opts.publicLearnerId ?? undefined);
+    if (existing) return { certificateCode: existing.certificateCode, issuedAt: existing.issuedAt };
+
+    const now = trainingNow();
+    const cert = await storage.createTrainingCertificate({
+      courseId: opts.courseId,
+      companyId: opts.companyId,
+      employeeId: opts.employeeId ?? null,
+      publicLearnerId: opts.publicLearnerId ?? null,
+      learnerName: opts.learnerName,
+      certificateCode: genCertCode(),
+      issuedAt: now,
+      createdAt: now,
+    });
+    await storage.updateTrainingCourse(opts.courseId, { updatedAt: now });
+    return { certificateCode: cert.certificateCode, issuedAt: cert.issuedAt };
+  }
   function genPublicId() { return Math.random().toString(36).substring(2, 12) + Math.random().toString(36).substring(2, 12); }
 
   function parseYoutubeId(url: string): string | null {
@@ -10099,24 +10158,12 @@ Return ONLY valid JSON:
       const course = await storage.getTrainingCourse(req.params.courseId);
       if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       await storage.markModuleComplete(req.params.courseId, req.params.moduleId, user.companyId, user.id, undefined);
-      const detail = await storage.getMyTrainingCourse(req.params.courseId, user.id);
-      if (detail && detail.course.isCompleted && course.certificateEnabled) {
-        const existing = await storage.getTrainingCertificate(req.params.courseId, user.id, undefined);
-        if (!existing) {
-          const now = trainingNow();
-          await storage.createTrainingCertificate({
-            courseId: req.params.courseId,
-            companyId: user.companyId,
-            employeeId: user.id,
-            publicLearnerId: null,
-            learnerName: `${user.firstName} ${user.lastName}`,
-            certificateCode: genCertCode(),
-            issuedAt: now,
-            createdAt: now,
-          });
-          await storage.updateTrainingCourse(req.params.courseId, { updatedAt: trainingNow() });
-        }
-      }
+      await tryIssueTrainingCertificate({
+        courseId: req.params.courseId,
+        companyId: user.companyId,
+        employeeId: user.id,
+        learnerName: `${user.firstName} ${user.lastName}`,
+      });
       res.json({ ok: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -10182,19 +10229,265 @@ Return ONLY valid JSON:
       const isCompleted = reqModules.length > 0 ? reqModules.every(m => completedIds.has(m.id)) : completedIds.size === modules.length && modules.length > 0;
       let certificate = null;
       if (isCompleted) {
-        const now = trainingNow();
-        await storage.updatePublicLearner(learnerId, { completedAt: now });
-        if (course.certificateEnabled) {
-          const existing = await storage.getTrainingCertificate(course.id, undefined, learnerId);
-          if (!existing) {
-            const cert = await storage.createTrainingCertificate({ courseId: course.id, companyId: course.companyId, employeeId: null, publicLearnerId: learnerId, learnerName: learner.name, certificateCode: genCertCode(), issuedAt: now, createdAt: now });
-            certificate = { certificateCode: cert.certificateCode, issuedAt: cert.issuedAt };
-          } else {
-            certificate = { certificateCode: existing.certificateCode, issuedAt: existing.issuedAt };
-          }
-        }
+        await storage.updatePublicLearner(learnerId, { completedAt: trainingNow() });
       }
+      certificate = await tryIssueTrainingCertificate({
+        courseId: course.id,
+        companyId: course.companyId,
+        publicLearnerId: learnerId,
+        learnerName: learner.name,
+      });
       res.json({ moduleId: req.params.moduleId, isCompleted, certificate });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Training Quiz: Attempt + Scoring ──────────────────────────────────────
+
+  // Build the public-facing quiz payload (sanitized: no correct answers/explanations on questions)
+  // along with the learner's attempt history and gating flags.
+  async function buildQuizPayload(courseId: string, employeeId: string | undefined, publicLearnerId: string | undefined) {
+    const quiz = await storage.getTrainingQuizByCourse(courseId);
+    if (!quiz) return null;
+
+    // Modules-completed gate (matches cert helper)
+    const modules = await storage.getTrainingModules(courseId);
+    const required = modules.filter(m => m.isRequired);
+    const progress = await storage.getTrainingProgress(courseId, employeeId, publicLearnerId);
+    const completedIds = new Set(progress.map(p => p.moduleId));
+    const modulesComplete = modules.length > 0 && (
+      required.length > 0 ? required.every(m => completedIds.has(m.id)) : modules.every(m => completedIds.has(m.id))
+    );
+
+    const attempts = await storage.getTrainingQuizAttempts(quiz.id, employeeId, publicLearnerId);
+    const lastCompleted = attempts.find(a => a.completedAt);
+    const hasPassed = attempts.some(a => a.passed);
+    const canRetake = !hasPassed && quiz.allowRetake;
+
+    return {
+      quiz: {
+        id: quiz.id,
+        title: quiz.title,
+        description: quiz.description,
+        passingScore: quiz.passingScore,
+        allowRetake: quiz.allowRetake,
+        showCorrectAnswers: quiz.showCorrectAnswers,
+        isRequired: quiz.isRequired,
+        questions: quiz.questions.map(q => ({
+          id: q.id,
+          questionText: q.questionText,
+          questionType: q.questionType,
+          optionsJson: q.optionsJson,
+          sortOrder: q.sortOrder,
+        })),
+      },
+      modulesComplete,
+      attemptCount: attempts.length,
+      lastAttempt: lastCompleted ? {
+        id: lastCompleted.id,
+        score: lastCompleted.score,
+        passed: lastCompleted.passed,
+        completedAt: lastCompleted.completedAt,
+      } : null,
+      hasPassed,
+      canRetake: canRetake || (!hasPassed && attempts.length === 0),
+    };
+  }
+
+  async function startQuizAttempt(courseId: string, companyId: string, employeeId: string | undefined, publicLearnerId: string | undefined) {
+    const quiz = await storage.getTrainingQuizByCourse(courseId);
+    if (!quiz) return { error: { status: 404, message: "Quiz not found" } } as const;
+
+    // Block if modules aren't done yet
+    const modules = await storage.getTrainingModules(courseId);
+    const required = modules.filter(m => m.isRequired);
+    const progress = await storage.getTrainingProgress(courseId, employeeId, publicLearnerId);
+    const completedIds = new Set(progress.map(p => p.moduleId));
+    const modulesComplete = modules.length > 0 && (
+      required.length > 0 ? required.every(m => completedIds.has(m.id)) : modules.every(m => completedIds.has(m.id))
+    );
+    if (!modulesComplete) return { error: { status: 400, message: "Complete all modules before starting the quiz" } } as const;
+
+    // Block re-attempt if already passed (regardless of allowRetake)
+    const passed = await storage.hasPassedTrainingQuiz(quiz.id, employeeId, publicLearnerId);
+    if (passed) return { error: { status: 400, message: "Quiz already passed" } } as const;
+
+    // Block new attempt if a prior failed attempt exists and retakes are disabled
+    if (!quiz.allowRetake) {
+      const attempts = await storage.getTrainingQuizAttempts(quiz.id, employeeId, publicLearnerId);
+      if (attempts.some(a => a.completedAt)) return { error: { status: 400, message: "Retakes are disabled for this quiz" } } as const;
+    }
+
+    const attempt = await storage.createTrainingQuizAttempt({
+      quizId: quiz.id,
+      courseId,
+      companyId,
+      employeeId: employeeId ?? null,
+      publicLearnerId: publicLearnerId ?? null,
+      score: null,
+      passed: false,
+      answersJson: null,
+      startedAt: trainingNow(),
+      completedAt: null,
+    } as any);
+    return { attempt, quiz } as const;
+  }
+
+  async function submitQuizAttempt(attemptId: string, answers: Record<string, any>, identity: { employeeId?: string; publicLearnerId?: string }) {
+    const attempt = await storage.getTrainingQuizAttempt(attemptId);
+    if (!attempt) return { error: { status: 404, message: "Attempt not found" } } as const;
+    if (attempt.completedAt) return { error: { status: 400, message: "Attempt already submitted" } } as const;
+    if (identity.employeeId && attempt.employeeId !== identity.employeeId) return { error: { status: 403, message: "Forbidden" } } as const;
+    if (identity.publicLearnerId && attempt.publicLearnerId !== identity.publicLearnerId) return { error: { status: 403, message: "Forbidden" } } as const;
+
+    const quiz = await storage.getTrainingQuizByCourse(attempt.courseId);
+    if (!quiz) return { error: { status: 404, message: "Quiz not found" } } as const;
+
+    let correctCount = 0;
+    const review = quiz.questions.map(q => {
+      const given = answers?.[q.id];
+      const isCorrect = scoreTrainingQuestion(q, given);
+      if (isCorrect) correctCount++;
+      let correctAnswer: any = null;
+      try { correctAnswer = JSON.parse(q.correctAnswerJson); } catch {}
+      return {
+        questionId: q.id,
+        given: given ?? null,
+        isCorrect,
+        correctAnswer,
+        explanation: q.explanation,
+      };
+    });
+    const total = quiz.questions.length || 1;
+    const score = Math.round((correctCount / total) * 100);
+    const passed = score >= quiz.passingScore;
+
+    await storage.updateTrainingQuizAttempt(attempt.id, {
+      score,
+      passed,
+      answersJson: JSON.stringify(answers ?? {}),
+      completedAt: trainingNow(),
+    } as any);
+
+    return { quiz, attempt, score, passed, correctCount, total, review } as const;
+  }
+
+  // GET /api/training/my-courses/:courseId/quiz — employee
+  app.get("/api/training/my-courses/:courseId/quiz", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== "employee") return res.status(403).json({ message: "Forbidden" });
+      // Assignment check: getMyTrainingCourse only returns when the employee is assigned/visible
+      const detail = await storage.getMyTrainingCourse(req.params.courseId, user.id);
+      if (!detail) return res.status(404).json({ message: "Course not found" });
+      const payload = await buildQuizPayload(req.params.courseId, user.id, undefined);
+      if (!payload) return res.status(404).json({ message: "No quiz for this course" });
+      res.json(payload);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/training/my-courses/:courseId/quiz/start — employee
+  app.post("/api/training/my-courses/:courseId/quiz/start", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== "employee") return res.status(403).json({ message: "Forbidden" });
+      const detail = await storage.getMyTrainingCourse(req.params.courseId, user.id);
+      if (!detail) return res.status(404).json({ message: "Course not found" });
+      const result = await startQuizAttempt(req.params.courseId, user.companyId, user.id, undefined);
+      if ("error" in result) return res.status(result.error.status).json({ message: result.error.message });
+      res.json({ attemptId: result.attempt.id });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/training/quiz-attempts/:attemptId/submit — employee
+  app.post("/api/training/quiz-attempts/:attemptId/submit", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== "employee") return res.status(403).json({ message: "Forbidden" });
+      const { answers } = req.body || {};
+      if (!answers || typeof answers !== "object") return res.status(400).json({ message: "answers required" });
+      const result = await submitQuizAttempt(req.params.attemptId, answers, { employeeId: user.id });
+      if ("error" in result) return res.status(result.error.status).json({ message: result.error.message });
+      // Tenant guard
+      if (result.attempt.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
+      const cert = result.passed ? await tryIssueTrainingCertificate({
+        courseId: result.attempt.courseId,
+        companyId: user.companyId,
+        employeeId: user.id,
+        learnerName: `${user.firstName} ${user.lastName}`,
+      }) : null;
+      const showAnswers = result.quiz.showCorrectAnswers || result.passed;
+      res.json({
+        score: result.score,
+        passed: result.passed,
+        passingScore: result.quiz.passingScore,
+        correctCount: result.correctCount,
+        total: result.total,
+        review: showAnswers ? result.review : result.review.map(r => ({ questionId: r.questionId, given: r.given, isCorrect: r.isCorrect })),
+        certificate: cert,
+      });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // GET /api/public/training/:publicId/quiz?learnerId=... — public
+  app.get("/api/public/training/:publicId/quiz", async (req, res) => {
+    try {
+      const course = await storage.getTrainingCourseByPublicId(req.params.publicId);
+      if (!course || !course.publicLinkEnabled || !course.isPublished) return res.status(404).json({ message: "Course not found" });
+      const learnerId = (req.query.learnerId as string) || undefined;
+      if (!learnerId) return res.status(400).json({ message: "learnerId required" });
+      const learner = await storage.getPublicLearner(learnerId);
+      if (!learner || learner.courseId !== course.id) return res.status(404).json({ message: "Learner not found" });
+      const payload = await buildQuizPayload(course.id, undefined, learnerId);
+      if (!payload) return res.status(404).json({ message: "No quiz for this course" });
+      res.json(payload);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/public/training/:publicId/quiz/start — public
+  app.post("/api/public/training/:publicId/quiz/start", async (req, res) => {
+    try {
+      const course = await storage.getTrainingCourseByPublicId(req.params.publicId);
+      if (!course || !course.publicLinkEnabled || !course.isPublished) return res.status(404).json({ message: "Course not found" });
+      const { learnerId } = req.body || {};
+      if (!learnerId) return res.status(400).json({ message: "learnerId required" });
+      const learner = await storage.getPublicLearner(learnerId);
+      if (!learner || learner.courseId !== course.id) return res.status(404).json({ message: "Learner not found" });
+      const result = await startQuizAttempt(course.id, course.companyId, undefined, learnerId);
+      if ("error" in result) return res.status(result.error.status).json({ message: result.error.message });
+      res.json({ attemptId: result.attempt.id });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/public/training/:publicId/quiz/submit — public
+  app.post("/api/public/training/:publicId/quiz/submit", async (req, res) => {
+    try {
+      const course = await storage.getTrainingCourseByPublicId(req.params.publicId);
+      if (!course || !course.publicLinkEnabled || !course.isPublished) return res.status(404).json({ message: "Course not found" });
+      const { learnerId, attemptId, answers } = req.body || {};
+      if (!learnerId || !attemptId || !answers || typeof answers !== "object") {
+        return res.status(400).json({ message: "learnerId, attemptId, answers required" });
+      }
+      const learner = await storage.getPublicLearner(learnerId);
+      if (!learner || learner.courseId !== course.id) return res.status(404).json({ message: "Learner not found" });
+      const result = await submitQuizAttempt(attemptId, answers, { publicLearnerId: learnerId });
+      if ("error" in result) return res.status(result.error.status).json({ message: result.error.message });
+      if (result.attempt.courseId !== course.id) return res.status(403).json({ message: "Forbidden" });
+      const cert = result.passed ? await tryIssueTrainingCertificate({
+        courseId: course.id,
+        companyId: course.companyId,
+        publicLearnerId: learnerId,
+        learnerName: learner.name,
+      }) : null;
+      const showAnswers = result.quiz.showCorrectAnswers || result.passed;
+      res.json({
+        score: result.score,
+        passed: result.passed,
+        passingScore: result.quiz.passingScore,
+        correctCount: result.correctCount,
+        total: result.total,
+        review: showAnswers ? result.review : result.review.map(r => ({ questionId: r.questionId, given: r.given, isCorrect: r.isCorrect })),
+        certificate: cert,
+      });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 

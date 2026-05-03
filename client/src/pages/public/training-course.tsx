@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import {
   BookOpen, CheckCircle2, Play, ChevronRight, Loader2, Award,
-  FileText, Image, AlertCircle, ArrowLeft, Clock, User,
+  FileText, Image, AlertCircle, ArrowLeft, Clock, User, ClipboardList, Lock,
 } from "lucide-react";
+import { QuizRunner, type QuizPayload, type QuizSubmitResult } from "@/components/training/quiz-runner";
 
 type PublicCourse = {
   id: string;
@@ -123,6 +124,46 @@ export default function PublicTrainingCourse() {
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  // Quiz payload — null when course has no quiz
+  const { data: quizPayload, refetch: refetchQuiz } = useQuery<QuizPayload | null>({
+    queryKey: ["/api/public/training", publicId, "quiz", learner?.learnerId],
+    enabled: !!publicId && !!learner?.learnerId,
+    queryFn: async () => {
+      const r = await fetch(`/api/public/training/${publicId}/quiz?learnerId=${learner!.learnerId}`);
+      if (r.status === 404) return null;
+      if (!r.ok) throw new Error("Failed to load quiz");
+      return r.json();
+    },
+    retry: false,
+  });
+
+  const startQuiz = async () => {
+    const r = await fetch(`/api/public/training/${publicId}/quiz/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ learnerId: learner?.learnerId }),
+    });
+    if (!r.ok) throw new Error((await r.json()).message || "Failed to start quiz");
+    return r.json();
+  };
+
+  const submitQuiz = async (attemptId: string, answers: Record<string, any>): Promise<QuizSubmitResult> => {
+    const r = await fetch(`/api/public/training/${publicId}/quiz/submit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ learnerId: learner?.learnerId, attemptId, answers }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.message || "Failed to submit quiz");
+    if (data.passed && data.certificate && learner) {
+      const updated: LearnerSession = { ...learner, isCompleted: true, certificate: data.certificate };
+      setLearner(updated);
+      sessionStorage.setItem(`training_learner_${publicId}`, JSON.stringify(updated));
+    }
+    refetchQuiz();
+    return data;
+  };
+
   const completeMutation = useMutation({
     mutationFn: (moduleId: string) =>
       fetch(`/api/public/training/${publicId}/progress/${moduleId}`, {
@@ -212,7 +253,10 @@ export default function PublicTrainingCourse() {
   }
 
   const completedSet = new Set(learner.completedModules);
-  const mod = course.modules[selectedModuleIdx];
+  const hasQuiz = !!quizPayload;
+  const totalSteps = course.modules.length + (hasQuiz ? 1 : 0);
+  const isQuizStep = hasQuiz && selectedModuleIdx === course.modules.length;
+  const mod = isQuizStep ? null : course.modules[selectedModuleIdx];
   const totalPct = course.modules.length > 0 ? Math.round((completedSet.size / course.modules.length) * 100) : 0;
 
   return (
@@ -233,7 +277,21 @@ export default function PublicTrainingCourse() {
         </div>
       </div>
 
-      {!mod ? (
+      {isQuizStep && quizPayload ? (
+        <div className="max-w-3xl mx-auto px-4 py-5">
+          <div className="mb-4">
+            <span className="text-xs text-muted-foreground">Final Step · {selectedModuleIdx + 1} of {totalSteps}</span>
+            <h2 className="text-xl font-bold text-foreground mt-0.5 flex items-center gap-2">
+              <ClipboardList className="w-5 h-5 text-primary" />Final Quiz
+            </h2>
+          </div>
+          <QuizRunner
+            payload={quizPayload}
+            onStart={startQuiz}
+            onSubmit={submitQuiz}
+          />
+        </div>
+      ) : !mod ? (
         <div className="flex items-center justify-center py-20 text-muted-foreground">No modules</div>
       ) : (
         <div className="max-w-3xl mx-auto">
@@ -306,6 +364,18 @@ export default function PublicTrainingCourse() {
                     {m.youtubeEmbedId && <Play className="w-3 h-3 text-muted-foreground" />}
                   </button>
                 ))}
+                {hasQuiz && (
+                  <button
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-left text-sm border-t border-border transition-colors ${isQuizStep ? "bg-primary/5" : "hover:bg-muted/30"}`}
+                    onClick={() => { setSelectedModuleIdx(course.modules.length); setModuleListOpen(false); }}
+                    data-testid="btn-module-quiz">
+                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${quizPayload?.hasPassed ? "border-green-500 bg-green-500" : isQuizStep ? "border-primary" : "border-muted-foreground"}`}>
+                      {quizPayload?.hasPassed ? <CheckCircle2 className="w-3.5 h-3.5 text-white" /> : <ClipboardList className="w-3.5 h-3.5 text-foreground" />}
+                    </div>
+                    <span className={`flex-1 ${quizPayload?.hasPassed ? "line-through text-muted-foreground" : "text-foreground"}`}>Final Quiz</span>
+                    {!quizPayload?.modulesComplete && <Lock className="w-3 h-3 text-muted-foreground flex-shrink-0" />}
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -327,7 +397,7 @@ export default function PublicTrainingCourse() {
       )}
 
       {/* Sticky bottom */}
-      {mod && (
+      {mod && !isQuizStep && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border">
           <div className="max-w-3xl mx-auto flex gap-3">
             {selectedModuleIdx > 0 && (
@@ -340,11 +410,24 @@ export default function PublicTrainingCourse() {
               </Button>
             ) : selectedModuleIdx < course.modules.length - 1 ? (
               <Button className="flex-1" onClick={() => setSelectedModuleIdx(i => i + 1)} data-testid="btn-next-module">Next →</Button>
+            ) : hasQuiz ? (
+              <Button className="flex-1" onClick={() => setSelectedModuleIdx(course.modules.length)} data-testid="btn-go-to-quiz">
+                <ClipboardList className="w-4 h-4 mr-1" />Go to Quiz
+              </Button>
             ) : (
               <Button className="flex-1 bg-green-600 hover:bg-green-700" disabled>
                 <CheckCircle2 className="w-4 h-4 mr-1" /> All Done!
               </Button>
             )}
+          </div>
+        </div>
+      )}
+      {isQuizStep && (
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border">
+          <div className="max-w-3xl mx-auto">
+            <Button variant="outline" className="w-full" onClick={() => setSelectedModuleIdx(course.modules.length - 1)} data-testid="btn-back-to-modules">
+              ← Back to Modules
+            </Button>
           </div>
         </div>
       )}
