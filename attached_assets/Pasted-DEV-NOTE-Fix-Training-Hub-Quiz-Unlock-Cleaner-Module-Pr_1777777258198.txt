@@ -1,0 +1,248 @@
+DEV NOTE: Fix Training Hub Quiz Unlock, Cleaner Module Progress, and Text-to-Audio
+
+Scope:
+Only update Training Hub.
+Do not touch or affect anything else in ClockField.
+
+Main issues:
+
+Final quiz stays locked even after all modules are complete
+Cleaner app does not clearly let employees complete modules and move to next module
+Modules without video need text-to-audio playback with speed control
+Fix Final Quiz Unlock Logic
+
+Issue:
+Final quiz says:
+
+“Final quiz locked. Complete all modules to unlock quiz.”
+
+But all modules are already marked complete.
+
+Fix:
+Update quiz unlock logic so it checks real module completion correctly.
+
+Quiz should unlock when:
+
+All required modules in the course are completed by the current learner.
+
+Current learner can be:
+
+logged-in employee
+public learner from shared link
+
+Check these carefully:
+
+course_id matches
+module_id matches
+employee_id matches when logged in
+public_learner_id matches when public link
+only required modules count toward unlock
+completed status is saved properly
+frontend refreshes progress after marking module complete
+
+Required logic:
+
+totalRequiredModules = all course modules where is_required = true
+
+completedRequiredModules = completed modules for this learner where:
+course_id matches
+module_id is in required modules
+status = completed
+
+If completedRequiredModules >= totalRequiredModules:
+unlock quiz
+
+Also handle:
+If all modules are required by default, count all modules.
+If course has zero required modules, treat all modules as required.
+
+Refresh Progress After Module Completion
+
+After clicking Mark Module Complete:
+
+Save completion
+Refetch course progress
+Update local state
+Unlock next module
+If last module is completed, unlock quiz immediately
+
+Do not require page refresh.
+
+Cleaner App Course Flow Fix
+
+In the cleaner/employee app, assigned courses must allow real progress.
+
+Cleaner should see:
+
+course title
+course progress
+current module
+completed modules
+next module button
+mark module complete button
+final quiz button once unlocked
+
+Cleaner course page should include:
+
+Previous Module
+Next Module
+Mark Complete
+Continue Course
+Take Final Quiz
+
+When a cleaner finishes Module 1:
+Module 1 shows completed
+Module 2 opens or becomes available
+Progress bar updates
+Cleaner can continue until all modules are done
+Final quiz unlocks
+
+Do not show only one static module with no completion flow.
+
+Public Link Flow Must Match Cleaner Flow
+
+Public course link should use the same progress behavior.
+
+Public learner should be able to:
+
+start course
+complete module
+go to next module
+finish all modules
+unlock final quiz
+submit quiz
+download certificate if passed
+
+Add Text-to-Audio for Modules Without Video
+
+If a module has no video, add a text-to-audio player.
+
+Use browser SpeechSynthesis first if available.
+
+Do not require paid API for MVP.
+
+Audio player should read:
+
+module title
+module description
+lesson content
+steps
+key points
+checklist
+safety notes
+
+Add controls:
+
+Play
+Pause
+Stop
+Speed selector
+
+Speed options:
+
+Slow 0.75x
+Normal 1x
+Fast 1.25x
+Very Fast 1.5x
+
+Mobile UI:
+Audio player should be compact.
+Place it near the top of the module under title/image.
+Use a clean card:
+“Listen to this module”
+
+If video exists:
+Do not auto-show text-to-audio unless there is also text content and user clicks “Listen instead.”
+
+Text-to-Audio Requirements
+
+When user clicks Play:
+
+combine module text into one readable script
+start speech
+show playing state
+allow pause/resume
+allow stop
+allow speed change
+
+When user changes module:
+stop current audio automatically
+
+When user leaves page:
+stop audio automatically
+
+Do not mark module complete just because audio played.
+User must still click Mark Complete.
+
+Better Module Completion UI
+
+For each module card:
+
+Show status:
+Not started
+In progress
+Completed
+
+Completed modules:
+show checkmark
+collapse after completion
+
+Current module:
+expanded
+
+Locked module:
+show lock icon only if sequential mode is enabled
+
+After completing a module:
+auto-collapse current module
+auto-open next module
+scroll to next module on mobile
+
+Backend/API Checks
+
+Add or fix endpoints if needed:
+
+GET course with progress
+POST mark module complete
+GET quiz unlock status
+POST quiz attempt
+
+Make sure each returns JSON.
+
+Never return HTML from Training Hub API routes.
+
+Completion Edge Cases
+
+Handle:
+
+module completion saved but quiz still locked
+duplicate progress records
+public learner progress
+employee progress
+modules added after course started
+optional modules
+deleted modules
+
+Use unique constraint if possible:
+
+course_id + module_id + employee_id
+
+and
+
+course_id + module_id + public_learner_id
+
+Update existing progress record instead of creating duplicates.
+
+Expected Result
+
+Cleaner opens assigned course.
+Cleaner completes Module 1.
+Module 2 opens.
+Progress updates.
+After all required modules are complete, Final Quiz unlocks.
+Cleaner takes quiz.
+If passed, course is completed and certificate unlocks.
+
+Public link works the same way.
+
+Modules without video have a clean ...

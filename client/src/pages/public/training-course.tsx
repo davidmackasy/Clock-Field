@@ -11,6 +11,7 @@ import {
   FileText, Image, AlertCircle, ArrowLeft, Clock, User, ClipboardList, Lock,
 } from "lucide-react";
 import { QuizRunner, type QuizPayload, type QuizSubmitResult } from "@/components/training/quiz-runner";
+import { AudioPlayer } from "@/components/training/audio-player";
 
 type PublicCourse = {
   id: string;
@@ -165,23 +166,40 @@ export default function PublicTrainingCourse() {
   };
 
   const completeMutation = useMutation({
-    mutationFn: (moduleId: string) =>
-      fetch(`/api/public/training/${publicId}/progress/${moduleId}`, {
+    mutationFn: async (moduleId: string) => {
+      const r = await fetch(`/api/public/training/${publicId}/progress/${moduleId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ learnerId: learner?.learnerId }),
-      }).then(r => r.json()),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.message || "Failed to mark complete");
+      return data;
+    },
     onSuccess: (data: any) => {
+      const existing = learner?.completedModules ?? [];
+      const completedModules = existing.includes(data.moduleId) ? existing : [...existing, data.moduleId];
       const updated: LearnerSession = {
         ...learner!,
-        completedModules: [...(learner?.completedModules ?? []), data.moduleId],
+        completedModules,
         isCompleted: data.isCompleted ?? false,
         certificate: data.certificate ?? learner?.certificate ?? null,
       };
       setLearner(updated);
       sessionStorage.setItem(`training_learner_${publicId}`, JSON.stringify(updated));
+      // Refresh the quiz payload so its modulesComplete flag is current
+      queryClient.invalidateQueries({ queryKey: ["/api/public/training", publicId, "quiz", learner?.learnerId] });
       toast({ title: "Module completed!" });
       if (data.isCompleted) toast({ title: "Course complete! 🎉", description: "You can now download your certificate." });
+      // Auto-advance to next module, or jump to quiz step when all done
+      if (course) {
+        const total = course.modules.length;
+        if (selectedModuleIdx < total - 1) {
+          setSelectedModuleIdx(selectedModuleIdx + 1);
+        } else if (data.modulesComplete && quizPayload) {
+          setSelectedModuleIdx(total);
+        }
+      }
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -315,6 +333,11 @@ export default function PublicTrainingCourse() {
               <h2 className="text-xl font-bold text-foreground mt-0.5">{mod.title}</h2>
               {mod.description && <p className="text-sm text-muted-foreground mt-1">{mod.description}</p>}
             </div>
+
+            {/* Audio player (TTS) — show when there's lesson text but no video */}
+            {!mod.youtubeEmbedId && mod.lessonText && (
+              <AudioPlayer text={mod.lessonText} title={mod.title} />
+            )}
 
             {/* Lesson text */}
             {mod.lessonText && (

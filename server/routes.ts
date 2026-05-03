@@ -10158,13 +10158,28 @@ Return ONLY valid JSON:
       const course = await storage.getTrainingCourse(req.params.courseId);
       if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       await storage.markModuleComplete(req.params.courseId, req.params.moduleId, user.companyId, user.id, undefined);
-      await tryIssueTrainingCertificate({
+      const certificate = await tryIssueTrainingCertificate({
         courseId: req.params.courseId,
         companyId: user.companyId,
         employeeId: user.id,
         learnerName: `${user.firstName} ${user.lastName}`,
       });
-      res.json({ ok: true });
+      // Compute fresh module-completion state for the client (avoids cache races on the quiz unlock).
+      const modules = await storage.getTrainingModules(req.params.courseId);
+      const progress = await storage.getTrainingProgress(req.params.courseId, user.id, undefined);
+      const completedIds = new Set(progress.map(p => p.moduleId));
+      const required = modules.filter(m => m.isRequired);
+      const modulesComplete = modules.length > 0 && (
+        required.length > 0 ? required.every(m => completedIds.has(m.id)) : modules.every(m => completedIds.has(m.id))
+      );
+      res.json({
+        ok: true,
+        moduleId: req.params.moduleId,
+        modulesComplete,
+        completedModules: completedIds.size,
+        totalModules: modules.length,
+        certificate,
+      });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
@@ -10226,7 +10241,10 @@ Return ONLY valid JSON:
       const progress = await storage.getTrainingProgress(course.id, undefined, learnerId);
       const completedIds = new Set(progress.map(p => p.moduleId));
       const reqModules = modules.filter(m => m.isRequired);
-      const isCompleted = reqModules.length > 0 ? reqModules.every(m => completedIds.has(m.id)) : completedIds.size === modules.length && modules.length > 0;
+      const modulesComplete = modules.length > 0 && (
+        reqModules.length > 0 ? reqModules.every(m => completedIds.has(m.id)) : modules.every(m => completedIds.has(m.id))
+      );
+      const isCompleted = modulesComplete;
       let certificate = null;
       if (isCompleted) {
         await storage.updatePublicLearner(learnerId, { completedAt: trainingNow() });
@@ -10237,7 +10255,14 @@ Return ONLY valid JSON:
         publicLearnerId: learnerId,
         learnerName: learner.name,
       });
-      res.json({ moduleId: req.params.moduleId, isCompleted, certificate });
+      res.json({
+        moduleId: req.params.moduleId,
+        isCompleted,
+        modulesComplete,
+        completedModules: completedIds.size,
+        totalModules: modules.length,
+        certificate,
+      });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 

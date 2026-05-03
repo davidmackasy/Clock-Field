@@ -10,6 +10,8 @@ import {
   Loader2, Award, FileText, Image, ArrowLeft, Lock, ClipboardList,
 } from "lucide-react";
 import { QuizRunner, type QuizPayload, type QuizSubmitResult } from "@/components/training/quiz-runner";
+import { AudioPlayer } from "@/components/training/audio-player";
+import { apiRequest } from "@/lib/queryClient";
 
 type MyCourse = {
   id: string;
@@ -150,13 +152,26 @@ export default function EmployeeTraining() {
   });
 
   const completeMutation = useMutation({
-    mutationFn: (moduleId: string) =>
-      fetch(`/api/training/my-courses/${selectedCourseId}/progress/${moduleId}`, { method: "POST" }).then(r => r.json()),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/training/my-courses"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/training/my-courses", selectedCourseId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/training/my-courses", selectedCourseId, "quiz"] });
+    mutationFn: async (moduleId: string) => {
+      const r = await apiRequest("POST", `/api/training/my-courses/${selectedCourseId}/progress/${moduleId}`);
+      return r.json() as Promise<{ ok: true; moduleId: string; modulesComplete: boolean; completedModules: number; totalModules: number; certificate: any }>;
+    },
+    onSuccess: async (data) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/training/my-courses"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/training/my-courses", selectedCourseId] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/training/my-courses", selectedCourseId, "quiz"] }),
+      ]);
       toast({ title: "Module completed!" });
+      // Auto-advance: if there are more modules, move to the next; if all done & quiz exists, jump to quiz step.
+      if (courseView) {
+        const total = courseView.modules.length;
+        if (selectedModuleIdx < total - 1) {
+          setSelectedModuleIdx(selectedModuleIdx + 1);
+        } else if (data.modulesComplete && quizPayload) {
+          setSelectedModuleIdx(total);
+        }
+      }
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -297,6 +312,11 @@ export default function EmployeeTraining() {
                 <h2 className="text-xl font-bold text-foreground">{mod.title}</h2>
                 {mod.description && <p className="text-sm text-muted-foreground mt-1">{mod.description}</p>}
               </div>
+
+              {/* Audio player (TTS) — show when there's lesson text but no video */}
+              {!mod.youtubeEmbedId && mod.lessonText && (
+                <AudioPlayer text={mod.lessonText} title={mod.title} />
+              )}
 
               {/* Lesson text */}
               {mod.lessonText && (
