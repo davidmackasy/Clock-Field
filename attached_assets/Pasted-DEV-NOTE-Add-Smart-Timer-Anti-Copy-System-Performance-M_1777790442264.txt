@@ -1,0 +1,285 @@
+DEV NOTE: Add Smart Timer + Anti-Copy System (Performance Mode)
+
+CRITICAL RULES
+Do not break anything
+Do not change scoring logic
+Do not affect existing flows
+Only add timer layer + input validation + UI enhancements
+
+OBJECTIVE
+
+Force real understanding under pressure.
+
+User must:
+
+Think fast
+Explain clearly
+Not rely on copy/paste
+CORE FEATURE: “TIMED EXPLANATION MODE”
+
+Every challenge gets a time limit
+
+User must answer within that time.
+
+If time runs out → automatic fail
+
+1. TIMER SYSTEM
+TIME GENERATION (AUTO)
+
+Do NOT use fixed times.
+
+Generate based on topic complexity:
+
+Easy:
+15–25 seconds
+
+Medium:
+30–45 seconds
+
+Hard:
+45–60 seconds
+
+HOW TO DETERMINE DIFFICULTY
+
+Use existing topic data:
+
+If topic:
+
+short concept → Easy
+multi-step idea → Medium
+abstract / theory → Hard
+
+OR use GPT to return:
+
+difficulty: easy | medium | hard
+
+TIMER DISPLAY (UI)
+
+Top of challenge screen:
+
+Countdown timer (big, visible)
+
+Example:
+
+00:32
+
+Add label:
+
+“Explain before time runs out”
+
+VISUAL BEHAVIOR
+Timer starts when user clicks “Start”
+Pulse animation when under 10 seconds
+Turn red under 5 seconds
+2. VOICE MODE TIMER
+FLOW
+
+User taps mic → timer starts immediately
+
+Show:
+
+Recording animation
+Live countdown
+END CONDITIONS
+
+Stop recording when:
+
+Timer hits 0
+OR
+User taps stop
+IF TIME EXPIRES
+
+Show:
+
+“Time’s up. That wasn’t a complete explanation.”
+
+Auto-submit what was recorded.
+
+Then:
+Score it normally (likely low)
+
+3. TEXT MODE TIMER
+START BEHAVIOR
+
+Timer starts when user clicks inside textbox
+
+LOCK CONDITIONS
+
+If timer ends:
+
+Disable typing
+Auto-submit text
+4. ANTI COPY-PASTE SYSTEM
+BLOCK PASTE (STRICT MODE)
+
+In text field:
+
+Disable:
+
+paste (Ctrl+V)
+right-click paste
+IF USER TRIES TO PASTE
+
+Show:
+
+“Type it in your own words. Copy-paste won’t help you here.”
+
+OPTIONAL (SMART DETECTION)
+
+If text is pasted via workaround:
+
+Detect:
+
+large text inserted instantly
+
+If detected:
+
+Show:
+
+“This looks pasted. Try explaining it yourself.”
+
+Do NOT score that attempt.
+
+5. “THINK FIRST” DELAY (SMART UX)
+
+Before typing allowed:
+
+Add 2–3 second delay:
+
+Show:
+
+“Think before you answer…”
+
+Prevents instant paste behavior.
+
+6. FAIL CONDITION
+
+User fails if:
+
+Timer ends with empty response
+Response too short
+Paste detected
+
+Show:
+
+“You didn’t attempt the explanation.”
+
+Button:
+Try Again
+
+Do NOT count this as a paid attempt if no valid input.
+
+7. RESULT INTEGRATION
+
+Timer adds pressure → improves scoring meaning
+
+Add to result:
+
+“Answered in 18 seconds”
+
+or
+
+“Ran out of time”
+
+8. GAMIFICATION
+
+Add:
+
+“Fast + Accurate” bonus
+
+If:
+
+Score > 80
+Time used < 70%
+
+Show:
+
+“Fast and clear. That’s real understanding.”
+
+9. SETTINGS (FUTURE SAFE)
+
+Add optional toggle:
+
+Normal Mode (no timer)
+Performance Mode (timer ON)
+
+Default:
+Performance Mode ON
+
+10. UI ENHANCEMENTS
+CHALLENGE SCREEN
+
+Add:
+
+Top:
+Timer
+
+Center:
+Topic
+
+Below:
+Instruction
+
+Input:
+Text box OR mic
+
+Bottom:
+Submit / recording state
+
+MICRO-INTERACTIONS
+Timer ticks smoothly
+Subtle sound optional (last 5 seconds)
+Mic glows while recording
+11. EDGE CASES
+
+Handle:
+
+User refresh → reset timer
+Tab switch → pause OR continue (choose one consistently)
+Mobile background → stop recording safely
+12. TESTING CHECKLIST
+
+Test:
+
+Timer starts correctly
+Timer stops correctly
+Voice stops at 0
+Text locks at 0
+Paste blocked
+Paste detection works
+Empty response fails
+No valid input = no credit used
+UI responsive mobile + desktop
+FINAL RESULT
+
+You now have:
+
+Time pressure
+Anti-cheating system
+Real performance testing
+More engaging experience
+Higher perceived value (important for pricing)
+PRODUCT IMPACT
+
+Before:
+“Explain when you want”
+
+Now:
+“Explain under pressure”
+
+That shift makes it:
+
+more real
+more valuable
+more addictive
+easier to monetize
+
+If you want next step:
+
+I can give you:
+
+exact frontend timer logic (React)
+paste-block code
+GPT prompt to adjust scoring based on time
+
+So your agent implements this perfectly.
