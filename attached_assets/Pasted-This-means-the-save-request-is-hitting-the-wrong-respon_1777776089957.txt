@@ -1,0 +1,116 @@
+This means the save request is hitting the wrong response type.
+The app expects JSON, but the backend is returning HTML:
+<!DOCTYPE ... is not valid JSON
+Send this to your agent:
+DEV NOTE: Fix Training Hub Save Failed JSON Error
+Only fix Training Hub.
+Do not touch anything else.
+Issue:
+When saving AI-generated course draft, the frontend shows:
+Failed to execute 'json' on 'Response': Unexpected token '<', '<!DOCTYPE ...' is not valid JSON
+Cause:
+The frontend is calling response.json(), but the server is returning an HTML page instead of JSON. This usually means:
+
+
+API route is wrong
+
+
+backend route does not exist
+
+
+request is being redirected to frontend index.html
+
+
+auth middleware redirects instead of returning JSON
+
+
+server error returns HTML
+
+
+Vite fallback is catching the API path
+
+
+Fix requirements:
+
+
+Check the save endpoint used by Training Hub
+
+
+Find the frontend save call.
+Make sure it calls the real API route, example:
+POST /api/training/courses
+Not:
+/training/courses
+/admin/training/courses
+/training/save
+
+
+Make backend route return JSON always
+
+
+The backend route must return JSON for success and errors.
+Example error response:
+res.status(400).json({ success: false, error: "Course title is required" })
+Never return HTML from Training Hub API routes.
+
+
+Add safe frontend response parsing
+
+
+Before calling response.json(), check content type.
+If response is not JSON, read text and show useful error.
+Example:
+const contentType = response.headers.get("content-type") || "";
+If not JSON:
+Show:
+“Training course save endpoint returned HTML. Check API route or backend error.”
+
+
+Fix API registration order
+
+
+Make sure Training Hub API routes are registered before Vite/frontend fallback.
+Correct order:
+app.use("/api/training", trainingRoutes);
+Then Vite/static fallback after API routes.
+
+
+Check auth middleware
+
+
+If user is not authenticated, API must return:
+401 JSON
+Not redirect HTML.
+Example:
+res.status(401).json({ success: false, error: "Unauthorized" })
+
+
+Validate payload
+
+
+Make sure AI-generated course save sends:
+course title
+description
+category
+duration
+modules array
+quiz object
+quiz questions array
+Empty video/image fields should not fail save.
+
+
+Add console logging only for this route
+
+
+Log:
+request path
+request method
+payload keys
+server error message
+Do not log sensitive data.
+Expected result:
+Click Save
+Course saves successfully
+No HTML response error
+If save fails, frontend shows a clear JSON error
+Training Hub remains isolated from the rest of ClockField
