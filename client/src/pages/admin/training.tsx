@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import TrainingAIWizard from "@/components/admin/training-ai-wizard";
 import {
   Plus, BookOpen, Users, Trophy, Clock, ChevronRight, Pencil, Trash2,
   Globe, Lock, Copy, ExternalLink, Play, FileText, Image, CheckCircle2,
@@ -658,6 +659,7 @@ export default function AdminTrainingHub() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createStep, setCreateStep] = useState(1);
+  const [aiWizardOpen, setAiWizardOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("All");
   const [filterStatus, setFilterStatus] = useState("All");
@@ -821,9 +823,14 @@ export default function AdminTrainingHub() {
           <p className="text-sm text-muted-foreground">Create courses, assign employees, track completions</p>
         </div>
         {view === "grid" && (
-          <Button onClick={() => { setCreateOpen(true); setCreateStep(1); }} data-testid="btn-create-course">
-            <Plus className="w-4 h-4 mr-1" /> Create Course
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setAiWizardOpen(true)} data-testid="btn-create-course-ai">
+              <Sparkles className="w-4 h-4 mr-1" /> Generate with AI
+            </Button>
+            <Button onClick={() => { setCreateOpen(true); setCreateStep(1); }} data-testid="btn-create-course">
+              <Plus className="w-4 h-4 mr-1" /> Create Course
+            </Button>
+          </div>
         )}
         {view === "detail" && (
           <Button variant="outline" onClick={() => { setView("grid"); setSelectedId(null); }} data-testid="btn-back-courses">
@@ -891,9 +898,14 @@ export default function AdminTrainingHub() {
               <BookOpen className="w-12 h-12 text-muted-foreground mb-3" />
               <p className="text-base font-semibold text-foreground mb-1">No courses yet</p>
               <p className="text-sm text-muted-foreground mb-4 max-w-xs">Build your first training course with YouTube videos, text lessons, and quizzes.</p>
-              <Button onClick={() => setCreateOpen(true)} data-testid="btn-create-course-empty">
-                <Plus className="w-4 h-4 mr-1" /> Create First Course
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={() => setAiWizardOpen(true)} data-testid="btn-create-course-ai-empty">
+                  <Sparkles className="w-4 h-4 mr-1" /> Generate with AI
+                </Button>
+                <Button variant="outline" onClick={() => setCreateOpen(true)} data-testid="btn-create-course-empty">
+                  <Plus className="w-4 h-4 mr-1" /> Create Manually
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
@@ -1069,6 +1081,13 @@ export default function AdminTrainingHub() {
           )}
         </div>
       )}
+
+      {/* ── AI WIZARD ── */}
+      <TrainingAIWizard
+        open={aiWizardOpen}
+        onOpenChange={setAiWizardOpen}
+        onCreated={(courseId) => { setSelectedId(courseId); setView("detail"); }}
+      />
 
       {/* ── CREATE COURSE DIALOG ── */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

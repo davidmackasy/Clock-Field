@@ -2360,6 +2360,13 @@ export class DatabaseStorage implements IStorage {
     await db.delete(trainingProgress).where(eq(trainingProgress.courseId, id));
     await db.delete(trainingPublicLearners).where(eq(trainingPublicLearners.courseId, id));
     await db.delete(trainingCertificates).where(eq(trainingCertificates.courseId, id));
+    // Quiz cascade (no FK constraints — must delete explicitly)
+    const quizzes = await db.select({ id: trainingQuizzes.id }).from(trainingQuizzes).where(eq(trainingQuizzes.courseId, id));
+    for (const q of quizzes) {
+      await db.delete(trainingQuizQuestions).where(eq(trainingQuizQuestions.quizId, q.id));
+      await db.delete(trainingQuizAttempts).where(eq(trainingQuizAttempts.quizId, q.id));
+    }
+    await db.delete(trainingQuizzes).where(eq(trainingQuizzes.courseId, id));
     await db.delete(trainingCourses).where(eq(trainingCourses.id, id));
   }
 

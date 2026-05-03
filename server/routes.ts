@@ -13,7 +13,8 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { isNotNull, eq, and, isNull, inArray, desc, sql } from "drizzle-orm";
-import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments, supplies, supplyUpdates, inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses, trainingPublicLearners } from "@shared/schema";
+import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments, supplies, supplyUpdates, inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses, trainingPublicLearners, trainingCourses, trainingModules, trainingQuizzes, trainingQuizQuestions } from "@shared/schema";
+import { db } from "./db";
 import { getPlan } from "./plans";
 import { generateReviewOgImage } from "./og-image";
 
@@ -10252,6 +10253,128 @@ Return ONLY valid JSON:
       res.json(draft);
     } catch (e: any) {
       res.status(500).json({ message: e.message || "AI generation failed" });
+    }
+  });
+
+  // POST /api/training/ai/save-draft — atomically save an edited AI course draft (course + modules + quiz + questions)
+  app.post("/api/training/ai/save-draft", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { course: courseInput, modules: moduleInputs, quiz: quizInput } = req.body || {};
+
+      // ── Validation ────────────────────────────────────────────────────────
+      if (!courseInput || typeof courseInput.title !== "string" || !courseInput.title.trim()) {
+        return res.status(400).json({ message: "Course title is required" });
+      }
+      if (!Array.isArray(moduleInputs) || moduleInputs.length === 0) {
+        return res.status(400).json({ message: "At least one module is required" });
+      }
+      for (let i = 0; i < moduleInputs.length; i++) {
+        const m = moduleInputs[i];
+        if (!m || typeof m.title !== "string" || !m.title.trim()) {
+          return res.status(400).json({ message: `Module #${i + 1} is missing a title` });
+        }
+      }
+      if (quizInput && Array.isArray(quizInput.questions)) {
+        for (let i = 0; i < quizInput.questions.length; i++) {
+          const q = quizInput.questions[i];
+          if (!q || typeof q.questionText !== "string" || !q.questionText.trim()) {
+            return res.status(400).json({ message: `Quiz question #${i + 1} is missing text` });
+          }
+          if (!["multiple_choice", "true_false", "short_answer"].includes(q.questionType)) {
+            return res.status(400).json({ message: `Quiz question #${i + 1} has invalid type` });
+          }
+          if (q.questionType === "multiple_choice") {
+            const opts = Array.isArray(q.options) ? q.options.filter((o: any) => typeof o === "string" && o.trim()) : [];
+            if (opts.length < 2) {
+              return res.status(400).json({ message: `Quiz question #${i + 1} needs at least 2 options` });
+            }
+            if (!q.correctAnswer || !opts.includes(q.correctAnswer)) {
+              return res.status(400).json({ message: `Quiz question #${i + 1} needs a correct answer that matches one of the options` });
+            }
+          } else if (q.questionType === "true_false") {
+            if (q.correctAnswer !== "True" && q.correctAnswer !== "False") {
+              return res.status(400).json({ message: `Quiz question #${i + 1} needs a True/False answer` });
+            }
+          } else if (q.questionType === "short_answer") {
+            if (typeof q.correctAnswer !== "string" || !q.correctAnswer.trim()) {
+              return res.status(400).json({ message: `Quiz question #${i + 1} needs an expected answer` });
+            }
+          }
+        }
+      }
+
+      const now = trainingNow();
+      const publicId = courseInput.publicLinkEnabled ? genPublicId() : null;
+
+      // ── Atomic insert via DB transaction ──────────────────────────────────
+      const courseId = await db.transaction(async (tx) => {
+        const [course] = await tx.insert(trainingCourses).values({
+          companyId: user.companyId,
+          createdBy: user.id,
+          title: String(courseInput.title).trim(),
+          description: courseInput.description ? String(courseInput.description) : null,
+          category: courseInput.category ? String(courseInput.category) : null,
+          estimatedDuration: courseInput.estimatedDuration ? String(courseInput.estimatedDuration) : null,
+          thumbnailData: courseInput.thumbnailData ? String(courseInput.thumbnailData) : null,
+          isRequired: !!courseInput.isRequired,
+          isPublished: false,
+          publicLinkEnabled: !!courseInput.publicLinkEnabled,
+          publicId,
+          certificateEnabled: courseInput.certificateEnabled !== false,
+          createdAt: now,
+          updatedAt: now,
+        } as any).returning();
+
+        for (let i = 0; i < moduleInputs.length; i++) {
+          const m = moduleInputs[i];
+          const embedId = m.youtubeUrl ? parseYoutubeId(String(m.youtubeUrl)) : null;
+          await tx.insert(trainingModules).values({
+            courseId: course.id,
+            companyId: user.companyId,
+            title: String(m.title).trim(),
+            description: m.description ? String(m.description) : null,
+            youtubeUrl: m.youtubeUrl ? String(m.youtubeUrl) : null,
+            youtubeEmbedId: embedId,
+            lessonText: m.lessonText ? String(m.lessonText) : null,
+            sortOrder: typeof m.sortOrder === "number" ? m.sortOrder : i,
+            isRequired: m.isRequired !== false,
+            createdAt: now,
+            updatedAt: now,
+          } as any);
+        }
+
+        if (quizInput && Array.isArray(quizInput.questions) && quizInput.questions.length > 0) {
+          const [quiz] = await tx.insert(trainingQuizzes).values({
+            courseId: course.id,
+            companyId: user.companyId,
+            title: quizInput.title ? String(quizInput.title) : `${course.title} — Final Quiz`,
+            description: quizInput.description ? String(quizInput.description) : null,
+            passingScore: typeof quizInput.passingScore === "number" ? Math.max(0, Math.min(100, quizInput.passingScore)) : 80,
+            allowRetake: quizInput.allowRetake !== false,
+            showCorrectAnswers: !!quizInput.showCorrectAnswers,
+            isRequired: quizInput.isRequired !== false,
+            createdAt: now,
+            updatedAt: now,
+          } as any).returning();
+
+          const rows = aiQuestionsToInsertRows(quizInput.questions as AIQuizQuestion[]).map(r => ({
+            ...r,
+            quizId: quiz.id,
+            createdAt: now,
+          }));
+          if (rows.length > 0) {
+            await tx.insert(trainingQuizQuestions).values(rows as any);
+          }
+        }
+
+        return course.id;
+      });
+
+      res.json({ id: courseId, courseId });
+    } catch (e: any) {
+      console.error("[training/ai/save-draft] error:", e);
+      res.status(500).json({ message: e.message || "Failed to save draft" });
     }
   });
 
