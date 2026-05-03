@@ -1,0 +1,412 @@
+DEV NOTE UPDATE: Improve Training Hub With AI Course Builder, Quizzes, and Better Public Course UI
+
+Add this to the previous Training Hub dev note.
+
+Main goal:
+Upgrade Training Hub so admins can build courses faster with AI, add quizzes, improve module presentation, and make the public course link feel premium, mobile-friendly, and Udemy-style.
+
+Do not break or affect anything else.
+Do not touch payroll, worklogs, reports, field notes, publications, agreements, auth, Stripe, or existing employee flows.
+Only work inside the new Training Hub feature.
+
+AI Course Builder
+
+Add AI help inside course creation.
+
+Admin should be able to use AI to generate:
+
+Course title
+Course description
+Course objectives
+What employees will learn
+Course outline
+Module titles
+Module descriptions
+Step-by-step lesson content
+Safety reminders
+Cleaning best practices
+Quiz questions
+Certificate wording
+Short intro text for public course page
+
+Add buttons like:
+
+Generate with AI
+Improve with AI
+Fix grammar
+Make it clearer
+Make it shorter
+Make it more professional
+Generate quiz from modules
+Generate module outline
+Generate safety training version
+
+Example flow:
+Admin enters:
+“How to mop restaurant kitchen floors properly”
+
+AI returns:
+Course title
+Course summary
+5 suggested modules
+Learning objectives
+15 quiz questions
+Completion certificate text
+
+Admin can edit everything before saving.
+
+Important:
+AI should only suggest content.
+Admin must be able to review and edit before publishing.
+
+AI Course Creation Wizard
+
+Add a guided course builder.
+
+Step 1:
+Admin enters course topic.
+
+Fields:
+Course topic
+Industry
+Employee level
+Training goal
+Number of modules
+Include quiz yes/no
+Tone:
+Simple
+Professional
+Safety-focused
+Beginner-friendly
+
+Step 2:
+AI generates course draft.
+
+Draft includes:
+Title
+Description
+Course breakdown
+Module list
+Learning objectives
+Suggested quiz
+
+Step 3:
+Admin edits modules.
+
+Step 4:
+Admin adds YouTube unlisted links, images, or slides.
+
+Step 5:
+Admin publishes or assigns course.
+
+Module Content Types
+
+Each module should support:
+
+YouTube unlisted video
+Module thumbnail image
+Slides/images
+Text lesson
+Step-by-step instructions
+Key points
+Safety notes
+Checklist
+Mini quiz optional
+
+Not every module needs a video.
+
+If no video is added:
+Show module thumbnail/image at the top.
+
+If video is added:
+Show embedded video at the top.
+Use clean video container.
+Do not make it feel like the user left ClockField.
+
+YouTube Thumbnail and Link Handling
+
+When admin pastes a YouTube unlisted link:
+
+Extract video ID.
+Save embed URL.
+Fetch or generate YouTube thumbnail.
+Use thumbnail as course/module image if admin has not uploaded a custom thumbnail.
+
+Important:
+Do not show the raw YouTube link on the public course page.
+Do not display “Watch on YouTube” buttons.
+Embed video inside ClockField.
+Disable unnecessary YouTube branding as much as allowed by YouTube embed settings.
+
+Use embed URL format with safe parameters:
+rel=0
+modestbranding=1
+playsinline=1
+
+Do not allow unsafe iframe code from users.
+Only allow pasted YouTube URLs.
+
+Module UI Behavior
+
+Public course page should not look plain.
+
+Make modules look like premium cards or accordion sections.
+
+Public course page layout:
+
+Top:
+Company logo
+Course thumbnail
+Course title
+Course description
+Estimated duration
+Progress bar
+
+Then:
+Course overview card
+What you will learn
+Required modules count
+Start course button
+
+Modules:
+Module 1 card
+Module 2 card
+Module 3 card
+
+Each module should collapse/expand.
+
+Behavior:
+Only one module open at a time on mobile.
+After Module 1 is completed, collapse Module 1 and open Module 2.
+Show checkmark for completed modules.
+Show locked style for later modules if sequential learning is enabled.
+Show progress percentage.
+
+Mobile:
+Full-width content
+Sticky bottom button:
+Mark Module Complete / Continue
+Accordion module list
+Large video area
+Easy tap buttons
+
+Desktop:
+Content area on left
+Course progress/sidebar on right
+
+Course Completion Quiz
+
+Every course should support a final quiz.
+
+Quiz appears after all required modules are completed.
+
+Default quiz:
+15 questions
+
+Question types:
+Multiple choice
+True or false
+Short answer
+
+Admin can:
+Generate quiz with AI
+Edit questions
+Delete questions
+Add questions manually
+Set passing score
+Allow retake yes/no
+
+Suggested default:
+Passing score: 80%
+Allow retake: yes
+Show correct answers after submit: optional
+
+Quiz should be based on course modules.
+
+Example:
+If course is about washroom cleaning, quiz should ask about:
+Safety
+Product use
+Cleaning order
+PPE
+Final inspection
+Common mistakes
+
+Quiz Database Tables
+
+Add:
+
+training_quizzes
+id
+course_id
+title
+description
+passing_score
+allow_retake
+show_correct_answers
+created_at
+updated_at
+
+training_quiz_questions
+id
+quiz_id
+question_text
+question_type
+options_json
+correct_answer_json
+explanation
+sort_order
+created_at
+
+training_quiz_attempts
+id
+quiz_id
+course_id
+employee_id nullable
+public_learner_id nullable
+score
+passed
+answers_json
+started_at
+completed_at
+
+Completion Rule
+
+Course should only be marked complete when:
+
+All required modules are completed
+Final quiz is submitted
+Quiz score meets passing score, if passing is required
+
+Then:
+Generate certificate
+Update employee profile
+Update admin completion dashboard
+
+AI Prompt Requirements
+
+Create safe AI prompts that generate structured JSON.
+
+AI should generate:
+
+course_title
+course_description
+learning_objectives
+modules
+module_title
+module_description
+lesson_text
+key_points
+checklist
+quiz_questions
+correct_answers
+explanations
+
+AI output must be editable before saving.
+
+Never auto-publish AI-generated content without admin review.
+
+Admin Course Builder UI
+
+Add AI helper panel.
+
+Course builder layout:
+
+Left side:
+Course form and module editor
+
+Right side:
+AI Assistant panel
+
+AI Assistant actions:
+Generate course outline
+Improve this module
+Generate quiz
+Rewrite for beginners
+Make this safety-focused
+Fix grammar
+Create checklist
+Create certificate wording
+
+Keep UI clean.
+Do not make the AI panel too big on mobile.
+
+Mobile:
+AI actions should be inside a drawer or bottom sheet.
+
+Public Link UI Upgrade
+
+The public link must look polished.
+
+Public course page should include:
+
+Hero section
+Course thumbnail/video preview
+Company branding
+Course title
+Short description
+Progress tracker
+Module accordion
+Clean lesson cards
+Final quiz section
+Certificate download after passing
+
+Avoid plain vertical text.
+Avoid module content covering the whole page with no structure.
+Use cards, spacing, icons, progress states, and collapsible sections.
+
+Employee Training Hub Upgrade
+
+Employee should see:
+
+Assigned courses
+Required courses
+In progress
+Completed
+Certificates
+
+Course cards should show:
+Thumbnail
+Title
+Progress
+Required/optional badge
+Due date if available
+Continue button
+Certificate button if completed
+
+Certificate Upgrade
+
+Certificate should only unlock after quiz is passed.
+
+Certificate should show:
+Employee name
+Course title
+Company name
+Completion date
+Quiz score optional
+Certificate ID
+ClockField footer
+
+Add:
+Download PDF
+View certificate
+Share certificate link optional
+
+Safety and Scope
+
+Do not break anything else.
+Keep Training Hub isolated.
+Use new routes, new components, and new database tables.
+Do not change existing employee profile except adding Training Hub entry point.
+Do not expose YouTube links directly.
+Do not store video files.
+Do not auto-publish AI content.
+Do not let public learners access private employee/business data.
+
+Final expected result:
+Admins can create professional training courses faster using AI.
+Courses can include videos, images, slides, text, checklists, and modules.
+Each course has a final AI-generated or manual quiz.
+Employees must complete modules and pass the quiz before receiving a certificate.
+Public course links look premium, mobile-friendly, and Udemy-style.
+Training completion is tracked inside employee profiles and admin dashboards.
