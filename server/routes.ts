@@ -735,6 +735,101 @@ Welcome again, and thank you for choosing ClockField.
     }
   });
 
+  // ── Employee Documents (admin) ───────────────────────────────────────────
+  // List documents for an employee (no fileData payload)
+  app.get("/api/employees/:id/documents", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const target = await storage.getUser(req.params.id);
+      if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const docs = await storage.listEmployeeDocuments(req.params.id, user.companyId);
+      res.json(docs);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Upload a document. Body: { name, category?, mimeType, sizeBytes, fileData (base64), notes? }
+  app.post("/api/employees/:id/documents", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const target = await storage.getUser(req.params.id);
+      if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const { name, category, mimeType, fileData, notes } = req.body || {};
+      if (!name || typeof name !== "string") return res.status(400).json({ message: "Document name is required" });
+      if (!mimeType || typeof mimeType !== "string") return res.status(400).json({ message: "File type is required" });
+      if (!fileData || typeof fileData !== "string") return res.status(400).json({ message: "File data is required" });
+      // Compute actual decoded size from the base64 payload — never trust a
+      // client-supplied sizeBytes (it could be falsified to bypass the cap).
+      const padding = (fileData.endsWith("==") ? 2 : fileData.endsWith("=") ? 1 : 0);
+      const size = Math.max(0, Math.floor(fileData.length * 3 / 4) - padding);
+      // 30MB cap — base64 inflates ~33%, server body limit is 50MB.
+      if (size > 30 * 1024 * 1024) return res.status(413).json({ message: "File is too large. Maximum size is 30MB." });
+      const doc = await storage.createEmployeeDocument({
+        companyId: user.companyId,
+        employeeId: req.params.id,
+        name: name.trim(),
+        category: typeof category === "string" && category ? category : "other",
+        mimeType,
+        sizeBytes: size,
+        fileData,
+        notes: typeof notes === "string" ? notes : null,
+        uploadedBy: user.id,
+        uploadedAt: new Date().toISOString(),
+      } as any);
+      const { fileData: _omit, ...safe } = doc as any;
+      res.json(safe);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Get a single document including fileData (used to view/download)
+  app.get("/api/employees/:id/documents/:docId", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const target = await storage.getUser(req.params.id);
+      if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const doc = await storage.getEmployeeDocument(req.params.docId, user.companyId);
+      if (!doc || doc.employeeId !== req.params.id) return res.status(404).json({ message: "Not found" });
+      res.json(doc);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Delete a document
+  app.delete("/api/employees/:id/documents/:docId", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const target = await storage.getUser(req.params.id);
+      if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      // Resolve the doc first and confirm it belongs to BOTH this employee AND
+      // this tenant. Without the employeeId check, an admin could delete a doc
+      // belonging to a different employee in the same company by guessing docId.
+      const doc = await storage.getEmployeeDocument(req.params.docId, user.companyId);
+      if (!doc || doc.employeeId !== req.params.id) return res.status(404).json({ message: "Not found" });
+      const ok = await storage.deleteEmployeeDocument(req.params.docId, user.companyId);
+      if (!ok) return res.status(404).json({ message: "Not found" });
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ── Per-Employee Training Summary (admin read-only) ──────────────────────
+  app.get("/api/employees/:id/training", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const target = await storage.getUser(req.params.id);
+      if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const summary = await storage.getEmployeeTrainingSummary(req.params.id, user.companyId);
+      res.json(summary);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // ── Admin Management ─────────────────────────────────────────────────────
   app.get("/api/admins", requireRole("admin"), async (req, res) => {
     const user = req.user as any;

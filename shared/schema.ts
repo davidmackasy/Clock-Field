@@ -2131,3 +2131,25 @@ export type InsertTrainingQuizQuestion = z.infer<typeof insertTrainingQuizQuesti
 export const insertTrainingQuizAttemptSchema = createInsertSchema(trainingQuizAttempts).omit({ id: true });
 export type TrainingQuizAttempt = typeof trainingQuizAttempts.$inferSelect;
 export type InsertTrainingQuizAttempt = z.infer<typeof insertTrainingQuizAttemptSchema>;
+
+// ── Employee Documents ───────────────────────────────────────────────────────
+// HR/profile documents (resume, ID, certifications, contracts, etc.)
+// Files are stored as base64 in fileData (consistent with trainingModuleAssets).
+
+export const employeeDocuments = pgTable("employee_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  employeeId: varchar("employee_id").notNull(),
+  name: text("name").notNull(),
+  category: text("category").notNull().default("other"),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull().default(0),
+  fileData: text("file_data").notNull(),
+  notes: text("notes"),
+  uploadedBy: varchar("uploaded_by").notNull(),
+  uploadedAt: text("uploaded_at").notNull(),
+});
+
+export const insertEmployeeDocumentSchema = createInsertSchema(employeeDocuments).omit({ id: true });
+export type EmployeeDocument = typeof employeeDocuments.$inferSelect;
+export type InsertEmployeeDocument = z.infer<typeof insertEmployeeDocumentSchema>;

@@ -91,6 +91,8 @@ import {
   type TrainingQuiz, type InsertTrainingQuiz,
   type TrainingQuizQuestion, type InsertTrainingQuizQuestion,
   type TrainingQuizAttempt, type InsertTrainingQuizAttempt,
+  employeeDocuments,
+  type EmployeeDocument, type InsertEmployeeDocument,
   quoteRequestWalkthroughs, quoteRequestWalkthroughPhotos, quoteRequestWalkthroughSections,
   type QuoteRequestWalkthrough, type InsertQuoteRequestWalkthrough,
   type QuoteRequestWalkthroughPhoto, type InsertQuoteRequestWalkthroughPhoto,
@@ -502,6 +504,15 @@ export interface IStorage {
   getTrainingQuizAttempt(id: string): Promise<TrainingQuizAttempt | undefined>;
   getTrainingQuizAttempts(quizId: string, employeeId?: string, publicLearnerId?: string): Promise<TrainingQuizAttempt[]>;
   hasPassedTrainingQuiz(quizId: string, employeeId?: string, publicLearnerId?: string): Promise<boolean>;
+
+  // Employee documents (HR/profile files)
+  listEmployeeDocuments(employeeId: string, companyId: string): Promise<Omit<EmployeeDocument, "fileData">[]>;
+  getEmployeeDocument(id: string, companyId: string): Promise<EmployeeDocument | undefined>;
+  createEmployeeDocument(data: InsertEmployeeDocument): Promise<EmployeeDocument>;
+  deleteEmployeeDocument(id: string, companyId: string): Promise<boolean>;
+
+  // Per-employee training summary (read-only aggregation, admin view)
+  getEmployeeTrainingSummary(employeeId: string, companyId: string): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2605,6 +2616,50 @@ export class DatabaseStorage implements IStorage {
     if (publicLearnerId) conditions.push(eq(trainingQuizAttempts.publicLearnerId, publicLearnerId));
     const [row] = await db.select({ id: trainingQuizAttempts.id }).from(trainingQuizAttempts).where(and(...conditions)).limit(1);
     return !!row;
+  }
+
+  // ── Employee Documents ────────────────────────────────────────────────────
+  async listEmployeeDocuments(employeeId: string, companyId: string): Promise<Omit<EmployeeDocument, "fileData">[]> {
+    const rows = await db.select({
+      id: employeeDocuments.id,
+      companyId: employeeDocuments.companyId,
+      employeeId: employeeDocuments.employeeId,
+      name: employeeDocuments.name,
+      category: employeeDocuments.category,
+      mimeType: employeeDocuments.mimeType,
+      sizeBytes: employeeDocuments.sizeBytes,
+      notes: employeeDocuments.notes,
+      uploadedBy: employeeDocuments.uploadedBy,
+      uploadedAt: employeeDocuments.uploadedAt,
+    }).from(employeeDocuments)
+      .where(and(eq(employeeDocuments.employeeId, employeeId), eq(employeeDocuments.companyId, companyId)))
+      .orderBy(desc(employeeDocuments.uploadedAt));
+    return rows as any;
+  }
+
+  async getEmployeeDocument(id: string, companyId: string): Promise<EmployeeDocument | undefined> {
+    const [row] = await db.select().from(employeeDocuments)
+      .where(and(eq(employeeDocuments.id, id), eq(employeeDocuments.companyId, companyId)));
+    return row;
+  }
+
+  async createEmployeeDocument(data: InsertEmployeeDocument): Promise<EmployeeDocument> {
+    const [row] = await db.insert(employeeDocuments).values(data as any).returning();
+    return row;
+  }
+
+  async deleteEmployeeDocument(id: string, companyId: string): Promise<boolean> {
+    const result = await db.delete(employeeDocuments)
+      .where(and(eq(employeeDocuments.id, id), eq(employeeDocuments.companyId, companyId)))
+      .returning({ id: employeeDocuments.id });
+    return result.length > 0;
+  }
+
+  // ── Per-Employee Training Summary (admin read-only view) ──────────────────
+  async getEmployeeTrainingSummary(employeeId: string, companyId: string): Promise<any[]> {
+    // Reuse the same logic as the employee's own "my-courses" list so the admin
+    // sees identical progress/status/certificate state for that employee.
+    return this.getMyTrainingCourses(employeeId, companyId);
   }
 }
 

@@ -56,7 +56,15 @@ app.use((req, res, next) => {
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        // Redact endpoints whose responses contain large/sensitive payloads
+        // (employee document file data, training module assets, etc.) to keep
+        // PII out of server logs and prevent log bloat.
+        const isDocumentDetail = /^\/api\/employees\/[^/]+\/documents\/[^/]+$/.test(path) && req.method === "GET";
+        if (isDocumentDetail) {
+          logLine += ` :: [redacted]`;
+        } else {
+          logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        }
       }
 
       log(logLine);
