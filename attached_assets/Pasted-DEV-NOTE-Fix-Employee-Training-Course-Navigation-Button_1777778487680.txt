@@ -1,0 +1,113 @@
+DEV NOTE: Fix Employee Training Course Navigation Buttons
+
+Scope:
+Only fix Training Hub on the employee side.
+Do not touch admin Training Hub.
+Do not touch public link unless the same shared component is required.
+Do not affect anything else in ClockField.
+
+Issue:
+Employee can open an assigned course, but there are no buttons to:
+
+Start module
+Mark module complete
+Go to next module
+Go to previous module
+Continue course
+Take final quiz
+
+Because of this, employee cannot properly complete modules, so quiz stays locked.
+
+Fix Requirements
+
+Add module action buttons on employee course page
+
+For every module view, show buttons:
+
+Previous
+Mark Complete
+Next
+
+Button behavior:
+
+Previous:
+Moves employee to previous module.
+
+Next:
+Moves employee to next module.
+
+Mark Complete:
+Saves module completion for the logged-in employee.
+Updates progress count immediately.
+Shows completed checkmark.
+Unlocks next module.
+If last module is completed, unlock Final Quiz.
+
+Add sticky mobile action bar
+
+On mobile, add sticky bottom action bar above the existing bottom navigation.
+
+It should show:
+
+Previous
+Mark Complete / Completed
+Next
+
+If employee is on final module:
+Show “Finish Modules” or “Take Quiz” after completion.
+
+Make sure it does not cover the Home, Schedule, Action, Reports, Profile nav.
+
+Fix module list click behavior
+
+When employee taps a module from “All Modules”:
+
+Open that module content.
+Show its video/text/slides.
+Show the action buttons.
+Do not only show the module title.
+
+Fix progress text
+
+Top header currently shows:
+
+0/5 modules • 0% complete • quiz
+
+This must update after each completion.
+
+Example:
+
+1/5 modules • 20% complete
+5/5 modules • 100% complete • quiz unlocked
+
+Final quiz unlock
+
+After all required modules are complete:
+
+Remove locked card.
+Show “Take Final Quiz” button.
+Allow employee to start quiz.
+
+Save progress for employee
+
+When Mark Complete is clicked, call the Training Hub progress endpoint with:
+
+course_id
+module_id
+employee_id from logged-in employee session
+status = completed
+
+Do not create public learner progress for logged-in employees.
+
+Do not affect admin side
+
+This fix is only for the employee course-taking screen.
+
+Expected result:
+Employee opens course.
+Employee sees Module 1 content.
+Employee can tap Mark Complete.
+Employee can tap Next.
+Progress updates from 0/5 to 1/5.
+After Module 5 is complete, quiz unlocks.
+Employee can take final quiz.

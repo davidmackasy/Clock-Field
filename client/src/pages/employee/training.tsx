@@ -222,7 +222,7 @@ export default function EmployeeTraining() {
     const completedSet = new Set(modules.filter(m => m.completed).map(m => m.id));
 
     return (
-      <div className="min-h-screen bg-background pb-24">
+      <div className="min-h-screen bg-background pb-40">
         {/* Header */}
         <div className="sticky top-0 z-10 bg-background border-b border-border px-4 py-3 flex items-center gap-3">
           <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setSelectedCourseId(null)} data-testid="btn-back-to-list">
@@ -402,9 +402,9 @@ export default function EmployeeTraining() {
           </div>
         )}
 
-        {/* Sticky bottom action (modules only) */}
+        {/* Sticky bottom action (modules only) — sits above the mobile bottom nav */}
         {mod && !isQuizStep && (
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border">
+          <div className="fixed bottom-16 left-0 right-0 z-40 p-3 bg-background border-t border-border safe-area-bottom">
             <div className="max-w-3xl mx-auto flex gap-3">
               {selectedModuleIdx > 0 && (
                 <Button variant="outline" className="flex-1" onClick={() => setSelectedModuleIdx(i => i - 1)} data-testid="btn-prev-module">
@@ -437,7 +437,7 @@ export default function EmployeeTraining() {
           </div>
         )}
         {isQuizStep && (
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border">
+          <div className="fixed bottom-16 left-0 right-0 z-40 p-3 bg-background border-t border-border safe-area-bottom">
             <div className="max-w-3xl mx-auto">
               <Button variant="outline" className="w-full" onClick={() => setSelectedModuleIdx(modules.length - 1)} data-testid="btn-back-to-modules">
                 ← Back to Modules
