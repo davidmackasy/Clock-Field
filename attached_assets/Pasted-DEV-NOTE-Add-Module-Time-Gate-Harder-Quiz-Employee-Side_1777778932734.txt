@@ -1,0 +1,154 @@
+DEV NOTE: Add Module Time Gate + Harder Quiz (Employee Side Only)
+
+Scope
+Only update Training Hub (employee + quiz logic).
+Do not touch admin, payroll, schedules, reports, or anything else.
+
+Add 15-Second Minimum Time Gate per Module
+
+Goal
+Employee must spend at least 15 seconds on a module before they can mark it complete.
+
+Behavior
+
+When a module opens:
+Start a timer (per module, per employee)
+Disable “Mark Complete” button initially
+Button shows: “Read or listen for 15s to continue”
+After 15 seconds:
+Enable button
+Button turns active (blue)
+Text changes to: “Mark Complete”
+
+UI
+
+Show a small timer indicator:
+“0:15” countdown
+or progress bar filling
+Mobile (important):
+Keep timer inside the sticky bottom bar
+Do not block navigation buttons
+
+Edge Cases
+
+If user switches modules:
+Reset timer for new module
+If user refreshes:
+Resume timer if possible using local state
+If module already completed:
+Do not apply timer again
+
+Implementation
+
+Frontend:
+
+Track moduleStartTime
+Compute elapsed time
+Enable button when elapsed >= 15 seconds
+
+Backend:
+
+On completion request:
+Optionally validate elapsed time (recommended for security)
+Reject completion if < 15 seconds with JSON error
+Optional: Auto-complete when audio finishes
+
+If using text-to-audio:
+
+If audio duration > 15s:
+Enable complete button when audio reaches 15s mark
+Do not auto-complete
+User must still click “Mark Complete”
+Make Quiz Harder
+
+Goal
+Improve quiz quality so employees actually understand content.
+
+Changes
+
+A. Increase difficulty level in AI generation
+
+Update AI prompt:
+
+Use scenario-based questions
+Include “what would you do” questions
+Avoid obvious answers
+Add explanation for each answer
+
+B. Mix question types
+
+Per quiz (default 15 questions):
+
+8 Multiple choice (4 options)
+4 Scenario-based
+2 True/False
+1 Short answer (optional if supported)
+
+C. Add trick validation
+
+Avoid repeating same wording from modules
+Rephrase questions
+Use real cleaning situations
+
+Example upgrade
+
+Instead of:
+“What should you do if floor is wet?”
+
+Use:
+“You are cleaning a washroom and notice a wet floor near the entrance. What is the safest first action?”
+
+D. Add explanation requirement
+
+Each question should include:
+
+Correct answer
+Explanation
+Why others are wrong (optional but preferred)
+
+E. Increase strictness
+
+Default:
+
+Passing score = 80% → increase to 85% (optional but recommended)
+
+Allow admin override.
+
+Add Quiz UX Improvements
+Show progress:
+“Question 3 of 15”
+Disable skipping if required
+Show:
+“Review answers before submit”
+After submit:
+Show score
+Show correct/incorrect
+Show explanations
+Completion Flow Update
+
+Course completion now requires:
+
+All required modules completed
+Each module had at least 15 seconds engagement
+Final quiz passed
+
+Only then:
+
+Mark course complete
+Unlock certificate
+Do Not Break Anything
+Do not change admin builder
+Do not change database structure unless needed
+Do not affect public link unless shared logic applies
+Keep everything isolated to Training Hub
+
+Expected Result
+
+Employee opens module
+Sees timer (15 seconds)
+Cannot click complete immediately
+After 15 seconds → button activates
+Employee completes module → moves next
+After all modules → quiz unlocks
+Quiz is harder and more realistic
+Employee passes → course completes → certificate unlocks

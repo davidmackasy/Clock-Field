@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
@@ -141,6 +141,14 @@ export default function EmployeeTraining() {
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [selectedModuleIdx, setSelectedModuleIdx] = useState(0);
   const [moduleListOpen, setModuleListOpen] = useState(false);
+  // Time-gate: 15-second minimum engagement per module before "Mark Complete" is enabled.
+  const MIN_GATE_SECONDS = 15;
+  const [moduleStartTimes, setModuleStartTimes] = useState<Record<string, number>>({});
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(id);
+  }, []);
 
   const { data: myCourses = [], isLoading } = useQuery<MyCourse[]>({
     queryKey: ["/api/training/my-courses"],
@@ -152,8 +160,12 @@ export default function EmployeeTraining() {
   });
 
   const completeMutation = useMutation({
-    mutationFn: async (moduleId: string) => {
-      const r = await apiRequest("POST", `/api/training/my-courses/${selectedCourseId}/progress/${moduleId}`);
+    mutationFn: async (args: { moduleId: string; elapsedSeconds: number }) => {
+      const r = await apiRequest(
+        "POST",
+        `/api/training/my-courses/${selectedCourseId}/progress/${args.moduleId}`,
+        { elapsedSeconds: args.elapsedSeconds },
+      );
       return r.json() as Promise<{ ok: true; moduleId: string; modulesComplete: boolean; completedModules: number; totalModules: number; certificate: any }>;
     },
     onSuccess: async (data) => {
@@ -213,6 +225,14 @@ export default function EmployeeTraining() {
     return data;
   };
 
+  // Initialize the per-module timer the first time the user lands on a not-yet-completed module.
+  useEffect(() => {
+    if (!courseView) return;
+    const cur = courseView.modules[selectedModuleIdx];
+    if (!cur || cur.completed) return;
+    setModuleStartTimes(prev => prev[cur.id] ? prev : { ...prev, [cur.id]: Date.now() });
+  }, [courseView, selectedModuleIdx]);
+
   if (selectedCourseId && courseView) {
     const { course, modules } = courseView;
     const hasQuiz = !!quizPayload;
@@ -220,6 +240,11 @@ export default function EmployeeTraining() {
     const isQuizStep = hasQuiz && selectedModuleIdx === modules.length;
     const mod = isQuizStep ? null : modules[selectedModuleIdx];
     const completedSet = new Set(modules.filter(m => m.completed).map(m => m.id));
+    // Gate calculation for the current module
+    const modStart = mod ? moduleStartTimes[mod.id] : undefined;
+    const elapsedSec = mod && modStart ? Math.floor((now - modStart) / 1000) : 0;
+    const gatePassed = !mod || mod.completed || elapsedSec >= MIN_GATE_SECONDS;
+    const remainingSec = Math.max(0, MIN_GATE_SECONDS - elapsedSec);
 
     return (
       <div className="min-h-screen bg-background pb-40">
@@ -413,12 +438,30 @@ export default function EmployeeTraining() {
               )}
               {!mod.completed ? (
                 <Button
-                  className="flex-1"
-                  onClick={() => completeMutation.mutate(mod.id)}
-                  disabled={completeMutation.isPending}
+                  className="flex-1 relative overflow-hidden"
+                  onClick={() => completeMutation.mutate({ moduleId: mod.id, elapsedSeconds: elapsedSec })}
+                  disabled={completeMutation.isPending || !gatePassed}
                   data-testid="btn-mark-complete">
-                  {completeMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <CheckCircle2 className="w-4 h-4 mr-1" />}
-                  Mark Complete
+                  {/* Filling progress bar behind the label while the 15s gate is active */}
+                  {!gatePassed && (
+                    <span
+                      aria-hidden
+                      className="absolute inset-y-0 left-0 bg-primary/15 transition-[width] duration-500 ease-linear"
+                      style={{ width: `${Math.min(100, (elapsedSec / MIN_GATE_SECONDS) * 100)}%` }}
+                    />
+                  )}
+                  <span className="relative flex items-center justify-center">
+                    {completeMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                    ) : !gatePassed ? (
+                      <Clock className="w-4 h-4 mr-1" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 mr-1" />
+                    )}
+                    {!gatePassed
+                      ? `Read or listen · 0:${String(remainingSec).padStart(2, "0")}`
+                      : "Mark Complete"}
+                  </span>
                 </Button>
               ) : selectedModuleIdx < modules.length - 1 ? (
                 <Button className="flex-1" onClick={() => setSelectedModuleIdx(i => i + 1)} data-testid="btn-next-module">

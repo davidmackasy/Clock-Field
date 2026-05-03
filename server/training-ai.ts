@@ -147,6 +147,8 @@ export async function generateCourseDraft(input: GenerateCourseInput): Promise<A
     "Always return valid JSON matching the requested schema. Never invent specific regulation citations or proprietary product names.",
     "Modules must be PRACTICAL, DETAILED, and USEFUL — not generic filler. Each lesson should give an employee everything they need to do the work correctly.",
     "Lesson text MUST be 200-400 words per module, organized as flowing paragraphs (not bullets).",
+    // Quiz quality bar — harder, scenario-driven, real-world.
+    "Quiz questions must be RIGOROUS: prefer realistic on-the-job scenarios over factual recall. Avoid obvious or giveaway answers. Rephrase concepts in the questions instead of copying module wording verbatim. Every distractor in a multiple_choice question must be plausible to someone who only skimmed the module. Every question MUST include a 1-sentence explanation of why the correct answer is right.",
   ].join(" ");
 
   const typeMixGuidance = includeQuiz ? buildTypeMixGuidance(input.questionTypeMix, quizCount) : "";
@@ -160,7 +162,9 @@ export async function generateCourseDraft(input: GenerateCourseInput): Promise<A
     input.trainingGoal ? `Training goal: ${input.trainingGoal}` : "",
     `Number of modules: ${moduleCount}`,
     includeQuiz
-      ? `Final quiz: ${quizCount} questions based on the modules you generate. Passing score: ${passingScore}%. ${typeMixGuidance}`
+      ? `Final quiz: ${quizCount} questions based on the modules you generate. Passing score: ${passingScore}%. ${typeMixGuidance}\n` +
+        `At least HALF of the multiple_choice questions must be scenario-based — phrased as a real situation the employee would face on the job (e.g. "You arrive at a client site and notice…", "A coworker spills…", "A customer complains that…"). Ask "what is the safest first action" or "what should you do next" rather than asking for a definition.\n` +
+        `Do NOT lift wording verbatim from lessonText; rephrase. Distractors must look plausible. Every question must include an "explanation" string.`
       : `Do NOT include a quiz; return suggestedQuiz: [].`,
     wantImages ? `For each module include an "imagePrompt" — a short visual description an admin could use to find or generate a relevant header image.` : `imagePrompt may be empty string.`,
     ``,
@@ -297,7 +301,8 @@ export async function generateQuizFromCourse(args: {
   const system = [
     "You are an expert quiz designer for employee training courses.",
     tonePreamble(args.tone),
-    "Each question must be answerable from the course content provided. Avoid trick questions.",
+    "Each question must be answerable from the course content provided.",
+    "RIGOR: prefer realistic on-the-job scenarios over factual recall. Avoid obvious or giveaway answers. Do not lift wording verbatim from lesson text — rephrase concepts. Every distractor in a multiple_choice question must be plausible to someone who only skimmed the modules. Every question MUST include a 1-sentence explanation of why the correct answer is right.",
     "Return valid JSON only.",
   ].join(" ");
 
@@ -319,7 +324,9 @@ export async function generateQuizFromCourse(args: {
     ``,
     `Generate ${count} quiz questions covering the modules above.`,
     buildTypeMixGuidance(args.questionTypeMix, count),
-    `Every question must include a 1-sentence explanation.`,
+    `At least HALF of the multiple_choice questions must be scenario-based — phrased as a real situation the employee would face on the job (e.g. "You arrive at a client site and notice…", "A coworker spills…", "A customer complains that…"). Ask "what is the safest first action" or "what should you do next" rather than asking for a definition.`,
+    `Do NOT copy wording verbatim from the module content; rephrase. Distractors must look plausible.`,
+    `Every question must include an "explanation" string of 1 sentence.`,
     ``,
     `Return JSON: { "questions": [ { "questionText", "questionType", "options"?, "correctAnswer", "explanation" } ] }`,
   ].filter(Boolean).join("\n");

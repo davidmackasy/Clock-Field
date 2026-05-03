@@ -10157,6 +10157,19 @@ Return ONLY valid JSON:
       if (user.role !== "employee") return res.status(403).json({ message: "Forbidden" });
       const course = await storage.getTrainingCourse(req.params.courseId);
       if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      // 15-second engagement gate: skip if module already completed (idempotent re-mark allowed).
+      const existingProgress = await storage.getTrainingProgress(req.params.courseId, user.id, undefined);
+      const alreadyCompleted = existingProgress.some(p => p.moduleId === req.params.moduleId);
+      if (!alreadyCompleted) {
+        const elapsed = Number((req.body as any)?.elapsedSeconds);
+        if (!Number.isFinite(elapsed) || elapsed < 15) {
+          return res.status(400).json({
+            message: "Please spend at least 15 seconds reading or listening to this module before marking it complete.",
+            code: "TIME_GATE",
+            requiredSeconds: 15,
+          });
+        }
+      }
       await storage.markModuleComplete(req.params.courseId, req.params.moduleId, user.companyId, user.id, undefined);
       const certificate = await tryIssueTrainingCertificate({
         courseId: req.params.courseId,
