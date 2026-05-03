@@ -58,8 +58,28 @@ function ProgressRing({ pct, size = 36, className = "" }: { pct: number; size?: 
 }
 
 function CourseCard({ course, onClick }: { course: MyCourse; onClick: () => void }) {
-  const statusColor = course.isCompleted ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : course.status === "in_progress" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400";
-  const statusLabel = course.isCompleted ? "Completed" : course.status === "in_progress" ? "In Progress" : "Not Started";
+  // A course is only "really" complete when modules are done AND (if a certificate
+  // is enabled) a certificate has been issued. The backend gates certificate
+  // issuance on quiz pass, so `course.certificate !== null` is a reliable
+  // indicator that the final quiz was passed when one exists.
+  const modulesDone = course.totalModules > 0 && course.completedModules >= course.totalModules;
+  const effectiveCompleted = course.isCompleted && (!course.certificateEnabled || course.certificate !== null);
+  const quizPending = course.isCompleted && course.certificateEnabled && course.certificate === null;
+  const effectivePct = effectiveCompleted ? 100 : quizPending || (modulesDone && !effectiveCompleted) ? Math.min(course.progressPct, 90) : course.progressPct;
+  const statusColor = effectiveCompleted
+    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+    : quizPending
+      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+      : course.status === "in_progress" || course.completedModules > 0
+        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+        : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400";
+  const statusLabel = effectiveCompleted
+    ? "Completed"
+    : quizPending
+      ? "Quiz Required"
+      : course.status === "in_progress" || course.completedModules > 0
+        ? "In Progress"
+        : "Not Started";
   return (
     <div
       className="bg-card border border-border rounded-lg sm:rounded-xl overflow-hidden active:scale-[0.99] transition-all cursor-pointer hover:shadow-sm"
@@ -74,13 +94,13 @@ function CourseCard({ course, onClick }: { course: MyCourse; onClick: () => void
           </div>
         )}
         {course.isRequired && <Badge className="absolute top-1 left-1 sm:top-2 sm:left-2 bg-red-500 text-white text-[9px] sm:text-xs px-1.5 py-0 sm:px-2 sm:py-0.5 leading-tight">Required</Badge>}
-        {course.isCompleted && <div className="absolute inset-0 bg-green-500/10 flex items-center justify-center"><CheckCircle2 className="w-6 h-6 sm:w-10 sm:h-10 text-green-500" /></div>}
+        {effectiveCompleted && <div className="absolute inset-0 bg-green-500/10 flex items-center justify-center"><CheckCircle2 className="w-6 h-6 sm:w-10 sm:h-10 text-green-500" /></div>}
       </div>
       <div className="p-2 sm:p-3">
         <div className="flex items-start justify-between gap-1.5 sm:gap-2">
           <h3 className="font-semibold text-foreground text-[11px] sm:text-sm leading-tight flex-1 line-clamp-2">{course.title}</h3>
-          <ProgressRing pct={course.progressPct} size={24} className="sm:hidden shrink-0" />
-          <ProgressRing pct={course.progressPct} size={32} className="hidden sm:block shrink-0" />
+          <ProgressRing pct={effectivePct} size={24} className="sm:hidden shrink-0" />
+          <ProgressRing pct={effectivePct} size={32} className="hidden sm:block shrink-0" />
         </div>
         <div className="flex flex-wrap items-center gap-1 sm:gap-2 mt-1.5 sm:mt-2">
           <span className={`text-[9px] sm:text-xs px-1.5 sm:px-2 py-0 sm:py-0.5 rounded-full font-medium leading-tight ${statusColor}`}>{statusLabel}</span>
@@ -197,9 +217,17 @@ export default function EmployeeTraining() {
   if (selectedCourseId && courseView) {
     const { course, modules } = courseView;
     const hasQuiz = !!quizPayload;
+    const quizPassed = !!quizPayload?.hasPassed;
     const totalSteps = modules.length + (hasQuiz ? 1 : 0);
     const isQuizStep = hasQuiz && selectedModuleIdx === modules.length;
     const mod = isQuizStep ? null : modules[selectedModuleIdx];
+    // Effective completion display: course is only "100% / Completed" when
+    // modules are done AND (no quiz OR quiz passed). When modules are done
+    // but the quiz hasn't been passed, cap the displayed progress at 90%.
+    const allModulesDone = course.totalModules > 0 && course.completedModules >= course.totalModules;
+    const effectiveCompleted = allModulesDone && (!hasQuiz || quizPassed);
+    const quizPending = allModulesDone && hasQuiz && !quizPassed;
+    const effectivePct = effectiveCompleted ? 100 : quizPending ? Math.min(course.progressPct, 90) : course.progressPct;
     const completedSet = new Set(modules.filter(m => m.completed).map(m => m.id));
     // Gate calculation for the current module
     const modStart = mod ? moduleStartTimes[mod.id] : undefined;
@@ -216,16 +244,20 @@ export default function EmployeeTraining() {
           </Button>
           <div className="flex-1 min-w-0">
             <div className="font-semibold text-sm text-foreground truncate">{course.title}</div>
-            <div className="text-xs text-muted-foreground">{course.completedModules}/{course.totalModules} modules · {course.progressPct}% complete{hasQuiz ? " · quiz" : ""}</div>
+            <div className="text-xs text-muted-foreground">
+              {quizPending
+                ? `Modules: ${course.completedModules}/${course.totalModules} · Quiz required`
+                : `${course.completedModules}/${course.totalModules} modules · ${effectivePct}% complete${hasQuiz ? " · quiz" : ""}`}
+            </div>
           </div>
           <div className="w-8">
-            <ProgressRing pct={course.progressPct} size={30} />
+            <ProgressRing pct={effectivePct} size={30} />
           </div>
         </div>
 
         {/* Progress bar */}
         <div className="w-full h-1 bg-muted">
-          <div className="h-full bg-primary transition-all duration-500" style={{ width: `${course.progressPct}%` }} />
+          <div className="h-full bg-primary transition-all duration-500" style={{ width: `${effectivePct}%` }} />
         </div>
 
         {courseLoading ? (
@@ -453,9 +485,16 @@ export default function EmployeeTraining() {
     );
   }
 
-  // Course list view
-  const assigned = myCourses.filter(c => c.status !== "completed");
-  const completed = myCourses.filter(c => c.isCompleted);
+  // Course list view. A course is only "really" complete (and shown in the
+  // Completed section) when modules are done AND, if a certificate is enabled,
+  // a certificate has been issued. The backend gates certificate issuance on
+  // quiz pass, so `certificate !== null` reliably reflects quiz pass when one
+  // exists. Otherwise (modules done but quiz still pending) the course stays
+  // in the Assigned/In Progress group.
+  const isReallyCompleted = (c: MyCourse) => c.isCompleted && (!c.certificateEnabled || c.certificate !== null);
+  const completed = myCourses.filter(isReallyCompleted);
+  const assigned = myCourses.filter(c => !isReallyCompleted(c));
+  const inProgressCount = myCourses.filter(c => !isReallyCompleted(c) && (c.status === "in_progress" || c.completedModules > 0)).length;
 
   return (
     <div className="p-4 pb-24 space-y-6 max-w-5xl mx-auto">
@@ -469,7 +508,7 @@ export default function EmployeeTraining() {
         <div className="grid grid-cols-3 gap-3">
           {[
             { label: "Assigned", value: myCourses.length, icon: BookOpen, color: "text-blue-500" },
-            { label: "In Progress", value: myCourses.filter(c => c.status === "in_progress").length, icon: Clock, color: "text-amber-500" },
+            { label: "In Progress", value: inProgressCount, icon: Clock, color: "text-amber-500" },
             { label: "Completed", value: completed.length, icon: Trophy, color: "text-green-500" },
           ].map(s => {
             const Icon = s.icon;
