@@ -12,7 +12,7 @@ import {
   LayoutDashboard, Users, Calendar, ClipboardList,
   DollarSign, Building2, Settings,
   LogOut, MoreHorizontal, Clock, ChevronRight, Users2, BookOpen,
-  CreditCard, Bell, ShieldAlert, Package, Newspaper, FileInput, GraduationCap,
+  CreditCard, Bell, ShieldAlert, Newspaper, FileInput, GraduationCap,
 } from "lucide-react";
 
 const primaryTabs = [
@@ -28,7 +28,6 @@ const navMoreItems = [
   { label: "Management",   href: "/admin/management",   icon: Users2 },
   { label: "Work Log",     href: "/admin/work-log",     icon: BookOpen },
   { label: "Forms",        href: "/admin/quote-forms",  icon: FileInput },
-  { label: "Supplies",      href: "/admin/supplies",     icon: Package },
   { label: "Training Hub", href: "/admin/training",     icon: GraduationCap },
   { label: "Settings",     href: "/admin/settings",     icon: Settings },
   { label: "Publications", href: "/admin/publications", icon: Newspaper },
@@ -39,7 +38,7 @@ const accountMoreItems = [
   { label: "Messages",     href: "/admin/platform-messages",  icon: Bell },
 ];
 
-const workLogPaths       = ["/admin/work-log", "/admin/reports", "/admin/field-notes", "/admin/requests"];
+const workLogPaths       = ["/admin/work-log", "/admin/reports", "/admin/field-notes", "/admin/requests", "/admin/supplies"];
 const publicationsPaths  = ["/admin/publications", "/admin/proposals", "/admin/agreements"];
 
 const pageTitles: Record<string, string> = {
@@ -55,11 +54,12 @@ const pageTitles: Record<string, string> = {
   "/admin/requests":           "Work Log",
   "/admin/reports":            "Work Log",
   "/admin/work-log":           "Work Log",
+  "/admin/work-log/supplies":  "Work Log",
   "/admin/field-notes":        "Work Log",
   "/admin/quote-forms":        "Forms",
   "/admin/proposals":          "Publications",
   "/admin/agreements":         "Publications",
-  "/admin/supplies":           "Supplies",
+  "/admin/supplies":           "Work Log",
   "/admin/training":           "Training Hub",
   "/admin/publications":       "Publications",
   "/admin/settings":           "Settings",

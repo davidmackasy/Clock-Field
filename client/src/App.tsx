@@ -134,6 +134,7 @@ function AdminLayout() {
               <Route path="/admin/proposals" component={AdminProposals} />
               <Route path="/admin/agreements/:id" component={AdminAgreementBuilder} />
               <Route path="/admin/agreements" component={AdminAgreementsPage} />
+              <Route path="/admin/work-log/supplies" component={AdminWorkLogHub} />
               <Route path="/admin/supplies" component={AdminSupplies} />
               <Route path="/admin/publications/:id" component={AdminPublicationEditor} />
               <Route path="/admin/publications" component={AdminPublications} />

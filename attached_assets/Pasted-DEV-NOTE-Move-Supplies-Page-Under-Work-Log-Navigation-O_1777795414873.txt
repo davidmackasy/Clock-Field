@@ -1,0 +1,136 @@
+DEV NOTE: Move Supplies Page Under Work Log (Navigation Only)
+Scope
+Only update navigation structure and page grouping.
+Do not change functionality.
+Do not modify database, APIs, or logic.
+
+Goal
+Remove “Supplies” from main sidebar navigation and place it inside “Work Log” as a sub-section.
+
+Do NOT change:
+Inventory logic
+Requests
+Purchase history
+Location expenses
+Any supply-related data
+Any backend routes
+Any existing UI components inside Supplies
+URLs (if possible)
+Permissions
+Employee-side behavior
+
+
+
+Remove Supplies from Main Navigation
+
+
+Remove “Supplies” from left sidebar:
+Before:
+Dashboard
+Employees
+Schedule
+Attendance
+Payroll
+Clients
+Management
+Work Log
+Forms
+Supplies
+Training Hub
+After:
+Dashboard
+Employees
+Schedule
+Attendance
+Payroll
+Clients
+Management
+Work Log
+Forms
+Training Hub
+
+
+
+Add Supplies Inside Work Log
+
+
+Inside Work Log page, add a tab or sub-navigation:
+Work Log Tabs:
+Overview
+Logs
+Supplies
+or if tabs already exist:
+Add new tab:
+Supplies
+
+
+
+Load Existing Supplies Page Inside Work Log
+
+
+Do NOT rebuild Supplies.
+Reuse existing components:
+Supply Management Overview
+Inventory
+Location Expenses
+Requests
+Purchase History
+Render them inside Work Log → Supplies tab.
+
+
+
+Routing
+
+
+Keep original routes working:
+/supplies → still accessible (for safety)
+/worklog/supplies → new entry point
+Optional:
+Redirect /supplies → /worklog/supplies (only if safe)
+
+
+
+UI Behavior
+
+
+When user clicks Work Log:
+They should see tabs:
+Logs | Supplies
+When clicking Supplies:
+Load full supply management UI
+No visual break
+No layout issues
+
+
+
+Mobile Behavior
+
+
+Work Log page should include Supplies tab in mobile view.
+No overflow
+No broken layout
+
+
+
+Permissions
+
+
+Do not change:
+Who can access supplies
+Admin vs employee visibility
+
+
+
+Expected Result
+
+
+“Supplies” removed from sidebar
+Supplies fully accessible inside Work Log
+All features work exactly the same
+No data loss
+No logic changes
+No broken routes
+
+Strict Rule
+This is a navigation move only.
+Do not refactor or rebuild the Supplies system.

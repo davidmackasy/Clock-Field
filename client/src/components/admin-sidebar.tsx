@@ -20,7 +20,7 @@ import {
   LayoutDashboard, Users, Calendar, ClipboardList,
   DollarSign, Building2,
   Settings, LogOut, Clock, Users2, BookOpen,
-  CreditCard, Bell, ShieldAlert, ChevronRight, Package, Newspaper,
+  CreditCard, Bell, ShieldAlert, ChevronRight, Newspaper,
   FileInput, GraduationCap,
 } from "lucide-react";
 
@@ -34,7 +34,6 @@ const navItems = [
   { title: "Management", url: "/admin/management", icon: Users2 },
   { title: "Work Log", url: "/admin/work-log", icon: BookOpen },
   { title: "Forms", url: "/admin/quote-forms", icon: FileInput },
-  { title: "Supplies", url: "/admin/supplies", icon: Package },
   { title: "Training Hub", url: "/admin/training", icon: GraduationCap },
   { title: "Settings", url: "/admin/settings", icon: Settings },
 ];
@@ -54,7 +53,9 @@ export function AdminSidebar() {
   const initials = user ? `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}` : "A";
 
   // Work Log tab is active for work-log, reports, field-notes, requests sub-paths
-  const workLogPaths = ["/admin/work-log", "/admin/reports", "/admin/field-notes", "/admin/requests"];
+  // Supplies is now nested under Work Log, so the legacy /admin/supplies
+  // path also lights up the Work Log tab.
+  const workLogPaths = ["/admin/work-log", "/admin/reports", "/admin/field-notes", "/admin/requests", "/admin/supplies"];
   const isWorkLogActive = workLogPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
 
   // Publications is active for all publication-related paths

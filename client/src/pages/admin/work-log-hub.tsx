@@ -1,11 +1,12 @@
 import { useSearch, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { FileText, BookOpen, NotebookPen, MessageSquare, ClipboardList } from "lucide-react";
+import { FileText, BookOpen, NotebookPen, MessageSquare, ClipboardList, Package } from "lucide-react";
 import AdminWorkLog from "./work-log";
 import AdminReports from "./reports";
 import AdminFieldNotes from "./field-notes";
 import AdminRequests from "./requests";
 import AdminScheduledFieldNotes from "./scheduled-field-notes";
+import AdminSupplies from "./supplies";
 
 const TABS = [
   { id: "submissions", label: "Submissions", icon: BookOpen },
@@ -13,17 +14,23 @@ const TABS = [
   { id: "field-notes", label: "Field Notes", icon: NotebookPen },
   { id: "requests", label: "Requests", icon: MessageSquare },
   { id: "scheduled-notes", label: "Scheduled Notes", icon: ClipboardList },
+  { id: "supplies", label: "Supplies", icon: Package },
 ];
 
 export default function AdminWorkLogHub() {
   const search = useSearch();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const params = new URLSearchParams(search);
-  const activeTab = params.get("tab") || "submissions";
+  // Supplies uses its own path (/admin/work-log/supplies) so it's
+  // shareable as a clean URL; all other tabs use ?tab= on /admin/work-log.
+  const isSuppliesPath = location.startsWith("/admin/work-log/supplies");
+  const activeTab = isSuppliesPath ? "supplies" : (params.get("tab") || "submissions");
 
   const handleTabChange = (tabId: string) => {
     if (tabId === "submissions") {
       navigate("/admin/work-log");
+    } else if (tabId === "supplies") {
+      navigate("/admin/work-log/supplies");
     } else {
       navigate(`/admin/work-log?tab=${tabId}`);
     }
@@ -63,6 +70,7 @@ export default function AdminWorkLogHub() {
         {activeTab === "field-notes" && <AdminFieldNotes />}
         {activeTab === "requests" && <AdminRequests />}
         {activeTab === "scheduled-notes" && <AdminScheduledFieldNotes />}
+        {activeTab === "supplies" && <AdminSupplies />}
       </div>
     </div>
   );
