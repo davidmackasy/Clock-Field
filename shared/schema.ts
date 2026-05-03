@@ -601,6 +601,20 @@ export const reports = pgTable("reports", {
   clientViewedAt: text("client_viewed_at"),
   // Attachments as JSON array string: [{url, type, name}]
   attachments: text("attachments"),
+  // ── Extended Incident Report fields (13-step wizard) ──────────────────────
+  supervisorNotified: boolean("supervisor_notified").default(false),
+  supervisorName: text("supervisor_name"),
+  incidentTypes: text("incident_types"),            // JSON: string[]
+  peopleInvolved: text("people_involved"),          // JSON: {name,role,contact,injured}[]
+  narrativeSummary: text("narrative_summary"),      // AI-generated paragraph
+  rootCause: text("root_cause"),
+  contributingFactors: text("contributing_factors"),// JSON: string[]
+  correctiveActionsStructured: text("corrective_actions_structured"), // JSON: {action,responsible,deadline,completed}[]
+  clientNotificationDetail: text("client_notification_detail"),       // JSON: object
+  witnessList: text("witness_list"),                // JSON: {name,contact,statementAttached}[]
+  equipmentInvolved: text("equipment_involved"),    // JSON: {item,damageType,estimatedValue,reportedBy}[]
+  areaSecured: boolean("area_secured").default(false),
+  attachmentsChecklist: text("attachments_checklist"),// JSON: object
   // Timestamps
   sentAt: text("sent_at"),
   finalizedAt: text("finalized_at"),

@@ -1,0 +1,363 @@
+DEV NOTE: Incident Report System Upgrade (MATCHING REAL FORM STRUCTURE)
+Based on uploaded report
+
+Objective
+Rebuild the Incident Report feature to match this exact real-world structure while making it digital, clean, fast, and usable across cleaner, admin, and client flows.
+Do not break or affect anything currently working.
+Do not modify unrelated modules.
+
+WHAT THIS REAL REPORT DOES WELL (KEEP THIS STRUCTURE)
+
+From your uploaded file:
+
+Page 1:
+
+Clear header with company branding
+Sectioned layout (Report Info → Incident Overview → People)
+
+Page 3:
+
+Strong operational sections:
+Description
+Witnesses
+Evidence
+Equipment
+Actions
+Root cause
+Recommendations
+
+Page 2:
+
+Client notification
+Final sign-off (multi-role signatures)
+Attachments checklist
+
+Page 4:
+
+Clean narrative summary (story format)
+
+This structure is solid. We rebuild digitally with better UX.
+
+NEW SYSTEM: DIGITAL STRUCTURE (1:1 BUT IMPROVED)
+
+Use step-based UI. No long scrolling.
+
+STEP 1: REPORT INFORMATION (MATCH PAGE 1)
+
+Fields:
+
+Date of Report (auto)
+Time of Report (auto)
+Prepared By (auto from logged user)
+Position (auto or dropdown)
+Supervisor Notified (Yes/No)
+Supervisor Name (if Yes)
+
+UX:
+
+Auto-fill everything possible
+Editable if needed
+
+STEP 2: INCIDENT OVERVIEW
+
+Fields:
+
+Date of Incident
+Time of Incident
+Location (site + address)
+Area (example: mezzanine, washroom, boardroom)
+Incident Type (checkbox multi-select)
+
+Options:
+
+Injury to Worker
+Injury to Others
+Damage to Client Property
+Damage to Building
+Equipment Malfunction
+Near Miss
+Other (text)
+
+STEP 3: PEOPLE INVOLVED
+
+Fields:
+
+Full Name
+Role (cleaner, supervisor, client)
+Contact info
+Injury? (Yes/No)
+
+Allow:
+
+Add multiple people
+Quick add from employee list
+
+STEP 4: DESCRIPTION OF INCIDENT (IMPORTANT)
+
+Two parts:
+
+A. Structured input:
+
+What happened?
+Where did it start?
+What caused it?
+
+B. Auto-generated summary (AI):
+
+Converts inputs into clean paragraph (like page 4)
+
+Example:
+“While carrying a bucket…” style narrative
+
+Editable before saving.
+
+STEP 5: WITNESSES
+
+Fields:
+
+Name
+Contact
+Statement attached? (Yes/No)
+Upload statement (optional)
+
+STEP 6: EVIDENCE
+
+Fields:
+
+Photos upload (grid)
+Video upload (optional)
+Voice note (auto transcription)
+
+Default:
+
+“Yes (Attached)” auto if files uploaded
+
+STEP 7: EQUIPMENT / PROPERTY INVOLVED
+
+Fields:
+
+Item / Area (example: washroom tiles)
+Type of damage (dropdown + text)
+Estimated value ($)
+Who reported it
+
+STEP 8: IMMEDIATE ACTIONS TAKEN
+
+Fields:
+
+Action description
+Equipment used
+Was area secured? (Yes/No)
+
+Add cleaning-specific prompts:
+
+Vacuum used?
+Water extraction?
+Chemical applied?
+
+STEP 9: ROOT CAUSE
+
+Fields:
+
+Root cause (text)
+Contributing factors (optional dropdowns)
+
+Examples:
+
+Human error
+Equipment issue
+Environment hazard
+
+STEP 10: CORRECTIVE ACTIONS
+
+Fields:
+
+Action item
+Responsible person
+Deadline
+Completed (Yes/No)
+
+Example from file:
+“Use closed container when carrying water”
+
+STEP 11: CLIENT NOTIFICATION (MATCH PAGE 2)
+
+Fields:
+
+Client notified? (Yes/No)
+Notified by
+Date/time
+Client response (text)
+
+STEP 12: FINAL SIGN-OFF (CRITICAL)
+
+Signatures:
+
+Employee (required)
+Supervisor (required)
+Manager (optional)
+Safety Officer (optional)
+Client (optional but recommended)
+
+Each signature:
+
+Draw or type
+Timestamp
+IP logged
+
+Auto-lock after signing.
+
+STEP 13: ATTACHMENTS CHECKLIST
+
+Auto-check based on uploads:
+
+Photos
+Witness statements
+Client feedback
+Equipment checklist
+Insurance report
+
+PUBLIC LINK SYSTEM (IMPORTANT)
+
+Generate secure link:
+
+/incident/{token}
+
+Access:
+
+Cleaner:
+
+Fill + sign
+
+Admin:
+
+Full control
+
+Client:
+
+View
+Accept / acknowledge
+Comment
+Sign
+Download PDF
+
+No login required.
+
+CLIENT ACTIONS (ADD THIS)
+
+Client page must include:
+
+Clean read-only report
+Accept / acknowledge button
+Optional comment box
+Optional signature
+Download PDF button
+
+Status updates:
+
+Accepted → shows in admin dashboard
+
+PDF OUTPUT (MUST MATCH REAL FORM)
+
+Design:
+
+Header:
+
+Company logo (from settings)
+Company name
+Address (from settings)
+
+Body:
+
+Same section order as paper form
+Clean spacing
+Section titles bold
+Images in grid
+Narrative section included
+
+Footer:
+
+Contact info
+
+Rules:
+
+No internal IDs
+No overflow
+Proper margins
+Multi-page clean breaks
+Signatures visible
+
+EMAIL FLOW
+
+Trigger emails:
+
+Cleaner:
+
+“Complete incident report”
+Includes link
+
+Admin:
+
+“Report submitted”
+
+Client:
+
+“Incident report available”
+Includes:
+Summary
+Link
+Download option
+
+UI/UX RULES
+
+Stepper UI (top progress bar)
+Mobile-first
+Auto-save every step
+Large touch inputs
+No clutter
+Match Clockfield premium style
+
+DATA MODEL (SIMPLIFIED)
+
+incident_reports:
+
+id
+company_id
+type
+status
+report_info (json)
+incident_overview (json)
+people (json)
+description
+narrative_summary
+witnesses (json)
+evidence_urls
+equipment (json)
+actions_taken
+root_cause
+corrective_actions (json)
+client_notification (json)
+signatures (json)
+
+incident_tokens:
+
+report_id
+token
+role
+expires_at
+
+STRICT RULES
+
+Do not break existing incident reports
+Do not modify other modules
+Do not change auth or payments
+Only improve incident report system
+
+SUCCESS CRITERIA
+
+Matches real-world paper form exactly
+Cleaner fills it fast
+Admin reviews easily
+Client understands instantly
+PDF looks professional when printed
+Signatures work correctly

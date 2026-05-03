@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
+import IncidentReportWizard from "./incident-report-wizard";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
@@ -1001,10 +1002,107 @@ function ReportDetailDialog({ reportId: rptId, open, onClose, employees, clients
                 <SectionHeader label="Incident Summary" sectionKey="summary_section" icon={ClipboardList} />
                 {expandedSections.summary_section && (
                   <div className="space-y-3 px-1 pb-2">
-                    <Field label="Summary" value={rpt.summary} />
+                    <Field label="Narrative Summary" value={rpt.narrativeSummary || rpt.summary} />
                     <Field label="Immediate Action Taken" value={rpt.immediateAction} />
+                    <Field label="Area Secured" value={rpt.areaSecured} />
+                    <Field label="Root Cause" value={rpt.rootCause} />
+                    {rpt.contributingFactors && (() => { try { const arr = JSON.parse(rpt.contributingFactors); return arr?.length > 0 ? <Field label="Contributing Factors" value={arr.join(", ")} /> : null; } catch { return null; } })()}
                     {rpt.employeeStatement && <Field label="Employee Statement" value={rpt.employeeStatement} />}
                     {rpt.clientComments && <Field label="Client Comments" value={rpt.clientComments} />}
+                  </div>
+                )}
+
+                {/* Incident Types (wizard) */}
+                {rpt.incidentTypes && (() => { try { const arr = JSON.parse(rpt.incidentTypes); return arr?.length > 0; } catch { return false; } })() && (
+                  <div className="px-1 pb-2">
+                    <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">Incident Types</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(() => { try { return JSON.parse(rpt.incidentTypes); } catch { return []; } })().map((t: string, i: number) => (
+                        <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200">{t}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* People Involved (wizard) */}
+                {rpt.peopleInvolved && (() => { try { const arr = JSON.parse(rpt.peopleInvolved); return arr?.length > 0; } catch { return false; } })() && (
+                  <div className="px-1 pb-2">
+                    <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">People Involved</p>
+                    <div className="space-y-1.5">
+                      {(() => { try { return JSON.parse(rpt.peopleInvolved); } catch { return []; } })().map((p: any, i: number) => (
+                        <div key={i} className="flex items-center gap-3 text-sm rounded-md bg-muted/30 px-3 py-1.5">
+                          <span className="font-medium">{p.name}</span>
+                          <span className="text-muted-foreground text-xs">{p.role}</span>
+                          {p.injured && <span className="text-xs text-red-600 font-medium">Injured</span>}
+                          {p.contact && <span className="text-xs text-muted-foreground ml-auto">{p.contact}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Witnesses (wizard) */}
+                {rpt.witnessList && (() => { try { const arr = JSON.parse(rpt.witnessList); return arr?.length > 0; } catch { return false; } })() && (
+                  <div className="px-1 pb-2">
+                    <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">Witnesses</p>
+                    <div className="space-y-1.5">
+                      {(() => { try { return JSON.parse(rpt.witnessList); } catch { return []; } })().map((w: any, i: number) => (
+                        <div key={i} className="flex items-center gap-3 text-sm rounded-md bg-muted/30 px-3 py-1.5">
+                          <span className="font-medium">{w.name}</span>
+                          {w.contact && <span className="text-xs text-muted-foreground">{w.contact}</span>}
+                          {w.statementAttached && <span className="text-xs text-green-600 font-medium ml-auto">Statement attached</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Equipment Involved (wizard) */}
+                {rpt.equipmentInvolved && (() => { try { const arr = JSON.parse(rpt.equipmentInvolved); return arr?.length > 0; } catch { return false; } })() && (
+                  <div className="px-1 pb-2">
+                    <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">Equipment / Property Affected</p>
+                    <div className="space-y-1.5">
+                      {(() => { try { return JSON.parse(rpt.equipmentInvolved); } catch { return []; } })().map((eq: any, i: number) => (
+                        <div key={i} className="flex items-center gap-3 text-sm rounded-md bg-muted/30 px-3 py-1.5">
+                          <span className="font-medium">{eq.item}</span>
+                          {eq.damageType && <span className="text-xs text-muted-foreground">{eq.damageType}</span>}
+                          {eq.estimatedValue && <span className="text-xs font-medium ml-auto">${eq.estimatedValue}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Corrective Actions (wizard) */}
+                {rpt.correctiveActionsStructured && (() => { try { const arr = JSON.parse(rpt.correctiveActionsStructured); return arr?.length > 0; } catch { return false; } })() && (
+                  <div className="px-1 pb-2">
+                    <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">Corrective Actions</p>
+                    <div className="space-y-1.5">
+                      {(() => { try { return JSON.parse(rpt.correctiveActionsStructured); } catch { return []; } })().map((ca: any, i: number) => (
+                        <div key={i} className="text-sm rounded-md bg-muted/30 px-3 py-1.5 flex items-start gap-2">
+                          <span className={cn("mt-0.5 w-3 h-3 rounded-full flex-shrink-0 border-2", ca.completed ? "bg-green-500 border-green-500" : "border-muted-foreground")} />
+                          <div className="flex-1 min-w-0">
+                            <span className="font-medium">{ca.action}</span>
+                            {ca.responsible && <span className="text-xs text-muted-foreground ml-2">→ {ca.responsible}</span>}
+                            {ca.deadline && <span className="text-xs text-muted-foreground ml-2">by {ca.deadline}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Client Notification (wizard) */}
+                {rpt.clientNotificationDetail && (() => { try { const obj = JSON.parse(rpt.clientNotificationDetail); return obj?.notified; } catch { return false; } })() && (
+                  <div className="px-1 pb-2">
+                    <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">Client Notification</p>
+                    {(() => { try { const obj = JSON.parse(rpt.clientNotificationDetail); return (
+                      <div className="rounded-md bg-blue-50 border border-blue-200 px-3 py-2 space-y-1 text-sm">
+                        {obj.notifiedBy && <p><span className="text-muted-foreground">Notified by:</span> {obj.notifiedBy}</p>}
+                        {obj.dateTime && <p><span className="text-muted-foreground">Date/Time:</span> {obj.dateTime}</p>}
+                        {obj.clientResponse && <p><span className="text-muted-foreground">Response:</span> {obj.clientResponse}</p>}
+                      </div>
+                    ); } catch { return null; } })()}
                   </div>
                 )}
 
@@ -1462,6 +1560,7 @@ export default function AdminReports() {
   const { user } = useAuth();
   const [location] = useLocation();
   const [createOpen, setCreateOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
@@ -1506,9 +1605,14 @@ export default function AdminReports() {
           <h1 className="text-2xl font-bold text-foreground">Reports</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Create, manage, and track reports across your team</p>
         </div>
-        <Button onClick={() => setCreateOpen(true)} data-testid="button-new-report">
-          <Plus className="w-4 h-4 mr-2" />New Report
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setWizardOpen(true)} data-testid="button-incident-wizard" className="hidden sm:flex">
+            <AlertTriangle className="w-4 h-4 mr-2 text-orange-500" />Incident Report
+          </Button>
+          <Button onClick={() => setCreateOpen(true)} data-testid="button-new-report">
+            <Plus className="w-4 h-4 mr-2" />New Report
+          </Button>
+        </div>
       </div>
 
       {/* Section nav */}
@@ -1669,6 +1773,9 @@ export default function AdminReports() {
           clients={clients}
           locations={locations}
         />
+      )}
+      {wizardOpen && (
+        <IncidentReportWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
       )}
       {selectedId && (
         <ReportDetailDialog
