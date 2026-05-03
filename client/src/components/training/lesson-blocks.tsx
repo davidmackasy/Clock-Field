@@ -8,6 +8,7 @@ export type LessonBlock = {
   assetData: string | null;
   caption: string | null;
   imagePrompt: string | null;
+  imageSize: string | null;
   galleryJson: string | null;
   checklistJson: string | null;
   stepsJson: string | null;
@@ -55,28 +56,36 @@ function AIBlock({ title, content }: { title?: string | null; content?: string |
   );
 }
 
-function ImageBlock({ title, caption, imageData }: { title?: string | null; caption?: string | null; imageData?: string | null }) {
+// Image size variants control width + height. Hero is a wide banner; small is
+// inline (max ~24rem). Anything unrecognised falls back to medium.
+function imageSizeClasses(size?: string | null) {
+  switch (size) {
+    case "small":  return { wrap: "max-w-sm",  img: "max-h-56 object-cover" };
+    case "large":  return { wrap: "w-full",    img: "max-h-[32rem] object-cover" };
+    case "hero":   return { wrap: "w-full",    img: "h-72 sm:h-96 object-cover" };
+    case "medium":
+    default:       return { wrap: "w-full",    img: "max-h-96 object-cover" };
+  }
+}
+
+function ImageBlock({ title, caption, imageData, imageSize }: { title?: string | null; caption?: string | null; imageData?: string | null; imageSize?: string | null }) {
   if (!imageData) return null;
+  const sz = imageSizeClasses(imageSize);
   return (
-    <figure className="bg-card border border-border rounded-xl overflow-hidden" data-testid="block-image">
+    <figure className={`bg-card border border-border rounded-xl overflow-hidden ${sz.wrap}`} data-testid="block-image">
       {title && <figcaption className="px-4 pt-3 text-sm font-semibold text-foreground">{title}</figcaption>}
-      <img src={imageData} alt={caption ?? title ?? ""} className="w-full max-h-96 object-cover" />
+      <img src={imageData} alt={caption ?? title ?? ""} className={`w-full ${sz.img}`} />
       {caption && <figcaption className="px-4 py-2 text-xs text-muted-foreground italic">{caption}</figcaption>}
     </figure>
   );
 }
 
-function ImagePromptBlock({ title, imagePrompt }: { title?: string | null; imagePrompt?: string | null }) {
-  if (!imagePrompt) return null;
-  return (
-    <div className="bg-muted/40 border border-dashed border-border rounded-xl p-4 flex items-start gap-3" data-testid="block-image-prompt">
-      <ImageIcon className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" />
-      <div className="min-w-0">
-        <div className="text-xs uppercase tracking-wider text-muted-foreground mb-0.5">{title || "Image suggested"}</div>
-        <div className="text-sm text-foreground italic">{imagePrompt}</div>
-      </div>
-    </div>
-  );
+// Backwards-compat: legacy `image_prompt` blocks are no longer shown to
+// learners as raw "Suggested image" descriptions. They render as nothing
+// (they only matter inside the admin editor, where the admin can convert
+// them into real images via the Generate Image button).
+function ImagePromptBlock(_: { title?: string | null; imagePrompt?: string | null }) {
+  return null;
 }
 
 function GalleryBlock({ title, galleryJson }: { title?: string | null; galleryJson?: string | null }) {
@@ -179,7 +188,7 @@ export function LessonBlocks({ blocks, fallbackText, fallbackAssets }: {
           case "text":           node = <TextBlock title={b.title} content={b.content} />; break;
           case "safety_tip":     node = <SafetyBlock title={b.title} content={b.content} />; break;
           case "ai_explanation": node = <AIBlock title={b.title} content={b.content} />; break;
-          case "image":          node = <ImageBlock title={b.title} caption={b.caption} imageData={b.assetData} />; break;
+          case "image":          node = <ImageBlock title={b.title} caption={b.caption} imageData={b.assetData} imageSize={b.imageSize} />; break;
           case "image_prompt":   node = <ImagePromptBlock title={b.title} imagePrompt={b.imagePrompt} />; break;
           case "gallery":        node = <GalleryBlock title={b.title} galleryJson={b.galleryJson} />; break;
           case "checklist":      node = <ChecklistBlock title={b.title} checklistJson={b.checklistJson} />; break;
@@ -205,6 +214,8 @@ export function buildLessonScript(opts: { title?: string | null; description?: s
   } else {
     const sorted = [...blocks].sort((a, b) => a.sortOrder - b.sortOrder);
     for (const b of sorted) {
+      // image_prompt blocks are admin-only scaffolding — never read aloud.
+      if (b.type === "image_prompt") continue;
       if (b.title) parts.push(b.title + ".");
       if (b.type === "text" || b.type === "safety_tip" || b.type === "ai_explanation") {
         if (b.content) parts.push(b.content);

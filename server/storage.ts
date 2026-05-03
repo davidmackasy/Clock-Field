@@ -81,12 +81,13 @@ import {
   trainingCourses, trainingModules, trainingModuleAssets, trainingAssignments,
   trainingProgress, trainingPublicLearners, trainingCertificates,
   trainingQuizzes, trainingQuizQuestions, trainingQuizAttempts,
-  trainingLessonBlocks, trainingModuleAudio,
+  trainingLessonBlocks, trainingModuleAudio, trainingImageCache,
   type TrainingCourse, type InsertTrainingCourse,
   type TrainingModule, type InsertTrainingModule,
   type TrainingModuleAsset, type InsertTrainingModuleAsset,
   type TrainingLessonBlock, type InsertTrainingLessonBlock,
   type TrainingModuleAudio, type InsertTrainingModuleAudio,
+  type TrainingImageCache, type InsertTrainingImageCache,
   type TrainingAssignment, type InsertTrainingAssignment,
   type TrainingProgress, type InsertTrainingProgress,
   type TrainingPublicLearner, type InsertTrainingPublicLearner,
@@ -520,6 +521,10 @@ export interface IStorage {
   // Training module audio cache
   getCachedModuleAudio(moduleId: string, contentHash: string): Promise<TrainingModuleAudio | undefined>;
   upsertModuleAudio(data: InsertTrainingModuleAudio): Promise<TrainingModuleAudio>;
+
+  // Training image cache (AI-generated images, keyed by prompt hash)
+  getCachedTrainingImage(companyId: string, promptHash: string): Promise<TrainingImageCache | undefined>;
+  insertCachedTrainingImage(data: InsertTrainingImageCache): Promise<TrainingImageCache>;
 
   // Employee documents (HR/profile files)
   listEmployeeDocuments(employeeId: string, companyId: string): Promise<Omit<EmployeeDocument, "fileData">[]>;
@@ -2808,6 +2813,18 @@ export class DatabaseStorage implements IStorage {
     // One cache row per module — replace any existing rows.
     await db.delete(trainingModuleAudio).where(eq(trainingModuleAudio.moduleId, data.moduleId));
     const [row] = await db.insert(trainingModuleAudio).values(data as any).returning();
+    return row;
+  }
+
+  // ── Training Image Cache ──────────────────────────────────────────────────
+  async getCachedTrainingImage(companyId: string, promptHash: string): Promise<TrainingImageCache | undefined> {
+    const [row] = await db.select().from(trainingImageCache)
+      .where(and(eq(trainingImageCache.companyId, companyId), eq(trainingImageCache.promptHash, promptHash)));
+    return row;
+  }
+
+  async insertCachedTrainingImage(data: InsertTrainingImageCache): Promise<TrainingImageCache> {
+    const [row] = await db.insert(trainingImageCache).values(data as any).returning();
     return row;
   }
 }

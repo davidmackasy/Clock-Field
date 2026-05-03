@@ -10266,6 +10266,12 @@ Return ONLY valid JSON:
     if (!lenOK(body?.caption, 1000)) return { ok: false, message: "Caption too long" };
     if (!lenOK(body?.imagePrompt, 2000)) return { ok: false, message: "Image prompt too long" };
     if (!lenOK(body?.assetData, MAX_IMAGE_DATA)) return { ok: false, message: "Image too large" };
+    if (body?.imageSize != null) {
+      const allowed = ["small", "medium", "large", "hero"];
+      if (typeof body.imageSize !== "string" || !allowed.includes(body.imageSize)) {
+        return { ok: false, message: "Invalid image size" };
+      }
+    }
     if (!lenOK(body?.galleryJson, MAX_JSON_FIELD)) return { ok: false, message: "Gallery too large" };
     if (!lenOK(body?.checklistJson, MAX_TEXT)) return { ok: false, message: "Checklist too long" };
     if (!lenOK(body?.stepsJson, MAX_TEXT * 4)) return { ok: false, message: "Steps too long" };
@@ -10293,6 +10299,7 @@ Return ONLY valid JSON:
         assetData: req.body.assetData ?? null,
         caption: req.body.caption ?? null,
         imagePrompt: req.body.imagePrompt ?? null,
+        imageSize: req.body.imageSize ?? null,
         galleryJson: req.body.galleryJson ?? null,
         checklistJson: req.body.checklistJson ?? null,
         stepsJson: req.body.stepsJson ?? null,
@@ -10313,8 +10320,16 @@ Return ONLY valid JSON:
       const v = validateBlockPayload(req.body);
       if (!v.ok) return res.status(400).json({ message: v.message });
       const update: any = { updatedAt: trainingNow() };
-      const editable = ["title", "content", "assetData", "caption", "imagePrompt", "galleryJson", "checklistJson", "stepsJson", "sortOrder"];
+      // `type` is editable only to support converting an `image_prompt` block
+      // into an `image` block once an image has been generated for it. All
+      // other block-type changes are rejected to keep the editor predictable.
+      const editable = ["title", "content", "assetData", "caption", "imagePrompt", "imageSize", "galleryJson", "checklistJson", "stepsJson", "sortOrder"];
       for (const k of editable) if (k in req.body) update[k] = req.body[k];
+      if (typeof req.body?.type === "string") {
+        const allowedTypes = ["text", "image", "gallery", "safety_tip", "checklist", "step_by_step", "ai_explanation", "image_prompt"];
+        if (!allowedTypes.includes(req.body.type)) return res.status(400).json({ message: "Invalid block type" });
+        update.type = req.body.type;
+      }
       const block = await storage.updateLessonBlock(req.params.id, update);
       res.json(block);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -10359,10 +10374,12 @@ Return ONLY valid JSON:
       parts.push(String(mod.lessonText));
     } else {
       for (const b of sorted) {
+        // image_prompt blocks are admin-only scaffolding — never spoken aloud.
+        if (b.type === "image_prompt") continue;
         if (b.title) parts.push(String(b.title) + ".");
         if (b.type === "text" || b.type === "safety_tip" || b.type === "ai_explanation") {
           if (b.content) parts.push(String(b.content));
-        } else if (b.type === "image" || b.type === "image_prompt") {
+        } else if (b.type === "image") {
           if (b.caption) parts.push(String(b.caption));
         } else if (b.type === "gallery") {
           try {
@@ -10471,6 +10488,106 @@ Return ONLY valid JSON:
     }
   });
 
+  // ── AI image generation (Training Hub only) ───────────────────────────────
+  // Provider-isolated helper. Today this calls OpenAI gpt-image-1 because the
+  // workspace ships with an OPENAI_API_KEY. Swapping to Gemini 3.1 later is a
+  // single-function change here once GEMINI_API_KEY is configured.
+  async function generateTrainingImage(args: {
+    prompt: string;
+    style?: string | null;
+    size?: "small" | "medium" | "large" | "hero";
+    companyId: string;
+  }): Promise<{ ok: true; imageData: string; cached: boolean } | { ok: false; error: string }> {
+    const promptRaw = String(args.prompt || "").trim().slice(0, 1000);
+    if (!promptRaw) return { ok: false, error: "Prompt is required" };
+    const styled = args.style
+      ? `${promptRaw} — style: ${args.style}, clean training-material illustration, no text or watermarks`
+      : `${promptRaw} — clean training-material illustration, no text or watermarks`;
+    const promptHash = createHash("sha256").update(`${args.companyId}::${styled}`).digest("hex");
+    const cached = await storage.getCachedTrainingImage(args.companyId, promptHash);
+    if (cached) return { ok: true, imageData: cached.imageData, cached: true };
+    if (!process.env.OPENAI_API_KEY) {
+      return { ok: false, error: "Image generation is not configured (missing API key)." };
+    }
+    try {
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      // gpt-image-1 returns base64 by default; perfect for inline storage.
+      const result = await openai.images.generate({
+        model: "gpt-image-1",
+        prompt: styled,
+        size: args.size === "hero" ? "1536x1024" : args.size === "large" ? "1536x1024" : "1024x1024",
+        n: 1,
+      } as any);
+      const b64 = (result as any)?.data?.[0]?.b64_json;
+      if (!b64) return { ok: false, error: "Image provider returned no data" };
+      const imageData = `data:image/png;base64,${b64}`;
+      await storage.insertCachedTrainingImage({
+        companyId: args.companyId,
+        promptHash,
+        prompt: styled,
+        style: args.style ?? null,
+        imageData,
+        createdAt: trainingNow(),
+      } as any);
+      return { ok: true, imageData, cached: false };
+    } catch (e: any) {
+      console.error("[training/image] generation failed:", e?.message);
+      return { ok: false, error: e?.message || "Image generation failed" };
+    }
+  }
+
+  // POST /api/training/ai/generate-image — returns a generated image without
+  // persisting it to a block. Admin only. Always returns JSON.
+  app.post("/api/training/ai/generate-image", requireAuth, requireRole("admin"), async (req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    try {
+      const user = (req as any).user;
+      const prompt = String(req.body?.prompt ?? "").trim();
+      if (!prompt) return res.status(400).json({ success: false, error: "Prompt is required" });
+      const size = ["small", "medium", "large", "hero"].includes(req.body?.size) ? req.body.size : "medium";
+      const style = typeof req.body?.style === "string" ? req.body.style.slice(0, 100) : null;
+      const result = await generateTrainingImage({ prompt, style, size, companyId: user.companyId });
+      if (!result.ok) return res.status(200).json({ success: false, error: result.error });
+      res.json({ success: true, imageData: result.imageData, imageUrl: result.imageData, cached: result.cached });
+    } catch (e: any) {
+      console.error("[training/ai/generate-image] error:", e?.message);
+      res.status(500).json({ success: false, error: e?.message || "Image generation failed" });
+    }
+  });
+
+  // POST /api/training/blocks/:id/generate-image — generate (or regenerate)
+  // an image *into* a specific block. If the block is `image_prompt`, it is
+  // converted to `image`. Always returns JSON.
+  app.post("/api/training/blocks/:id/generate-image", requireAuth, requireRole("admin"), async (req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    try {
+      const user = (req as any).user;
+      const ok = await authorizeBlockForAdmin(req.params.id, user.companyId);
+      if (!ok) return res.status(404).json({ success: false, error: "Block not found" });
+      const block = await storage.getLessonBlock(req.params.id);
+      if (!block) return res.status(404).json({ success: false, error: "Block not found" });
+      const prompt = String(req.body?.prompt ?? block.imagePrompt ?? "").trim();
+      if (!prompt) return res.status(400).json({ success: false, error: "Prompt is required" });
+      const size = ["small", "medium", "large", "hero"].includes(req.body?.size)
+        ? req.body.size
+        : (block.imageSize || "medium");
+      const style = typeof req.body?.style === "string" ? req.body.style.slice(0, 100) : null;
+      const result = await generateTrainingImage({ prompt, style, size, companyId: user.companyId });
+      if (!result.ok) return res.status(200).json({ success: false, error: result.error });
+      const updated = await storage.updateLessonBlock(req.params.id, {
+        type: "image",
+        assetData: result.imageData,
+        imagePrompt: prompt,
+        imageSize: size,
+        updatedAt: trainingNow(),
+      } as any);
+      res.json({ success: true, block: updated, cached: result.cached });
+    } catch (e: any) {
+      console.error("[training/blocks/generate-image] error:", e?.message);
+      res.status(500).json({ success: false, error: e?.message || "Image generation failed" });
+    }
+  });
+
   // ── AI block helpers ──────────────────────────────────────────────────────
   // POST /api/training/ai/generate-blocks — produce a structured array of
   // lesson blocks from a module's title/context. Admin only.
@@ -10489,7 +10606,36 @@ Return ONLY valid JSON:
       const blocks: any[] = [];
       if (draft?.overview) blocks.push({ type: "text", title: "Overview", content: String(draft.overview) });
       if (draft?.lessonText) blocks.push({ type: "text", title: "Lesson", content: String(draft.lessonText) });
-      if (draft?.imagePrompt) blocks.push({ type: "image_prompt", title: "Suggested image", imagePrompt: String(draft.imagePrompt) });
+      if (draft?.imagePrompt) {
+        // Cost control: auto-generate at most ONE image per AI module run.
+        // If generation succeeds we attach a real image block; if it fails
+        // we fall back to a plain image_prompt block so the admin can retry.
+        const user = (req as any).user;
+        const imgPrompt = String(draft.imagePrompt);
+        let placedImage = false;
+        try {
+          const img = await generateTrainingImage({
+            prompt: imgPrompt,
+            style: "training diagram",
+            size: "large",
+            companyId: user.companyId,
+          });
+          if (img.ok) {
+            blocks.push({
+              type: "image",
+              title: "Illustration",
+              assetData: img.imageData,
+              imagePrompt: imgPrompt,
+              imageSize: "large",
+              caption: null,
+            });
+            placedImage = true;
+          }
+        } catch {}
+        if (!placedImage) {
+          blocks.push({ type: "image_prompt", title: "Suggested image", imagePrompt: imgPrompt });
+        }
+      }
       if (Array.isArray(draft?.stepByStep) && draft.stepByStep.length > 0) {
         blocks.push({
           type: "step_by_step",

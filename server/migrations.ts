@@ -45,6 +45,28 @@ export async function runStartupMigrations() {
       log(`Granted Super Admin to: gift.delvin@mastercleaning.ca`, "migrations");
     }
 
+    // 4. Training Hub: image_size column + training_image_cache table.
+    //    Idempotent — safe to run on every boot.
+    await client.query(`
+      ALTER TABLE training_lesson_blocks
+      ADD COLUMN IF NOT EXISTS image_size text;
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS training_image_cache (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id varchar NOT NULL,
+        prompt_hash text NOT NULL,
+        prompt text NOT NULL,
+        style text,
+        image_data text NOT NULL,
+        created_at text NOT NULL
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_training_image_cache_company_hash
+      ON training_image_cache (company_id, prompt_hash);
+    `);
+
     log("Startup migrations complete.", "migrations");
   } catch (err: any) {
     log(`Migration error (non-fatal): ${err.message}`, "migrations");

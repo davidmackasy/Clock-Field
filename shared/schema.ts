@@ -2145,6 +2145,7 @@ export type InsertTrainingQuizAttempt = z.infer<typeof insertTrainingQuizAttempt
 //   "step_by_step"   — JSON array of {title, description} in stepsJson
 //   "ai_explanation" — AI-generated explanation in `content`
 //   "image_prompt"   — placeholder describing an image to upload (in imagePrompt)
+// imageSize controls how an "image" block renders: small | medium | large | hero
 export const trainingLessonBlocks = pgTable("training_lesson_blocks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   moduleId: varchar("module_id").notNull(),
@@ -2155,6 +2156,7 @@ export const trainingLessonBlocks = pgTable("training_lesson_blocks", {
   assetData: text("asset_data"),
   caption: text("caption"),
   imagePrompt: text("image_prompt"),
+  imageSize: text("image_size"),
   galleryJson: text("gallery_json"),
   checklistJson: text("checklist_json"),
   stepsJson: text("steps_json"),
@@ -2185,6 +2187,23 @@ export const trainingModuleAudio = pgTable("training_module_audio", {
 export const insertTrainingModuleAudioSchema = createInsertSchema(trainingModuleAudio).omit({ id: true });
 export type TrainingModuleAudio = typeof trainingModuleAudio.$inferSelect;
 export type InsertTrainingModuleAudio = z.infer<typeof insertTrainingModuleAudioSchema>;
+
+// ── Training Image Cache ─────────────────────────────────────────────────────
+// Caches AI-generated images per (companyId, promptHash). Reused across blocks
+// so admins regenerating with the same prompt do not pay twice.
+export const trainingImageCache = pgTable("training_image_cache", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  promptHash: text("prompt_hash").notNull(),
+  prompt: text("prompt").notNull(),
+  style: text("style"),
+  imageData: text("image_data").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertTrainingImageCacheSchema = createInsertSchema(trainingImageCache).omit({ id: true });
+export type TrainingImageCache = typeof trainingImageCache.$inferSelect;
+export type InsertTrainingImageCache = z.infer<typeof insertTrainingImageCacheSchema>;
 
 // ── Employee Documents ───────────────────────────────────────────────────────
 // HR/profile documents (resume, ID, certifications, contracts, etc.)

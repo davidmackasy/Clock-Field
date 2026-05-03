@@ -11,8 +11,11 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Plus, ChevronUp, ChevronDown, Trash2, Loader2, Sparkles, Wand2,
-  FileText, ShieldAlert, ListChecks, ListOrdered, ImageIcon, Image as ImageLucide, X,
+  FileText, ShieldAlert, ListChecks, ListOrdered, ImageIcon, Image as ImageLucide, X, RefreshCw,
 } from "lucide-react";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import type { LessonBlock } from "./lesson-blocks";
 
 const BLOCK_TYPES: { value: string; label: string; icon: any; desc: string }[] = [
@@ -20,10 +23,17 @@ const BLOCK_TYPES: { value: string; label: string; icon: any; desc: string }[] =
   { value: "safety_tip",     label: "Safety Tip",      icon: ShieldAlert, desc: "Highlighted warning / note" },
   { value: "ai_explanation", label: "AI Explanation",  icon: Sparkles,    desc: "Detailed explanation block" },
   { value: "image",          label: "Image",           icon: ImageLucide, desc: "Single image with caption" },
-  { value: "image_prompt",   label: "Image Suggested",  icon: ImageIcon,   desc: "Describe an image to add" },
+  { value: "ai_image",       label: "Generate Image (AI)", icon: Wand2,   desc: "Describe an image, AI creates it" },
   { value: "gallery",        label: "Gallery",         icon: ImageIcon,   desc: "Multiple images" },
   { value: "checklist",      label: "Checklist",       icon: ListChecks,  desc: "Bulleted list" },
   { value: "step_by_step",   label: "Step-by-step",    icon: ListOrdered, desc: "Numbered steps" },
+];
+
+const IMAGE_SIZE_OPTIONS = [
+  { value: "small",  label: "Small (inline)" },
+  { value: "medium", label: "Medium (default)" },
+  { value: "large",  label: "Large (full width)" },
+  { value: "hero",   label: "Hero (banner)" },
 ];
 
 export function AdminBlockEditor({ moduleId, moduleTitle, courseTitle, courseDescription }: {
@@ -89,7 +99,15 @@ export function AdminBlockEditor({ moduleId, moduleTitle, courseTitle, courseDes
     const defaults: any = { type };
     if (type === "text" || type === "safety_tip" || type === "ai_explanation") { defaults.title = ""; defaults.content = ""; }
     if (type === "image_prompt") { defaults.title = "Image suggested"; defaults.imagePrompt = ""; }
-    if (type === "image") { defaults.title = ""; defaults.assetData = ""; defaults.caption = ""; }
+    if (type === "image") { defaults.title = ""; defaults.assetData = ""; defaults.caption = ""; defaults.imageSize = "medium"; }
+    if (type === "ai_image") {
+      // AI image starts as an image_prompt block with a friendly title — the
+      // admin types a prompt and clicks Generate to convert it to an image.
+      defaults.type = "image_prompt";
+      defaults.title = "AI image";
+      defaults.imagePrompt = "";
+      defaults.imageSize = "medium";
+    }
     if (type === "gallery") { defaults.title = "Gallery"; defaults.galleryJson = "[]"; }
     if (type === "checklist") { defaults.title = "Checklist"; defaults.checklistJson = "[]"; }
     if (type === "step_by_step") { defaults.title = "Steps"; defaults.stepsJson = "[]"; }
@@ -145,6 +163,7 @@ export function AdminBlockEditor({ moduleId, moduleTitle, courseTitle, courseDes
             block={b}
             index={idx}
             count={sorted.length}
+            moduleId={moduleId}
             moduleTitle={moduleTitle}
             onMoveUp={() => move(idx, -1)}
             onMoveDown={() => move(idx, +1)}
@@ -157,10 +176,11 @@ export function AdminBlockEditor({ moduleId, moduleTitle, courseTitle, courseDes
   );
 }
 
-function BlockRow({ block, index, count, moduleTitle, onMoveUp, onMoveDown, onDelete, onSave }: {
+function BlockRow({ block, index, count, moduleId, moduleTitle, onMoveUp, onMoveDown, onDelete, onSave }: {
   block: LessonBlock;
   index: number;
   count: number;
+  moduleId: string;
   moduleTitle: string;
   onMoveUp: () => void;
   onMoveDown: () => void;
@@ -172,7 +192,10 @@ function BlockRow({ block, index, count, moduleTitle, onMoveUp, onMoveDown, onDe
   const [content, setContent] = useState(block.content ?? "");
   const [caption, setCaption] = useState(block.caption ?? "");
   const [imagePrompt, setImagePrompt] = useState(block.imagePrompt ?? "");
+  const [imageSize, setImageSize] = useState<string>(block.imageSize ?? "medium");
   const [assetData, setAssetData] = useState(block.assetData ?? "");
+  const [imageGenerating, setImageGenerating] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [gallery, setGallery] = useState<{ imageData: string; caption?: string }[]>(() => {
     try { return JSON.parse(block.galleryJson || "[]"); } catch { return []; }
   });
@@ -192,12 +215,46 @@ function BlockRow({ block, index, count, moduleTitle, onMoveUp, onMoveDown, onDe
   const persist = () => {
     const data: any = { title };
     if (block.type === "text" || block.type === "safety_tip" || block.type === "ai_explanation") data.content = content;
-    if (block.type === "image") { data.assetData = assetData; data.caption = caption; }
-    if (block.type === "image_prompt") data.imagePrompt = imagePrompt;
+    if (block.type === "image") { data.assetData = assetData; data.caption = caption; data.imageSize = imageSize; data.imagePrompt = imagePrompt; }
+    if (block.type === "image_prompt") { data.imagePrompt = imagePrompt; data.imageSize = imageSize; }
     if (block.type === "gallery") data.galleryJson = JSON.stringify(gallery);
     if (block.type === "checklist") data.checklistJson = JSON.stringify(checklist);
     if (block.type === "step_by_step") data.stepsJson = JSON.stringify(steps);
     onSave(data);
+  };
+
+  // Generate (or regenerate) an AI image directly into this block. Server
+  // converts image_prompt → image automatically and returns the updated row.
+  const handleGenerateImage = async () => {
+    if (!imagePrompt.trim()) {
+      setImageError("Describe the image you want to generate first.");
+      return;
+    }
+    setImageGenerating(true);
+    setImageError(null);
+    try {
+      const res = await fetch(`/api/training/blocks/${block.id}/generate-image`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({ prompt: imagePrompt, size: imageSize }),
+      });
+      const ct = res.headers.get("content-type") || "";
+      if (!ct.includes("application/json")) throw new Error("Image endpoint returned an unexpected response.");
+      const data = await res.json().catch(() => null) as any;
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || data?.message || "Image could not be generated");
+      }
+      const updated = data.block;
+      if (updated?.assetData) setAssetData(updated.assetData);
+      toast({ title: data.cached ? "Image loaded from cache" : "Image generated" });
+      // Force a refetch so the row's `type` flips from image_prompt → image.
+      queryClient.invalidateQueries({ queryKey: ["/api/training/modules", moduleId, "blocks"] as any });
+    } catch (e: any) {
+      setImageError(e?.message || "Image could not be generated");
+    } finally {
+      setImageGenerating(false);
+    }
   };
 
   const handleImproveAI = async () => {
@@ -270,7 +327,45 @@ function BlockRow({ block, index, count, moduleTitle, onMoveUp, onMoveDown, onDe
       )}
 
       {block.type === "image_prompt" && (
-        <Textarea rows={3} placeholder="Describe the image you want to add…" value={imagePrompt} onChange={e => setImagePrompt(e.target.value)} onBlur={persist} data-testid={`input-block-image-prompt-${block.id}`} />
+        <div className="space-y-2">
+          <Textarea
+            rows={3}
+            placeholder="Describe the image you want to generate…"
+            value={imagePrompt}
+            onChange={e => setImagePrompt(e.target.value)}
+            onBlur={persist}
+            data-testid={`input-block-image-prompt-${block.id}`}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="w-44">
+              <Select value={imageSize} onValueChange={(v) => { setImageSize(v); onSave({ title, imagePrompt, imageSize: v } as any); }}>
+                <SelectTrigger data-testid={`select-image-size-${block.id}`}><SelectValue placeholder="Size" /></SelectTrigger>
+                <SelectContent>
+                  {IMAGE_SIZE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              variant="default"
+              size="sm"
+              type="button"
+              onClick={handleGenerateImage}
+              disabled={imageGenerating || !imagePrompt.trim()}
+              data-testid={`btn-block-generate-image-${block.id}`}
+            >
+              {imageGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Wand2 className="w-3.5 h-3.5 mr-1" />}
+              Generate Image
+            </Button>
+          </div>
+          {imageError && (
+            <div className="text-xs text-destructive flex items-center gap-1.5" data-testid={`text-image-error-${block.id}`}>
+              {imageError}
+              <Button variant="ghost" size="sm" type="button" className="h-6 px-2" onClick={handleGenerateImage} disabled={imageGenerating}>
+                <RefreshCw className="w-3 h-3 mr-1" />Retry
+              </Button>
+            </div>
+          )}
+        </div>
       )}
 
       {block.type === "image" && (
@@ -283,11 +378,48 @@ function BlockRow({ block, index, count, moduleTitle, onMoveUp, onMoveDown, onDe
           ) : (
             <div className="border border-dashed border-border rounded-md p-4 text-center text-sm text-muted-foreground">No image yet.</div>
           )}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <input type="file" accept="image/*" className="sr-only" ref={fileRef} onChange={(e) => handleImageUpload(e, "single")} />
             <Button variant="outline" size="sm" type="button" onClick={() => fileRef.current?.click()} data-testid={`btn-block-upload-${block.id}`}><ImageLucide className="w-3.5 h-3.5 mr-1" />{assetData ? "Replace image" : "Upload image"}</Button>
+            <div className="w-40">
+              <Select value={imageSize} onValueChange={(v) => { setImageSize(v); onSave({ title, imageSize: v } as any); }}>
+                <SelectTrigger data-testid={`select-image-size-${block.id}`}><SelectValue placeholder="Size" /></SelectTrigger>
+                <SelectContent>
+                  {IMAGE_SIZE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <Input placeholder="Caption (optional)" value={caption} onChange={e => setCaption(e.target.value)} onBlur={persist} data-testid={`input-block-caption-${block.id}`} />
+          <Textarea
+            rows={2}
+            placeholder="AI prompt (optional — for regenerating this image)"
+            value={imagePrompt}
+            onChange={e => setImagePrompt(e.target.value)}
+            onBlur={persist}
+            data-testid={`input-block-image-prompt-${block.id}`}
+          />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              onClick={handleGenerateImage}
+              disabled={imageGenerating || !imagePrompt.trim()}
+              data-testid={`btn-block-regenerate-image-${block.id}`}
+            >
+              {imageGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Wand2 className="w-3.5 h-3.5 mr-1" />}
+              {assetData ? "Regenerate with AI" : "Generate with AI"}
+            </Button>
+            <Input placeholder="Caption (optional)" value={caption} onChange={e => setCaption(e.target.value)} onBlur={persist} data-testid={`input-block-caption-${block.id}`} />
+          </div>
+          {imageError && (
+            <div className="text-xs text-destructive flex items-center gap-1.5" data-testid={`text-image-error-${block.id}`}>
+              {imageError}
+              <Button variant="ghost" size="sm" type="button" className="h-6 px-2" onClick={handleGenerateImage} disabled={imageGenerating}>
+                <RefreshCw className="w-3 h-3 mr-1" />Retry
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

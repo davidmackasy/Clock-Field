@@ -1,0 +1,200 @@
+DEV NOTE: Add AI Image Generation (Gemini 3.1) to Training Hub
+Scope
+Only update Training Hub (module builder + course generation + viewer).
+Do not touch anything else.
+
+Goal
+Replace “Suggested Image” text with real generated images using Gemini 3.1.
+Images should:
+
+
+Match lesson content
+
+
+Be auto-generated during AI course creation
+
+
+Be optionally generated manually per block
+
+
+Display clean inside course
+
+
+
+
+
+Replace “Suggested Image” with Real Image Block
+
+
+Current:
+“Suggested Image: An illustrated chart showing...”
+New behavior:
+If AI suggests an image:
+→ Automatically generate image using Gemini 3.1
+→ Replace suggestion with real image block
+If generation fails:
+→ fallback to “Generate Image” button
+
+
+
+AI Course Generation Update
+
+
+When AI generates modules:
+Instead of:
+"type": "image_prompt"
+Do:
+"type": "image"
+"prompt": "..."
+Then immediately:
+Call Gemini 3.1 image API
+Generate image
+Store image URL
+Attach to block
+Final stored block:
+{
+type: "image",
+imageUrl: "...",
+prompt: "...",
+caption: "..."
+}
+
+
+
+Manual Image Generation (Admin)
+
+
+In module builder → Add Block:
+Add new option:
+Generate Image (Gemini)
+Flow:
+Admin clicks → Generate Image
+Input appears:
+“Describe image”
+Optional:
+Size:
+Small
+Medium
+Large
+Full width
+Click Generate
+→ call Gemini
+→ return image
+→ insert block
+Admin can:
+Regenerate
+Delete
+Replace
+Add caption
+
+
+
+Image Sizes
+
+
+Allow per image block:
+Small → inline
+Medium → standard
+Large → full width
+Hero → banner style
+Save size in block:
+size: "small" | "medium" | "large" | "hero"
+
+
+
+Gemini 3.1 Integration
+
+
+Use:
+gemini-3.1 image generation endpoint
+Input:
+prompt (from AI or admin)
+style (optional):
+realistic
+illustration
+training diagram
+Output:
+image URL
+
+
+
+Cost Control (IMPORTANT)
+
+
+Do NOT auto-generate images blindly.
+Rules:
+During AI course generation:
+Limit to max 1–2 images per module
+Manual generation:
+User-triggered only
+Cache images:
+If prompt already generated → reuse
+Do not regenerate on every load
+
+
+
+Viewer Rendering (Employee + Public)
+
+
+Image block should:
+Show clean card
+Rounded corners
+Proper spacing
+Caption below image
+Respect size
+Order:
+Text → Image → Text → Checklist → etc.
+No more “suggested image” text anywhere.
+
+
+
+Fallback Handling
+
+
+If Gemini fails:
+Show:
+“Image could not be generated”
+
+
+button: Retry
+
+
+Do NOT break module rendering.
+
+
+
+Do Not Break Existing Modules
+
+
+If module has:
+type: "image_prompt"
+Convert on render:
+Show:
+“Generate Image” button
+Do not delete old data.
+
+
+
+Expected Result
+
+
+Admin generates course
+Images appear automatically in modules
+Admin can manually generate images per block
+Employee sees real visuals, not text prompts
+Course feels premium and engaging
+
+
+
+Strict Rules
+
+
+Do not affect:
+Admin panel outside Training Hub
+Employee navigation
+Public link structure
+Database outside training tables
+Existing course logic
+
+If you implement this cleanly:
+Your Training Hub becomes 10x more engaging instantly.
