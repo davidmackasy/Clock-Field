@@ -457,7 +457,7 @@ export default function EmployeeTraining() {
   const completed = myCourses.filter(c => c.isCompleted);
 
   return (
-    <div className="p-4 pb-24 space-y-6 max-w-2xl mx-auto">
+    <div className="p-4 pb-24 space-y-6 max-w-5xl mx-auto">
       <div>
         <h1 className="text-xl font-bold text-foreground">My Training</h1>
         <p className="text-sm text-muted-foreground">Complete your assigned courses</p>
@@ -496,7 +496,7 @@ export default function EmployeeTraining() {
           {assigned.length > 0 && (
             <div>
               <h2 className="text-sm font-semibold text-foreground mb-3">Assigned Courses</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {assigned.map(c => <CourseCard key={c.id} course={c} onClick={() => { setSelectedCourseId(c.id); setSelectedModuleIdx(0); }} />)}
               </div>
             </div>
@@ -504,7 +504,7 @@ export default function EmployeeTraining() {
           {completed.length > 0 && (
             <div>
               <h2 className="text-sm font-semibold text-foreground mb-3">Completed</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {completed.map(c => <CourseCard key={c.id} course={c} onClick={() => { setSelectedCourseId(c.id); setSelectedModuleIdx(0); }} />)}
               </div>
             </div>
