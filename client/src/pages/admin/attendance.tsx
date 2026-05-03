@@ -20,6 +20,19 @@ import { EmployeeAttendanceModal } from "@/components/employee-attendance-modal"
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
+/**
+ * Convert a UTC epoch (ms) to a "fake-UTC" epoch by expressing the moment in
+ * the company's local timezone and then reinterpreting that local clock time as
+ * UTC.  When we do the same to `scheduledStartAt` / `scheduledEndAt` (which are
+ * already bare local-time strings, so we just append "Z"), the difference
+ * between the two fake-UTC values equals the true wall-clock difference in the
+ * company timezone — regardless of what timezone the browser happens to be in.
+ */
+function toLocalFakeUtcMs(utcMs: number, tz: string): number {
+  const localStr = new Date(utcMs).toLocaleString("sv-SE", { timeZone: tz || "UTC" }).replace(" ", "T");
+  return new Date(localStr + "Z").getTime();
+}
+
 const flagColors: Record<string, string> = {
   late_clock_in: "destructive",
   early_clock_in: "secondary",
@@ -489,6 +502,9 @@ export default function AdminAttendance() {
   const initEmployeeId = initParams.get("employeeId") || "all";
   const initDate = initParams.get("date"); // "YYYY-MM-DD" company local date
 
+  const { data: tzData } = useQuery<{ timezone: string }>({ queryKey: ["/api/settings/timezone"], staleTime: Infinity });
+  const tz = tzData?.timezone || "UTC";
+
   const { data: entries, isLoading } = useQuery<any[]>({ queryKey: ["/api/time-entries"] });
   const { data: employees } = useQuery<any[]>({ queryKey: ["/api/employees"] });
   const { data: shifts } = useQuery<any[]>({ queryKey: ["/api/shifts"] });
@@ -512,25 +528,31 @@ export default function AdminAttendance() {
 
   // Forgotten clock-out assist — only entries that are scheduled, still active,
   // and more than 5 minutes past their scheduled end time.
+  // scheduledEndAt is a bare local-time string (no TZ suffix); we append "Z" to
+  // treat it as fake-UTC, and convert Date.now() to the same fake-UTC scale via
+  // toLocalFakeUtcMs so the comparison is timezone-correct regardless of the
+  // browser's own timezone.
   const overdueEntries = useMemo(() => {
     if (!entries || !shifts) return [];
     const THRESHOLD_MS = 5 * 60 * 1000;
-    const now = Date.now();
+    const nowFakeUtc = toLocalFakeUtcMs(Date.now(), tz);
     return entries
       .filter((e: any) => {
         if (e.status !== "active" || e.clockOutAt || !e.shiftId) return false;
         const shift = shiftMap.get(e.shiftId);
         if (!shift?.scheduledEndAt) return false;
-        return now > new Date(shift.scheduledEndAt).getTime() + THRESHOLD_MS;
+        const endFakeUtc = new Date(shift.scheduledEndAt + "Z").getTime();
+        return nowFakeUtc > endFakeUtc + THRESHOLD_MS;
       })
       .map((e: any) => {
         const shift = shiftMap.get(e.shiftId);
-        const overdueMs = now - new Date(shift.scheduledEndAt).getTime();
+        const endFakeUtc = new Date(shift.scheduledEndAt + "Z").getTime();
+        const overdueMs = nowFakeUtc - endFakeUtc;
         const overdueMin = Math.floor(overdueMs / 60000);
         return { ...e, _shift: shift, _overdueMin: overdueMin };
       })
       .sort((a, b) => b._overdueMin - a._overdueMin);
-  }, [entries, shifts, shiftMap]);
+  }, [entries, shifts, shiftMap, tz]);
 
   const filtered = useMemo(() => {
     if (!entries) return [];
@@ -856,8 +878,13 @@ export default function AdminAttendance() {
 
                     let variance = "-";
                     if (shift) {
-                      const scheduledStart = new Date(shift.scheduledStartAt);
-                      const diff = Math.round((clockIn.getTime() - scheduledStart.getTime()) / 60000);
+                      // clockInAt is a real UTC ISO string; scheduledStartAt is a
+                      // bare local-time string (no TZ suffix). Convert both to the
+                      // same "fake-UTC" scale so the diff equals the true wall-clock
+                      // difference in the company timezone, regardless of browser TZ.
+                      const clockInFakeUtc = toLocalFakeUtcMs(clockIn.getTime(), tz);
+                      const startFakeUtc = new Date(shift.scheduledStartAt + "Z").getTime();
+                      const diff = Math.round((clockInFakeUtc - startFakeUtc) / 60000);
                       if (diff > 0) variance = `+${diff} min late`;
                       else if (diff < 0) variance = `${diff} min early`;
                       else variance = "On time";

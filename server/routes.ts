@@ -1250,11 +1250,18 @@ Welcome again, and thank you for choosing ClockField.
           catch { return false; }
         }).map(e => e.shiftId).filter(Boolean)
       );
+      // scheduledStartAt is a bare local-time string (no TZ suffix). Appending "Z"
+      // treats it as fake-UTC; converting `now` to company-local time first and
+      // then also treating that as fake-UTC keeps both sides on the same scale, so
+      // the 30-min threshold fires at the correct wall-clock moment regardless of
+      // the server's own timezone.
+      const nowLocalStr = utcToLocalIso(new Date(now).toISOString(), tz);
+      const nowFakeUtcMs = new Date(nowLocalStr + "Z").getTime();
       const missedToday = todayShifts.filter(s => {
         if (s.status === "missed" || s.status === "no_show") return true;
         if (s.status !== "scheduled") return false;
-        const start = new Date(s.scheduledStartAt).getTime();
-        return now > start + MISSED_THRESHOLD_MS && !clockedInShiftIds.has(s.id);
+        const startFakeUtcMs = new Date(s.scheduledStartAt + "Z").getTime();
+        return nowFakeUtcMs > startFakeUtcMs + MISSED_THRESHOLD_MS && !clockedInShiftIds.has(s.id);
       }).length;
       const totalWorkedToday = todayEntries.reduce((sum, e) => sum + (e.workedMinutes || 0), 0);
       const openCount = openRequests.filter(r => ["new", "open", "in_review"].includes(r.status)).length;

@@ -1,0 +1,147 @@
+DEV NOTE: Fix Schedule, Attendance, Clock-In Time Zone Matching Bug
+
+Issue:
+Attendance is matching employee clock-ins to the wrong schedule template.
+
+Example:
+Today is Sunday.
+Employee Fortune Eiwo has a Sunday schedule from 8:00 AM to 2:00 PM.
+Employee clocked in around 7:56 AM.
+Attendance incorrectly matched this clock-in to the weekday schedule from 5:00 PM to 10:30 PM.
+The system then shows a false variance of 3,776+ minutes late.
+
+This is wrong.
+
+The employee should be matched to the Sunday schedule because the clock-in happened on Sunday local business time.
+
+Important instruction:
+Do not change, delete, rebuild, or refactor the schedule system.
+Do not change the clock-in flow.
+Do not change attendance records.
+Do not change payroll.
+Do not change recurring schedules.
+Do not touch anything outside this bug fix.
+
+Only fix the date, time zone, and schedule-matching logic.
+
+Main fix required:
+
+Use the business/account local timezone everywhere
+The app must use the company timezone from account settings.
+
+For Clockfield, this should likely be:
+America/Winnipeg
+
+All schedule matching must be based on the business local date, not UTC date.
+
+Do not use raw server UTC day when deciding which schedule applies.
+
+Match clock-ins by local calendar day
+When an employee clocks in:
+
+Convert the clock-in timestamp to the business timezone.
+Get the local date.
+Get the local weekday.
+Find the employee schedule assigned to that exact weekday.
+
+Example:
+Clock-in timestamp converted to America/Winnipeg = Sunday, May 3, 2026, 7:56 AM.
+The system must match Sunday schedules only.
+
+It must not match Monday, weekday, or previous/next day schedules because of UTC conversion.
+
+Fix recurring schedule lookup
+Recurring schedules must be selected by:
+
+employee_id
+business_id
+local weekday
+active schedule status
+date range validity
+schedule start/end date
+not paused or deleted
+
+If employee has multiple schedules, choose the one where the recurring day matches the local clock-in day.
+
+Fix attendance variance calculation
+Variance must compare:
+
+actual clock-in local time
+against
+matched schedule start local time
+
+Example:
+Sunday schedule: 8:00 AM to 2:00 PM
+Actual clock-in: 7:56 AM
+Result:
+4 minutes early
+
+It should not show late.
+It should not show thousands of minutes late.
+
+Protect overnight shifts
+Some schedules may cross midnight, like 5:00 PM to 10:30 PM or overnight shifts.
+
+Do not break overnight logic.
+
+Rules:
+If schedule ends after start time, treat it as same-day.
+If schedule end time is earlier than start time, treat it as overnight and ends the next local day.
+Only use overnight matching when the schedule actually crosses midnight.
+
+Do not accidentally pull a Monday schedule into Sunday unless the shift started Sunday and ended Monday.
+
+Fix forgotten clock-out banner
+The forgotten clock-out alert must use the matched schedule’s correct local end time.
+
+If the employee is on the Sunday 8:00 AM to 2:00 PM schedule, the alert must use Sunday 2:00 PM.
+It must not show weekday 10:30 PM.
+
+Add safe validation logs
+Add temporary server-side debug logs only for this matching logic.
+
+Log:
+employee id
+business timezone
+raw clock-in timestamp
+local clock-in date
+local weekday
+matched schedule id
+matched schedule day
+matched schedule start/end
+variance result
+
+Do not expose logs to users.
+
+Add test cases
+Add tests for:
+
+Sunday clock-in matches Sunday schedule
+Monday clock-in matches Monday schedule
+Employee with multiple recurring schedules matches the correct day
+Early clock-in shows early, not late
+Late clock-in shows correct late minutes
+Schedule crossing midnight still works
+UTC date does not override local business date
+Attendance page Today filter uses business local date
+
+Expected result:
+On Sunday May 3, 2026, Fortune Eiwo clocking in at 7:56 AM should show:
+
+Scheduled Time:
+08:00 - 14:00
+
+Actual Time:
+07:56 - In progress
+
+Variance:
+4 min early
+
+Forgotten clock-out:
+Only appears after the correct Sunday schedule end time has passed.
+
+Final instruction:
+Fix this carefully in production-safe mode.
+Do not delete any attendance or schedule data.
+Do not change existing UI unless required to display the corrected data.
+Do not touch unrelated features.
