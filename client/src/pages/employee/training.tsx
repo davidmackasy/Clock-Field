@@ -46,11 +46,11 @@ type CourseView = {
   }[];
 };
 
-function ProgressRing({ pct, size = 36 }: { pct: number; size?: number }) {
+function ProgressRing({ pct, size = 36, className = "" }: { pct: number; size?: number; className?: string }) {
   const r = (size - 4) / 2;
   const circ = 2 * Math.PI * r;
   return (
-    <svg width={size} height={size} className="-rotate-90">
+    <svg width={size} height={size} className={`-rotate-90 ${className}`}>
       <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeWidth={3} className="text-muted" />
       <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeWidth={3} className="text-primary" strokeDasharray={circ} strokeDashoffset={circ * (1 - pct / 100)} strokeLinecap="round" />
     </svg>
@@ -62,30 +62,31 @@ function CourseCard({ course, onClick }: { course: MyCourse; onClick: () => void
   const statusLabel = course.isCompleted ? "Completed" : course.status === "in_progress" ? "In Progress" : "Not Started";
   return (
     <div
-      className="bg-card border border-border rounded-xl overflow-hidden active:scale-[0.99] transition-all cursor-pointer hover:shadow-sm"
+      className="bg-card border border-border rounded-lg sm:rounded-xl overflow-hidden active:scale-[0.99] transition-all cursor-pointer hover:shadow-sm"
       onClick={onClick}
       data-testid={`card-my-course-${course.id}`}>
-      <div className="h-28 bg-gradient-to-br from-primary/10 to-primary/5 relative">
+      <div className="h-16 sm:h-24 lg:h-28 bg-gradient-to-br from-primary/10 to-primary/5 relative">
         {course.thumbnailData ? (
           <img src={course.thumbnailData} alt={course.title} className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <BookOpen className="w-10 h-10 text-primary/30" />
+            <BookOpen className="w-6 h-6 sm:w-10 sm:h-10 text-primary/30" />
           </div>
         )}
-        {course.isRequired && <Badge className="absolute top-2 left-2 bg-red-500 text-white text-xs">Required</Badge>}
-        {course.isCompleted && <div className="absolute inset-0 bg-green-500/10 flex items-center justify-center"><CheckCircle2 className="w-10 h-10 text-green-500" /></div>}
+        {course.isRequired && <Badge className="absolute top-1 left-1 sm:top-2 sm:left-2 bg-red-500 text-white text-[9px] sm:text-xs px-1.5 py-0 sm:px-2 sm:py-0.5 leading-tight">Required</Badge>}
+        {course.isCompleted && <div className="absolute inset-0 bg-green-500/10 flex items-center justify-center"><CheckCircle2 className="w-6 h-6 sm:w-10 sm:h-10 text-green-500" /></div>}
       </div>
-      <div className="p-3">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="font-semibold text-foreground text-sm leading-tight flex-1">{course.title}</h3>
-          <ProgressRing pct={course.progressPct} size={32} />
+      <div className="p-2 sm:p-3">
+        <div className="flex items-start justify-between gap-1.5 sm:gap-2">
+          <h3 className="font-semibold text-foreground text-[11px] sm:text-sm leading-tight flex-1 line-clamp-2">{course.title}</h3>
+          <ProgressRing pct={course.progressPct} size={24} className="sm:hidden shrink-0" />
+          <ProgressRing pct={course.progressPct} size={32} className="hidden sm:block shrink-0" />
         </div>
-        <div className="flex items-center gap-2 mt-2">
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor}`}>{statusLabel}</span>
-          {course.estimatedDuration && <span className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" />{course.estimatedDuration}</span>}
+        <div className="flex flex-wrap items-center gap-1 sm:gap-2 mt-1.5 sm:mt-2">
+          <span className={`text-[9px] sm:text-xs px-1.5 sm:px-2 py-0 sm:py-0.5 rounded-full font-medium leading-tight ${statusColor}`}>{statusLabel}</span>
+          {course.estimatedDuration && <span className="text-[9px] sm:text-xs text-muted-foreground flex items-center gap-0.5 sm:gap-1"><Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3" />{course.estimatedDuration}</span>}
         </div>
-        <div className="mt-2 text-xs text-muted-foreground">
+        <div className="mt-1 sm:mt-2 text-[9px] sm:text-xs text-muted-foreground">
           {course.completedModules}/{course.totalModules} modules
         </div>
       </div>
@@ -496,7 +497,7 @@ export default function EmployeeTraining() {
           {assigned.length > 0 && (
             <div>
               <h2 className="text-sm font-semibold text-foreground mb-3">Assigned Courses</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 {assigned.map(c => <CourseCard key={c.id} course={c} onClick={() => { setSelectedCourseId(c.id); setSelectedModuleIdx(0); }} />)}
               </div>
             </div>
@@ -504,7 +505,7 @@ export default function EmployeeTraining() {
           {completed.length > 0 && (
             <div>
               <h2 className="text-sm font-semibold text-foreground mb-3">Completed</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 {completed.map(c => <CourseCard key={c.id} course={c} onClick={() => { setSelectedCourseId(c.id); setSelectedModuleIdx(0); }} />)}
               </div>
             </div>
