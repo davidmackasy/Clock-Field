@@ -1,0 +1,209 @@
+Good. This is exactly where most agents mess up. They try to “help too much” and end up breaking other parts.
+
+You don’t need more features. You need strict boundaries + a smarter prompt.
+
+Use this exactly:
+
+DEV NOTE: Restrict AI Changes + Upgrade Module Structure Only
+
+Scope (STRICT – DO NOT VIOLATE)
+
+Only improve:
+
+AI module generation structure
+Lesson block composition
+Viewer rendering order (visual flow only)
+
+DO NOT change:
+
+Database
+APIs
+Routes
+Training assignment logic
+Quiz logic
+Completion logic
+Certificates
+Public link system
+Employee app navigation
+Admin panel structure
+YouTube video handling
+
+Do not rename fields.
+Do not add new required fields.
+Do not modify existing schemas.
+Do not refactor unrelated code.
+
+GOAL
+
+Keep the system exactly the same.
+
+ONLY change how modules are:
+
+generated (AI output)
+structured (block composition)
+displayed (order + visual flow)
+Lock Existing System Behavior
+
+Agent must treat these as fixed:
+
+Video stays at top if exists
+Blocks array stays the same structure
+Image generation (Gemini) stays as is
+AI generation endpoint stays the same
+Module save logic stays unchanged
+
+Agent is NOT allowed to:
+
+create new endpoints
+change payload structure
+alter validation rules
+modify progress tracking
+Replace ONLY the AI Prompt (Core Change)
+
+Update AI system prompt to this:
+
+SYSTEM PROMPT: TRAINING MODULE GENERATOR
+
+You are an expert instructional designer and storyteller.
+
+Your job is to generate engaging, human-like training modules.
+
+You must NOT use a rigid template.
+
+You must NOT generate predictable sections like:
+Overview → Lesson → Image → Checklist
+
+Instead, build each module like a guided learning experience.
+
+BLOCK LIBRARY
+
+You can use these block types:
+
+hook
+deep_dive
+image_prompt
+quick_tip
+scenario
+steps
+checklist
+mistake
+recap
+
+RULES
+
+Do NOT follow a fixed order
+Do NOT repeat the same structure across modules
+Do NOT stack long text blocks
+Never generate more than 2 deep_dive blocks in a row
+Always vary pacing
+
+FLOW
+
+Each module must feel like:
+
+Start:
+Hook or scenario
+
+Middle:
+Explain concept in parts
+
+Between parts:
+Insert visuals or tips
+
+End:
+Action or takeaway
+
+IMAGE RULES
+
+Use image_prompt ONLY when:
+
+describing a real-world situation
+explaining a physical process
+showing hazards or tools
+
+Do NOT insert images randomly.
+
+OUTPUT FORMAT (IMPORTANT – DO NOT CHANGE STRUCTURE)
+
+Return JSON only:
+
+{
+"title": "...",
+"description": "...",
+"blocks": [
+{
+"type": "hook",
+"content": "..."
+},
+{
+"type": "deep_dive",
+"content": "..."
+},
+{
+"type": "image_prompt",
+"prompt": "...",
+"caption": "..."
+}
+]
+}
+
+Do not add new fields.
+Do not rename fields.
+Do not change structure.
+
+TONE
+
+Clear
+Practical
+Simple
+Real-world
+Not robotic
+Viewer Rendering Rule (SAFE CHANGE)
+
+Frontend must:
+
+Render blocks in order
+Remove labels like:
+“Suggested image”
+Show images clean with captions
+Keep video at top unchanged
+
+DO NOT change:
+
+component structure
+state logic
+APIs
+
+Only adjust display styling.
+
+Backward Compatibility
+
+If module has:
+
+lesson_text only → convert to:
+
+[
+{ type: "deep_dive", content: lesson_text }
+]
+
+Do not delete old data.
+
+Expected Result
+
+Modules feel:
+
+dynamic
+natural
+engaging
+visual
+
+System remains:
+
+stable
+unchanged
+safe
+
+If you follow this exactly:
+
+You upgrade the experience
+WITHOUT touching the system

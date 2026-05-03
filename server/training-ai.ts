@@ -54,6 +54,53 @@ export interface AIModuleDraft {
   safetyNotes: string[];
   keyTakeaways: string[];
   imagePrompt?: string;
+  // Optional storytelling fields used by /generate-blocks to compose
+  // type-specific block flows (hook → scenario → image → ...). All are
+  // optional so older AI responses still normalize cleanly.
+  hook?: string;
+  scenario?: string;
+  quickTip?: string;
+  recap?: string;
+  example?: string;
+}
+
+// ── Course-type detection & adaptive guidance ───────────────────────────────
+// We detect the type from the topic/title and adapt the prompt + block
+// composition. Detection is heuristic only (keyword based) — no schema or
+// API changes are needed because the type is never persisted; it just shapes
+// the AI prompt and the block layout the route emits.
+export type CourseType = "cleaning" | "safety" | "equipment" | "customer_service" | "general";
+
+export function detectCourseType(...texts: (string | null | undefined)[]): CourseType {
+  const t = texts.filter(Boolean).join(" ").toLowerCase();
+  if (!t) return "general";
+  // Order matters — safety wins over cleaning when both appear (e.g. "safe
+  // chemical handling" should be safety, not cleaning).
+  if (/\b(safety|hazard|osha|ppe|injury|slip|fall|chemical spill|fire|emergency|lockout|tagout|incident|risk|prevention)\b/.test(t)) return "safety";
+  if (/\b(equipment|machine|tool|vacuum|scrubber|buffer|extractor|polisher|pressure washer|gear|device|operate|operating)\b/.test(t)) return "equipment";
+  // Customer-service detection: avoid the generic word "service" (which also
+  // appears in "cleaning service", "field services", etc.). Match only on
+  // higher-signal phrases.
+  if (/\b(customer service|client communication|complaint|complaints|guest service|guest experience|hospitality|front desk|phone etiquette|email etiquette|greeting guests|handling clients|customer interaction)\b/.test(t)) return "customer_service";
+  if (/\b(clean|cleaning|janitor|sanitiz|disinfect|mop|sweep|dust|restroom|washroom|bathroom|kitchen|floor|surface|stain|residue)\b/.test(t)) return "cleaning";
+  return "general";
+}
+
+const COURSE_TYPE_GUIDANCE: Record<CourseType, string> = {
+  cleaning:
+    "COURSE TYPE: CLEANING. Prioritize real scenarios, visual explanations, step-by-step processes, and before/after thinking. Open with a vivid hook (e.g. 'You walk into a washroom and it smells bad…'). Show the difference between dirty and clean. Give exact processes. Use a quick tip (e.g. 'Always clean from top to bottom') and a common mistake (e.g. 'Using the same cloth everywhere'). Be practical and visual.",
+  safety:
+    "COURSE TYPE: SAFETY. Foreground hazards, consequences, awareness, and prevention. Open with a hook that conveys urgency (e.g. 'In one second, a wet floor can cause injury…'). Use a 'What would you do if…' scenario. Explain the risk clearly. Provide a checklist of safety actions. Call out the mistake of ignoring warning signs. Be cautious and aware.",
+  equipment:
+    "COURSE TYPE: EQUIPMENT TRAINING. Focus on how to use the tool, do's and don'ts, setup and handling. Open with a hook about the cost of misuse (e.g. 'Using this machine incorrectly can damage floors…'). Describe parts and functions, then give exact operating steps. Include a best-practice quick tip and a common misuse mistake. Be instructional.",
+  customer_service:
+    "COURSE TYPE: CUSTOMER SERVICE. Focus on behavior, communication, and real situations. Open with a scenario (e.g. 'A client complains about missed spots…'). Explain how to respond. Provide a quick tip on tone and wording. Include a good-vs-bad response example. Be conversational and human.",
+  general:
+    "COURSE TYPE: GENERAL. Write engaging, practical training. Open with a hook or scenario, vary pacing, and end with a clear takeaway. Avoid rigid templates.",
+};
+
+export function courseTypeGuidance(type: CourseType): string {
+  return COURSE_TYPE_GUIDANCE[type];
 }
 
 export interface AICourseDraft {
@@ -141,9 +188,12 @@ export async function generateCourseDraft(input: GenerateCourseInput): Promise<A
   const passingScore = typeof input.passingScore === "number" ? Math.max(0, Math.min(100, input.passingScore)) : 80;
   const wantImages = !!input.wantImages;
 
+  const courseType = detectCourseType(input.topic, input.industry, input.trainingGoal);
   const system = [
-    "You are a senior instructional designer building professional employee training courses for service industries (cleaning, janitorial, field services, hospitality).",
+    "You are a senior instructional designer and storyteller building professional employee training courses for service industries (cleaning, janitorial, field services, hospitality).",
     tonePreamble(input.tone),
+    courseTypeGuidance(courseType),
+    "Build each module like a guided learning experience — NOT a rigid Overview→Lesson→Image→Checklist template. Vary pacing. Open with a hook or scenario, explain the concept in parts, place visuals between parts, and end with an action or takeaway. Never stack long text blocks back-to-back. Each module should feel different from the others.",
     "Always return valid JSON matching the requested schema. Never invent specific regulation citations or proprietary product names.",
     "Modules must be PRACTICAL, DETAILED, and USEFUL — not generic filler. Each lesson should give an employee everything they need to do the work correctly.",
     "Lesson text MUST be 200-400 words per module, organized as flowing paragraphs (not bullets).",
@@ -187,7 +237,12 @@ export async function generateCourseDraft(input: GenerateCourseInput): Promise<A
     `      "commonMistakes": string[],      // 2-4 frequent errors to avoid`,
     `      "safetyNotes": string[],         // 0-3 cautions; empty array if not safety-relevant`,
     `      "keyTakeaways": string[],        // 2-4 final-summary bullets`,
-    `      "imagePrompt": string            // short visual description, or "" if none`,
+    `      "imagePrompt": string,           // short visual description, or "" if none`,
+    `      "hook": string,                  // 1-2 sentence vivid opening that pulls the reader in. "" if not natural`,
+    `      "scenario": string,              // 1-2 sentence "What would you do if…" or real-situation prompt. "" if not natural`,
+    `      "quickTip": string,              // 1 sentence pithy practical tip. "" if not natural`,
+    `      "example": string,               // 1-2 sentence good-vs-bad example. Customer-service modules SHOULD have this; others may use ""`,
+    `      "recap": string                  // 1-2 sentence wrap-up the learner walks away with. "" if not natural`,
     `    }`,
     `  ],`,
     `  "suggestedQuiz": [`,
@@ -229,6 +284,7 @@ function asStringArray(v: any): string[] {
 }
 
 function normalizeModule(m: any): AIModuleDraft {
+  const optStr = (v: any): string | undefined => (typeof v === "string" && v.trim() ? v.trim() : undefined);
   return {
     title: String(m?.title ?? "Untitled module"),
     description: String(m?.description ?? ""),
@@ -241,6 +297,11 @@ function normalizeModule(m: any): AIModuleDraft {
     safetyNotes: asStringArray(m?.safetyNotes),
     keyTakeaways: asStringArray(m?.keyTakeaways),
     imagePrompt: typeof m?.imagePrompt === "string" ? m.imagePrompt : "",
+    hook: optStr(m?.hook),
+    scenario: optStr(m?.scenario),
+    quickTip: optStr(m?.quickTip),
+    recap: optStr(m?.recap),
+    example: optStr(m?.example),
   };
 }
 
@@ -343,10 +404,12 @@ export async function generateModuleContent(args: {
   courseDescription?: string | null;
   tone?: ToneOption;
 }): Promise<AIModuleDraft> {
+  const courseType = detectCourseType(args.moduleTitle, args.courseTitle, args.courseDescription);
   const system = [
-    "You are an instructional designer writing a single, detailed training module.",
+    "You are an instructional designer and storyteller writing a single, detailed training module.",
     tonePreamble(args.tone),
-    "Be concrete, practical, and useful for a service-industry employee. No filler. Return valid JSON only.",
+    courseTypeGuidance(courseType),
+    "Build the module as a guided learning experience — NOT a rigid template. Open with a hook or scenario, explain the concept in parts, place visuals between parts, and end with an action or takeaway. Vary pacing. Be concrete, practical, and useful for a service-industry employee. No filler. Return valid JSON only.",
   ].join(" ");
 
   const user = [
@@ -366,7 +429,12 @@ export async function generateModuleContent(args: {
     `  "commonMistakes": string[],     // 2-4 errors to avoid`,
     `  "safetyNotes": string[],         // 0-3; empty array if N/A`,
     `  "keyTakeaways": string[],       // 2-4 summary bullets`,
-    `  "imagePrompt": string            // short visual description, or ""`,
+    `  "imagePrompt": string,           // short visual description, or ""`,
+    `  "hook": string,                  // 1-2 sentence vivid opening. "" if not natural`,
+    `  "scenario": string,              // 1-2 sentence real-situation prompt. "" if not natural`,
+    `  "quickTip": string,              // 1 sentence practical tip. "" if not natural`,
+    `  "example": string,               // 1-2 sentence good-vs-bad example. "" if not natural`,
+    `  "recap": string                  // 1-2 sentence wrap-up. "" if not natural`,
     `}`,
   ].filter(Boolean).join("\n");
 

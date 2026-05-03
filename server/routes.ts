@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { db, pool } from "./db";
 import { setupAuth, hashPassword, comparePasswords, requireAuth, requireRole } from "./auth";
 import OpenAI from "openai";
-import { generateCourseDraft, improveText, generateQuizFromCourse, generateModuleContent, isAIAvailable, type ImproveAction, type ToneOption, type AIQuizQuestion } from "./training-ai";
+import { generateCourseDraft, improveText, generateQuizFromCourse, generateModuleContent, isAIAvailable, detectCourseType, type ImproveAction, type ToneOption, type AIQuizQuestion } from "./training-ai";
 import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail, sendAdminRequestReplyEmail, sendTrialAccountEmail, sendProposalEmail, sendHiringPackageEmail } from "./mail";
 import { createHash } from "crypto";
 import passport from "passport";
@@ -10603,61 +10603,131 @@ Return ONLY valid JSON:
         courseDescription: courseDescription || null,
         tone: tone as ToneOption | undefined,
       });
-      const blocks: any[] = [];
-      if (draft?.overview) blocks.push({ type: "text", title: "Overview", content: String(draft.overview) });
-      if (draft?.lessonText) blocks.push({ type: "text", title: "Lesson", content: String(draft.lessonText) });
+
+      // Detect course type so the block flow varies (cleaning vs safety vs
+      // equipment vs customer service). The type is NOT persisted — it only
+      // shapes how we order/style the blocks below.
+      const courseType = detectCourseType(moduleTitle, courseTitle, courseDescription);
+
+      // Image generation priority per the product spec:
+      //   cleaning / safety / equipment → HIGH (auto-attempt one image)
+      //   customer_service              → MEDIUM (skip auto-attempt; admin can generate manually)
+      //   general                       → HIGH (existing behavior)
+      const wantAutoImage = courseType !== "customer_service";
+
+      // Pre-build an image block (or image_prompt fallback) so the recipe can
+      // place it in the right slot. Cost control: at most ONE image per run.
+      const userCtx = (req as any).user;
+      let imageBlock: any = null;
+      let imagePromptFallback: any = null;
       if (draft?.imagePrompt) {
-        // Cost control: auto-generate at most ONE image per AI module run.
-        // If generation succeeds we attach a real image block; if it fails
-        // we fall back to a plain image_prompt block so the admin can retry.
-        const user = (req as any).user;
         const imgPrompt = String(draft.imagePrompt);
-        let placedImage = false;
-        try {
-          const img = await generateTrainingImage({
-            prompt: imgPrompt,
-            style: "training diagram",
-            size: "large",
-            companyId: user.companyId,
-          });
-          if (img.ok) {
-            blocks.push({
-              type: "image",
-              title: "Illustration",
-              assetData: img.imageData,
-              imagePrompt: imgPrompt,
-              imageSize: "large",
-              caption: null,
+        if (wantAutoImage) {
+          try {
+            const img = await generateTrainingImage({
+              prompt: imgPrompt,
+              style: courseType === "safety" ? "safety hazard illustration"
+                   : courseType === "equipment" ? "equipment diagram"
+                   : courseType === "cleaning" ? "before-and-after cleaning illustration"
+                   : "training diagram",
+              size: "large",
+              companyId: userCtx.companyId,
             });
-            placedImage = true;
-          }
-        } catch {}
-        if (!placedImage) {
-          blocks.push({ type: "image_prompt", title: "Suggested image", imagePrompt: imgPrompt });
+            if (img.ok) {
+              imageBlock = {
+                type: "image",
+                title: null,
+                assetData: img.imageData,
+                imagePrompt: imgPrompt,
+                imageSize: "large",
+                caption: null,
+              };
+            }
+          } catch {}
+        }
+        if (!imageBlock) {
+          imagePromptFallback = { type: "image_prompt", title: null, imagePrompt: imgPrompt };
         }
       }
-      if (Array.isArray(draft?.stepByStep) && draft.stepByStep.length > 0) {
-        blocks.push({
+
+      // Helpers ────────────────────────────────────────────────────────────
+      const stepsBlock = () => {
+        if (!Array.isArray(draft?.stepByStep) || draft.stepByStep.length === 0) return null;
+        return {
           type: "step_by_step",
-          title: "Step-by-step",
+          title: courseType === "equipment" ? "How to use it" : "Steps",
           stepsJson: JSON.stringify(draft.stepByStep.map((s: any, i: number) => ({
             title: typeof s === "string" ? `Step ${i + 1}` : (s.title ?? `Step ${i + 1}`),
             description: typeof s === "string" ? s : (s.description ?? ""),
           }))),
-        });
+        };
+      };
+      const checklistBlock = (title: string) => {
+        if (!Array.isArray(draft?.checklist) || draft.checklist.length === 0) return null;
+        return { type: "checklist", title, checklistJson: JSON.stringify(draft.checklist) };
+      };
+      const safetyChecklistBlock = () => {
+        if (!Array.isArray(draft?.safetyNotes) || draft.safetyNotes.length === 0) return checklistBlock("Safety actions");
+        return { type: "checklist", title: "Safety actions", checklistJson: JSON.stringify(draft.safetyNotes) };
+      };
+      const mistakeBlock = () => {
+        if (!Array.isArray(draft?.commonMistakes) || draft.commonMistakes.length === 0) return null;
+        const body = draft.commonMistakes.length === 1 ? String(draft.commonMistakes[0]) : "• " + draft.commonMistakes.join("\n• ");
+        return { type: "text", title: "Common mistake", content: body };
+      };
+      const hookBlock = () => draft?.hook ? { type: "text", title: "Hook", content: String(draft.hook) } : null;
+      const scenarioBlock = () => draft?.scenario ? { type: "text", title: "Scenario", content: String(draft.scenario) } : null;
+      const deepDiveBlock = () => {
+        const txt = String(draft?.lessonText ?? draft?.overview ?? "").trim();
+        return txt ? { type: "ai_explanation", title: "Deep dive", content: txt } : null;
+      };
+      const quickTipBlock = () => {
+        const tip = draft?.quickTip || (Array.isArray(draft?.keyPoints) && draft.keyPoints[0]) || null;
+        return tip ? { type: "text", title: "Quick tip", content: String(tip) } : null;
+      };
+      const exampleBlock = () => draft?.example ? { type: "text", title: "Good vs bad response", content: String(draft.example) } : null;
+      const recapBlock = () => {
+        const r = draft?.recap || (Array.isArray(draft?.keyTakeaways) && draft.keyTakeaways.length > 0 ? "• " + draft.keyTakeaways.join("\n• ") : null);
+        return r ? { type: "text", title: "Recap", content: String(r) } : null;
+      };
+      const imageSlot = () => imageBlock || imagePromptFallback;
+
+      // Type-specific recipes ───────────────────────────────────────────────
+      let recipe: (any | null)[] = [];
+      switch (courseType) {
+        case "cleaning":
+          recipe = [hookBlock(), deepDiveBlock(), imageSlot(), stepsBlock(), quickTipBlock(), mistakeBlock(), recapBlock()];
+          break;
+        case "safety":
+          // Spec flow: hook → scenario → image → deep_dive → checklist → mistake.
+          recipe = [hookBlock(), scenarioBlock(), imageSlot(), deepDiveBlock(), safetyChecklistBlock(), mistakeBlock()];
+          break;
+        case "equipment":
+          recipe = [hookBlock(), imageSlot(), deepDiveBlock(), stepsBlock(), quickTipBlock(), mistakeBlock(), recapBlock()];
+          break;
+        case "customer_service":
+          // Spec flow: scenario → deep_dive → quickTip → example → recap.
+          // Image is deprioritized for this type and is NOT placed in the
+          // learner-facing flow; admin can still generate one manually.
+          recipe = [scenarioBlock(), deepDiveBlock(), quickTipBlock(), exampleBlock(), recapBlock()];
+          break;
+        default:
+          // Engaging-but-flexible flow for general topics.
+          recipe = [
+            hookBlock() || scenarioBlock(),
+            deepDiveBlock(),
+            imageSlot(),
+            stepsBlock(),
+            quickTipBlock(),
+            checklistBlock("Checklist"),
+            mistakeBlock(),
+            recapBlock(),
+          ];
       }
-      if (Array.isArray(draft?.safetyNotes) && draft.safetyNotes.length > 0) {
-        blocks.push({ type: "safety_tip", title: "Safety notes", content: draft.safetyNotes.join("\n• ") });
-      }
-      if (Array.isArray(draft?.checklist) && draft.checklist.length > 0) {
-        blocks.push({ type: "checklist", title: "Checklist", checklistJson: JSON.stringify(draft.checklist) });
-      }
-      if (Array.isArray(draft?.commonMistakes) && draft.commonMistakes.length > 0) {
-        blocks.push({ type: "text", title: "Common mistakes", content: "• " + draft.commonMistakes.join("\n• ") });
-      }
-      if (Array.isArray(draft?.keyTakeaways) && draft.keyTakeaways.length > 0) {
-        blocks.push({ type: "text", title: "Key takeaways", content: "• " + draft.keyTakeaways.join("\n• ") });
-      }
+
+      const blocks = recipe.filter(Boolean);
+      // Preserve the existing { blocks, draft } payload shape — admin wizard
+      // already consumes only those two keys.
       res.json({ blocks, draft });
     } catch (e: any) {
       res.status(500).json({ message: e.message || "AI block generation failed" });
