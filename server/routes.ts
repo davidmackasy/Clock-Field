@@ -10426,32 +10426,49 @@ Return ONLY valid JSON:
   }
 
   // POST /api/training/modules/:id/audio (employee + admin)
+  // ALWAYS returns JSON. Never throws an HTML response. If OpenAI is not
+  // configured the response is `{ success: false, error: "..." }` so the
+  // frontend can cleanly fall back to browser text-to-speech.
   app.post("/api/training/modules/:id/audio", requireAuth, async (req, res) => {
+    res.setHeader("Content-Type", "application/json");
     try {
       const user = (req as any).user;
       const mod = await storage.getTrainingModule(req.params.id);
-      if (!mod) return res.status(404).json({ message: "Not found" });
+      if (!mod) return res.status(404).json({ success: false, error: "Module not found" });
       const course = await storage.getTrainingCourse(mod.courseId);
-      if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (!course || course.companyId !== user.companyId) return res.status(404).json({ success: false, error: "Module not found" });
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(200).json({ success: false, error: "Premium voice is not configured yet. Using browser voice instead." });
+      }
       const blocks = await storage.listLessonBlocksByModule(req.params.id);
       const result = await generateOrLoadModuleAudio(req.params.id, user.companyId, mod, blocks);
-      if (!result.supported) return res.status(503).json({ message: "Premium audio unavailable", fallback: true });
-      res.json({ audioData: result.audioData, format: result.format, voice: result.voice, cached: result.cached });
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
+      if (!result.supported) return res.status(200).json({ success: false, error: "Premium voice is not configured yet. Using browser voice instead." });
+      res.json({ success: true, audioData: result.audioData, audioUrl: result.audioData, format: result.format, voice: result.voice, cached: result.cached });
+    } catch (e: any) {
+      console.error("[training/audio] error:", e?.message);
+      res.status(500).json({ success: false, error: e?.message || "Premium voice failed" });
+    }
   });
 
   // POST /api/public/training/:publicId/modules/:moduleId/audio (public learners)
   app.post("/api/public/training/:publicId/modules/:moduleId/audio", async (req, res) => {
+    res.setHeader("Content-Type", "application/json");
     try {
       const course = await storage.getTrainingCourseByPublicId(req.params.publicId);
-      if (!course || !course.publicLinkEnabled || !course.isPublished) return res.status(404).json({ message: "Course not found" });
+      if (!course || !course.publicLinkEnabled || !course.isPublished) return res.status(404).json({ success: false, error: "Course not found" });
       const mod = await storage.getTrainingModule(req.params.moduleId);
-      if (!mod || mod.courseId !== course.id) return res.status(404).json({ message: "Module not found" });
+      if (!mod || mod.courseId !== course.id) return res.status(404).json({ success: false, error: "Module not found" });
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(200).json({ success: false, error: "Premium voice is not configured yet. Using browser voice instead." });
+      }
       const blocks = await storage.listLessonBlocksByModule(req.params.moduleId);
       const result = await generateOrLoadModuleAudio(req.params.moduleId, course.companyId, mod, blocks);
-      if (!result.supported) return res.status(503).json({ message: "Premium audio unavailable", fallback: true });
-      res.json({ audioData: result.audioData, format: result.format, voice: result.voice, cached: result.cached });
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
+      if (!result.supported) return res.status(200).json({ success: false, error: "Premium voice is not configured yet. Using browser voice instead." });
+      res.json({ success: true, audioData: result.audioData, audioUrl: result.audioData, format: result.format, voice: result.voice, cached: result.cached });
+    } catch (e: any) {
+      console.error("[training/audio public] error:", e?.message);
+      res.status(500).json({ success: false, error: e?.message || "Premium voice failed" });
+    }
   });
 
   // ── AI block helpers ──────────────────────────────────────────────────────

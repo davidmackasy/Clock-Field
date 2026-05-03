@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Play, Pause, Square, Volume2, AlertCircle, Sparkles, Loader2 } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
 
 type Props = {
   text: string;
@@ -62,15 +61,31 @@ export function AudioPlayer({ text, title, moduleId, publicId }: Props) {
       const path = publicId
         ? `/api/public/training/${publicId}/modules/${moduleId}/audio`
         : `/api/training/modules/${moduleId}/audio`;
-      const res = await apiRequest("POST", path, {});
-      const data = await res.json();
-      if (data?.audioData) {
-        setPremiumUrl(data.audioData);
+      const res = await fetch(path, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: "{}",
+      });
+      // Defensive: if the server returned HTML (e.g. Vite catch-all because
+      // the route is missing in this build), surface a clean message and
+      // keep browser TTS available rather than crashing on JSON.parse.
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error("Premium voice is not configured yet. Using browser voice instead.");
+      }
+      const data = await res.json().catch(() => null) as any;
+      if (!res.ok) {
+        // Server returned JSON error — show its message but always fall back.
+        throw new Error(data?.error || data?.message || "Premium voice is not configured yet. Using browser voice instead.");
+      }
+      if (data?.audioData || data?.audioUrl) {
+        setPremiumUrl(data.audioData || data.audioUrl);
       } else {
-        throw new Error(data?.message || "No audio returned");
+        throw new Error(data?.error || data?.message || "Premium voice is not configured yet. Using browser voice instead.");
       }
     } catch (e: any) {
-      setPremiumError(e?.message || "Premium audio unavailable; using browser voice.");
+      setPremiumError(e?.message || "Premium voice is not configured yet. Using browser voice instead.");
     } finally {
       setGenerating(false);
     }
