@@ -815,25 +815,25 @@ export default function AdminTrainingHub() {
   const course = detail?.course;
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto overflow-x-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Training Hub</h1>
-          <p className="text-sm text-muted-foreground">Create courses, assign employees, track completions</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-foreground leading-tight break-words">Training Hub</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Create courses, assign employees, track completions</p>
         </div>
         {view === "grid" && (
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setAiWizardOpen(true)} data-testid="btn-create-course-ai">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-2 w-full sm:w-auto sm:flex-shrink-0">
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setAiWizardOpen(true)} data-testid="btn-create-course-ai">
               <Sparkles className="w-4 h-4 mr-1" /> Generate with AI
             </Button>
-            <Button onClick={() => { setCreateOpen(true); setCreateStep(1); }} data-testid="btn-create-course">
+            <Button className="w-full sm:w-auto" onClick={() => { setCreateOpen(true); setCreateStep(1); }} data-testid="btn-create-course">
               <Plus className="w-4 h-4 mr-1" /> Create Course
             </Button>
           </div>
         )}
         {view === "detail" && (
-          <Button variant="outline" onClick={() => { setView("grid"); setSelectedId(null); }} data-testid="btn-back-courses">
+          <Button variant="outline" className="w-full sm:w-auto" onClick={() => { setView("grid"); setSelectedId(null); }} data-testid="btn-back-courses">
             ← All Courses
           </Button>
         )}
@@ -850,13 +850,13 @@ export default function AdminTrainingHub() {
           ].map(s => {
             const Icon = s.icon;
             return (
-              <div key={s.label} className="bg-card border border-border rounded-xl p-4 flex items-center gap-3">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${s.color}`}>
+              <div key={s.label} className="bg-card border border-border rounded-xl p-3 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
+                <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${s.color}`}>
                   <Icon className="w-4 h-4" />
                 </div>
-                <div>
-                  <div className="text-xl font-bold text-foreground">{s.value}</div>
-                  <div className="text-xs text-muted-foreground">{s.label}</div>
+                <div className="min-w-0">
+                  <div className="text-lg sm:text-xl font-bold text-foreground leading-tight">{s.value}</div>
+                  <div className="text-[11px] sm:text-xs text-muted-foreground leading-tight truncate">{s.label}</div>
                 </div>
               </div>
             );
@@ -868,25 +868,27 @@ export default function AdminTrainingHub() {
       {view === "grid" && (
         <div className="space-y-4">
           {/* Filters */}
-          <div className="flex flex-wrap gap-2 items-center">
-            <div className="relative flex-1 min-w-48">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:items-center">
+            <div className="relative w-full sm:flex-1 sm:min-w-48">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input className="pl-9 h-9" placeholder="Search courses..." value={search} onChange={e => setSearch(e.target.value)} data-testid="input-search-courses" />
+              <Input className="pl-9 h-9 w-full" placeholder="Search courses..." value={search} onChange={e => setSearch(e.target.value)} data-testid="input-search-courses" />
             </div>
-            <select
-              className="h-9 px-3 border border-border rounded-md text-sm bg-background text-foreground"
-              value={filterCategory} onChange={e => setFilterCategory(e.target.value)} data-testid="select-filter-category">
-              <option value="All">All Categories</option>
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <select
-              className="h-9 px-3 border border-border rounded-md text-sm bg-background text-foreground"
-              value={filterStatus} onChange={e => setFilterStatus(e.target.value)} data-testid="select-filter-status">
-              <option value="All">All Status</option>
-              <option value="Published">Published</option>
-              <option value="Draft">Draft</option>
-              <option value="Required">Required</option>
-            </select>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-2 w-full sm:w-auto">
+              <select
+                className="h-9 px-3 border border-border rounded-md text-sm bg-background text-foreground w-full sm:w-auto min-w-0"
+                value={filterCategory} onChange={e => setFilterCategory(e.target.value)} data-testid="select-filter-category">
+                <option value="All">All Categories</option>
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select
+                className="h-9 px-3 border border-border rounded-md text-sm bg-background text-foreground w-full sm:w-auto min-w-0"
+                value={filterStatus} onChange={e => setFilterStatus(e.target.value)} data-testid="select-filter-status">
+                <option value="All">All Status</option>
+                <option value="Published">Published</option>
+                <option value="Draft">Draft</option>
+                <option value="Required">Required</option>
+              </select>
+            </div>
           </div>
 
           {isLoading ? (
@@ -894,15 +896,15 @@ export default function AdminTrainingHub() {
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
           ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center border border-dashed border-border rounded-xl">
+            <div className="flex flex-col items-center justify-center py-12 sm:py-20 px-4 text-center border border-dashed border-border rounded-xl">
               <BookOpen className="w-12 h-12 text-muted-foreground mb-3" />
               <p className="text-base font-semibold text-foreground mb-1">No courses yet</p>
               <p className="text-sm text-muted-foreground mb-4 max-w-xs">Build your first training course with YouTube videos, text lessons, and quizzes.</p>
-              <div className="flex gap-2">
-                <Button onClick={() => setAiWizardOpen(true)} data-testid="btn-create-course-ai-empty">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-sm">
+                <Button className="w-full" onClick={() => setAiWizardOpen(true)} data-testid="btn-create-course-ai-empty">
                   <Sparkles className="w-4 h-4 mr-1" /> Generate with AI
                 </Button>
-                <Button variant="outline" onClick={() => setCreateOpen(true)} data-testid="btn-create-course-empty">
+                <Button className="w-full" variant="outline" onClick={() => setCreateOpen(true)} data-testid="btn-create-course-empty">
                   <Plus className="w-4 h-4 mr-1" /> Create Manually
                 </Button>
               </div>

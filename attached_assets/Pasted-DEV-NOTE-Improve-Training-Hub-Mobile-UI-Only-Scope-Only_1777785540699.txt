@@ -1,0 +1,134 @@
+DEV NOTE: Improve Training Hub Mobile UI Only
+Scope:
+Only update Training Hub mobile UI.
+Do not touch:
+Admin desktop layout
+Employee app
+Public course link
+APIs
+Database
+Course logic
+Quizzes
+Certificates
+Payroll
+Schedule
+Attendance
+Reports
+Anything else in ClockField
+Issue:
+Training Hub mobile layout looks cramped.
+Title wraps badly.
+Buttons are squeezed.
+Stats cards take too much space.
+Search/filter area is not clean.
+There is horizontal overflow at the bottom.
+Fix Requirements:
+
+
+Fix mobile header
+
+
+On mobile, make header vertical and clean:
+Training Hub
+Create courses, assign employees, track completions
+Buttons should stack or fit cleanly:
+Generate with AI
+Create Course
+Use full-width buttons on mobile.
+
+
+Fix title wrapping
+
+
+Do not let “Training Hub” split awkwardly.
+Use:
+font-size: 24px
+line-height: 1.1
+max-width: 100%
+Description should stay under title.
+
+
+Fix action buttons
+
+
+Mobile:
+2 buttons side by side if space allows
+Otherwise full width stacked
+No button should cut off.
+
+
+Improve stats cards
+
+
+Mobile layout:
+2 cards per row
+Keep cards compact:
+Total Courses
+Employees Assigned
+Completions
+In Progress
+Reduce padding slightly.
+
+
+Improve search and filters
+
+
+Mobile layout:
+Search input full width
+Category filter full width or 2-column with status
+Status filter below if needed
+No overflow.
+
+
+Fix empty state card
+
+
+Make empty state fit mobile:
+Centered icon
+“No courses yet”
+Short text
+Buttons stacked or 2-column clean
+
+
+Remove horizontal scrolling
+
+
+Important:
+There should be no horizontal scrollbar on mobile.
+Check containers for:
+fixed widths
+min-width too large
+overflow-x
+button groups wider than viewport
+Add:
+max-width: 100%
+overflow-x: hidden
+Only where needed inside Training Hub mobile container.
+
+
+Keep desktop unchanged
+
+
+Use responsive CSS only.
+Example:
+@media (max-width: 640px) {
+.training-header {
+flex-direction: column;
+align-items: stretch;
+}
+.training-actions {
+display: grid;
+grid-template-columns: 1fr;
+gap: 8px;
+}
+.training-stats {
+grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+}
+Expected Result:
+Training Hub admin mobile page looks clean, professional, and readable.
+No cramped buttons.
+No broken title.
+No horizontal scrolling.
+Stats fit nicely.
+Nothing else in ClockField is affected.
