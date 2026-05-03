@@ -80,6 +80,7 @@ import {
   type EmployeeHiringDocument, type InsertEmployeeHiringDocument,
   trainingCourses, trainingModules, trainingModuleAssets, trainingAssignments,
   trainingProgress, trainingPublicLearners, trainingCertificates,
+  trainingQuizzes, trainingQuizQuestions, trainingQuizAttempts,
   type TrainingCourse, type InsertTrainingCourse,
   type TrainingModule, type InsertTrainingModule,
   type TrainingModuleAsset, type InsertTrainingModuleAsset,
@@ -87,6 +88,9 @@ import {
   type TrainingProgress, type InsertTrainingProgress,
   type TrainingPublicLearner, type InsertTrainingPublicLearner,
   type TrainingCertificate, type InsertTrainingCertificate,
+  type TrainingQuiz, type InsertTrainingQuiz,
+  type TrainingQuizQuestion, type InsertTrainingQuizQuestion,
+  type TrainingQuizAttempt, type InsertTrainingQuizAttempt,
   quoteRequestWalkthroughs, quoteRequestWalkthroughPhotos, quoteRequestWalkthroughSections,
   type QuoteRequestWalkthrough, type InsertQuoteRequestWalkthrough,
   type QuoteRequestWalkthroughPhoto, type InsertQuoteRequestWalkthroughPhoto,
@@ -483,6 +487,21 @@ export interface IStorage {
 
   createTrainingCertificate(data: InsertTrainingCertificate): Promise<TrainingCertificate>;
   getTrainingCertificate(courseId: string, employeeId?: string, publicLearnerId?: string): Promise<TrainingCertificate | undefined>;
+
+  // Training Quizzes
+  getTrainingQuizByCourse(courseId: string): Promise<(TrainingQuiz & { questions: TrainingQuizQuestion[] }) | undefined>;
+  createTrainingQuiz(data: InsertTrainingQuiz): Promise<TrainingQuiz>;
+  updateTrainingQuiz(id: string, data: Partial<InsertTrainingQuiz>): Promise<TrainingQuiz | undefined>;
+  deleteTrainingQuiz(id: string): Promise<void>;
+  createTrainingQuizQuestion(data: InsertTrainingQuizQuestion): Promise<TrainingQuizQuestion>;
+  updateTrainingQuizQuestion(id: string, data: Partial<InsertTrainingQuizQuestion>): Promise<TrainingQuizQuestion | undefined>;
+  deleteTrainingQuizQuestion(id: string): Promise<void>;
+  replaceTrainingQuizQuestions(quizId: string, questions: Omit<InsertTrainingQuizQuestion, "quizId" | "createdAt">[]): Promise<TrainingQuizQuestion[]>;
+  createTrainingQuizAttempt(data: InsertTrainingQuizAttempt): Promise<TrainingQuizAttempt>;
+  updateTrainingQuizAttempt(id: string, data: Partial<InsertTrainingQuizAttempt>): Promise<TrainingQuizAttempt | undefined>;
+  getTrainingQuizAttempt(id: string): Promise<TrainingQuizAttempt | undefined>;
+  getTrainingQuizAttempts(quizId: string, employeeId?: string, publicLearnerId?: string): Promise<TrainingQuizAttempt[]>;
+  hasPassedTrainingQuiz(quizId: string, employeeId?: string, publicLearnerId?: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2501,6 +2520,84 @@ export class DatabaseStorage implements IStorage {
     if (publicLearnerId) conditions.push(eq(trainingCertificates.publicLearnerId, publicLearnerId));
     const [row] = await db.select().from(trainingCertificates).where(and(...conditions));
     return row;
+  }
+
+  // ── Training Quizzes ──────────────────────────────────────────────────────
+  async getTrainingQuizByCourse(courseId: string): Promise<(TrainingQuiz & { questions: TrainingQuizQuestion[] }) | undefined> {
+    const [quiz] = await db.select().from(trainingQuizzes).where(eq(trainingQuizzes.courseId, courseId));
+    if (!quiz) return undefined;
+    const questions = await db.select().from(trainingQuizQuestions)
+      .where(eq(trainingQuizQuestions.quizId, quiz.id))
+      .orderBy(asc(trainingQuizQuestions.sortOrder));
+    return { ...quiz, questions };
+  }
+
+  async createTrainingQuiz(data: InsertTrainingQuiz): Promise<TrainingQuiz> {
+    const [row] = await db.insert(trainingQuizzes).values(data as any).returning();
+    return row;
+  }
+
+  async updateTrainingQuiz(id: string, data: Partial<InsertTrainingQuiz>): Promise<TrainingQuiz | undefined> {
+    const [row] = await db.update(trainingQuizzes).set(data as any).where(eq(trainingQuizzes.id, id)).returning();
+    return row;
+  }
+
+  async deleteTrainingQuiz(id: string): Promise<void> {
+    await db.delete(trainingQuizQuestions).where(eq(trainingQuizQuestions.quizId, id));
+    await db.delete(trainingQuizAttempts).where(eq(trainingQuizAttempts.quizId, id));
+    await db.delete(trainingQuizzes).where(eq(trainingQuizzes.id, id));
+  }
+
+  async createTrainingQuizQuestion(data: InsertTrainingQuizQuestion): Promise<TrainingQuizQuestion> {
+    const [row] = await db.insert(trainingQuizQuestions).values(data as any).returning();
+    return row;
+  }
+
+  async updateTrainingQuizQuestion(id: string, data: Partial<InsertTrainingQuizQuestion>): Promise<TrainingQuizQuestion | undefined> {
+    const [row] = await db.update(trainingQuizQuestions).set(data as any).where(eq(trainingQuizQuestions.id, id)).returning();
+    return row;
+  }
+
+  async deleteTrainingQuizQuestion(id: string): Promise<void> {
+    await db.delete(trainingQuizQuestions).where(eq(trainingQuizQuestions.id, id));
+  }
+
+  async replaceTrainingQuizQuestions(quizId: string, questions: Omit<InsertTrainingQuizQuestion, "quizId" | "createdAt">[]): Promise<TrainingQuizQuestion[]> {
+    await db.delete(trainingQuizQuestions).where(eq(trainingQuizQuestions.quizId, quizId));
+    if (questions.length === 0) return [];
+    const now = new Date().toISOString();
+    const rows = questions.map((q, i) => ({ ...q, quizId, sortOrder: q.sortOrder ?? i, createdAt: now }));
+    return db.insert(trainingQuizQuestions).values(rows as any).returning();
+  }
+
+  async createTrainingQuizAttempt(data: InsertTrainingQuizAttempt): Promise<TrainingQuizAttempt> {
+    const [row] = await db.insert(trainingQuizAttempts).values(data as any).returning();
+    return row;
+  }
+
+  async updateTrainingQuizAttempt(id: string, data: Partial<InsertTrainingQuizAttempt>): Promise<TrainingQuizAttempt | undefined> {
+    const [row] = await db.update(trainingQuizAttempts).set(data as any).where(eq(trainingQuizAttempts.id, id)).returning();
+    return row;
+  }
+
+  async getTrainingQuizAttempt(id: string): Promise<TrainingQuizAttempt | undefined> {
+    const [row] = await db.select().from(trainingQuizAttempts).where(eq(trainingQuizAttempts.id, id));
+    return row;
+  }
+
+  async getTrainingQuizAttempts(quizId: string, employeeId?: string, publicLearnerId?: string): Promise<TrainingQuizAttempt[]> {
+    const conditions: any[] = [eq(trainingQuizAttempts.quizId, quizId)];
+    if (employeeId) conditions.push(eq(trainingQuizAttempts.employeeId, employeeId));
+    if (publicLearnerId) conditions.push(eq(trainingQuizAttempts.publicLearnerId, publicLearnerId));
+    return db.select().from(trainingQuizAttempts).where(and(...conditions)).orderBy(desc(trainingQuizAttempts.startedAt));
+  }
+
+  async hasPassedTrainingQuiz(quizId: string, employeeId?: string, publicLearnerId?: string): Promise<boolean> {
+    const conditions: any[] = [eq(trainingQuizAttempts.quizId, quizId), eq(trainingQuizAttempts.passed, true)];
+    if (employeeId) conditions.push(eq(trainingQuizAttempts.employeeId, employeeId));
+    if (publicLearnerId) conditions.push(eq(trainingQuizAttempts.publicLearnerId, publicLearnerId));
+    const [row] = await db.select({ id: trainingQuizAttempts.id }).from(trainingQuizAttempts).where(and(...conditions)).limit(1);
+    return !!row;
   }
 }
 

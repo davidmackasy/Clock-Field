@@ -2077,3 +2077,57 @@ export type InsertTrainingPublicLearner = z.infer<typeof insertTrainingPublicLea
 export const insertTrainingCertificateSchema = createInsertSchema(trainingCertificates).omit({ id: true });
 export type TrainingCertificate = typeof trainingCertificates.$inferSelect;
 export type InsertTrainingCertificate = z.infer<typeof insertTrainingCertificateSchema>;
+
+// ── Training Quizzes ──────────────────────────────────────────────────────────
+
+export const trainingQuizzes = pgTable("training_quizzes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  courseId: varchar("course_id").notNull().unique(),
+  companyId: varchar("company_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  passingScore: integer("passing_score").notNull().default(80),
+  allowRetake: boolean("allow_retake").notNull().default(true),
+  showCorrectAnswers: boolean("show_correct_answers").notNull().default(false),
+  isRequired: boolean("is_required").notNull().default(true),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const trainingQuizQuestions = pgTable("training_quiz_questions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  quizId: varchar("quiz_id").notNull(),
+  questionText: text("question_text").notNull(),
+  questionType: text("question_type").notNull().default("multiple_choice"),
+  optionsJson: text("options_json"),
+  correctAnswerJson: text("correct_answer_json").notNull(),
+  explanation: text("explanation"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
+export const trainingQuizAttempts = pgTable("training_quiz_attempts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  quizId: varchar("quiz_id").notNull(),
+  courseId: varchar("course_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  employeeId: varchar("employee_id"),
+  publicLearnerId: varchar("public_learner_id"),
+  score: integer("score"),
+  passed: boolean("passed").notNull().default(false),
+  answersJson: text("answers_json"),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"),
+});
+
+export const insertTrainingQuizSchema = createInsertSchema(trainingQuizzes).omit({ id: true });
+export type TrainingQuiz = typeof trainingQuizzes.$inferSelect;
+export type InsertTrainingQuiz = z.infer<typeof insertTrainingQuizSchema>;
+
+export const insertTrainingQuizQuestionSchema = createInsertSchema(trainingQuizQuestions).omit({ id: true });
+export type TrainingQuizQuestion = typeof trainingQuizQuestions.$inferSelect;
+export type InsertTrainingQuizQuestion = z.infer<typeof insertTrainingQuizQuestionSchema>;
+
+export const insertTrainingQuizAttemptSchema = createInsertSchema(trainingQuizAttempts).omit({ id: true });
+export type TrainingQuizAttempt = typeof trainingQuizAttempts.$inferSelect;
+export type InsertTrainingQuizAttempt = z.infer<typeof insertTrainingQuizAttemptSchema>;

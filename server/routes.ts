@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { db, pool } from "./db";
 import { setupAuth, hashPassword, comparePasswords, requireAuth, requireRole } from "./auth";
 import OpenAI from "openai";
+import { generateCourseDraft, improveText, generateQuizFromCourse, generateModuleContent, isAIAvailable, type ImproveAction, type ToneOption, type AIQuizQuestion } from "./training-ai";
 import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail, sendAdminRequestReplyEmail, sendTrialAccountEmail, sendProposalEmail, sendHiringPackageEmail } from "./mail";
 import { createHash } from "crypto";
 import passport from "passport";
@@ -10197,6 +10198,268 @@ Return ONLY valid JSON:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ── Training AI Backbone ──────────────────────────────────────────────────
+
+  // POST /api/training/ai/generate-course — wizard step 2 backbone
+  app.post("/api/training/ai/generate-course", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      if (!isAIAvailable()) return res.status(503).json({ message: "AI not available" });
+      const { topic, industry, employeeLevel, trainingGoal, moduleCount, includeQuiz, tone } = req.body || {};
+      if (!topic || typeof topic !== "string" || topic.trim().length < 3) {
+        return res.status(400).json({ message: "topic is required (min 3 chars)" });
+      }
+      const draft = await generateCourseDraft({
+        topic: topic.trim(),
+        industry: industry || undefined,
+        employeeLevel: employeeLevel || undefined,
+        trainingGoal: trainingGoal || undefined,
+        moduleCount: typeof moduleCount === "number" ? moduleCount : undefined,
+        includeQuiz: includeQuiz !== false,
+        tone: tone as ToneOption | undefined,
+      });
+      res.json(draft);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "AI generation failed" });
+    }
+  });
+
+  // POST /api/training/ai/improve — improve/grammar/shorter/clearer/professional/safety/etc
+  app.post("/api/training/ai/improve", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      if (!isAIAvailable()) return res.status(503).json({ message: "AI not available" });
+      const { text, action, context } = req.body || {};
+      if (!text || typeof text !== "string") return res.status(400).json({ message: "text required" });
+      if (!action || typeof action !== "string") return res.status(400).json({ message: "action required" });
+      const result = await improveText(text, action as ImproveAction, context);
+      res.json({ result });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "AI generation failed" });
+    }
+  });
+
+  // POST /api/training/ai/generate-module — generate or fill out a single module body
+  app.post("/api/training/ai/generate-module", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      if (!isAIAvailable()) return res.status(503).json({ message: "AI not available" });
+      const { moduleTitle, courseTitle, courseDescription, tone } = req.body || {};
+      if (!moduleTitle || typeof moduleTitle !== "string") return res.status(400).json({ message: "moduleTitle required" });
+      const draft = await generateModuleContent({
+        moduleTitle,
+        courseTitle: courseTitle || undefined,
+        courseDescription: courseDescription || null,
+        tone: tone as ToneOption | undefined,
+      });
+      res.json(draft);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "AI generation failed" });
+    }
+  });
+
+  // POST /api/training/ai/generate-quiz — generate quiz questions from existing course modules
+  app.post("/api/training/ai/generate-quiz", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      if (!isAIAvailable()) return res.status(503).json({ message: "AI not available" });
+      const user = (req as any).user;
+      const { courseId, count, tone } = req.body || {};
+      if (!courseId) return res.status(400).json({ message: "courseId required" });
+      const course = await storage.getTrainingCourse(courseId);
+      if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Course not found" });
+      const modules = await storage.getTrainingModules(courseId);
+      const modulesWithContent = modules.filter(m => (m.lessonText && m.lessonText.trim().length > 20) || (m.description && m.description.trim().length > 10));
+      if (modulesWithContent.length === 0) {
+        return res.status(400).json({ message: "Course has no module content yet. Add lesson text or descriptions to at least one module before generating a quiz." });
+      }
+      const questions = await generateQuizFromCourse({
+        courseTitle: course.title,
+        courseDescription: course.description,
+        modules: modulesWithContent.map(m => ({ title: m.title, description: m.description, lessonText: m.lessonText })),
+        count: typeof count === "number" ? count : 15,
+        tone: tone as ToneOption | undefined,
+      });
+      res.json({ questions });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "AI generation failed" });
+    }
+  });
+
+  // ── Training Quiz CRUD ────────────────────────────────────────────────────
+
+  function aiQuestionsToInsertRows(questions: AIQuizQuestion[]) {
+    return questions.map((q, i) => ({
+      questionText: q.questionText,
+      questionType: q.questionType,
+      optionsJson: q.options ? JSON.stringify(q.options) : null,
+      correctAnswerJson: JSON.stringify(q.correctAnswer),
+      explanation: q.explanation || null,
+      sortOrder: i,
+    }));
+  }
+
+  // GET /api/training/courses/:courseId/quiz — admin
+  app.get("/api/training/courses/:courseId/quiz", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const course = await storage.getTrainingCourse(req.params.courseId);
+      if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const quiz = await storage.getTrainingQuizByCourse(req.params.courseId);
+      res.json(quiz ?? null);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/training/courses/:courseId/quiz — create or replace quiz (with optional questions array)
+  app.post("/api/training/courses/:courseId/quiz", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const course = await storage.getTrainingCourse(req.params.courseId);
+      if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const { title, description, passingScore, allowRetake, showCorrectAnswers, isRequired, questions, aiQuestions } = req.body || {};
+      const now = trainingNow();
+      const existing = await storage.getTrainingQuizByCourse(course.id);
+      let quiz: TrainingQuizLike;
+      if (existing) {
+        quiz = (await storage.updateTrainingQuiz(existing.id, {
+          title: title ?? existing.title,
+          description: description ?? existing.description,
+          passingScore: typeof passingScore === "number" ? passingScore : existing.passingScore,
+          allowRetake: typeof allowRetake === "boolean" ? allowRetake : existing.allowRetake,
+          showCorrectAnswers: typeof showCorrectAnswers === "boolean" ? showCorrectAnswers : existing.showCorrectAnswers,
+          isRequired: typeof isRequired === "boolean" ? isRequired : existing.isRequired,
+          updatedAt: now,
+        }))!;
+      } else {
+        quiz = await storage.createTrainingQuiz({
+          courseId: course.id,
+          companyId: user.companyId,
+          title: title ?? `${course.title} — Final Quiz`,
+          description: description ?? null,
+          passingScore: typeof passingScore === "number" ? passingScore : 80,
+          allowRetake: typeof allowRetake === "boolean" ? allowRetake : true,
+          showCorrectAnswers: typeof showCorrectAnswers === "boolean" ? showCorrectAnswers : false,
+          isRequired: typeof isRequired === "boolean" ? isRequired : true,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+
+      let savedQuestions = null;
+      if (Array.isArray(aiQuestions)) {
+        savedQuestions = await storage.replaceTrainingQuizQuestions(quiz.id, aiQuestionsToInsertRows(aiQuestions as AIQuizQuestion[]));
+      } else if (Array.isArray(questions)) {
+        savedQuestions = await storage.replaceTrainingQuizQuestions(quiz.id, questions.map((q: any, i: number) => ({
+          questionText: String(q.questionText ?? ""),
+          questionType: q.questionType === "true_false" || q.questionType === "short_answer" ? q.questionType : "multiple_choice",
+          optionsJson: q.options ? JSON.stringify(q.options) : (q.optionsJson ?? null),
+          correctAnswerJson: typeof q.correctAnswerJson === "string" ? q.correctAnswerJson : JSON.stringify(q.correctAnswer ?? ""),
+          explanation: q.explanation ?? null,
+          sortOrder: typeof q.sortOrder === "number" ? q.sortOrder : i,
+        })));
+      }
+      const full = await storage.getTrainingQuizByCourse(course.id);
+      res.json(full ?? { ...quiz, questions: savedQuestions ?? [] });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Tenant ownership helpers — load before mutate
+  async function loadQuizForCompany(quizId: string, companyId: string) {
+    const { trainingQuizzes: tq } = await import("@shared/schema");
+    const [row] = await db.select().from(tq).where(and(eq(tq.id, quizId), eq(tq.companyId, companyId)));
+    return row ?? null;
+  }
+  async function loadQuestionForCompany(questionId: string, companyId: string) {
+    const { trainingQuizzes: tq, trainingQuizQuestions: tqq } = await import("@shared/schema");
+    const [row] = await db
+      .select({ q: tqq, quiz: tq })
+      .from(tqq)
+      .innerJoin(tq, eq(tqq.quizId, tq.id))
+      .where(and(eq(tqq.id, questionId), eq(tq.companyId, companyId)));
+    return row ? { question: row.q, quiz: row.quiz } : null;
+  }
+
+  // PUT /api/training/quizzes/:quizId — update quiz settings
+  app.put("/api/training/quizzes/:quizId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const existing = await loadQuizForCompany(req.params.quizId, user.companyId);
+      if (!existing) return res.status(404).json({ message: "Not found" });
+      // Whitelist mutable fields; never trust client to set companyId / courseId / id
+      const { title, description, passingScore, allowRetake, showCorrectAnswers, isRequired } = req.body || {};
+      const patch: any = { updatedAt: trainingNow() };
+      if (typeof title === "string") patch.title = title;
+      if (description !== undefined) patch.description = description;
+      if (typeof passingScore === "number") patch.passingScore = passingScore;
+      if (typeof allowRetake === "boolean") patch.allowRetake = allowRetake;
+      if (typeof showCorrectAnswers === "boolean") patch.showCorrectAnswers = showCorrectAnswers;
+      if (typeof isRequired === "boolean") patch.isRequired = isRequired;
+      const updated = await storage.updateTrainingQuiz(req.params.quizId, patch);
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // DELETE /api/training/quizzes/:quizId
+  app.delete("/api/training/quizzes/:quizId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const existing = await loadQuizForCompany(req.params.quizId, user.companyId);
+      if (!existing) return res.status(404).json({ message: "Not found" });
+      await storage.deleteTrainingQuiz(req.params.quizId);
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/training/quizzes/:quizId/questions — add a question
+  app.post("/api/training/quizzes/:quizId/questions", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const existing = await loadQuizForCompany(req.params.quizId, user.companyId);
+      if (!existing) return res.status(404).json({ message: "Not found" });
+      const { questionText, questionType, options, correctAnswer, explanation, sortOrder } = req.body || {};
+      if (!questionText) return res.status(400).json({ message: "questionText required" });
+      const q = await storage.createTrainingQuizQuestion({
+        quizId: req.params.quizId,
+        questionText,
+        questionType: questionType === "true_false" || questionType === "short_answer" ? questionType : "multiple_choice",
+        optionsJson: options ? JSON.stringify(options) : null,
+        correctAnswerJson: JSON.stringify(correctAnswer ?? ""),
+        explanation: explanation ?? null,
+        sortOrder: typeof sortOrder === "number" ? sortOrder : 0,
+        createdAt: trainingNow(),
+      });
+      res.json(q);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // PUT /api/training/quiz-questions/:id
+  app.put("/api/training/quiz-questions/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const existing = await loadQuestionForCompany(req.params.id, user.companyId);
+      if (!existing) return res.status(404).json({ message: "Not found" });
+      const { questionText, questionType, options, correctAnswer, explanation, sortOrder } = req.body || {};
+      const patch: any = {};
+      if (typeof questionText === "string") patch.questionText = questionText;
+      if (questionType === "multiple_choice" || questionType === "true_false" || questionType === "short_answer") patch.questionType = questionType;
+      if (options !== undefined) patch.optionsJson = options ? JSON.stringify(options) : null;
+      if (correctAnswer !== undefined) patch.correctAnswerJson = JSON.stringify(correctAnswer);
+      if (explanation !== undefined) patch.explanation = explanation;
+      if (typeof sortOrder === "number") patch.sortOrder = sortOrder;
+      const q = await storage.updateTrainingQuizQuestion(req.params.id, patch);
+      res.json(q);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // DELETE /api/training/quiz-questions/:id
+  app.delete("/api/training/quiz-questions/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const existing = await loadQuestionForCompany(req.params.id, user.companyId);
+      if (!existing) return res.status(404).json({ message: "Not found" });
+      await storage.deleteTrainingQuizQuestion(req.params.id);
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   return httpServer;
 }
+
+type TrainingQuizLike = Awaited<ReturnType<typeof storage.createTrainingQuiz>>;
 
