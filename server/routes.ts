@@ -14,7 +14,6 @@ import path from "path";
 import fs from "fs";
 import { isNotNull, eq, and, isNull, inArray, desc, sql } from "drizzle-orm";
 import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments, supplies, supplyUpdates, inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses, trainingPublicLearners, trainingCourses, trainingModules, trainingQuizzes, trainingQuizQuestions } from "@shared/schema";
-import { db } from "./db";
 import { getPlan } from "./plans";
 import { generateReviewOgImage } from "./og-image";
 
