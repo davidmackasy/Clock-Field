@@ -1,0 +1,1269 @@
+DEV NOTE: Upgrade ClockField Messaging Into a Real Messenger-Style Communication System
+
+Project: ClockField
+Area: Admin Messages, Employee App, Client Portal
+Priority: High
+Goal: Turn Messages into a full communication hub where admins, employees, management users, and clients can start conversations, reply, send photos, and tag messages by purpose.
+
+Very important
+
+Do not delete, break, rebuild, or rename unrelated features.
+
+Do not touch:
+
+Stripe
+
+Subscription/paywall logic
+
+Authentication
+
+Payroll
+
+Attendance
+
+Scheduling
+
+Worklogs
+
+Training Hub
+
+Hiring package
+
+Client reports
+
+Public report links
+
+Existing employee records
+
+Existing client records
+
+Existing uploaded files
+
+Existing request/report history
+
+Only work on the messaging experience, employee/client messaging entry points, and safe message/photo submission flow.
+
+Use additive changes only.
+
+Do not remove old report/request functionality. Keep old routes/components working unless they are safely redirected to the new messaging composer.
+
+Current issue
+
+The current admin messaging UI looks clean, but it has missing functionality.
+
+Problems:
+
+There is no clear way to start a new message.
+
+Admin cannot choose who to message.
+
+Admin cannot select between client, employee, or management/team member.
+
+Employee app still feels like reports are separate from messaging.
+
+Client portal feels too basic and does not have a strong app-style action button.
+
+Clients cannot easily take photos and send an issue directly to admin.
+
+The experience should feel like a modern messenger, not a basic form.
+
+Reference direction
+
+Use the Workiz-style messaging example as the UX direction:
+
+Left side conversation list
+
+Clear new message button
+
+Recipient/category filters
+
+Large conversation thread area
+
+Bottom reply composer
+
+Quick reply buttons
+
+Clean conversation card layout
+
+Simple action buttons
+
+Professional app-like interaction
+
+Do not copy branding. Use ClockField branding and current UI system.
+
+Main concept
+
+Messages should become the main communication hub.
+
+Instead of separating “Reports,” “Requests,” and “Messages” into disconnected flows, use message tags.
+
+Users should be able to send a normal message or report something by choosing a tag.
+
+Message tags:
+
+General Message
+
+Incident Report
+
+Cleaning Issue
+
+Maintenance Issue
+
+Supply Request
+
+Schedule Question
+
+Payroll Question
+
+Worklog Question
+
+Client Request
+
+Photo Report
+
+Other
+
+The message tag tells admin what type of conversation it is.
+
+Admin Messaging Page Requirements
+
+Add a clear New Message button
+
+On the admin Messages page, add a button to start a message.
+
+Button text:
+
+New Message
+
+or
+
+Start New Message
+
+Placement:
+
+Desktop: top of conversation list near search/filter area
+
+Mobile/tablet: floating plus button or top-right action button
+
+The current empty state should also have a button:
+
+Start a new message
+
+Empty state copy:
+
+No messages yet.
+Start a conversation with an employee, management user, or client.
+
+New Message modal or slide-over
+
+When admin clicks New Message, open a clean modal or right-side panel.
+
+Fields:
+
+Recipient Type
+
+Employee
+
+Management / Team Member
+
+Client
+
+Recipient Search
+
+Search by name
+
+Search by email
+
+Search by client/company name
+
+Message Tag
+
+General Message
+
+Incident Report
+
+Cleaning Issue
+
+Maintenance Issue
+
+Supply Request
+
+Schedule Question
+
+Payroll Question
+
+Worklog Question
+
+Client Request
+
+Photo Report
+
+Other
+
+Title, optional
+
+Message body
+
+Attach photo/file, optional
+
+Send Message button
+
+Cancel button
+
+Recipient search behavior
+
+The recipient search must use existing records.
+
+Do not create duplicate employees, users, managers, or clients.
+
+Search should show matching results with clear labels.
+
+Example:
+
+Sarah Mitchell
+Employee
+sarah@email.com
+
+David Manager
+Management
+david@email.com
+
+Downtown Office
+Client
+client@email.com
+
+Each result should show:
+
+Name
+
+Role badge
+
+Email or phone
+
+Client/company name if applicable
+
+After selecting a recipient, admin writes the message and sends it.
+
+Conversation list
+
+Admin should see conversations in a clean left-side list.
+
+Each conversation item should show:
+
+Name
+
+Role badge: Employee, Management, Client
+
+Message tag chip
+
+Last message preview
+
+Last message time
+
+Unread count
+
+Attachment/photo icon if photos exist
+
+Status: Open, Pending, Resolved, Archived
+
+Example:
+
+Jessica Client
+Client · Cleaning Issue
+“Uploaded photos from the lobby entrance...”
+2 unread · 4:29 PM
+
+Admin filters
+
+Keep the current sidebar filters but improve them.
+
+Required filters:
+
+All
+
+Clients
+
+Team
+
+Employees
+
+Management
+
+Requests
+
+Incident Reports
+
+Cleaning Issues
+
+Supply Requests
+
+Unread
+
+Archived
+
+The filter count should update correctly.
+
+Example:
+
+Clients 3
+
+Team 8
+
+Unread 2
+
+Archived 0
+
+Conversation thread
+
+When admin opens a conversation, it should feel like a real messenger.
+
+Thread requirements:
+
+Header with recipient name
+
+Role badge
+
+Tag chip
+
+Status dropdown
+
+Call/email icon if available
+
+Message bubbles
+
+Timestamps
+
+Sender name where needed
+
+Photo thumbnails
+
+File attachments
+
+Bottom reply composer
+
+Send button
+
+Optional quick replies
+
+Admin messages should appear on one side.
+
+Recipient messages should appear on the other side.
+
+Photos should open in a larger preview when clicked.
+
+Bottom reply composer
+
+At the bottom of the thread, add a fixed reply box.
+
+Composer actions:
+
+Type message
+
+Attach image/file
+
+Send
+
+Optional quick reply chips
+
+Suggested quick reply chips:
+
+Thanks for the update
+
+We will review this
+
+Can you send more photos?
+
+Please confirm the location
+
+We will follow up shortly
+
+For client requests, add optional quick actions:
+
+Create Worklog
+
+Create Service Request
+
+Mark Resolved
+
+Do not force messages into worklogs unless safe.
+
+Status system
+
+Each conversation should support status:
+
+Open
+
+Pending
+
+Resolved
+
+Archived
+
+Rules:
+
+New conversations start as Open.
+
+Admin can mark Pending.
+
+Admin can mark Resolved.
+
+Archived hides from active list but does not delete.
+
+Never delete message history.
+
+Employee App Requirements
+
+Change Report/Request entry to Messages where safe
+
+In the employee app bottom navigation, the current Reports button should be replaced or repurposed as:
+
+Messages
+
+Do not delete the existing report/request logic.
+
+Safe approach:
+
+Keep old report/request routes working.
+
+Update the visible button to Messages.
+
+Inside Messages, allow employee to choose message type/tag.
+
+If old Report route is still used somewhere, redirect it to the message composer with the correct tag.
+
+Employee app bottom navigation
+
+Keep the current clean mobile layout.
+
+Suggested nav:
+
+Home
+
+Schedule
+
+Action
+
+Messages
+
+Profile
+
+The center Action button should stay.
+
+Employee Action button
+
+When employee taps the center plus/action button, show a clean action sheet.
+
+Options:
+
+New Message
+
+Report Incident
+
+Report Cleaning Issue
+
+Request Supplies
+
+Schedule Question
+
+Payroll Question
+
+Upload Photos
+
+Other
+
+Each option opens the same message composer but preselects the right tag.
+
+Examples:
+
+Report Incident opens composer with tag: Incident Report
+
+Request Supplies opens composer with tag: Supply Request
+
+Upload Photos opens composer with tag: Photo Report
+
+Employee message composer
+
+Fields:
+
+Title
+
+Message tag
+
+Message body
+
+Take photo
+
+Upload photo
+
+Send to Admin
+
+Rules:
+
+Employee does not need to pick admin manually at first.
+
+Default recipient should be business admin/management inbox.
+
+If multiple managers exist, route to the business messaging inbox or assigned manager if your app already supports that.
+
+Do not expose client conversations to employees unless approved later.
+
+Employee conversation list
+
+Employee should see their own conversations only.
+
+Show:
+
+Conversation title
+
+Tag
+
+Last message
+
+Unread badge
+
+Status
+
+Timestamp
+
+Thread should show:
+
+Message bubbles
+
+Admin replies
+
+Employee replies
+
+Photos
+
+Attachments
+
+Simple bottom composer
+
+Client Portal Requirements
+
+Add Messages to client portal
+
+The client portal currently looks too basic.
+
+Add a Messages section.
+
+Client should be able to:
+
+View messages from admin
+
+Reply to admin
+
+Start a new message
+
+Report an issue with photos
+
+Submit a cleaning concern
+
+Submit a service request
+
+Add app-style action button to client portal
+
+Add a center plus/action button similar to the employee app.
+
+Client bottom nav suggestion:
+
+Home
+
+Messages
+
+Action
+
+Requests
+
+Profile
+
+If you do not want too many nav items, use:
+
+Home
+
+Messages
+
+Profile
+
+with a floating plus button.
+
+The plus/action button should open:
+
+Send Message
+
+Report Cleaning Issue
+
+Request Service
+
+Upload Photos
+
+Maintenance Concern
+
+Other
+
+Client message composer
+
+Fields:
+
+Title
+
+Message tag
+
+Description/message
+
+Take photo
+
+Upload photo
+
+Send to Admin
+
+Client should be able to take pictures of an issue and send them to admin.
+
+Photos should appear in the admin message thread.
+
+Primary destination should be Messaging.
+
+Optional secondary link:
+
+If safe, attach the message/photos to Work Log or Service Request context.
+
+Do not modify worklog flow unless safe and approved.
+
+Client conversation thread
+
+Client should see a clean messenger-style thread.
+
+Requirements:
+
+Conversation list
+
+Unread badges
+
+Message bubbles
+
+Photo thumbnails
+
+Admin replies
+
+Bottom reply composer
+
+Clean mobile layout
+
+No outdated form feeling
+
+No messy request-only experience
+
+Client should feel like they are using a professional service app.
+
+Management / Team Member Messaging
+
+Management users are team members too.
+
+Admin should be able to message:
+
+Employees
+
+Management users
+
+Clients
+
+Management users should be able to message admins if their permissions allow it.
+
+Do not expose full admin messaging to management users unless the permissions already allow it.
+
+Use current role/permission system.
+
+Message Tags
+
+Every conversation should have a tag.
+
+Required tags:
+
+General Message
+
+Incident Report
+
+Cleaning Issue
+
+Maintenance Issue
+
+Supply Request
+
+Schedule Question
+
+Payroll Question
+
+Worklog Question
+
+Client Request
+
+Photo Report
+
+Other
+
+Tag rules:
+
+Admin can change the tag.
+
+Employee/client selects tag when starting a message.
+
+Tags appear in conversation list.
+
+Tags appear in thread header.
+
+Tags can be used for filtering.
+
+Tags do not delete or replace old report/request records.
+
+Photo Upload Requirements
+
+For employees and clients:
+
+Allow taking a photo with the device camera.
+
+Allow uploading from gallery/files.
+
+Allow multiple photos if existing upload system supports it.
+
+Show selected thumbnails before sending.
+
+Allow removing a selected photo before sending.
+
+Show upload progress if possible.
+
+Show professional error messages.
+
+For admin:
+
+Photos appear in the conversation thread.
+
+Photos can be clicked to preview larger.
+
+Admin can download/open photos if supported.
+
+Do not reduce image quality so much that issue details become unclear.
+
+Backend Requirements
+
+Before building, inspect the current messaging/request/report structure.
+
+Do not replace working data.
+
+Do not delete existing tables.
+
+Use safe additive migrations.
+
+Preferred structure if no full messaging model exists:
+
+conversations
+
+id
+
+business_id
+
+created_by_user_id
+
+created_by_role
+
+recipient_user_id nullable
+
+recipient_role
+
+recipient_client_id nullable
+
+title
+
+tag
+
+status
+
+last_message_at
+
+created_at
+
+updated_at
+
+archived_at nullable
+
+messages
+
+id
+
+conversation_id
+
+sender_user_id nullable
+
+sender_client_id nullable
+
+sender_role
+
+body
+
+created_at
+
+updated_at
+
+deleted_at nullable
+
+conversation_attachments
+
+id
+
+conversation_id
+
+message_id
+
+file_url
+
+file_type
+
+file_name
+
+uploaded_by_user_id nullable
+
+uploaded_by_client_id nullable
+
+created_at
+
+conversation_participants
+
+id
+
+conversation_id
+
+user_id nullable
+
+client_id nullable
+
+role
+
+last_read_at
+
+created_at
+
+Use existing file storage if available.
+
+Use existing business scoping.
+
+Use existing auth/session logic.
+
+Use existing client account logic.
+
+Security Requirements
+
+Messages must be scoped to the correct business.
+
+Admin can only see messages for their own business.
+
+Employee can only see their own conversations.
+
+Client can only see their own conversations.
+
+One client must never see another client’s messages.
+
+One employee must never see another employee’s private messages.
+
+Client should not message employees directly unless approved later.
+
+Employee should not message clients directly unless approved later.
+
+Management visibility must follow existing permissions.
+
+Do not expose internal notes to clients.
+
+Do not expose private employee data to clients.
+
+Notifications and Unread Counts
+
+Add unread state for:
+
+Admin
+
+Employee
+
+Client
+
+Management user if supported
+
+When a new message arrives:
+
+Recipient sees unread badge.
+
+Conversation list moves latest conversation to top.
+
+Admin Messages nav shows unread count if possible.
+
+Employee Messages tab shows unread count if possible.
+
+Client Messages tab shows unread count if possible.
+
+Email notifications:
+
+Only use existing safe email system if available.
+
+Do not build a new email system unless needed.
+
+Email should be simple:
+
+You have a new message in ClockField.
+Log in to view and reply.
+
+Do not include sensitive message content in email unless current privacy rules already allow it.
+
+UI/UX Requirements
+
+The whole messaging experience should feel like a polished app.
+
+Desktop layout:
+
+Left app nav
+
+Messaging category sidebar
+
+Conversation list
+
+Main chat thread
+
+Bottom composer
+
+Mobile layout:
+
+Show conversation list first
+
+Tap conversation to open full thread
+
+Back button returns to list
+
+Bottom composer fixed
+
+Action button easy to reach
+
+Use:
+
+Clean cards
+
+Soft borders
+
+Rounded corners
+
+Role badges
+
+Tag chips
+
+Unread dots
+
+Smooth spacing
+
+Professional empty states
+
+Simple icons
+
+No harsh red errors unless critical
+
+No blank broken states
+
+No AI-looking layout
+
+Admin Empty State
+
+When admin has no conversations:
+
+Title:
+
+No messages yet
+
+Text:
+
+Start a conversation with a client, employee, or team member.
+
+Button:
+
+Start New Message
+
+Employee Empty State
+
+Title:
+
+No messages yet
+
+Text:
+
+Send a message to your admin, report an issue, or request help.
+
+Button:
+
+New Message
+
+Client Empty State
+
+Title:
+
+No messages yet
+
+Text:
+
+Send a message, report an issue, or upload photos for your service team.
+
+Button:
+
+New Message
+
+Compatibility With Existing Reports and Requests
+
+Do not delete existing Reports or Requests.
+
+This update should make Messaging the preferred experience.
+
+Safe mapping:
+
+Old Report button → Messages composer with tag Incident Report
+
+Old Request button → Messages composer with tag Client Request or Supply Request
+
+Old service request → Can remain as-is
+
+Old reports → Can remain as-is
+
+Existing records → Must remain visible wherever they currently appear
+
+If needed, old report/request submissions can create linked message conversations later.
+
+Do not migrate old data unless approved.
+
+Testing Checklist
+
+Admin tests:
+
+Admin can open Messages.
+
+Admin can click New Message.
+
+Admin can choose Employee.
+
+Admin can choose Management.
+
+Admin can choose Client.
+
+Admin can search recipients.
+
+Admin can send text message.
+
+Admin can send photo attachment.
+
+Admin can receive employee message.
+
+Admin can receive client message.
+
+Admin can reply.
+
+Admin can change tag.
+
+Admin can change status.
+
+Admin can filter by Clients.
+
+Admin can filter by Team.
+
+Admin can filter by Requests.
+
+Admin can filter by Archived.
+
+Employee tests:
+
+Employee sees Messages in app.
+
+Employee can tap Action.
+
+Employee can choose Report Incident.
+
+Employee can send title, message, and photos.
+
+Admin receives it.
+
+Employee can view admin reply.
+
+Employee can continue conversation.
+
+Employee cannot see other employee messages.
+
+Client tests:
+
+Client sees Messages or action button.
+
+Client can send message to admin.
+
+Client can report issue with photos.
+
+Admin receives client message and photos.
+
+Client can view admin replies.
+
+Client cannot see other client messages.
+
+Regression tests:
+
+Stripe still works.
+
+Paywall still works.
+
+Auth still works.
+
+Employee login still works.
+
+Client login still works.
+
+Schedule still works.
+
+Attendance still works.
+
+Payroll still works.
+
+Worklog still works.
+
+Training Hub still works.
+
+Hiring package still works.
+
+Existing reports still work.
+
+Existing requests still work.
+
+Public client report links still work.
+
+Implementation Steps
+
+Step 1: Audit existing system
+
+Find current admin Messages page.
+
+Find current employee Reports/Request routes.
+
+Find current client request page.
+
+Find existing photo upload logic.
+
+Find existing user roles.
+
+Find existing client account structure.
+
+Find existing notification system.
+
+Do not change anything yet.
+
+Step 2: Add safe conversation support
+
+Use current messaging tables if they exist.
+
+Only add missing fields/tables.
+
+Add tags.
+
+Add status.
+
+Add participants.
+
+Add attachment support if missing.
+
+Step 3: Build admin New Message flow
+
+Add New Message button.
+
+Build modal/slide-over.
+
+Add recipient type selector.
+
+Add search.
+
+Add tag selector.
+
+Add message composer.
+
+Send message.
+
+Refresh conversation list.
+
+Step 4: Improve admin messaging layout
+
+Add conversation list.
+
+Add role badges.
+
+Add tag chips.
+
+Add unread counts.
+
+Add empty state button.
+
+Add thread view.
+
+Add bottom composer.
+
+Add filters.
+
+Step 5: Add employee messaging
+
+Update employee nav or report/request button label to Messages.
+
+Keep old report/request routes working.
+
+Add action button options.
+
+Add message composer.
+
+Add photo upload.
+
+Add employee thread view.
+
+Step 6: Add client messaging
+
+Add Messages to client portal.
+
+Add action button.
+
+Add client message composer.
+
+Add photo upload.
+
+Add client conversation thread.
+
+Route messages to admin.
+
+Step 7: Add unread and notifications
+
+Track read status.
+
+Show unread badges.
+
+Move latest conversation to top.
+
+Use email notification only if existing email system is safe.
+
+Step 8: Final polish
+
+Make desktop and mobile feel like one consistent messaging system.
+
+Check spacing.
+
+Check icons.
+
+Check empty states.
+
+Check loading states.
+
+Check photo preview.
+
+Check error messages.
+
+Expected result
+
+ClockField Messages should become a full professional communication hub.
+
+Admin can start a message with employees, management users, or clients.
+
+Employees can send messages, reports, requests, and photos through one clean messaging experience.
+
+Clients can send messages, report issues, and upload photos through a professional app-style portal.
+
+Reports and requests become tagged conversations instead of disconnected forms.
+
+Nothing else in the app should be changed, deleted, broken, or affected.

@@ -9,7 +9,7 @@ import { AdminSidebar } from "@/components/admin-sidebar";
 import { AdminMobileNav } from "@/components/admin-mobile-nav";
 import { SuperAdminSidebar } from "@/components/super-admin-sidebar";
 import { MobileNav } from "@/components/mobile-nav";
-import { employeeNavItems, employeeCenterAction, clientNavItems } from "@/lib/nav-config";
+import { employeeNavItems, employeeCenterAction, clientNavItems, clientCenterAction } from "@/lib/nav-config";
 import { FeatureGate } from "@/components/feature-gate";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -58,6 +58,8 @@ import PublicPublication from "@/pages/public/publication";
 import ClientDashboard from "@/pages/client/dashboard";
 import ClientRequestsPage from "@/pages/client/requests";
 import ClientProfile from "@/pages/client/profile";
+import ClientMessages from "@/pages/client/messages";
+import EmployeeMessages from "@/pages/employee/messages";
 import PublicWorkReport from "@/pages/public/work-report";
 import PublicReviewShare from "@/pages/public/review-share";
 import PublicReportAccess from "@/pages/public/report-access";
@@ -193,14 +195,9 @@ function EmployeeLayout() {
     r => r.createdByRole === "admin" && !["closed", "resolved", "replied"].includes(r.status)
   ).length;
 
-  // When there are pending admin requests, reroute the "Reports" nav item to /employee/requests
-  // so the badge click takes the cleaner directly to their requests, not the reports page.
-  const navItems = adminRequestBadge > 0
-    ? employeeNavItems.map(item =>
-        item.href === "/employee/reports" ? { ...item, href: "/employee/requests" } : item
-      )
-    : employeeNavItems;
-  const badges = adminRequestBadge > 0 ? { "/employee/requests": adminRequestBadge } : {};
+  // Show unread badge on Messages nav item when admin has sent pending requests to employee
+  const navItems = employeeNavItems;
+  const badges = adminRequestBadge > 0 ? { "/employee/messages": adminRequestBadge } : {};
 
   return (
     <div className="min-h-screen bg-background">
@@ -209,6 +206,7 @@ function EmployeeLayout() {
           <Route path="/employee" component={EmployeeHome} />
           <Route path="/employee/schedule" component={EmployeeSchedule} />
           <Route path="/employee/hours" component={EmployeeHours} />
+          <Route path="/employee/messages" component={EmployeeMessages} />
           <Route path="/employee/requests" component={EmployeeRequests} />
           <Route path="/employee/reports" component={EmployeeReports} />
           <Route path="/employee/timesheets" component={EmployeeTimesheets} />
@@ -236,13 +234,14 @@ function ClientLayout() {
       <main className="pb-20">
         <Switch>
           <Route path="/client" component={ClientDashboard} />
+          <Route path="/client/messages" component={ClientMessages} />
           <Route path="/client/requests" component={ClientRequestsPage} />
           <Route path="/client/reports" component={ClientReports} />
           <Route path="/client/profile" component={ClientProfile} />
           <Route component={NotFound} />
         </Switch>
       </main>
-      <MobileNav items={clientNavItems} />
+      <MobileNav items={clientNavItems} centerAction={clientCenterAction} />
     </div>
   );
 }

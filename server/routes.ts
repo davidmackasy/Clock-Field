@@ -1883,6 +1883,84 @@ Welcome again, and thank you for choosing ClockField.
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  // ── Admin → Initiate Conversation (New Message modal) ────────────────────
+  app.post("/api/admin/messages", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { recipientType, recipientId, tag, title, body, photos } = req.body;
+      if (!title?.trim()) return res.status(400).json({ message: "Title is required" });
+      if (!body?.trim()) return res.status(400).json({ message: "Message body is required" });
+      const now = new Date().toISOString();
+
+      let clientId: string | undefined;
+      let employeeId: string | undefined;
+      let visibilityScope = "admin_and_client";
+
+      if (recipientType === "client") {
+        // recipientId is client record id
+        const clientRecord = await storage.getClient(recipientId);
+        if (!clientRecord || clientRecord.companyId !== user.companyId) {
+          return res.status(404).json({ message: "Client not found" });
+        }
+        clientId = clientRecord.id;
+        visibilityScope = "admin_and_client";
+      } else if (recipientType === "employee") {
+        // recipientId is employee user id
+        const emp = await storage.getUser(recipientId);
+        if (!emp || emp.companyId !== user.companyId) {
+          return res.status(404).json({ message: "Employee not found" });
+        }
+        employeeId = emp.id;
+        visibilityScope = "admin_and_employee";
+      }
+
+      const request = await storage.createClientRequest({
+        companyId: user.companyId,
+        clientId,
+        employeeId,
+        createdByUserId: user.id,
+        createdByRole: "admin",
+        title: title.trim(),
+        description: body.trim(),
+        requestType: tag || "general_message",
+        priority: "normal",
+        status: "new",
+        visibilityScope,
+        createdAt: now,
+      } as any);
+
+      const msg = await storage.createRequestMessage({
+        requestId: request.id,
+        authorUserId: user.id,
+        authorRole: "admin",
+        body: body.trim(),
+        messageType: "initial_request",
+        isVisibleToClient: recipientType === "client",
+        isVisibleToEmployee: recipientType === "employee",
+        isStatusUpdate: false,
+        statusValue: null,
+        createdAt: now,
+      });
+
+      if (photos && Array.isArray(photos)) {
+        for (const photo of photos) {
+          if (photo.dataUrl) {
+            await storage.createRequestAttachment({
+              requestMessageId: msg.id,
+              fileUrl: photo.dataUrl,
+              fileType: "image",
+              caption: photo.caption || null,
+              uploadedByUserId: user.id,
+              createdAt: now,
+            });
+          }
+        }
+      }
+
+      res.status(201).json(request);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   // ── Admin → Cleaner Requests ─────────────────────────────────────────────
   app.post("/api/admin/cleaner-requests", requireRole("admin"), async (req, res) => {
     try {
