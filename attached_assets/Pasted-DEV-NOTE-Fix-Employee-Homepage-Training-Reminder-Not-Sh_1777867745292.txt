@@ -1,0 +1,236 @@
+DEV NOTE: Fix Employee Homepage Training Reminder Not Showing
+Critical rules
+
+Do not change anything else.
+
+Only debug and fix the required training reminder on the employee homepage.
+
+Do not touch:
+
+Course creation
+Course editor
+Quiz editor
+Module editor
+Training assignment logic
+Clock-in / clock-out logic
+Schedule logic
+Reports
+Profile
+Admin Training Hub UI
+Current issue
+
+Employee is assigned to a training course.
+
+Expected:
+
+Small required training reminder appears on employee homepage.
+
+Actual:
+
+Employee homepage shows only clock-in card, today’s shifts, and upcoming shifts.
+No training reminder card appears.
+Required fix
+1. Confirm employee homepage is calling reminder API
+
+On /employee homepage, confirm it calls:
+
+GET /api/employee/training/reminder
+
+or the correct existing endpoint.
+
+If it is not being called, add the fetch to the employee homepage only.
+
+2. Confirm API returns assigned incomplete training
+
+The endpoint must check the logged-in employee.
+
+It should return reminder when:
+
+employee has assigned course
+course is required
+course is not completed
+course is published / available
+employee progress is less than 100%
+quiz failed or retake required
+
+Expected response:
+
+{
+  hasReminder: true,
+  totalRequiredIncomplete: 1,
+  training: {
+    assignmentId: "...",
+    courseId: "...",
+    title: "Cleaning Safety Course",
+    status: "not_started",
+    progressPercent: 0,
+    required: true,
+    retakeRequired: false
+  }
+}
+3. Check assignment filter
+
+Do not filter out assigned employee incorrectly.
+
+Check these possible issues:
+
+assignment uses employeeId but endpoint checks userId
+employee login account ID differs from employee record ID
+assignment is saved under cohort/public learner but homepage checks assigned employees only
+course is assigned but required is false
+course status is published but endpoint checks wrong field
+progress record missing and endpoint treats it as completed instead of not started
+
+If progress does not exist, treat as:
+
+status: "not_started"
+progressPercent: 0
+4. Add reminder card to employee homepage UI
+
+Location:
+
+Employee homepage /employee
+
+Place reminder card:
+
+Below greeting
+Above clock-in card
+
+Do not block clock-in.
+
+Do not use full-screen popup.
+
+Required UI card
+
+Title:
+
+Required Training
+
+Message if not started:
+
+You have required training to complete: [Course Title].
+
+Message if in progress:
+
+You are [progressPercent]% done with [Course Title]. Please finish your required training.
+
+Message if failed:
+
+You need to retake [Course Title] to complete your required training.
+
+Button:
+
+Continue Training
+
+If failed:
+
+Retake Training
+
+Small count text if multiple:
+
+1 of [totalRequiredIncomplete] required trainings
+
+Click behavior
+
+Button should navigate to the correct training page.
+
+Use existing employee training route.
+
+Examples:
+
+/employee/training/[courseId]
+
+or existing route used by employee training list.
+
+Do not create a new training flow.
+
+Multiple courses behavior
+
+If more than one incomplete required training exists:
+
+Show only one card.
+
+Priority:
+
+Failed / retake required
+In progress
+Not started
+Oldest assigned
+
+Do not show multiple cards.
+
+Completion behavior
+
+After employee completes/passes training:
+
+Reminder disappears
+If another required training remains, show the next one
+If failed and retake required, show retake reminder
+Visual style
+
+Use existing employee mobile card style.
+
+Suggested compact layout:
+
+Required Training
+You have required training to complete: Cleaning Safety Course.
+[Continue Training]
+
+Optional small progress bar if progress > 0.
+
+Keep it small.
+
+Do not crowd homepage.
+
+Testing required
+
+Test 1:
+Assign required course to employee.
+
+Login as that employee.
+
+Open /employee.
+
+Confirm reminder appears.
+
+Test 2:
+Click Continue Training.
+
+Confirm it opens the assigned training.
+
+Test 3:
+Complete part of course.
+
+Return to homepage.
+
+Confirm percentage updates.
+
+Test 4:
+Complete and pass course.
+
+Return to homepage.
+
+Confirm reminder disappears.
+
+Test 5:
+Assign two required courses.
+
+Confirm only one reminder card appears.
+
+Test 6:
+Unassign course.
+
+Confirm reminder disappears.
+
+Test 7:
+Confirm clock-in card and shift cards are unchanged.
+
+Expected result
+
+Assigned employees see a small required training reminder on the employee homepage.
+
+The reminder links to the correct course.
+
+It disappears only after the required training is completed and passed.
+
+No other app behavior changes.
