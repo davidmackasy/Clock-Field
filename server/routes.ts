@@ -10784,6 +10784,93 @@ Return ONLY valid JSON:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // GET /api/training/my-reminder — employee homepage reminder card
+  app.get("/api/training/my-reminder", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== "employee") return res.status(403).json({ message: "Forbidden" });
+
+      // All assignments for this employee
+      const assignments = await db
+        .select()
+        .from(trainingAssignments)
+        .where(and(
+          eq(trainingAssignments.employeeId, user.id),
+          eq(trainingAssignments.companyId, user.companyId),
+        ))
+        .orderBy(asc(trainingAssignments.createdAt));
+
+      if (assignments.length === 0) return res.json({ hasReminder: false, totalRequiredIncomplete: 0, training: null });
+
+      const courseIds = assignments.map(a => a.courseId);
+      const courses = await db.select().from(trainingCourses).where(
+        and(inArray(trainingCourses.id, courseIds), eq(trainingCourses.isRequired, true), eq(trainingCourses.isPublished, true))
+      );
+      const requiredCourseMap = new Map(courses.map(c => [c.id, c]));
+
+      const reminderItems: any[] = [];
+
+      for (const assignment of assignments) {
+        const course = requiredCourseMap.get(assignment.courseId);
+        if (!course) continue;
+
+        const modules = await storage.getTrainingModules(course.id);
+        if (modules.length === 0) continue;
+
+        const progress = await storage.getTrainingProgress(course.id, user.id, undefined);
+        const completedIds = new Set(progress.map(p => p.moduleId));
+        const totalModules = modules.length;
+        const completedModules = modules.filter(m => completedIds.has(m.id)).length;
+        const progressPercent = Math.round((completedModules / totalModules) * 100);
+        const modulesComplete = modules.filter(m => m.isRequired).every(m => completedIds.has(m.id));
+
+        // Check quiz
+        const [quiz] = await db.select().from(trainingQuizzes).where(eq(trainingQuizzes.courseId, course.id));
+        let quizPassed = true;
+        let retakeRequired = false;
+        if (quiz && quiz.isRequired) {
+          quizPassed = await storage.hasPassedTrainingQuiz(quiz.id, user.id, undefined);
+          if (!quizPassed && modulesComplete) {
+            const attempts = await storage.getTrainingQuizAttempts(quiz.id, user.id, undefined);
+            retakeRequired = attempts.some(a => a.completedAt && !a.passed);
+          }
+        }
+
+        // Skip truly completed
+        if (modulesComplete && quizPassed) continue;
+
+        let status: string;
+        if (retakeRequired) status = "retake_needed";
+        else if (completedModules > 0) status = "in_progress";
+        else status = "not_started";
+
+        reminderItems.push({
+          assignmentId: assignment.id,
+          courseId: course.id,
+          title: course.title,
+          status,
+          progressPercent,
+          required: true,
+          retakeRequired,
+          assignedAt: assignment.createdAt,
+        });
+      }
+
+      if (reminderItems.length === 0) return res.json({ hasReminder: false, totalRequiredIncomplete: 0, training: null });
+
+      // Priority sort: retake_needed → in_progress (highest % first) → not_started → oldest
+      reminderItems.sort((a, b) => {
+        const rank = (s: string) => s === "retake_needed" ? 0 : s === "in_progress" ? 1 : 2;
+        const ra = rank(a.status), rb = rank(b.status);
+        if (ra !== rb) return ra - rb;
+        if (a.status === "in_progress" && b.status === "in_progress") return b.progressPercent - a.progressPercent;
+        return a.assignedAt < b.assignedAt ? -1 : 1;
+      });
+
+      res.json({ hasReminder: true, totalRequiredIncomplete: reminderItems.length, training: reminderItems[0] });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // GET /api/training/my-courses — employee
   app.get("/api/training/my-courses", requireAuth, async (req, res) => {
     try {

@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation as useWouterLocation } from "wouter";
-import { Clock, Play, Square, Calendar, ShieldAlert, ChevronRight, Zap, X as XIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon } from "lucide-react";
+import { Clock, Play, Square, Calendar, ShieldAlert, ChevronRight, Zap, X as XIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon, GraduationCap } from "lucide-react";
 
 export default function EmployeeHome() {
   const { user } = useAuth();
@@ -56,6 +56,23 @@ export default function EmployeeHome() {
 
   const { data: myPriorityAlerts = [] } = useQuery<any[]>({
     queryKey: ["/api/employee/priority-alerts"],
+    refetchInterval: 5 * 60_000,
+  });
+
+  const { data: trainingReminder } = useQuery<{
+    hasReminder: boolean;
+    totalRequiredIncomplete: number;
+    training: {
+      assignmentId: string;
+      courseId: string;
+      title: string;
+      status: string;
+      progressPercent: number;
+      required: boolean;
+      retakeRequired: boolean;
+    } | null;
+  }>({
+    queryKey: ["/api/training/my-reminder"],
     refetchInterval: 5 * 60_000,
   });
 
@@ -236,6 +253,49 @@ export default function EmployeeHome() {
           </div>
         </Link>
       )}
+
+      {/* Required Training reminder */}
+      {trainingReminder?.hasReminder && trainingReminder.training && (() => {
+        const t = trainingReminder.training;
+        const total = trainingReminder.totalRequiredIncomplete;
+        const isRetake = t.status === "retake_needed";
+        const isInProgress = t.status === "in_progress";
+        let message: string;
+        if (isRetake) message = `You need to retake ${t.title} to complete your required training.`;
+        else if (isInProgress) message = `You are ${t.progressPercent}% done with ${t.title}. Please finish your required training.`;
+        else message = `You have required training to complete: ${t.title}.`;
+        return (
+          <div className="rounded-xl border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 p-3.5 space-y-3" data-testid="training-reminder-card">
+            <div className="flex items-start gap-2.5">
+              <GraduationCap className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Required Training</p>
+                  <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 border-0 text-[10px] h-4 px-1.5">Required</Badge>
+                </div>
+                <p className="text-xs text-blue-700 dark:text-blue-400 mt-0.5 leading-relaxed" data-testid="training-reminder-message">{message}</p>
+                {total > 1 && (
+                  <p className="text-[10px] text-blue-500 dark:text-blue-500 mt-1" data-testid="training-reminder-count">1 of {total} required trainings</p>
+                )}
+                {isInProgress && (
+                  <div className="mt-2 h-1.5 w-full rounded-full bg-blue-200 dark:bg-blue-900">
+                    <div className="h-1.5 rounded-full bg-blue-500" style={{ width: `${t.progressPercent}%` }} data-testid="training-reminder-progress" />
+                  </div>
+                )}
+              </div>
+            </div>
+            <Button
+              size="sm"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white h-9 text-xs font-semibold"
+              onClick={() => navigate("/employee/training")}
+              data-testid="button-training-reminder-action"
+            >
+              <GraduationCap className="w-3.5 h-3.5 mr-1.5" />
+              {isRetake ? "Retake Training" : "Continue Training"}
+            </Button>
+          </div>
+        );
+      })()}
 
       {/* Priority Clean reminder banner */}
       {!paDismissed && myPriorityAlerts.length > 0 && (

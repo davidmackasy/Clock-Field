@@ -1,0 +1,342 @@
+DEV NOTE: Add Small Employee Training Reminder on Homepage
+Critical rules
+
+Do not change course creation.
+
+Do not change quiz creation.
+
+Do not change module editing.
+
+Do not change training assignment logic.
+
+Do not change certificates.
+
+Do not change clock-in or clock-out behavior.
+
+Only add a small reminder on the employee homepage when required training is incomplete.
+
+Goal
+
+When an employee is assigned a required training course, show a small reminder card on their homepage.
+
+The reminder should appear only when the employee has training that is:
+
+Assigned
+Required
+Not completed
+Failed and needs retake
+In progress but not finished
+
+Once the employee completes and passes the required training, the reminder should disappear.
+
+Required homepage reminder
+
+Add a small card near the top of the employee homepage.
+
+Recommended title:
+
+Required Training
+
+Recommended message examples:
+
+If not started:
+
+You have required training to complete: Cleaning Safety Course.
+
+If in progress:
+
+You are 60% done with Cleaning Safety Course. Please finish your required training.
+
+If failed and retake is needed:
+
+You need to retake Cleaning Safety Course to complete your required training.
+
+Button:
+
+Continue Training
+
+Button action:
+
+Take employee directly to the assigned training page.
+
+Multiple assigned trainings
+
+If the employee has more than one incomplete required training:
+
+Only show one card.
+
+Do not show multiple cards.
+
+Priority order:
+
+Failed training that requires retake
+In-progress training with highest completion percentage
+Not-started required training
+Oldest assigned required training
+
+Add small text:
+
+1 of 3 required trainings
+
+Example:
+
+Required Training
+You are 60% done with Cleaning Safety Course. Please finish your required training.
+1 of 3 required trainings
+Continue Training
+
+Do not crowd the homepage.
+
+Visibility rules
+
+Show reminder when:
+
+Employee has at least one required assigned training not completed
+Training is in progress
+Training was failed and retake is required
+
+Hide reminder when:
+
+Employee has no required assigned training
+Employee completed and passed all required training
+Training assignment was removed
+Course is unpublished or unavailable
+Progress logic
+
+Use existing training progress data.
+
+Do not create duplicate progress records.
+
+Reminder percentage should use existing completion calculation:
+
+Completed modules / total modules
+
+If quiz is required, include quiz completion/pass status in final completion.
+
+Examples:
+
+5 modules total
+3 completed
+Progress = 60%
+
+If modules are complete but quiz is failed:
+
+Show retake message, not 100% complete.
+
+UI requirements
+
+Card style:
+
+Small and clean
+Not a large popup
+Should not block clock-in / clock-out
+Should not feel annoying
+Should fit mobile and desktop
+
+Suggested layout:
+
+Title: Required Training
+Body: Short progress message
+Badge: Required
+Progress bar: optional but recommended
+Button: Continue Training
+
+Use app’s existing card style.
+
+Do not introduce a new design system.
+
+Suggested UI copy
+
+Not started:
+
+Required Training
+You have required training to complete: [Course Title].
+Continue Training
+
+In progress:
+
+Required Training
+You are [progress]% done with [Course Title]. Please finish your required training.
+Continue Training
+
+Failed / retake:
+
+Required Training
+You need to retake [Course Title] to complete your required training.
+Retake Training
+
+Multiple trainings:
+
+Required Training
+You are [progress]% done with [Course Title].
+1 of [total] required trainings
+Continue Training
+
+Click behavior
+
+When employee clicks the card or button:
+
+Navigate to the training course page
+Open the correct assigned course
+Continue from their current progress if supported
+Do not restart completed modules unless retake is required
+Data connection
+
+Use existing assigned training data.
+
+Fetch only trainings assigned to the logged-in employee.
+
+Filter:
+
+required = true
+completed = false OR passed = false OR retakeRequired = true
+
+Sort by priority:
+
+retakeRequired / failed
+in progress
+not started
+assignedAt ascending
+
+Return only the top item for homepage display.
+
+Also return total incomplete required count.
+
+Backend/API behavior
+
+Add or reuse endpoint:
+
+GET /api/employee/training/reminder
+
+Expected response:
+
+{
+  hasReminder: true,
+  totalRequiredIncomplete: 3,
+  training: {
+    assignmentId: "assignment_id",
+    courseId: "course_id",
+    title: "Cleaning Safety Course",
+    status: "in_progress",
+    progressPercent: 60,
+    required: true,
+    retakeRequired: false
+  }
+}
+
+If no reminder:
+
+{
+  hasReminder: false,
+  totalRequiredIncomplete: 0,
+  training: null
+}
+
+Use current auth/session employee ID.
+
+Do not expose other employees’ training.
+
+Frontend placement
+
+Employee app homepage only.
+
+Place near the top, but below any critical clock-in status card if needed.
+
+Do not place inside admin homepage.
+
+Do not place on client/public pages.
+
+Completion behavior
+
+After employee completes and submits training:
+
+Recalculate assignment status
+If passed/completed, remove reminder from homepage
+If failed and retake is required, show retake reminder
+If there are other incomplete required trainings, show the next one
+Edge cases
+
+If course was deleted:
+
+Do not show reminder.
+
+If course is unpublished:
+
+Do not show reminder.
+
+If training has no modules:
+
+Do not show reminder unless course is valid.
+
+If progress is missing:
+
+Treat as not started.
+
+If employee has completed modules but failed quiz:
+
+Show retake message.
+
+If employee has 3 required trainings:
+
+Show only one card and count text.
+
+Testing required
+
+Test 1:
+Assign one required course to employee.
+
+Employee logs in.
+
+Reminder appears on homepage.
+
+Test 2:
+Employee clicks Continue Training.
+
+It opens the correct course.
+
+Test 3:
+Employee completes 60%.
+
+Returns to homepage.
+
+Reminder shows 60%.
+
+Test 4:
+Employee completes and passes course.
+
+Homepage reminder disappears.
+
+Test 5:
+Employee fails quiz and retake is required.
+
+Homepage shows retake message.
+
+Test 6:
+Assign 3 required courses.
+
+Homepage shows only one card.
+
+Text shows 1 of 3 required trainings.
+
+Test 7:
+Remove assignment.
+
+Reminder disappears.
+
+Test 8:
+Unpublish course.
+
+Reminder disappears.
+
+Test 9:
+Confirm clock-in and clock-out still work unchanged.
+
+Expected result
+
+Employees see a clean reminder only when they have required training to finish.
+
+The reminder is small, useful, and connected to real training progress.
+
+Once training is completed, it disappears automatically.
+
+No course creation, quiz, module, certificate, assignment, or clocking system is changed.
