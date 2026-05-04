@@ -800,6 +800,12 @@ export default function AdminTrainingHub() {
   const [selectedEmployees, setSelectedEmployees] = useState<Set<string>>(new Set());
   const assetRef = useRef<HTMLInputElement>(null);
 
+  const [editCourseOpen, setEditCourseOpen] = useState(false);
+  const [editCourseForm, setEditCourseForm] = useState({ title: "", description: "", category: "", isRequired: false });
+  const [includeQuiz, setIncludeQuiz] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<any | null>(null);
+  const [questionDialogOpen, setQuestionDialogOpen] = useState(false);
+
   const { data: courses = [], isLoading } = useQuery<Course[]>({ queryKey: ["/api/training/courses"] });
   const { data: stats } = useQuery<{ totalCourses: number; totalAssigned: number; totalCompleted: number; totalPending: number }>({
     queryKey: ["/api/training/stats"],
@@ -816,15 +822,27 @@ export default function AdminTrainingHub() {
     queryKey: ["/api/training/courses", selectedId, "public-learners"],
     enabled: !!selectedId,
   });
+  const { data: courseQuiz } = useQuery<any>({
+    queryKey: ["/api/training/courses", selectedId, "quiz"],
+    enabled: !!selectedId && view === "detail",
+  });
 
   const createCourseMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/training/courses", data),
-    onSuccess: (data: any) => {
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/training/courses", data);
+      return res.json();
+    },
+    onSuccess: async (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/training/courses"] });
       queryClient.invalidateQueries({ queryKey: ["/api/training/stats"] });
       setCreateOpen(false);
       setCreateStep(1);
       setCourseForm({ title: "", description: "", category: "", estimatedDuration: "", isRequired: false, publicLinkEnabled: false, certificateEnabled: true, thumbnailData: "" });
+      if (includeQuiz && data.id) {
+        await apiRequest("POST", `/api/training/courses/${data.id}/quiz`, { title: "Final Quiz", passingScore: 80 });
+        queryClient.invalidateQueries({ queryKey: ["/api/training/courses", data.id, "quiz"] });
+      }
+      setIncludeQuiz(false);
       setSelectedId(data.id);
       setView("detail");
       toast({ title: "Course created!" });
@@ -898,6 +916,65 @@ export default function AdminTrainingHub() {
       queryClient.invalidateQueries({ queryKey: ["/api/training/courses"] });
       queryClient.invalidateQueries({ queryKey: ["/api/training/courses", selectedId] });
     },
+  });
+
+  const createQuizMutation = useMutation({
+    mutationFn: (courseId: string) => apiRequest("POST", `/api/training/courses/${courseId}/quiz`, { title: "Final Quiz", passingScore: 80 }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/training/courses", selectedId, "quiz"] });
+      toast({ title: "Quiz created" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteQuizMutation = useMutation({
+    mutationFn: (quizId: string) => apiRequest("DELETE", `/api/training/quizzes/${quizId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/training/courses", selectedId, "quiz"] });
+      toast({ title: "Quiz removed" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const addQuestionMutation = useMutation({
+    mutationFn: (q: any) => apiRequest("POST", `/api/training/quizzes/${courseQuiz?.id}/questions`, {
+      questionText: q.questionText,
+      questionType: "multiple_choice",
+      optionsJson: JSON.stringify(q.options),
+      correctAnswerJson: JSON.stringify(q.correctAnswer),
+      sortOrder: courseQuiz?.questions?.length ?? 0,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/training/courses", selectedId, "quiz"] });
+      setQuestionDialogOpen(false);
+      setEditingQuestion(null);
+      toast({ title: "Question added" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const updateQuestionMutation = useMutation({
+    mutationFn: (q: any) => apiRequest("PUT", `/api/training/quiz-questions/${q.id}`, {
+      questionText: q.questionText,
+      optionsJson: JSON.stringify(q.options),
+      correctAnswerJson: JSON.stringify(q.correctAnswer),
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/training/courses", selectedId, "quiz"] });
+      setQuestionDialogOpen(false);
+      setEditingQuestion(null);
+      toast({ title: "Question saved" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteQuestionMutation = useMutation({
+    mutationFn: (questionId: string) => apiRequest("DELETE", `/api/training/quiz-questions/${questionId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/training/courses", selectedId, "quiz"] });
+      toast({ title: "Question deleted" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const handleThumbnail = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1099,6 +1176,17 @@ export default function AdminTrainingHub() {
                           <Globe className="w-3.5 h-3.5 mr-1" /> Enable Public Link
                         </Button>
                       )}
+                      <Button variant="outline" size="sm" onClick={() => {
+                        setEditCourseForm({
+                          title: course.title,
+                          description: course.description ?? "",
+                          category: course.category ?? "",
+                          isRequired: course.isRequired ?? false,
+                        });
+                        setEditCourseOpen(true);
+                      }} data-testid="btn-edit-course-info">
+                        <Pencil className="w-3.5 h-3.5 mr-1" /> Edit Info
+                      </Button>
                       <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/5"
                         onClick={() => setDeleteConfirm(course.id)} data-testid="btn-delete-course">
                         <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
@@ -1161,6 +1249,98 @@ export default function AdminTrainingHub() {
                     </div>
                   )}
                 </div>
+
+
+                {/* Quiz Section */}
+                {courseQuiz ? (
+                  <div className="bg-card border border-border rounded-xl p-5">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="font-semibold text-foreground">Final Quiz</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {courseQuiz.questions?.length ?? 0} question{(courseQuiz.questions?.length ?? 0) === 1 ? "" : "s"} · {courseQuiz.passingScore ?? 80}% to pass
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" onClick={() => {
+                          setEditingQuestion({ questionText: "", options: ["", "", "", ""], correctAnswer: 0 });
+                          setQuestionDialogOpen(true);
+                        }} data-testid="btn-add-question">
+                          <Plus className="w-3.5 h-3.5 mr-1" /> Add Question
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-8 w-8 p-0 text-destructive border-destructive/30 hover:bg-destructive/5"
+                          onClick={() => deleteQuizMutation.mutate(courseQuiz.id)}
+                          disabled={deleteQuizMutation.isPending}
+                          data-testid="btn-delete-quiz">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                    {(courseQuiz.questions?.length ?? 0) === 0 ? (
+                      <div className="text-center py-6 border border-dashed border-border rounded-lg">
+                        <CheckCircle2 className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
+                        <p className="text-sm text-muted-foreground mb-3">No questions yet. Add your first question.</p>
+                        <Button size="sm" variant="outline" onClick={() => {
+                          setEditingQuestion({ questionText: "", options: ["", "", "", ""], correctAnswer: 0 });
+                          setQuestionDialogOpen(true);
+                        }}>
+                          <Plus className="w-3.5 h-3.5 mr-1" /> Add Question
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {courseQuiz.questions.map((q: any, i: number) => {
+                          const options: string[] = q.optionsJson ? JSON.parse(q.optionsJson) : [];
+                          const correctVal = q.correctAnswerJson ? JSON.parse(q.correctAnswerJson) : 0;
+                          const correctIdx = typeof correctVal === "number" ? correctVal : options.indexOf(correctVal);
+                          return (
+                            <div key={q.id} className="p-3 border border-border rounded-lg" data-testid={`row-question-${q.id}`}>
+                              <div className="flex items-start gap-3">
+                                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary flex-shrink-0 mt-0.5">{i + 1}</div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-foreground">{q.questionText}</p>
+                                  {options.length > 0 && (
+                                    <div className="mt-1.5 grid grid-cols-2 gap-1">
+                                      {options.map((opt: string, oi: number) => (
+                                        <div key={oi} className={`text-xs px-2 py-1 rounded ${oi === correctIdx ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800" : "bg-muted text-muted-foreground"}`}>
+                                          {String.fromCharCode(65 + oi)}. {opt}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => {
+                                    const opts: string[] = q.optionsJson ? JSON.parse(q.optionsJson) : ["", "", "", ""];
+                                    const cVal = q.correctAnswerJson ? JSON.parse(q.correctAnswerJson) : 0;
+                                    const cIdx = typeof cVal === "number" ? cVal : opts.indexOf(cVal);
+                                    setEditingQuestion({ id: q.id, questionText: q.questionText, options: opts.length < 2 ? ["", "", "", ""] : opts, correctAnswer: cIdx });
+                                    setQuestionDialogOpen(true);
+                                  }} data-testid={`btn-edit-question-${q.id}`}>
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                                    onClick={() => deleteQuestionMutation.mutate(q.id)}
+                                    disabled={deleteQuestionMutation.isPending}
+                                    data-testid={`btn-delete-question-${q.id}`}>
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex justify-center pt-1">
+                    <Button variant="outline" onClick={() => createQuizMutation.mutate(selectedId!)} disabled={createQuizMutation.isPending} data-testid="btn-add-quiz">
+                      {createQuizMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-3.5 h-3.5 mr-1" />}
+                      Add Quiz
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {/* Right: cohort roster + public learners */}
@@ -1299,6 +1479,13 @@ export default function AdminTrainingHub() {
                   </div>
                   <Switch checked={courseForm.publicLinkEnabled} onCheckedChange={v => setCourseForm(f => ({ ...f, publicLinkEnabled: v }))} data-testid="switch-public-link" />
                 </div>
+                <div className="flex items-center justify-between p-3 border border-border rounded-lg">
+                  <div>
+                    <div className="text-sm font-medium text-foreground">Include Quiz at End</div>
+                    <div className="text-xs text-muted-foreground">Auto-create a quiz after the last module</div>
+                  </div>
+                  <Switch checked={includeQuiz} onCheckedChange={v => setIncludeQuiz(v)} data-testid="switch-include-quiz" />
+                </div>
               </div>
             )}
 
@@ -1314,6 +1501,7 @@ export default function AdminTrainingHub() {
                   <div className="flex justify-between text-sm"><span className="text-muted-foreground">Required</span><span>{courseForm.isRequired ? "Yes" : "No"}</span></div>
                   <div className="flex justify-between text-sm"><span className="text-muted-foreground">Certificate</span><span>{courseForm.certificateEnabled ? "Yes" : "No"}</span></div>
                   <div className="flex justify-between text-sm"><span className="text-muted-foreground">Public Link</span><span>{courseForm.publicLinkEnabled ? "Yes" : "No"}</span></div>
+                  <div className="flex justify-between text-sm"><span className="text-muted-foreground">Quiz</span><span>{includeQuiz ? "Yes — auto-created" : "No"}</span></div>
                 </div>
               </div>
             )}
@@ -1334,6 +1522,128 @@ export default function AdminTrainingHub() {
                 </Button>
               )}
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── EDIT COURSE INFO DIALOG ── */}
+      <Dialog open={editCourseOpen} onOpenChange={setEditCourseOpen}>
+        <DialogContent className="sm:max-w-lg" data-testid="dialog-edit-course-info">
+          <DialogHeader>
+            <DialogTitle>Edit Course Info</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label>Course Title <span className="text-destructive">*</span></Label>
+              <Input className="mt-1" value={editCourseForm.title} onChange={e => setEditCourseForm(f => ({ ...f, title: e.target.value }))} data-testid="input-edit-course-title" />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea className="mt-1" rows={3} placeholder="What will employees learn?" value={editCourseForm.description} onChange={e => setEditCourseForm(f => ({ ...f, description: e.target.value }))} data-testid="input-edit-course-description" />
+            </div>
+            <div>
+              <Label>Category</Label>
+              <select className="mt-1 w-full h-9 px-3 border border-border rounded-md text-sm bg-background text-foreground" value={editCourseForm.category} onChange={e => setEditCourseForm(f => ({ ...f, category: e.target.value }))} data-testid="select-edit-course-category">
+                <option value="">No Category</option>
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="flex items-center justify-between p-3 border border-border rounded-lg">
+              <div>
+                <div className="text-sm font-medium text-foreground">Required Course</div>
+                <div className="text-xs text-muted-foreground">Employees must complete this course</div>
+              </div>
+              <Switch checked={editCourseForm.isRequired} onCheckedChange={v => setEditCourseForm(f => ({ ...f, isRequired: v }))} data-testid="switch-edit-required" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditCourseOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!course || !editCourseForm.title.trim()) return;
+                updateCourseMutation.mutate({
+                  id: course.id,
+                  data: {
+                    title: editCourseForm.title.trim(),
+                    description: editCourseForm.description.trim() || null,
+                    category: editCourseForm.category || null,
+                    isRequired: editCourseForm.isRequired,
+                  },
+                });
+                setEditCourseOpen(false);
+              }}
+              disabled={!editCourseForm.title.trim() || updateCourseMutation.isPending}
+              data-testid="btn-save-course-info">
+              {updateCourseMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── QUESTION EDITOR DIALOG ── */}
+      <Dialog open={questionDialogOpen} onOpenChange={v => { setQuestionDialogOpen(v); if (!v) setEditingQuestion(null); }}>
+        <DialogContent className="sm:max-w-lg" data-testid="dialog-question">
+          <DialogHeader>
+            <DialogTitle>{editingQuestion?.id ? "Edit Question" : "Add Question"}</DialogTitle>
+          </DialogHeader>
+          {editingQuestion && (
+            <div className="space-y-4 py-2">
+              <div>
+                <Label>Question <span className="text-destructive">*</span></Label>
+                <Textarea className="mt-1" rows={2} placeholder="Enter your question..." value={editingQuestion.questionText ?? ""} onChange={e => setEditingQuestion((q: any) => ({ ...q, questionText: e.target.value }))} data-testid="input-question-text" />
+              </div>
+              <div>
+                <Label>Answer Options</Label>
+                <p className="text-xs text-muted-foreground mb-2">Click the circle to mark the correct answer.</p>
+                <div className="space-y-2">
+                  {(editingQuestion.options ?? ["", "", "", ""]).map((opt: string, i: number) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingQuestion((q: any) => ({ ...q, correctAnswer: i }))}
+                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${editingQuestion.correctAnswer === i ? "border-emerald-500 bg-emerald-500" : "border-muted-foreground hover:border-primary"}`}
+                        data-testid={`radio-correct-${i}`}>
+                        {editingQuestion.correctAnswer === i && <Check className="w-3 h-3 text-white" />}
+                      </button>
+                      <span className="w-5 text-xs font-medium text-muted-foreground">{String.fromCharCode(65 + i)}.</span>
+                      <Input
+                        className="flex-1 h-8 text-sm"
+                        placeholder={`Option ${String.fromCharCode(65 + i)}`}
+                        value={opt}
+                        onChange={e => {
+                          const newOpts = [...(editingQuestion.options ?? ["", "", "", ""])];
+                          newOpts[i] = e.target.value;
+                          setEditingQuestion((q: any) => ({ ...q, options: newOpts }));
+                        }}
+                        data-testid={`input-option-${i}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setQuestionDialogOpen(false); setEditingQuestion(null); }}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (editingQuestion?.id) {
+                  updateQuestionMutation.mutate(editingQuestion);
+                } else {
+                  addQuestionMutation.mutate(editingQuestion);
+                }
+              }}
+              disabled={
+                !editingQuestion?.questionText?.trim() ||
+                (editingQuestion?.options ?? []).filter((o: string) => o.trim()).length < 2 ||
+                addQuestionMutation.isPending ||
+                updateQuestionMutation.isPending
+              }
+              data-testid="btn-save-question">
+              {(addQuestionMutation.isPending || updateQuestionMutation.isPending) ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+              Save Question
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

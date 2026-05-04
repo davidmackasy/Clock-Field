@@ -1,0 +1,171 @@
+🔧 DEV NOTE: Training Hub Improvements (EDIT INTRO + QUIZ SUPPORT)
+🚫 CRITICAL RULES
+DO NOT break or affect any existing functionality
+DO NOT modify module system behavior
+DO NOT change database structure unless explicitly required below
+DO NOT touch UI outside Training Hub course page
+ONLY implement what is listed here
+✅ FEATURE 1: EDIT COURSE INTRO (TOP SECTION)
+❌ Current Problem
+Course intro (title + description) is NOT editable after creation
+Only modules are editable
+✅ Required Fix
+1. Add Edit Button
+
+Location:
+
+Top right of course card (same area as Unpublish / Assign / Copy Link)
+
+Button:
+
+Label: Edit Course Info
+Icon: pencil
+2. Edit Modal / Panel
+
+Open modal with fields:
+
+Course Title (input)
+Course Description (textarea)
+Optional:
+Category
+Required toggle
+3. Save Behavior
+Update existing course record
+Persist changes instantly
+Reflect changes in UI without reload
+4. Data Handling
+
+DO NOT create new tables
+
+Use existing course table fields:
+
+title
+description
+category (if exists)
+5. UI Rules
+Match existing modal styles
+Keep layout consistent
+No new page, use modal only
+✅ FEATURE 2: QUIZ SUPPORT FOR MANUAL COURSES
+❌ Current Problem
+AI-generated courses → can include quiz
+Manually created courses → NO quiz option
+✅ Required Fix
+1. Add Quiz Option During Course Creation
+
+When user clicks:
+
+Create Course
+
+Add step or toggle:
+
+Option:
+
+Include Quiz at End (toggle switch)
+2. Quiz Creation (Manual Mode)
+
+If toggle = ON:
+
+After course is created:
+
+Auto-create empty quiz section at end
+3. Add Quiz Editor UI
+
+Inside course view (below modules):
+
+Add section:
+
+Title: Final Quiz
+
+Buttons:
+
+Add Question
+4. Question Structure
+
+Each question:
+
+Question text
+4 options
+Select correct answer
+5. Behavior
+Quiz attaches to course (not module)
+Appears after last module
+Works same as AI quiz
+6. Editing Quiz
+
+User must be able to:
+
+Add questions
+Edit questions
+Delete questions
+7. Data Handling
+
+Use existing quiz system (AI one)
+
+DO NOT duplicate system
+
+Just allow:
+
+manual creation entry point
+✅ FEATURE 3: ADD QUIZ AFTER CREATION (IMPORTANT)
+
+User must also be able to:
+
+Add quiz EVEN if not selected during creation
+Add Button:
+
+Location:
+
+Bottom of modules section
+
+Button:
+
++ Add Quiz
+Behavior:
+Creates quiz section
+Opens quiz editor immediately
+🧠 UX FLOW SUMMARY
+
+Manual Course:
+
+Create course
+Toggle quiz ON → quiz auto-created
+OR
+Skip → later click “Add Quiz”
+
+AI Course:
+
+No change (keep existing behavior)
+🧪 TEST CASES (MANDATORY)
+
+Test 1:
+
+Create manual course → edit intro → save → refresh → persists
+
+Test 2:
+
+Create manual course with quiz ON → quiz appears
+
+Test 3:
+
+Create manual course without quiz → add quiz later → works
+
+Test 4:
+
+AI course → unchanged behavior
+
+Test 5:
+
+Editing intro does NOT affect modules
+🚫 DO NOT TOUCH
+Module editor
+AI generator logic
+Course assignment system
+Public links
+Certificates
+Training progress tracking
+✅ EXPECTED RESULT
+Course intro becomes editable
+Manual courses support quizzes
+Same experience as AI courses
+No regressions anywhere else
