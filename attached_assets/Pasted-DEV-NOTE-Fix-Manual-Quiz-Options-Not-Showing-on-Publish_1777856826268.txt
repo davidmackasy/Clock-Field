@@ -1,0 +1,231 @@
+DEV NOTE: Fix Manual Quiz Options Not Showing on Published Course
+Critical rules
+
+Do not change or affect anything else.
+
+Only fix the quiz option display issue.
+
+Do not touch:
+
+Module editor
+Course publishing logic
+Public link structure
+Training progress
+Certificates
+Employee assignment
+AI course generation
+Current issue
+
+Manual quiz questions can be created and saved.
+
+But on the published learner view, the quiz only shows:
+
+Question text
+
+It does not show:
+
+Option A
+Option B
+Option C
+Option D
+Answer selection UI
+
+This means the quiz data is either:
+
+Not saving the options correctly
+Saving options in a different field shape than the learner view expects
+Not fetching options on the published/public learner page
+The learner quiz component is only rendering question text and ignoring the options array
+Required fix
+1. Inspect quiz question data after save
+
+Check the saved manual quiz record.
+
+Confirm the database contains:
+
+question
+options
+correctAnswer
+
+or whatever the existing AI quiz schema uses.
+
+Manual quiz questions must save in the same format as AI-generated quiz questions.
+
+Do not create a new quiz format.
+
+Expected saved structure
+
+Use the same shape as AI quiz questions.
+
+Example:
+
+{
+  question: "What is the main goal of the Master Commercial Cleaning Safety Course?",
+  options: [
+    "To protect cleaners and others through safe cleaning practices",
+    "To clean faster without checking safety",
+    "To avoid using PPE",
+    "To skip chemical labels"
+  ],
+  correctAnswer: 0
+}
+
+If the app currently expects option labels, use the existing app format.
+
+Example:
+
+{
+  question: "...",
+  choices: [
+    { label: "A", text: "..." },
+    { label: "B", text: "..." },
+    { label: "C", text: "..." },
+    { label: "D", text: "..." }
+  ],
+  correctAnswer: "A"
+}
+
+Use the existing AI quiz structure as the source of truth.
+
+2. Fix manual quiz save mapping
+
+In the manual quiz editor modal, make sure these fields are saved:
+
+Option A input value
+Option B input value
+Option C input value
+Option D input value
+Selected correct answer
+
+Right now, it looks like only the question text is being persisted.
+
+The save handler must include the options payload.
+
+Example fix target:
+
+saveQuestion({
+  question: form.question,
+  options: [
+    form.optionA,
+    form.optionB,
+    form.optionC,
+    form.optionD
+  ],
+  correctAnswer: form.correctAnswerIndex
+});
+
+Also validate before save:
+
+Question is required
+All 4 options are required
+Correct answer is required
+
+Disable Save Question until all required fields are complete.
+
+3. Fix learner/public quiz render
+
+On the published learner page, confirm the quiz component renders options.
+
+Expected UI:
+
+Question:
+
+What is the main goal of the Master Commercial Cleaning Safety Course?
+
+Options:
+
+A. To protect cleaners and others through safe cleaning practices
+B. To clean faster without checking safety
+C. To avoid using PPE
+D. To skip chemical labels
+
+Learner must be able to click one answer.
+
+4. Support both old and new quiz records
+
+Some manually created quizzes may already exist with missing or differently shaped options.
+
+Add safe fallback logic:
+
+const options =
+  question.options ||
+  question.choices ||
+  [
+    question.optionA,
+    question.optionB,
+    question.optionC,
+    question.optionD
+  ].filter(Boolean);
+
+Render options only if they exist.
+
+If options are missing, show an admin-safe message only in admin preview:
+
+This quiz question is missing answer options. Edit the question and add options.
+
+Do not show this message to learners unless needed.
+
+5. Migration-safe behavior
+
+Do not delete existing quiz questions.
+
+Do not wipe existing courses.
+
+Do not rebuild the quiz system.
+
+Only normalize manual quiz save and render behavior.
+
+Testing required
+
+Test 1:
+Create a manual course.
+
+Add quiz question with 4 options.
+
+Save.
+
+Refresh admin page.
+
+Open edit question.
+
+Confirm all 4 options are still there.
+
+Test 2:
+Publish course.
+
+Open learner/public link.
+
+Reach final quiz.
+
+Confirm all 4 options show.
+
+Test 3:
+Select an answer.
+
+Click next.
+
+Confirm quiz progress works.
+
+Test 4:
+Create AI course with quiz.
+
+Confirm AI quiz still works exactly as before.
+
+Test 5:
+Edit manual quiz question.
+
+Change option B.
+
+Save.
+
+Refresh learner link.
+
+Confirm updated option appears.
+
+Expected result
+
+Manual quiz questions show full multiple-choice answers on the published training page.
+
+AI-generated quizzes continue working.
+
+No other Training Hub features are affected.

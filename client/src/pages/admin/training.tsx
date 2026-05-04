@@ -940,8 +940,8 @@ export default function AdminTrainingHub() {
     mutationFn: (q: any) => apiRequest("POST", `/api/training/quizzes/${courseQuiz?.id}/questions`, {
       questionText: q.questionText,
       questionType: "multiple_choice",
-      optionsJson: JSON.stringify(q.options),
-      correctAnswerJson: JSON.stringify(q.correctAnswer),
+      options: q.options,
+      correctAnswer: q.options[q.correctAnswer],
       sortOrder: courseQuiz?.questions?.length ?? 0,
     }),
     onSuccess: () => {
@@ -956,8 +956,8 @@ export default function AdminTrainingHub() {
   const updateQuestionMutation = useMutation({
     mutationFn: (q: any) => apiRequest("PUT", `/api/training/quiz-questions/${q.id}`, {
       questionText: q.questionText,
-      optionsJson: JSON.stringify(q.options),
-      correctAnswerJson: JSON.stringify(q.correctAnswer),
+      options: q.options,
+      correctAnswer: q.options[q.correctAnswer],
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/training/courses", selectedId, "quiz"] });
