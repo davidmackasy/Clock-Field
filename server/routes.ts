@@ -10179,7 +10179,10 @@ Return ONLY valid JSON:
       if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       const { order } = req.body;
       if (!Array.isArray(order)) return res.status(400).json({ message: "order must be an array of module IDs" });
-      await Promise.all(order.map((id: string, idx: number) => storage.updateTrainingModule(id, { sortOrder: idx })));
+      const existing = await storage.getTrainingModules(req.params.courseId);
+      const validIds = new Set(existing.map(m => m.id));
+      if ((order as string[]).some(id => !validIds.has(id))) return res.status(400).json({ message: "Invalid module IDs" });
+      await Promise.all((order as string[]).map((id, idx) => storage.updateTrainingModule(id, { sortOrder: idx })));
       res.json({ ok: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });

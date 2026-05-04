@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { AdminBlockEditor } from "@/components/training/admin-block-editor";
@@ -805,8 +805,10 @@ export default function AdminTrainingHub() {
   const [includeQuiz, setIncludeQuiz] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<any | null>(null);
   const [questionDialogOpen, setQuestionDialogOpen] = useState(false);
-  const [dragSrcIdx, setDragSrcIdx] = useState<number | null>(null);
+  const dragSrcRef = useRef<number | null>(null);
+  const [dragVisualSrc, setDragVisualSrc] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [localModules, setLocalModules] = useState<any[] | null>(null);
 
   const { data: courses = [], isLoading } = useQuery<Course[]>({ queryKey: ["/api/training/courses"] });
   const { data: stats } = useQuery<{ totalCourses: number; totalAssigned: number; totalCompleted: number; totalPending: number }>({
@@ -983,18 +985,35 @@ export default function AdminTrainingHub() {
     mutationFn: (order: string[]) => apiRequest("PATCH", `/api/training/courses/${selectedId}/modules/reorder`, { order }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/training/courses", selectedId] });
+      setLocalModules(null);
       toast({ title: "Module order updated" });
     },
-    onError: (e: any) => toast({ title: "Could not update module order. Please try again.", description: e.message, variant: "destructive" }),
+    onError: (e: any) => {
+      setLocalModules(null);
+      toast({ title: "Could not update module order. Please try again.", description: e.message, variant: "destructive" });
+    },
   });
 
-  const moveModule = (idx: number, dir: -1 | 1) => {
-    const mods = [...(detail?.modules ?? [])];
-    const newIdx = idx + dir;
-    if (newIdx < 0 || newIdx >= mods.length) return;
-    [mods[idx], mods[newIdx]] = [mods[newIdx], mods[idx]];
-    reorderModulesMutation.mutate(mods.map(m => m.id));
+  const applyReorder = (srcIdx: number, dstIdx: number) => {
+    const source = localModules ?? (detail?.modules ?? []);
+    const mods = [...source];
+    const [moved] = mods.splice(srcIdx, 1);
+    mods.splice(dstIdx, 0, moved);
+    setLocalModules(mods);
+    reorderModulesMutation.mutate(mods.map((m: any) => m.id));
   };
+
+  const moveModule = (idx: number, dir: -1 | 1) => {
+    const source = localModules ?? (detail?.modules ?? []);
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= source.length) return;
+    applyReorder(idx, newIdx);
+  };
+
+  const displayModules = useMemo(
+    () => localModules ?? (detail?.modules ?? []),
+    [localModules, detail?.modules]
+  );
 
   const handleThumbnail = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1241,26 +1260,25 @@ export default function AdminTrainingHub() {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {detail.modules.map((mod, i) => (
+                      {displayModules.map((mod: any, i: number) => (
                         <div
                           key={mod.id}
                           draggable
-                          onDragStart={() => setDragSrcIdx(i)}
+                          onDragStart={() => { dragSrcRef.current = i; setDragVisualSrc(i); }}
                           onDragOver={e => { e.preventDefault(); setDragOverIdx(i); }}
                           onDrop={e => {
                             e.preventDefault();
-                            if (dragSrcIdx === null || dragSrcIdx === i) { setDragSrcIdx(null); setDragOverIdx(null); return; }
-                            const mods = [...detail.modules];
-                            const [moved] = mods.splice(dragSrcIdx, 1);
-                            mods.splice(i, 0, moved);
-                            reorderModulesMutation.mutate(mods.map(m => m.id));
-                            setDragSrcIdx(null);
+                            const src = dragSrcRef.current;
+                            dragSrcRef.current = null;
+                            setDragVisualSrc(null);
                             setDragOverIdx(null);
+                            if (src === null || src === i) return;
+                            applyReorder(src, i);
                           }}
-                          onDragEnd={() => { setDragSrcIdx(null); setDragOverIdx(null); }}
+                          onDragEnd={() => { dragSrcRef.current = null; setDragVisualSrc(null); setDragOverIdx(null); }}
                           className={`flex items-center gap-2 p-3 border rounded-lg transition-all select-none ${
-                            dragSrcIdx === i ? "opacity-40 border-border" :
-                            dragOverIdx === i && dragSrcIdx !== i ? "border-primary bg-primary/5" :
+                            dragVisualSrc === i ? "opacity-40 border-border" :
+                            dragOverIdx === i && dragVisualSrc !== i ? "border-primary bg-primary/5" :
                             "border-border hover:bg-muted/30"
                           }`}
                           data-testid={`row-module-${mod.id}`}>
@@ -1294,7 +1312,7 @@ export default function AdminTrainingHub() {
                             <Button
                               variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
                               onClick={() => moveModule(i, 1)}
-                              disabled={i === detail.modules.length - 1 || reorderModulesMutation.isPending}
+                              disabled={i === displayModules.length - 1 || reorderModulesMutation.isPending}
                               data-testid={`btn-move-down-${mod.id}`}>
                               <ChevronDown className="w-3 h-3" />
                             </Button>

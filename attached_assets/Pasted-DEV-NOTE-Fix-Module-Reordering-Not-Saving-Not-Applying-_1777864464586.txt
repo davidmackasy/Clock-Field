@@ -1,0 +1,195 @@
+DEV NOTE: Fix Module Reordering Not Saving / Not Applying
+Critical rules
+
+Do not change or affect anything else.
+
+Only debug and fix module reordering.
+
+Do not touch:
+
+Module editor
+Course intro editor
+Quiz system
+Public links
+Certificates
+Learner progress
+Assignments
+Existing course/module content
+Current issue
+
+The UI shows that modules can be rearranged, but the reorder does not actually work.
+
+Possible problems:
+
+Drag UI changes only locally
+New order is not saved to database
+sortOrder is not updating
+API endpoint is not being called
+API saves but frontend refetch overwrites order
+Course modules are still sorted by createdAt or id
+Public/employee views ignore sortOrder
+Required fix
+1. Check drag-and-drop state
+
+When admin drags a module:
+
+UI order should update immediately
+Module numbers should update immediately
+New array order should contain correct module IDs
+
+Add temporary console logging during debugging only:
+
+console.log("New module order:", reorderedModules.map(m => ({
+  id: m.id,
+  title: m.title,
+  sortOrder: m.sortOrder
+})));
+
+Remove debug logs before final.
+
+2. Check save request
+
+After drop or after clicking save:
+
+Confirm API request is called.
+
+Payload should look like:
+
+{
+  courseId: "course_id",
+  modules: [
+    { id: "module_3", sortOrder: 1 },
+    { id: "module_1", sortOrder: 2 },
+    { id: "module_2", sortOrder: 3 }
+  ]
+}
+
+Do not send full module content unless needed.
+
+Only send:
+
+module ID
+new sort order
+3. Fix backend update
+
+Backend must update each module’s sortOrder.
+
+Example logic:
+
+for (const module of modules) {
+  await db.module.update({
+    where: {
+      id: module.id,
+      courseId
+    },
+    data: {
+      sortOrder: module.sortOrder
+    }
+  });
+}
+
+Important:
+
+Validate the module belongs to the selected course
+Do not update modules from other courses
+Do not delete or recreate modules
+4. Fix fetch sorting
+
+Every place that loads course modules must sort by:
+
+sortOrder ASC
+
+Fallback:
+
+createdAt ASC
+
+Do not sort by id.
+
+Apply this to:
+
+Admin course detail page
+Public learner course page
+Assigned employee training view
+5. Prevent refetch reset
+
+After save:
+
+Either update local state with saved order
+Or refetch and ensure backend returns sorted by sortOrder
+
+Do not let the page snap back to old order.
+
+6. Confirm database field
+
+Check whether sortOrder exists.
+
+If it exists:
+
+Use it correctly
+
+If it does not exist:
+
+Add only this field safely:
+sortOrder Int DEFAULT 0
+
+Then backfill existing modules based on current order.
+
+Do not alter any other schema.
+
+Required behavior
+
+Admin can move:
+
+Module 5 → Module 1
+
+Then after refresh, it must stay:
+
+Module 5
+Module 1
+Module 2
+Module 3
+Module 4
+
+Learner/public view must show the same order.
+
+Testing required
+
+Test 1:
+Reorder modules in admin view.
+
+Refresh page.
+
+Confirm order stays saved.
+
+Test 2:
+Check database after reorder.
+
+Confirm sortOrder values changed.
+
+Test 3:
+Open public training link.
+
+Confirm modules show in new order.
+
+Test 4:
+Open assigned employee view.
+
+Confirm modules show in new order.
+
+Test 5:
+Edit one reordered module.
+
+Confirm only content changes, not order.
+
+Test 6:
+Quiz remains after final module.
+
+Expected result
+
+Module reordering actually saves and applies everywhere.
+
+No module content changes.
+
+No learner progress is reset.
+
+No other Training Hub feature is affected.
