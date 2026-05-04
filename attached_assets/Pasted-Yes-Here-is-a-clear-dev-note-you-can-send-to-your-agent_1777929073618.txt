@@ -1,0 +1,471 @@
+Yes. Here is a clear dev note you can send to your agent.
+
+I reviewed the Workiz homepage. The main structure is:
+
+Header with logo, dropdown menus, free trial, login, phone number.
+Hero section with strong headline, short subtext, two CTA buttons, product visual, and trust badge.
+Three quick value cards under the hero.
+Trusted-by logo strip.
+Feature section with tabbed/video-style previews.
+Why section with benefits and testimonials.
+Industry/service cards.
+Final CTA section with desktop and mobile product mockups.
+Feature grid.
+Testimonials.
+FAQ.
+
+Copy and paste this:
+
+Dev Note: Redesign Clockfield Landing Page Inspired by Workiz UI/UX
+
+Please redesign the Clockfield public landing page using the same overall UI/UX structure, layout quality, spacing, conversion flow, and premium SaaS style inspired by Workiz.com.
+
+Important:
+Do not copy Workiz branding, text, images, logos, colors, or copyrighted assets.
+Use Workiz only as layout and UX inspiration.
+Clockfield must keep its own brand, features, copy, screenshots, colors, and product identity.
+Do not break, remove, rename, or affect any existing app functionality, authentication, Stripe, dashboard logic, employee flows, admin flows, or live production data.
+Only update the public-facing landing page UI/UX unless a landing-page component requires a safe visual-only adjustment.
+
+Goal:
+Make Clockfield look like a serious, modern field service / cleaning business management platform, similar in polish to Workiz, but fully focused on Clockfield’s cleaning, employee, attendance, reporting, training, scheduling, payroll, client report, incident report, quotation, and operations features.
+
+Reference Structure to Follow
+
+Header / Navigation
+
+Create a premium sticky header.
+
+Use:
+Clockfield logo on the left.
+Navigation dropdowns in the middle.
+Primary CTA buttons on the right.
+
+Suggested nav:
+
+Product
+Scheduling
+Attendance
+Worklogs
+Client Reports
+Payroll
+Training
+Incident Reports
+Quotes
+
+Solutions
+Commercial Cleaning
+Janitorial Companies
+Residential Cleaning
+Property Maintenance
+Small Cleaning Teams
+Growing Service Businesses
+
+Resources
+Blog
+Help Center
+Contact
+Demo
+
+Right side:
+Log in
+Book a Demo
+Start Free Trial
+
+Design:
+Clean rounded header.
+White or light background.
+Soft shadow or border.
+Large dropdown mega menus like Workiz.
+Mobile version should collapse into a clean hamburger menu.
+Do not affect logged-in app navigation.
+
+Hero Section
+
+Create a large conversion-focused hero section.
+
+Headline:
+Run your cleaning business from one simple platform
+
+Subheadline:
+Clockfield helps cleaning and service businesses manage schedules, employees, attendance, worklogs, client reports, payroll, training, quotes, and incident reports in one connected system.
+
+CTA buttons:
+Start Free Trial
+Book a Demo
+
+Add smaller trust text:
+Built for cleaning companies, janitorial teams, and service businesses.
+
+Hero Visual:
+Use a large product dashboard mockup.
+Show Clockfield dashboard UI inside a browser-style frame.
+Add floating cards around it:
+Today’s Schedule
+Employee Clocked In
+Client Report Sent
+Training Completed
+Payroll Ready
+Incident Report Signed
+
+Design:
+Big bold headline.
+Rounded CTA buttons.
+Clean background with light gradients.
+Use modern SaaS spacing.
+Hero should feel premium, like Workiz, but Clockfield-branded.
+
+Three Quick Value Cards Under Hero
+
+Add three cards similar to Workiz’s “Unleash your team / Win more jobs / Automate with AI” section.
+
+Card 1:
+Manage your team
+Keep cleaners, supervisors, and admins synced with schedules, attendance, roles, and job updates.
+
+Card 2:
+Prove the work
+Create before-and-after worklogs, field notes, client reports, and public links that show exactly what was completed.
+
+Card 3:
+Save admin time
+Automate reminders, training assignments, payroll preparation, reports, and operational follow-ups.
+
+Each card should include:
+Icon
+Short title
+One-sentence description
+Small product image or UI preview
+
+Trusted Section
+
+Add a trust strip.
+
+Text:
+Built for cleaning and service teams that need better operations
+
+Use placeholder logo style cards if we do not have real customer logos yet.
+Do not fake real companies.
+Use neutral badges:
+Commercial Cleaning
+Janitorial Teams
+Residential Cleaning
+Property Maintenance
+Building Maintenance
+Facility Services
+
+Main Feature Section With Tabs
+
+Create a large section similar to Workiz’s feature tabs.
+
+Title:
+Everything your cleaning business needs in one place
+
+Subtext:
+From scheduling to reports, Clockfield keeps daily operations organized, visible, and easy to manage.
+
+Create tabs:
+
+Scheduling
+Attendance
+Worklogs
+Client Reports
+Training
+Payroll
+Quotes
+Incident Reports
+
+Each tab should update the visual preview area.
+
+Scheduling:
+Plan jobs, assign cleaners, manage recurring shifts, and keep daily schedules clear.
+
+Attendance:
+Track clock-ins, clock-outs, hours, overtime, and employee attendance by date and pay period.
+
+Worklogs:
+Let cleaners upload before-and-after photos, notes, areas cleaned, and job progress.
+
+Client Reports:
+Generate professional public client report links with company branding, photos, notes, and completion details.
+
+Training:
+Create courses, assign training to employees, track completion, and issue certificates.
+
+Payroll:
+Prepare payroll estimates using hours, rates, deductions, and selected pay periods.
+
+Quotes:
+Build cleaning quotes for residential, commercial, and industrial jobs with add-ons and pricing suggestions.
+
+Incident Reports:
+Create professional incident reports, collect signatures, send to clients or employees, and export printable PDFs.
+
+Design:
+Left side tab list.
+Right side large UI preview.
+Use rounded panels.
+Use smooth transitions.
+Keep it responsive.
+Do not create fake backend logic. This is visual only unless the real feature already exists.
+
+Why Clockfield Section
+
+Create a section like Workiz’s “Why Workiz?”
+
+Title:
+Why cleaning businesses choose Clockfield
+
+Use three main columns:
+
+Easy to onboard
+Set up your team, schedules, clients, and job sites without complicated setup.
+
+Easy for cleaners to use
+Mobile-friendly tools help employees clock in, view assigned work, complete training, upload photos, and submit reports.
+
+Built for real cleaning workflows
+Clockfield supports the real work cleaning businesses deal with every day: schedules, attendance, work proof, quotes, payroll, safety, incidents, and client reporting.
+
+Add testimonial-style cards but only use placeholders unless real testimonials exist.
+
+Example placeholder:
+“Clockfield helps our team stay organized and gives clients a clear view of the work completed.”
+Cleaning Business Owner
+
+Make sure placeholder testimonials are clearly generic or replace with real reviews if available.
+
+Industry Section
+
+Create a section like “Made for field service businesses,” but Clockfield-focused.
+
+Title:
+Made for cleaning and service businesses
+
+Cards:
+Commercial Cleaning
+Janitorial Services
+Residential Cleaning
+Office Cleaning
+Post-Construction Cleaning
+Property Maintenance
+Move-In / Move-Out Cleaning
+Facility Services
+
+Each card should have:
+Icon
+Short description
+Learn more link or CTA
+
+Do not build new pages unless they already exist.
+If no page exists, links can scroll to features or contact/demo.
+
+Product CTA Section
+
+Create a full-width CTA section similar to Workiz’s “It’s free to try.”
+
+Title:
+Start running your cleaning business with Clockfield
+
+Subtext:
+Manage your team, prove completed work, organize reports, and keep your business moving from one clean dashboard.
+
+CTA:
+Start Free Trial
+Book a Demo
+
+Add product mockups:
+Desktop dashboard
+Mobile employee view
+
+Show:
+Clock in/out
+Today’s schedule
+Assigned training
+Worklog upload
+Client report preview
+
+Feature Grid
+
+Add a clean feature grid.
+
+Section title:
+For your business
+
+Cards:
+Scheduling
+Attendance
+Worklogs
+Client Reports
+Training & Certificates
+Payroll Estimator
+Incident Reports
+Quotations
+Employee Management
+Public Report Links
+Field Notes
+Reviews
+Supplies / Inventory if currently available
+Admin Settings
+Company Branding
+PDF Exports
+
+Each card:
+Icon
+Title
+Short description
+Learn more link if available
+
+Testimonials / Social Proof
+
+Add testimonial cards.
+
+If real testimonials exist, use them.
+If not, use generic placeholders and avoid making false claims.
+
+Cards should include:
+Quote
+Name
+Business type
+Optional image placeholder
+
+Do not claim fake numbers like “120,000 pros” unless Clockfield actually has that proof.
+
+FAQ Section
+
+Add FAQ at bottom.
+
+Questions:
+What is Clockfield?
+Who is Clockfield built for?
+Can employees clock in and out from mobile?
+Can I create client reports with photos?
+Can I assign employee training?
+Can I generate payroll estimates?
+Can I create incident reports and PDFs?
+Can clients view reports through a public link?
+Does Clockfield work for commercial and residential cleaning?
+How do I get started?
+
+Footer
+
+Create a professional footer.
+
+Columns:
+Product
+Scheduling
+Attendance
+Worklogs
+Reports
+Training
+Payroll
+Quotes
+Incident Reports
+
+Company
+About
+Contact
+Book Demo
+Login
+
+Resources
+Help Center
+Blog
+FAQ
+
+Legal
+Privacy Policy
+Terms
+
+Add CTA:
+Ready to organize your cleaning business?
+Start Free Trial
+
+Visual Style Requirements
+
+Use a premium SaaS design.
+
+Style:
+Large hero typography
+Rounded cards
+Soft shadows
+Clean gradients
+Modern icons
+Dashboard mockups
+Mobile mockups
+Generous spacing
+Smooth hover states
+Strong CTA buttons
+Responsive design
+
+Keep Clockfield identity:
+Use Clockfield name everywhere.
+Use Clockfield features only.
+Use cleaning/service business language.
+Do not mention Workiz anywhere on the live page.
+
+Mobile Requirements
+
+Mobile landing page must be polished.
+
+Make sure:
+Hero stacks properly.
+CTA buttons are easy to tap.
+Dashboard mockup does not overflow.
+Cards stack cleanly.
+Tabs become dropdown or horizontal scroll.
+Text stays readable.
+Header menu works properly.
+No white gaps.
+No broken spacing.
+No hidden CTA buttons.
+
+Safety Rules
+
+Do not touch:
+Authentication
+Stripe
+Subscription logic
+Dashboard routes
+Employee login
+Admin login
+Database schema unless required for landing page content
+Attendance logic
+Scheduling logic
+Training logic
+Payroll logic
+Worklog logic
+Report generation
+Incident report PDF generation
+Any existing working feature
+
+Only touch:
+Landing page files
+Landing page components
+Landing page styles
+Landing page images/mockups
+Marketing copy
+Responsive layout
+
+If a shared component affects the logged-in dashboard, do not edit it directly.
+Create a landing-page-specific version instead.
+
+Final QA Checklist
+
+After implementation, confirm:
+
+Landing page loads without errors.
+Login button still goes to the correct login page.
+Start Free Trial goes to the correct signup/subscription flow.
+Book Demo goes to the correct contact/demo route.
+Mobile menu works.
+No dashboard routes are affected.
+No Stripe/auth files were changed.
+No database logic was changed.
+No existing app feature was broken.
+Page looks professional on desktop, tablet, and mobile.
+All copy says Clockfield, not Workiz.
+No Workiz assets, logos, or copyrighted text were copied.
+
+Final instruction:
+Use Workiz as inspiration for layout quality and conversion structure only. Build the actual page as a unique Clockfield landing page for cleaning and service businesses. Keep the current Clockfield app working exactly as it is.
