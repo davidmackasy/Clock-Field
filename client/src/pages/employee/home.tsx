@@ -172,8 +172,11 @@ export default function EmployeeHome() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-orange-700">
-              <ShieldAlert className="w-5 h-5" />
-              Checklist Required Before Clocking Out
+              <ShieldAlert className="w-5 h-5 flex-shrink-0" />
+              <div className="flex flex-col leading-snug">
+                <span className="font-semibold">Checklist Required</span>
+                <span className="font-normal text-base">Before Clock Out</span>
+              </div>
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">

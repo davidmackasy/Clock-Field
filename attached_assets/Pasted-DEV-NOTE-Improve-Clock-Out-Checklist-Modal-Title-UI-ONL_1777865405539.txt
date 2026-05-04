@@ -1,0 +1,168 @@
+DEV NOTE: Improve Clock-Out Checklist Modal Title (UI ONLY)
+🚫 Critical rules
+Do not change any logic.
+Do not touch checklist validation.
+Do not modify buttons or actions.
+Do not affect clock-in / clock-out behavior.
+Do not change modal structure.
+Only improve the title UI.
+
+❌ Current issue
+Title:
+Checklist Required Before Clocking Out
+Problems:
+
+
+Too long
+
+
+Feels cramped
+
+
+Looks unbalanced in modal
+
+
+Poor visual hierarchy
+
+
+
+✅ Required fix
+Option 1 (Preferred)
+Break title into two lines:
+Checklist Required
+Before Clocking Out
+
+Option 2 (Cleaner / more modern)
+Checklist Required
+Complete Before Clock Out
+
+Option 3 (Shorter alternative)
+Finish Checklist
+Before Clock Out
+
+🎯 Final decision (use this)
+Checklist Required
+Before Clock Out
+
+🧱 UI implementation
+Title styling
+
+
+Keep same font family
+
+
+Make first line slightly stronger
+
+
+Example:
+Line 1:
+Checklist Required
+
+
+font-weight: 600 or 700
+
+
+Line 2:
+Before Clock Out
+
+
+font-weight: normal or slightly lighter
+
+
+slightly smaller size (optional)
+
+
+
+Layout rules
+
+
+Center align text
+
+
+Add small spacing between lines
+
+
+Ensure it wraps cleanly on mobile
+
+
+Prevent overflow
+
+
+
+Example structure
+<div class="modal-title">  <div class="title-main">Checklist Required</div>  <div class="title-sub">Before Clock Out</div></div>
+
+🎨 Spacing
+
+
+Reduce horizontal stretch
+
+
+Add vertical padding between lines (4px–6px)
+
+
+Keep icon aligned with title block
+
+
+
+📱 Mobile behavior
+
+
+Must wrap cleanly
+
+
+No text clipping
+
+
+Maintain center alignment
+
+
+
+🧪 Testing
+Test 1:
+Open modal on desktop → title looks balanced
+Test 2:
+Open on mobile → no overflow, clean two-line layout
+Test 3:
+Checklist names still render correctly
+Test 4:
+Buttons untouched:
+
+
+Complete Checklists Now
+
+
+Clock Out Anyway
+
+
+Cancel
+
+
+
+✅ Expected result
+
+
+Title looks clean and professional
+
+
+Better readability
+
+
+Balanced modal UI
+
+
+No logic changes anywhere
+
+
+
+If you want next:
+
+
+Improve modal wording tone (more human, less robotic)
+
+
+Add icon animation for urgency
+
+
+Add progress indicator for checklist completion
+
