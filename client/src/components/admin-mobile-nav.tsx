@@ -12,7 +12,7 @@ import {
   LayoutDashboard, Users, Calendar, ClipboardList,
   DollarSign, Building2, Settings,
   LogOut, MoreHorizontal, Clock, ChevronRight, Users2, BookOpen,
-  CreditCard, Bell, ShieldAlert, Newspaper, FileInput, GraduationCap,
+  CreditCard, Bell, ShieldAlert, Newspaper, FileInput, GraduationCap, MessageSquare,
 } from "lucide-react";
 
 const primaryTabs = [
@@ -25,6 +25,7 @@ const primaryTabs = [
 const navMoreItems = [
   { label: "Payroll",      href: "/admin/payroll",      icon: DollarSign },
   { label: "Clients",      href: "/admin/clients",      icon: Building2 },
+  { label: "Messages",     href: "/admin/messages",     icon: MessageSquare },
   { label: "Management",   href: "/admin/management",   icon: Users2 },
   { label: "Work Log",     href: "/admin/work-log",     icon: BookOpen },
   { label: "Forms",        href: "/admin/quote-forms",  icon: FileInput },
@@ -34,8 +35,8 @@ const navMoreItems = [
 ];
 
 const accountMoreItems = [
-  { label: "Subscription", href: "/admin/subscription",       icon: CreditCard },
-  { label: "Messages",     href: "/admin/platform-messages",  icon: Bell },
+  { label: "Subscription",    href: "/admin/subscription",       icon: CreditCard },
+  { label: "Notifications",   href: "/admin/platform-messages",  icon: Bell },
 ];
 
 const workLogPaths       = ["/admin/work-log", "/admin/reports", "/admin/field-notes", "/admin/requests", "/admin/supplies"];
@@ -64,7 +65,8 @@ const pageTitles: Record<string, string> = {
   "/admin/publications":       "Publications",
   "/admin/settings":           "Settings",
   "/admin/subscription":       "Subscription",
-  "/admin/platform-messages":  "Messages",
+  "/admin/messages":           "Messages",
+  "/admin/platform-messages":  "Notifications",
 };
 
 function isItemActive(href: string, location: string): boolean {

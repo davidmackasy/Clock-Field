@@ -21,7 +21,7 @@ import {
   DollarSign, Building2,
   Settings, LogOut, Clock, Users2, BookOpen,
   CreditCard, Bell, ShieldAlert, ChevronRight, Newspaper,
-  FileInput, GraduationCap,
+  FileInput, GraduationCap, MessageSquare,
 } from "lucide-react";
 
 const navItems = [
@@ -31,6 +31,7 @@ const navItems = [
   { title: "Attendance", url: "/admin/attendance", icon: ClipboardList },
   { title: "Payroll", url: "/admin/payroll", icon: DollarSign },
   { title: "Clients", url: "/admin/clients", icon: Building2 },
+  { title: "Messages", url: "/admin/messages", icon: MessageSquare },
   { title: "Management", url: "/admin/management", icon: Users2 },
   { title: "Work Log", url: "/admin/work-log", icon: BookOpen },
   { title: "Forms", url: "/admin/quote-forms", icon: FileInput },
@@ -130,7 +131,7 @@ export function AdminSidebar() {
                   <Link href="/admin/platform-messages" data-testid="nav-platform-messages">
                     <Bell className="w-4 h-4" />
                     <span className="flex items-center justify-between w-full">
-                      Messages
+                      Notifications
                       {unreadMessages > 0 && (
                         <Badge className="bg-primary text-primary-foreground text-[10px] h-4 min-w-[16px] px-1 rounded-full">
                           {unreadMessages}

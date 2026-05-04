@@ -1,0 +1,441 @@
+Dev Note: Improve Clockfield Messages UI/UX Like the Reference, Without Touching Anything Else
+
+Please improve the Clockfield Messages page UI/UX to feel like a modern enterprise communication inbox.
+
+Use the uploaded reference image as the layout inspiration.
+
+Important:
+Do not break, delete, rename, or affect anything else.
+Clockfield is live and active businesses are using it.
+Only improve the Messages UI/UX and message page layout.
+Do not touch authentication.
+Do not touch Stripe.
+Do not touch scheduling logic.
+Do not touch worklog logic.
+Do not touch client report logic.
+Do not touch employee logic.
+Do not touch database schema unless absolutely required.
+Do not change how messages are sent, received, stored, or linked.
+Do not remove any current message functionality.
+Keep all existing message backend logic working exactly the same.
+
+Goal
+
+Redesign the Messages page so all communication is organized in one clean inbox, similar to the reference.
+
+The page should support all message/conversation types in one place:
+
+Client messages
+Team messages
+Employee messages
+Online booking requests
+Quote requests
+Schedule requests
+Field note replies
+Client report replies
+Incident report messages
+General business inquiries
+Archived conversations
+
+Main Layout
+
+Use a 3-column inbox layout.
+
+Column 1: Message Categories Sidebar
+
+Left sidebar should show message categories.
+
+Suggested categories:
+
+All
+Clients
+Team
+Employees
+Requests
+Quotes
+Schedules
+Reports
+Incidents
+Archived
+
+Each category should show a count on the right.
+
+Example:
+
+All 12
+Clients 5
+Team 2
+Employees 3
+Requests 1
+Archived 0
+
+Design:
+Light background
+Selected category highlighted
+Small unread red dot where needed
+Clean icons
+No clutter
+Mobile should collapse into a dropdown or drawer
+
+Column 2: Conversation List
+
+Middle column should show conversations.
+
+Each conversation row should include:
+
+Avatar or initials
+Sender name
+Conversation type label
+Last message preview
+Time
+Unread indicator
+Small tag if needed
+
+Examples:
+
+Jessica Client
+Client
+“Can we reschedule tomorrow?”
+4:29 PM
+
+Michael Cleaner
+Employee
+“Worklog photos uploaded.”
+3:12 PM
+
+New Quote Request
+Request
+“Office cleaning quote requested.”
+Today
+
+Design:
+Selected conversation should have a highlighted left border.
+Unread messages should look stronger.
+Long text should truncate cleanly.
+Search and filter icons should sit at the top.
+
+Top tools:
+Search
+Filter
+New message, if already supported
+
+Do not build new backend messaging features unless the system already supports them.
+
+Column 3: Conversation Detail Panel
+
+Right side should show the selected conversation.
+
+Top conversation header should include:
+
+Name
+Role/type
+Status if available
+Phone icon if phone exists
+Email icon if email exists
+User/contact icon
+More actions menu
+
+Example:
+Jessica Client
+Client · Unknown status
+
+Actions:
+Call
+Email
+Assign
+Add client
+Archive
+More
+
+Only show actions that already exist or can safely link to existing pages.
+
+Message Thread Area
+
+The center thread should show messages in clean rounded cards.
+
+Each message card should include:
+
+Message title if available
+Sender name
+Phone number if available
+Email if available
+Date/time
+Message body
+Related request details
+Action buttons
+
+Use a clean layout like the reference.
+
+For booking/request messages, show structured details:
+
+Request type
+From
+Phone
+Email
+Requested date/time
+Location
+Message
+Source
+
+Example:
+
+Online Booking Request
+
+From: Jessica Client
+Phone: 6197730003
+Email: sitevisitor@example.com
+
+When: Tue May 05, 2026 10:00 AM
+Where: 9555 Chesapeake Drive
+Message: I’d like to get your services.
+
+Action buttons:
+Add Client
+Create Schedule
+Create Quote
+Reply
+
+Use Clockfield wording:
+Add Client
+Create Schedule
+Create Quote
+Send Reply
+
+Do not use:
+Add Job
+Add Lead
+Invoice wording unless Clockfield already supports it
+
+Bottom Reply Composer
+
+Add a clean reply area at the bottom.
+
+Composer should include:
+
+Message input
+Quick reply buttons
+Attach icon if already supported
+Send button
+Optional AI assist icon only if already supported
+
+Quick replies:
+Reschedule
+Price inquiry
+Scheduling inquiry
+Thanks, we received your message
+Can you send more details?
+We’ll get back to you shortly
+
+Send button:
+Send Message
+
+If SMS is supported, show:
+Send Text
+
+If email is supported, show:
+Send Email
+
+If both are supported, use a dropdown:
+Send as Text
+Send as Email
+
+Do not add real SMS or email sending logic unless it already exists.
+Only connect to current working send functions.
+
+Unified Message Connections
+
+Please connect the UI to show all existing conversation sources in one place where possible.
+
+Include existing sources only:
+
+Client report public link replies
+Review/reply messages
+Field note public link replies
+Incident report responses
+Quote request messages
+Schedule-related messages
+Employee/team messages
+Training assignment replies, if available
+General contact form messages, if available
+
+Important:
+Do not invent new data.
+Do not create fake messages.
+Do not break existing message storage.
+Do not migrate data unless absolutely required and approved.
+If some sources are not currently connected to messages, add safe UI placeholders only or create a clear TODO section in code comments.
+
+Message Category Logic
+
+Use safe category mapping.
+
+Clients:
+Messages from client contacts or public client links.
+
+Team:
+Internal business/admin/supervisor messages.
+
+Employees:
+Cleaner/employee messages.
+
+Requests:
+New booking, quote, schedule, contact, or service requests.
+
+Quotes:
+Quote-related conversations.
+
+Schedules:
+Schedule change, reschedule, or job timing messages.
+
+Reports:
+Client report and field note replies.
+
+Incidents:
+Incident report conversations or signatures/replies.
+
+Archived:
+Archived or dismissed conversations.
+
+Do not change role permissions.
+
+Enterprise UI Style
+
+Make the page feel polished and business-grade.
+
+Style requirements:
+Full-height inbox layout
+Clean sidebars
+Soft gray background
+White message cards
+Rounded corners
+Subtle borders
+Clear unread states
+Professional icons
+Sticky conversation header
+Sticky reply composer
+Smooth hover states
+Responsive layout
+No huge empty areas
+No broken spacing
+No harsh red errors
+
+Use Clockfield design language:
+Yellow accent
+Dark text
+Light gray panels
+Clean cards
+
+Mobile Layout
+
+Mobile must work properly.
+
+On mobile:
+Show conversation categories first.
+Then conversation list.
+Then selected conversation thread.
+Use back button to return from thread to list.
+Composer stays usable.
+Buttons wrap cleanly.
+No horizontal scrolling.
+No cut-off panels.
+No tiny tap targets.
+
+Safety Rules
+
+Do not touch unrelated files or logic.
+
+Do not change:
+Auth
+Stripe
+Subscriptions
+Paywall
+Dashboard navigation outside Messages
+Scheduling system
+Payroll
+Training
+Client report generation
+Incident report PDF logic
+Worklog logic
+Employee accounts
+Business accounts
+Database schema unless approved
+
+Only touch:
+Messages page layout
+Message UI components
+Message category display
+Conversation list UI
+Message card UI
+Reply composer UI
+Safe front-end mapping to existing message data
+
+If shared components affect other pages, create message-specific components instead.
+
+Empty States
+
+Add clean empty states.
+
+All:
+No messages yet.
+When clients, employees, or requests send messages, they will appear here.
+
+Clients:
+No client messages yet.
+
+Team:
+No team messages yet.
+
+Requests:
+No new requests yet.
+
+Archived:
+No archived conversations.
+
+Each empty state should include:
+Icon
+Short title
+One sentence
+Optional button only if existing action is available
+
+Loading and Error States
+
+Add polished loading and error states.
+
+Loading:
+Skeleton list rows
+Skeleton message cards
+
+Error:
+Couldn’t load messages.
+Please refresh or try again.
+
+Do not show ugly raw errors.
+Do not show stack traces to users.
+
+QA Checklist
+
+Before marking complete, test:
+
+Messages page loads.
+Existing messages still show.
+Existing replies still send.
+Existing client messages still connect.
+Existing employee/team messages still connect.
+Existing requests still show.
+Archive still works if already supported.
+Search still works if already supported.
+Filters do not break.
+No fake data appears in production.
+No auth routes changed.
+No Stripe/paywall logic changed.
+No scheduling logic changed.
+No reports or incident logic changed.
+Mobile layout works.
+Desktop layout works.
+No console errors.
+No database errors.
+No deleted data.
+
+Final Instruction
+
+Only improve the Clockfield Messages UI/UX and safely organize existing message/conversation types into a cleaner enterprise inbox. Use the reference image as visual inspiration, but keep Clockfield wording, Clockfield features, and current working backend logic. Do not touch or affect anything else.

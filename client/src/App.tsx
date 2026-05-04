@@ -35,6 +35,7 @@ import EmployeeFieldNotes from "@/pages/employee/field-notes";
 import AdminTimesheets from "@/pages/admin/timesheets";
 import AdminSubscription from "@/pages/admin/subscription";
 import AdminPlatformMessages from "@/pages/admin/platform-messages";
+import AdminMessages from "@/pages/admin/messages";
 import AdminReports from "@/pages/admin/reports";
 import EmployeeReports from "@/pages/employee/reports";
 import ClientReports from "@/pages/client/reports";
@@ -142,6 +143,7 @@ function AdminLayout() {
               <Route path="/admin/settings" component={AdminSettings} />
               <Route path="/admin/subscription" component={AdminSubscription} />
               <Route path="/admin/platform-messages" component={AdminPlatformMessages} />
+              <Route path="/admin/messages" component={AdminMessages} />
               <Route component={NotFound} />
             </Switch>
           </main>
