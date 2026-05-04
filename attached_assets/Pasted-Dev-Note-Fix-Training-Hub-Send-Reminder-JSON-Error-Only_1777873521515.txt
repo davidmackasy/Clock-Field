@@ -1,0 +1,342 @@
+Dev Note: Fix Training Hub “Send Reminder” JSON Error Only
+
+Issue
+
+When clicking Send Reminder in the Training Hub course detail page, the request fails with this error:
+
+Failed to execute 'json' on 'Response': Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+
+This means the frontend is calling response.json(), but the server is returning HTML instead of JSON.
+
+Most likely causes:
+
+The reminder API route does not exist
+
+The route path is incorrect
+
+The request is being redirected to an HTML page
+
+The server returns an HTML error page instead of JSON
+
+The frontend is not handling non-JSON responses safely
+
+Scope
+
+Only fix the Send Reminder action in Training Hub.
+
+Do not change or affect:
+
+Course creation
+
+Course editing
+
+Course publishing
+
+Course assignment
+
+Course completion
+
+Employee course viewer
+
+Training modules
+
+Training quiz flow
+
+Public link
+
+Certificate flow
+
+Live activity
+
+Auth
+
+Stripe
+
+Attendance
+
+Payroll
+
+Schedule
+
+Work Log
+
+Publications
+
+Any unrelated email logic
+
+Required Fix
+
+Find the Send Reminder button handler
+
+Locate the frontend function used by the Send Reminder button on the course detail page.
+
+Check the fetch call.
+
+Confirm the exact endpoint being called.
+
+Example areas to inspect:
+
+TrainingHub page
+
+Course detail page
+
+Course actions component
+
+Training reminder button component
+
+Any function named like:
+
+sendReminder
+
+handleSendReminder
+
+sendTrainingReminder
+
+sendCourseReminder
+
+Confirm the backend route exists
+
+Check if the frontend endpoint exists in the backend.
+
+Example expected route:
+
+POST /api/training/courses/:courseId/reminders
+
+or whatever route matches the current app structure.
+
+If the frontend is calling a wrong route, update only the frontend endpoint to match the real backend route.
+
+If the backend route is missing, add a small route only for training reminders.
+
+Do not rewrite the training system.
+
+Backend must always return JSON
+
+The reminder API must always return JSON, including error cases.
+
+Success response example:
+
+{
+"success": true,
+"message": "Reminder emails sent successfully.",
+"sent": 3,
+"failed": 0
+}
+
+Partial failure response example:
+
+{
+"success": true,
+"message": "Reminder sent to 2 employees. 1 email failed.",
+"sent": 2,
+"failed": 1,
+"errors": [
+{
+"employeeId": "employee_id_here",
+"reason": "Missing employee email"
+}
+]
+}
+
+Error response example:
+
+{
+"success": false,
+"message": "Unable to send reminder emails."
+}
+
+Important:
+
+Never return HTML from this API route.
+
+Never use res.redirect() from this API route.
+
+Never allow the app shell/index.html to be returned for this endpoint.
+
+Frontend must safely parse response
+
+Update the Send Reminder fetch handler so it does not blindly call response.json().
+
+Use content-type checking first.
+
+Example safe pattern:
+
+const response = await fetch(reminderUrl, {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+},
+body: JSON.stringify({ courseId }),
+});
+
+const contentType = response.headers.get("content-type") || "";
+
+let data;
+
+if (contentType.includes("application/json")) {
+data = await response.json();
+} else {
+const text = await response.text();
+throw new Error(
+text.includes("<!DOCTYPE")
+? "Reminder endpoint returned HTML instead of JSON. Check the API route path."
+: text || "Unexpected server response while sending reminder."
+);
+}
+
+if (!response.ok || data.success === false) {
+throw new Error(data.message || "Failed to send reminder.");
+}
+
+Then show the success message from the API.
+
+Reminder should only target incomplete assigned employees
+
+The backend reminder logic should:
+
+Find the course by courseId
+
+Find assigned employees
+
+Filter employees who have not completed the course
+
+Send reminder email only to those incomplete employees
+
+Skip employees with no email
+
+Do not send to employees who already completed the course
+
+Do not send to unassigned employees
+
+Do not create duplicate assignments
+
+Use existing email system only
+
+Use the current Clockfield email system already in the app.
+
+Do not add a new email provider.
+
+Do not change Mailgun config unless the existing email helper requires it.
+
+Do not create a new email system.
+
+Do not touch unrelated email templates.
+
+Email reminder content
+
+Subject:
+
+Reminder: Complete Your Assigned Training
+
+Body should say:
+
+Hi [Employee Name],
+
+This is a reminder that you still have an assigned training to complete in Clockfield.
+
+Training: [Course Title]
+
+Please log in to your employee app, go to Profile → Training, and complete the training when you can.
+
+[Open Training]
+
+Thank you,
+[Company Name]
+
+UI success/error messages
+
+Replace the raw technical error with a clean app-style message.
+
+Success toast:
+
+Reminder email sent successfully.
+
+If multiple employees:
+
+Reminder emails sent to 3 employees.
+
+If no incomplete employees:
+
+No reminder sent. All assigned employees have completed this training.
+
+If no assigned employees:
+
+No employees are currently assigned to this training.
+
+If email partially fails:
+
+Reminder sent to 2 employees. 1 email could not be sent.
+
+Error toast:
+
+We could not send the reminder email. Please try again.
+
+Log the real technical error in console/server logs only.
+
+Do not show this technical error to users:
+
+Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+
+Confirm route mismatch
+
+Please specifically check whether the Send Reminder button is calling a frontend route instead of an API route.
+
+This error usually happens when the app returns index.html because the route is not found.
+
+Example bad request:
+
+/training/courses/course-id/reminder
+
+Example correct request should be an API route:
+
+/api/training/courses/course-id/reminder
+
+or the route used by the backend.
+
+Testing Checklist
+
+Click Send Reminder on a course with assigned incomplete employees.
+
+Confirm API returns JSON.
+
+Confirm no Unexpected token '<' error appears.
+
+Confirm reminder email sends.
+
+Confirm assigned completed employees do not receive reminder.
+
+Confirm assigned incomplete employees receive reminder.
+
+Confirm employees with missing email are skipped safely.
+
+Confirm admin sees a clean success or partial success toast.
+
+Confirm course detail page does not refresh or break.
+
+Confirm all other Training Hub actions still work:
+
+Assign
+
+Copy Link
+
+Edit Info
+
+Publish/Unpublish
+
+Delete
+
+Public Link
+
+Course completion
+
+Expected Result
+
+The Send Reminder button works without breaking anything else.
+
+The backend returns JSON every time.
+
+The frontend handles errors safely.
+
+Admins can send training reminders to assigned incomplete employees.
+
+No unrelated Training Hub or app features are changed.

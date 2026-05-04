@@ -904,15 +904,22 @@ export default function AdminTrainingHub() {
   });
 
   const assignMutation = useMutation({
-    mutationFn: (employeeIds: string[]) =>
-      apiRequest("POST", `/api/training/courses/${selectedId}/assign`, { employeeIds, sendEmailNotification }).then(r => r.json()),
-    onSuccess: (data: { ok: boolean; newlyAssigned: number; emailsSent: number; emailsFailed: number }) => {
+    mutationFn: async (employeeIds: string[]) => {
+      const res = await apiRequest("POST", `/api/training/courses/${selectedId}/assign`, { employeeIds, sendEmailNotification });
+      const ct = res.headers.get("content-type") || "";
+      if (!ct.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(text.includes("<!DOCTYPE") ? "Assignment endpoint is not reachable. Please try again." : text || "Unexpected server response.");
+      }
+      return res.json() as Promise<{ ok: boolean; newlyAssigned: number; emailsSent: number; emailsFailed: number }>;
+    },
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/training/courses", selectedId] });
       queryClient.invalidateQueries({ queryKey: ["/api/training/stats"] });
       setAssignDialog(false);
       if (sendEmailNotification && data.newlyAssigned > 0) {
         if (data.emailsFailed > 0 && data.emailsSent === 0) {
-          toast({ title: "Training assigned successfully", description: "Email notifications could not be sent.", variant: "destructive" });
+          toast({ title: "Training assigned successfully", description: "Email notifications could not be sent." });
         } else if (data.emailsFailed > 0) {
           toast({ title: "Training assigned successfully", description: `Email sent to ${data.emailsSent} employee${data.emailsSent !== 1 ? "s" : ""}. ${data.emailsFailed} could not be sent.` });
         } else {
@@ -926,9 +933,16 @@ export default function AdminTrainingHub() {
   });
 
   const sendReminderMutation = useMutation({
-    mutationFn: () =>
-      apiRequest("POST", `/api/training/courses/${selectedId}/send-reminder`, {}).then(r => r.json()),
-    onSuccess: (data: { ok: boolean; incompleteCount: number; emailsSent: number; emailsFailed: number }) => {
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/training/courses/${selectedId}/send-reminder`, {});
+      const ct = res.headers.get("content-type") || "";
+      if (!ct.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(text.includes("<!DOCTYPE") ? "Reminder endpoint is not reachable. Please try again." : text || "Unexpected server response.");
+      }
+      return res.json() as Promise<{ ok: boolean; incompleteCount: number; emailsSent: number; emailsFailed: number }>;
+    },
+    onSuccess: (data) => {
       if (data.incompleteCount === 0) {
         toast({ title: "No reminders needed", description: "All assigned employees have completed this training." });
       } else if (data.emailsFailed > 0 && data.emailsSent === 0) {
@@ -939,7 +953,7 @@ export default function AdminTrainingHub() {
         toast({ title: "Reminders sent", description: `Reminder email sent to ${data.emailsSent} incomplete employee${data.emailsSent !== 1 ? "s" : ""}.` });
       }
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: "We could not send the reminder email.", description: e.message, variant: "destructive" }),
   });
 
   const publishMutation = useMutation({
