@@ -373,6 +373,7 @@ function AppRouter() {
   if (!user) {
     if (location === "/") return <LandingPage />;
     if (location === "/login" || location.startsWith("/login?")) return <AuthPage />;
+    if (location === "/business/login" || location === "/business/register" || location === "/employee/login") return <AuthPage />;
     return <Redirect to="/login" />;
   }
 

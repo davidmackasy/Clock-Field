@@ -1,0 +1,489 @@
+Dev Note: Improve Clockfield Auth, Business Onboarding, and New Business Setup Flow
+
+Please improve the Clockfield authentication and onboarding experience so it feels like premium enterprise software.
+
+Important:
+Do not break, delete, rename, or affect anything else.
+Clockfield is live and has active businesses using it.
+Do not touch Stripe logic.
+Do not touch the paywall logic.
+Do not touch subscription checks.
+Do not touch existing business accounts.
+Do not touch employee accounts.
+Do not touch dashboard routes unless needed only for safe visual onboarding improvements.
+Do not change database structure unless absolutely required.
+Do not remove any existing working authentication method.
+Do not affect current login sessions.
+Do not affect existing users.
+
+The goal is only to improve the UI/UX and separate the authentication flow clearly.
+
+Main Goal
+
+Improve Clockfield auth so users clearly understand the difference between:
+
+Business Owner / Admin Login
+Business Owner / Admin Register
+Employee Login
+
+Right now, the flow needs to feel more professional, more guided, and more enterprise-level.
+
+Separate Business Login From Employee Login
+
+Create a clear auth entry screen or improve the current login screen with two main options:
+
+Option 1:
+Business Login
+
+For business owners, admins, supervisors, and managers.
+
+Text:
+Manage your cleaning business, schedules, employees, reports, payroll, training, and client work from your Clockfield dashboard.
+
+Button:
+Continue as Business
+
+Option 2:
+Employee Login
+
+For cleaners and staff members.
+
+Text:
+View your schedule, clock in and out, complete training, upload worklogs, and submit field updates.
+
+Button:
+Continue as Employee
+
+Important:
+Employee login must not show business registration.
+Employee login must stay simple.
+Employees should not be pushed into Stripe, subscription, business setup, or owner onboarding.
+
+Business Auth Pages
+
+Create or improve these business auth pages:
+
+Business Login
+Business Register
+Forgot Password
+Business Onboarding After Register
+
+Business Login should include:
+Email
+Password
+Login button
+Forgot password link
+Create business account link
+Clean Clockfield branding
+Short product benefit on the side
+
+Business Register should include:
+Business owner full name
+Business email
+Password
+Phone number, optional if already supported
+Company name, if already supported
+Create Account button
+Login link
+
+Do not change backend auth logic.
+Only connect the form to the existing working register/login functions.
+
+Employee Auth Page
+
+Create a separate employee login page.
+
+Employee Login should include:
+Email or username, depending on current system
+Password
+Login button
+Forgot password link if currently supported
+Simple message:
+Your employer must invite or create your employee account before you can log in.
+
+Do not allow employees to create a business account from the employee login page.
+Do not send employees through business onboarding.
+Do not send employees through Stripe.
+Do not show subscription messaging to employees.
+
+New Business Onboarding Modal
+
+After a new business registers, show a polished onboarding flow similar to the screenshots.
+
+Use a clean centered modal with:
+Dark blurred background overlay
+White rounded card
+Step progress bar at top
+Back button
+Step count
+Yellow Clockfield CTA button
+Clean form inputs
+Pill-style option buttons
+Professional spacing
+
+Use Clockfield branding, not Workiz.
+
+Suggested onboarding steps:
+
+Step 1 of 5: Welcome to Clockfield
+
+Title:
+Welcome to Clockfield
+
+Subtitle:
+Let’s set up your cleaning business workspace.
+
+Fields or content:
+Short message explaining this setup will customize their dashboard.
+
+CTA:
+Get Started
+
+Step 2 of 5: Set up your account
+
+Fields:
+First and last name
+Phone number
+
+Text:
+We’ll use this information for your business profile and account setup.
+
+CTA:
+Next
+
+Step 3 of 5: About your business
+
+Fields:
+Company name
+
+Question:
+What type of business do you run?
+
+Options:
+Commercial Cleaning
+Residential Cleaning
+Janitorial Services
+Post-Construction Cleaning
+Office Cleaning
+Property Maintenance
+Facility Services
+Other
+
+Question:
+How many people work in your business?
+
+Options:
+Just me
+2 people
+3–5 people
+6–10 people
+11–25 people
+26–50 people
+50+ people
+
+CTA:
+Next
+
+Step 4 of 5: Your business goals
+
+Question:
+What is your top priority?
+
+Options:
+Manage my team
+Track attendance
+Schedule jobs
+Create client reports
+Improve payroll
+Assign training
+Send quotes
+Track incidents
+Organize everything in one app
+
+Question:
+How did you hear about Clockfield?
+
+Options:
+Friend/referral
+Facebook
+Instagram
+YouTube
+Google
+TikTok
+AI Agent
+Other
+
+CTA:
+Next
+
+Step 5 of 5: Choose your setup path
+
+Title:
+How do you want to start?
+
+Options:
+Set up my team
+Add employees and roles.
+
+Create my first schedule
+Start assigning shifts and jobs.
+
+Create a client report
+Try before-and-after reporting.
+
+Explore dashboard
+Go directly to the dashboard.
+
+CTA:
+Finish Setup
+
+After Finish Setup:
+Send the business owner to the existing dashboard or existing paywall flow based on the current subscription logic.
+
+Important:
+Do not bypass Stripe.
+Do not bypass paywall.
+Do not auto-grant subscription access.
+Do not change subscription status.
+The existing system should still decide what the user can access after onboarding.
+
+Business Dashboard New User Checklist
+
+Improve the dashboard onboarding checklist shown in the screenshot.
+
+Replace the generic “Get started in 3 simple steps” with a Clockfield-specific setup checklist.
+
+Title:
+Set up your Clockfield workspace
+
+Subtitle:
+Complete these steps to get your cleaning business ready.
+
+Checklist steps:
+
+Step 1: Add your company details
+Add your company name, logo, address, and business settings.
+
+Button:
+Complete Company Profile
+
+Step 2: Add your team
+Invite cleaners, supervisors, admins, or employees.
+
+Button:
+Add Employee
+
+Step 3: Create your first schedule
+Assign shifts, job sites, and workdays.
+
+Button:
+Create Schedule
+
+Optional additional steps:
+Step 4: Create your first client report
+Step 5: Assign employee training
+Step 6: Set payroll settings
+
+Design:
+Use cards like the screenshot.
+Each step should have an icon or illustration.
+Completed steps should show a checkmark.
+Current step should be highlighted.
+Future steps should be visible but softer.
+Allow dismiss checklist.
+If dismissed, do not permanently break access. It should be recoverable from settings or dashboard.
+
+Enterprise UI Improvements
+
+Make auth and onboarding feel premium.
+
+Design requirements:
+Clean white cards
+Soft gray background
+Yellow Clockfield accent
+Dark text
+Rounded corners
+Large readable headings
+Professional input states
+Green validation state for valid phone/email
+Clear error messages
+No harsh red full-screen errors
+Smooth step transitions
+Mobile responsive
+No overflow
+No tiny buttons
+No crowded layout
+
+The onboarding should feel like serious business software, not a basic form.
+
+Route Separation
+
+Use clear route structure if possible, without breaking existing routes.
+
+Suggested:
+
+/login
+Main auth selector or business login if current route depends on it.
+
+/business/login
+Business owner/admin login.
+
+/business/register
+Business registration.
+
+/employee/login
+Employee login.
+
+/onboarding/business
+New business onboarding flow.
+
+Important:
+If current routes are already used in production, do not remove them.
+Keep backward compatibility.
+Redirect old routes safely if needed.
+Do not break existing login links from emails, invites, or bookmarks.
+
+Role-Based Redirect Rules
+
+After login:
+
+Business owner/admin:
+Go to business dashboard or current subscription/paywall flow.
+
+Supervisor/manager:
+Go to their existing management dashboard based on current role logic.
+
+Employee/cleaner:
+Go to employee dashboard, schedule, or current employee home page.
+
+New business owner:
+Go through onboarding first, then continue into the existing paywall/subscription/dashboard flow.
+
+Do not change permissions.
+Do not grant employees admin access.
+Do not change business owner role logic.
+
+Stripe and Paywall Safety
+
+This is very important.
+
+Do not touch:
+Stripe checkout
+Stripe customer IDs
+Stripe webhook
+Subscription status
+Plan checks
+Trial logic
+Payment success redirect
+Existing paywall conditions
+Billing page
+Current subscribed user access
+
+The onboarding must sit before or beside the existing flow, not replace it.
+
+Correct behavior:
+User registers business.
+User completes onboarding.
+Existing app checks subscription/trial/paywall.
+User sees the correct billing or dashboard state based on current logic.
+
+Wrong behavior:
+User registers and gets free access by accident.
+Employee sees billing page.
+Onboarding skips Stripe.
+Existing customers are asked to onboard again.
+Paid users lose access.
+
+Existing Business Protection
+
+Do not force existing businesses through the new onboarding unless they have no onboarding data and it is safe.
+
+Existing businesses should:
+Still log in normally.
+Keep all data.
+Keep current subscription.
+Keep employees.
+Keep schedules.
+Keep reports.
+Keep settings.
+Not be interrupted by the new onboarding.
+
+For existing businesses, the new checklist can appear as optional only if it does not block work.
+
+Mobile Requirements
+
+Auth and onboarding must work perfectly on mobile.
+
+Mobile checklist:
+Modal fits screen.
+Inputs are easy to tap.
+Pill buttons wrap properly.
+Next button is always visible.
+No horizontal scrolling.
+Employee login is simple.
+Business login and register are clear.
+Keyboard does not hide important buttons.
+Dashboard checklist stacks cleanly.
+
+Copy Updates
+
+Replace Workiz wording with Clockfield wording.
+
+Do not show:
+Workiz
+Trade
+Jobs
+Invoices
+HVAC
+Plumbing
+Garage doors
+Locksmith
+Appliance repair
+
+Use Clockfield cleaning/service business wording.
+
+Use:
+Cleaning
+Janitorial
+Commercial cleaning
+Residential cleaning
+Property maintenance
+Schedules
+Employees
+Attendance
+Worklogs
+Client reports
+Training
+Payroll
+Quotes
+Incident reports
+
+QA Checklist Before Marking Complete
+
+Confirm:
+
+Business login works.
+Business register works.
+Employee login works.
+Forgot password still works if supported.
+Existing business accounts can still log in.
+Existing employee accounts can still log in.
+Stripe paywall still appears when required.
+Paid businesses still keep access.
+Unpaid businesses still see correct billing/paywall.
+Employee users never see Stripe or business onboarding.
+New business onboarding saves safely.
+Onboarding does not create duplicate businesses.
+Onboarding does not overwrite existing business data.
+Dashboard checklist displays correctly.
+Dismiss checklist works safely.
+Mobile auth works.
+Mobile onboarding works.
+No console errors.
+No broken routes.
+No database data loss.
+No changes to unrelated features.
+
+Final Instruction
+
+Only improve Clockfield auth UI, role separation, new business onboarding, and the new user checklist. Keep all existing auth, Stripe, paywall, dashboard, employee, business, and production flows safe. This app is live, so make small careful changes, test everything, and do not touch unrelated parts of the system.
