@@ -478,7 +478,7 @@ export interface IStorage {
   createTrainingModuleAsset(data: InsertTrainingModuleAsset): Promise<TrainingModuleAsset>;
   deleteTrainingModuleAssets(moduleId: string): Promise<void>;
 
-  assignTrainingCourse(courseId: string, companyId: string, employeeIds: string[], assignedBy: string): Promise<void>;
+  assignTrainingCourse(courseId: string, companyId: string, employeeIds: string[], assignedBy: string): Promise<string[]>;
   getTrainingAssignments(courseId: string): Promise<(TrainingAssignment & { employeeName: string })[]>;
   getMyTrainingCourses(employeeId: string, companyId: string): Promise<any[]>;
   getMyTrainingCourse(courseId: string, employeeId: string): Promise<any>;
@@ -2459,14 +2459,17 @@ export class DatabaseStorage implements IStorage {
     await db.delete(trainingModuleAssets).where(eq(trainingModuleAssets.moduleId, moduleId));
   }
 
-  async assignTrainingCourse(courseId: string, companyId: string, employeeIds: string[], assignedBy: string): Promise<void> {
+  async assignTrainingCourse(courseId: string, companyId: string, employeeIds: string[], assignedBy: string): Promise<string[]> {
     const now = new Date().toISOString();
+    const newlyAssigned: string[] = [];
     for (const employeeId of employeeIds) {
       const existing = await db.select().from(trainingAssignments).where(and(eq(trainingAssignments.courseId, courseId), eq(trainingAssignments.employeeId, employeeId)));
       if (existing.length === 0) {
         await db.insert(trainingAssignments).values({ courseId, companyId, employeeId, assignedBy, status: "assigned", createdAt: now });
+        newlyAssigned.push(employeeId);
       }
     }
+    return newlyAssigned;
   }
 
   async getTrainingAssignments(courseId: string): Promise<(TrainingAssignment & { employeeName: string })[]> {

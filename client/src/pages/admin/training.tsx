@@ -798,6 +798,7 @@ export default function AdminTrainingHub() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [assignDialog, setAssignDialog] = useState(false);
   const [selectedEmployees, setSelectedEmployees] = useState<Set<string>>(new Set());
+  const [sendEmailNotification, setSendEmailNotification] = useState(true);
   const assetRef = useRef<HTMLInputElement>(null);
 
   const [editCourseOpen, setEditCourseOpen] = useState(false);
@@ -903,12 +904,40 @@ export default function AdminTrainingHub() {
   });
 
   const assignMutation = useMutation({
-    mutationFn: (employeeIds: string[]) => apiRequest("POST", `/api/training/courses/${selectedId}/assign`, { employeeIds }),
-    onSuccess: () => {
+    mutationFn: (employeeIds: string[]) =>
+      apiRequest("POST", `/api/training/courses/${selectedId}/assign`, { employeeIds, sendEmailNotification }).then(r => r.json()),
+    onSuccess: (data: { ok: boolean; newlyAssigned: number; emailsSent: number; emailsFailed: number }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/training/courses", selectedId] });
       queryClient.invalidateQueries({ queryKey: ["/api/training/stats"] });
       setAssignDialog(false);
-      toast({ title: "Employees assigned" });
+      if (sendEmailNotification && data.newlyAssigned > 0) {
+        if (data.emailsFailed > 0 && data.emailsSent === 0) {
+          toast({ title: "Training assigned successfully", description: "Email notifications could not be sent.", variant: "destructive" });
+        } else if (data.emailsFailed > 0) {
+          toast({ title: "Training assigned successfully", description: `Email sent to ${data.emailsSent} employee${data.emailsSent !== 1 ? "s" : ""}. ${data.emailsFailed} could not be sent.` });
+        } else {
+          toast({ title: "Training assigned successfully", description: `Email notification sent to ${data.emailsSent} employee${data.emailsSent !== 1 ? "s" : ""}.` });
+        }
+      } else {
+        toast({ title: "Training assigned successfully" });
+      }
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const sendReminderMutation = useMutation({
+    mutationFn: () =>
+      apiRequest("POST", `/api/training/courses/${selectedId}/send-reminder`, {}).then(r => r.json()),
+    onSuccess: (data: { ok: boolean; incompleteCount: number; emailsSent: number; emailsFailed: number }) => {
+      if (data.incompleteCount === 0) {
+        toast({ title: "No reminders needed", description: "All assigned employees have completed this training." });
+      } else if (data.emailsFailed > 0 && data.emailsSent === 0) {
+        toast({ title: "Reminders could not be sent", description: "Check that employees have valid email addresses.", variant: "destructive" });
+      } else if (data.emailsFailed > 0) {
+        toast({ title: "Reminders sent", description: `Sent to ${data.emailsSent} employee${data.emailsSent !== 1 ? "s" : ""}. ${data.emailsFailed} could not be sent.` });
+      } else {
+        toast({ title: "Reminders sent", description: `Reminder email sent to ${data.emailsSent} incomplete employee${data.emailsSent !== 1 ? "s" : ""}.` });
+      }
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -1198,6 +1227,10 @@ export default function AdminTrainingHub() {
                       </Button>
                       <Button variant="outline" size="sm" onClick={() => setAssignDialog(true)} data-testid="btn-assign-employees">
                         <Users className="w-3.5 h-3.5 mr-1" /> Assign
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => sendReminderMutation.mutate()} disabled={sendReminderMutation.isPending} data-testid="btn-send-reminder">
+                        {sendReminderMutation.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Mail className="w-3.5 h-3.5 mr-1" />}
+                        Send Reminder
                       </Button>
                       {course.publicLinkEnabled && course.publicId ? (
                         <Button variant="outline" size="sm" onClick={() => {
@@ -1846,6 +1879,23 @@ export default function AdminTrainingHub() {
                 </div>
               </label>
             ))}
+          </div>
+          <div className="border-t pt-3 pb-1">
+            <label className="flex items-center gap-2 cursor-pointer select-none" data-testid="checkbox-send-email-notification">
+              <input
+                type="checkbox"
+                checked={sendEmailNotification}
+                onChange={e => setSendEmailNotification(e.target.checked)}
+                className="sr-only"
+              />
+              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${sendEmailNotification ? "border-primary bg-primary" : "border-muted-foreground"}`}>
+                {sendEmailNotification && <Check className="w-3 h-3 text-white" />}
+              </div>
+              <div>
+                <span className="text-sm font-medium">Send email notification to assigned employees</span>
+                <p className="text-xs text-muted-foreground">Employees will receive an email with instructions to complete this training.</p>
+              </div>
+            </label>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssignDialog(false)}>Cancel</Button>

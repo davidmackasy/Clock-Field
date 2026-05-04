@@ -67,6 +67,16 @@ export async function runStartupMigrations() {
       ON training_image_cache (company_id, prompt_hash);
     `);
 
+    // 5. Training assignment email tracking columns
+    await client.query(`
+      ALTER TABLE training_assignments
+      ADD COLUMN IF NOT EXISTS email_notification_sent_at text;
+    `);
+    await client.query(`
+      ALTER TABLE training_assignments
+      ADD COLUMN IF NOT EXISTS last_reminder_email_sent_at text;
+    `);
+
     log("Startup migrations complete.", "migrations");
   } catch (err: any) {
     log(`Migration error (non-fatal): ${err.message}`, "migrations");

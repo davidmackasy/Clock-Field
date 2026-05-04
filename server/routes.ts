@@ -5,14 +5,14 @@ import { db, pool } from "./db";
 import { setupAuth, hashPassword, comparePasswords, requireAuth, requireRole } from "./auth";
 import OpenAI from "openai";
 import { generateCourseDraft, improveText, generateQuizFromCourse, generateModuleContent, isAIAvailable, detectCourseType, type ImproveAction, type ToneOption, type AIQuizQuestion } from "./training-ai";
-import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail, sendAdminRequestReplyEmail, sendTrialAccountEmail, sendProposalEmail, sendHiringPackageEmail } from "./mail";
+import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail, sendAdminRequestReplyEmail, sendTrialAccountEmail, sendProposalEmail, sendHiringPackageEmail, sendTrainingAssignmentEmail, sendTrainingReminderEmail } from "./mail";
 import { createHash } from "crypto";
 import passport from "passport";
 import { randomBytes } from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { isNotNull, eq, and, isNull, inArray, desc, sql } from "drizzle-orm";
+import { isNotNull, eq, and, isNull, inArray, desc, asc, sql } from "drizzle-orm";
 import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments, supplies, supplyUpdates, inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses, trainingPublicLearners, trainingCourses, trainingModules, trainingModuleAssets, trainingAssignments, trainingQuizzes, trainingQuizQuestions, trainingLessonBlocks, trainingModuleAudio } from "@shared/schema";
 import { getPlan } from "./plans";
 import { generateReviewOgImage } from "./og-image";
@@ -10777,10 +10777,84 @@ Return ONLY valid JSON:
       const user = (req as any).user;
       const course = await storage.getTrainingCourse(req.params.id);
       if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      const { employeeIds } = req.body;
+      const { employeeIds, sendEmailNotification = false } = req.body;
       if (!Array.isArray(employeeIds)) return res.status(400).json({ message: "employeeIds required" });
-      await storage.assignTrainingCourse(req.params.id, user.companyId, employeeIds, user.id);
-      res.json({ ok: true });
+      const newlyAssignedIds = await storage.assignTrainingCourse(req.params.id, user.companyId, employeeIds, user.id);
+
+      let emailsSent = 0;
+      let emailsFailed = 0;
+      if (sendEmailNotification && newlyAssignedIds.length > 0) {
+        const company = await storage.getCompany(user.companyId);
+        const companyName = company?.name ?? "Your Company";
+        const appUrl = `${req.protocol}://${req.get("host")}/employee`;
+        const now = new Date().toISOString();
+        for (const empId of newlyAssignedIds) {
+          const [emp] = await db.select().from(users).where(eq(users.id, empId));
+          if (emp?.email) {
+            try {
+              await sendTrainingAssignmentEmail({
+                to: emp.email,
+                employeeName: `${emp.firstName} ${emp.lastName}`,
+                companyName,
+                courseTitle: course.title,
+                isRequired: !!(course as any).isRequired,
+                dueDate: null,
+                appUrl,
+              });
+              await db.update(trainingAssignments)
+                .set({ emailNotificationSentAt: now })
+                .where(and(eq(trainingAssignments.courseId, req.params.id), eq(trainingAssignments.employeeId, empId)));
+              emailsSent++;
+            } catch {
+              emailsFailed++;
+            }
+          }
+        }
+      }
+
+      res.json({ ok: true, newlyAssigned: newlyAssignedIds.length, emailsSent, emailsFailed });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/training/courses/:id/send-reminder — send reminder emails to incomplete employees
+  app.post("/api/training/courses/:id/send-reminder", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const course = await storage.getTrainingCourse(req.params.id);
+      if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+
+      const assignments = await storage.getTrainingAssignments(req.params.id);
+      const incomplete = assignments.filter(a => a.status !== "completed");
+
+      const company = await storage.getCompany(user.companyId);
+      const companyName = company?.name ?? "Your Company";
+      const appUrl = `${req.protocol}://${req.get("host")}/employee`;
+      const now = new Date().toISOString();
+
+      let emailsSent = 0;
+      let emailsFailed = 0;
+      for (const a of incomplete) {
+        const [emp] = await db.select().from(users).where(eq(users.id, a.employeeId));
+        if (emp?.email) {
+          try {
+            await sendTrainingReminderEmail({
+              to: emp.email,
+              employeeName: `${emp.firstName} ${emp.lastName}`,
+              companyName,
+              courseTitle: course.title,
+              appUrl,
+            });
+            await db.update(trainingAssignments)
+              .set({ lastReminderEmailSentAt: now })
+              .where(eq(trainingAssignments.id, a.id));
+            emailsSent++;
+          } catch {
+            emailsFailed++;
+          }
+        }
+      }
+
+      res.json({ ok: true, incompleteCount: incomplete.length, emailsSent, emailsFailed });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 

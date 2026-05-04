@@ -1,0 +1,404 @@
+Dev Note: Add Training Assignment Email Notification Without Breaking Existing Training Flow
+
+Goal
+
+Add an email notification option when a training course is assigned to employees/cleaners.
+
+When an employee is assigned to a training, they should receive a clear email telling them:
+
+They have been assigned a training
+
+The training title/topic
+
+That it is required or optional, depending on assignment settings
+
+Where to find it inside the app
+
+How to complete it
+
+That they can complete it anytime before the due date, if a due date exists
+
+Important: Do not change, delete, rebuild, or affect the current training/course creation system. This is only an email notification upgrade for assigned employees.
+
+Core Requirement
+
+When a course/training is assigned to one or more employees, the system should support email notifications using the existing Clockfield email system.
+
+Do not add a new third-party email provider.
+
+Do not replace the current email setup.
+
+Do not touch unrelated Mailgun, auth, Stripe, attendance, clock-in, schedules, payroll, reports, or worklog logic.
+
+Use the existing email service/helper already used in the app.
+
+Feature Behavior
+
+When assigning a training to employees
+
+Add a simple email notification option in the assignment flow.
+
+Example checkbox:
+
+Send email notification to assigned employees
+
+Default behavior:
+
+Checked by default if safe
+
+Or unchecked if we want admin control
+
+Do not force-send emails without giving the admin visibility.
+
+When the admin assigns employees and saves the assignment, the selected employees should receive the training assignment email.
+
+Send email to all assigned employees
+
+If multiple employees are selected, send the email to each assigned employee.
+
+Each employee should receive their own email.
+
+Do not expose other employees’ emails.
+
+Do not use CC with all employees.
+
+Use individual email sending or BCC only if the existing system already safely supports it.
+
+Best option: one email per employee.
+
+Avoid duplicate emails
+
+Do not send a duplicate email every time the admin opens or edits the course.
+
+Only send email when:
+
+A new employee is assigned to a course
+
+Or admin manually clicks Send reminder email
+
+If an employee was already assigned before, do not send another assignment email unless the admin chooses to resend.
+
+Optional resend button
+
+Inside the course assignment/admin view, add a small action:
+
+Send reminder email
+
+This should let the admin resend the training notification to employees who have not completed the training yet.
+
+Do not send reminders to employees who already completed the training unless the admin specifically selects them.
+
+Email Content
+
+Subject example:
+
+New Training Assigned: [Training Title]
+
+Email body example:
+
+Hi [Employee Name],
+
+You have been assigned a training course in Clockfield.
+
+Training: [Training Title]
+
+Assigned by: [Company Name]
+
+Status: Required
+
+Due Date: [Due Date if available]
+
+Please complete this training when you get a chance.
+
+How to complete it:
+
+Log in to your Clockfield employee app.
+
+Go to your Profile.
+
+Open the Training section.
+
+Select the assigned training.
+
+Review the course and complete the quiz or required steps.
+
+Click below to open Clockfield:
+
+[Open Training]
+
+Thank you,
+[Company Name]
+
+Email Link Behavior
+
+The email should include a button:
+
+Open Training
+
+Preferred behavior:
+
+If possible, link directly to the employee training page.
+
+Example:
+
+/employee/profile/training
+
+or the existing route used for the employee training tab.
+
+If direct linking is not safe or the route requires auth, still send them to the app login/dashboard.
+
+After login, they should be able to go to:
+
+Profile → Training
+
+Important:
+
+Do not create a public training link unless the current training system already supports it.
+
+This email is only for assigned employees inside the app.
+
+Keep the training access protected behind employee login.
+
+UI Changes
+
+Admin side
+
+In the training assignment modal/page, add:
+
+Checkbox:
+
+Send email notification to assigned employees
+
+Optional helper text:
+
+Employees will receive an email with instructions to open the app, go to Profile, and complete the assigned training.
+
+After assigning, show a clean success toast:
+
+Training assigned successfully. Email notification sent to assigned employees.
+
+If emails fail but assignment succeeds:
+
+Training assigned successfully, but one or more email notifications could not be sent.
+
+Do not fail the assignment just because email failed.
+
+Employee side
+
+No major UI changes required for this upgrade.
+
+Keep the existing employee training page and reminder UI working as-is.
+
+Do not change the course viewer, quiz flow, completion tracking, or homepage reminder unless needed only to support email links.
+
+Data Handling
+
+Add fields only if needed.
+
+Recommended assignment/email tracking fields:
+
+emailNotificationSentAt
+
+lastReminderEmailSentAt
+
+emailNotificationStatus
+
+emailNotificationError
+
+These can be stored on the training assignment record if the existing schema supports it.
+
+Do not migrate or rewrite unrelated training data.
+
+Do not delete current assignments.
+
+Do not change current completion logic.
+
+Backend Logic
+
+Create or reuse a service function like:
+
+sendTrainingAssignmentEmail({
+employee,
+course,
+company,
+assignment,
+})
+
+The function should:
+
+Check employee has a valid email
+
+Use existing email system
+
+Build a clean branded email
+
+Include course title
+
+Include company name
+
+Include due date if available
+
+Include login/app link
+
+Handle errors safely
+
+Log failed email sends without stopping the training assignment
+
+Email sending should happen after the assignment is successfully saved.
+
+Do not send email before the database assignment is created.
+
+Manual Reminder Logic
+
+Add an admin action:
+
+Send reminder email to incomplete employees
+
+This should:
+
+Find assigned employees for the course
+
+Filter employees where completion status is not completed
+
+Send reminder email
+
+Update lastReminderEmailSentAt
+
+Show success/failure toast
+
+Reminder subject example:
+
+Reminder: Complete Your Assigned Training
+
+Reminder body example:
+
+Hi [Employee Name],
+
+This is a reminder that you still have an assigned training to complete in Clockfield.
+
+Training: [Training Title]
+
+Please log in to your employee app, go to Profile → Training, and complete it when you can.
+
+[Open Training]
+
+Thank you,
+[Company Name]
+
+Important Safety Rules
+
+Do not touch or rebuild:
+
+Course creation
+
+Module creation
+
+Quiz creation
+
+Training completion logic
+
+Employee training viewer
+
+Homepage reminder popup
+
+Employee profile page, except if needed to support the training link
+
+Auth
+
+Stripe
+
+Payroll
+
+Attendance
+
+Schedules
+
+Worklogs
+
+Reports
+
+Field notes
+
+Public links
+
+Only add notification logic around training assignments.
+
+Email System Requirement
+
+Use the current app email system only.
+
+Do not introduce a new email provider.
+
+Do not add a new dependency unless absolutely required.
+
+Do not create a separate email configuration.
+
+Use the existing company branding/email template if available.
+
+If the app already supports company logo/name in emails, reuse it.
+
+If no branded email template exists, create a simple internal training email template using the current email sender.
+
+Failure Handling
+
+If email fails:
+
+Training assignment should still be saved.
+
+Admin should see a clear message.
+
+Log the error for debugging.
+
+Do not crash the page.
+
+Do not rollback the assignment unless assignment itself fails.
+
+Testing Checklist
+
+Test assigning one employee to a training.
+
+Confirm the employee receives one email.
+
+Confirm the email includes the correct training title.
+
+Confirm the email includes the correct company name.
+
+Confirm the email tells the employee to go to Profile → Training.
+
+Confirm the email button opens the app.
+
+Test assigning multiple employees.
+
+Confirm each employee gets their own email.
+
+Confirm no employee sees another employee’s email.
+
+Test assigning an employee who already had the course.
+
+Confirm no duplicate assignment email is sent unless manually resent.
+
+Test the Send reminder email button.
+
+Confirm reminders only go to incomplete employees.
+
+Complete the training as employee.
+
+Confirm the reminder no longer sends to that employee.
+
+Test email failure.
+
+Confirm assignment still works.
+
+Confirm the admin sees a clean message.
+
+Expected Result
+
+Admins can assign training like they already do.
+
+They can choose to notify assigned employees by email.
+
+Employees receive a clear email explaining what training they need to complete and where to go.
+
+The employee can open Clockfield, go to Profile → Training, and complete the course.
+
+Nothing else in the app is changed, broken, removed, or rebuilt.

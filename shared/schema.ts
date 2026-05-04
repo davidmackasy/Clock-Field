@@ -2028,6 +2028,8 @@ export const trainingAssignments = pgTable("training_assignments", {
   dueDate: text("due_date"),
   status: text("status").notNull().default("assigned"),
   createdAt: text("created_at").notNull(),
+  emailNotificationSentAt: text("email_notification_sent_at"),
+  lastReminderEmailSentAt: text("last_reminder_email_sent_at"),
 });
 
 export const trainingProgress = pgTable("training_progress", {
