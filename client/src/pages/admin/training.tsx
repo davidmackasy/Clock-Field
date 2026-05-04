@@ -805,6 +805,8 @@ export default function AdminTrainingHub() {
   const [includeQuiz, setIncludeQuiz] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<any | null>(null);
   const [questionDialogOpen, setQuestionDialogOpen] = useState(false);
+  const [dragSrcIdx, setDragSrcIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
   const { data: courses = [], isLoading } = useQuery<Course[]>({ queryKey: ["/api/training/courses"] });
   const { data: stats } = useQuery<{ totalCourses: number; totalAssigned: number; totalCompleted: number; totalPending: number }>({
@@ -976,6 +978,23 @@ export default function AdminTrainingHub() {
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
+
+  const reorderModulesMutation = useMutation({
+    mutationFn: (order: string[]) => apiRequest("PATCH", `/api/training/courses/${selectedId}/modules/reorder`, { order }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/training/courses", selectedId] });
+      toast({ title: "Module order updated" });
+    },
+    onError: (e: any) => toast({ title: "Could not update module order. Please try again.", description: e.message, variant: "destructive" }),
+  });
+
+  const moveModule = (idx: number, dir: -1 | 1) => {
+    const mods = [...(detail?.modules ?? [])];
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= mods.length) return;
+    [mods[idx], mods[newIdx]] = [mods[newIdx], mods[idx]];
+    reorderModulesMutation.mutate(mods.map(m => m.id));
+  };
 
   const handleThumbnail = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1223,8 +1242,35 @@ export default function AdminTrainingHub() {
                   ) : (
                     <div className="space-y-2">
                       {detail.modules.map((mod, i) => (
-                        <div key={mod.id} className="flex items-center gap-3 p-3 border border-border rounded-lg hover:bg-muted/30 transition-colors" data-testid={`row-module-${mod.id}`}>
+                        <div
+                          key={mod.id}
+                          draggable
+                          onDragStart={() => setDragSrcIdx(i)}
+                          onDragOver={e => { e.preventDefault(); setDragOverIdx(i); }}
+                          onDrop={e => {
+                            e.preventDefault();
+                            if (dragSrcIdx === null || dragSrcIdx === i) { setDragSrcIdx(null); setDragOverIdx(null); return; }
+                            const mods = [...detail.modules];
+                            const [moved] = mods.splice(dragSrcIdx, 1);
+                            mods.splice(i, 0, moved);
+                            reorderModulesMutation.mutate(mods.map(m => m.id));
+                            setDragSrcIdx(null);
+                            setDragOverIdx(null);
+                          }}
+                          onDragEnd={() => { setDragSrcIdx(null); setDragOverIdx(null); }}
+                          className={`flex items-center gap-2 p-3 border rounded-lg transition-all select-none ${
+                            dragSrcIdx === i ? "opacity-40 border-border" :
+                            dragOverIdx === i && dragSrcIdx !== i ? "border-primary bg-primary/5" :
+                            "border-border hover:bg-muted/30"
+                          }`}
+                          data-testid={`row-module-${mod.id}`}>
+                          {/* Drag handle */}
+                          <div className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground flex-shrink-0 touch-none" data-testid={`drag-handle-${mod.id}`}>
+                            <GripVertical className="w-4 h-4" />
+                          </div>
+                          {/* Position number */}
                           <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary flex-shrink-0">{i + 1}</div>
+                          {/* Content */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-medium text-foreground truncate">{mod.title}</span>
@@ -1236,7 +1282,25 @@ export default function AdminTrainingHub() {
                               {(mod.assets?.length ?? 0) > 0 && <span className="flex items-center gap-1"><Image className="w-3 h-3" />{mod.assets?.length} images</span>}
                             </div>
                           </div>
-                          <div className="flex items-center gap-1">
+                          {/* Move up/down (mobile-friendly) */}
+                          <div className="flex flex-col gap-0.5 flex-shrink-0">
+                            <Button
+                              variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
+                              onClick={() => moveModule(i, -1)}
+                              disabled={i === 0 || reorderModulesMutation.isPending}
+                              data-testid={`btn-move-up-${mod.id}`}>
+                              <ChevronUp className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
+                              onClick={() => moveModule(i, 1)}
+                              disabled={i === detail.modules.length - 1 || reorderModulesMutation.isPending}
+                              data-testid={`btn-move-down-${mod.id}`}>
+                              <ChevronDown className="w-3 h-3" />
+                            </Button>
+                          </div>
+                          {/* Edit / Delete */}
+                          <div className="flex items-center gap-1 flex-shrink-0">
                             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setEditingModule(mod); setModuleDialogOpen(true); }} data-testid={`btn-edit-module-${mod.id}`}>
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>

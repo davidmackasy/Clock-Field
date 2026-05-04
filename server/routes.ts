@@ -10171,6 +10171,19 @@ Return ONLY valid JSON:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // PATCH /api/training/courses/:courseId/modules/reorder
+  app.patch("/api/training/courses/:courseId/modules/reorder", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const course = await storage.getTrainingCourse(req.params.courseId);
+      if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const { order } = req.body;
+      if (!Array.isArray(order)) return res.status(400).json({ message: "order must be an array of module IDs" });
+      await Promise.all(order.map((id: string, idx: number) => storage.updateTrainingModule(id, { sortOrder: idx })));
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // POST /api/training/courses/:id/modules
   app.post("/api/training/courses/:id/modules", requireAuth, requireRole("admin"), async (req, res) => {
     try {

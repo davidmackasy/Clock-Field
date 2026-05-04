@@ -1,0 +1,176 @@
+DEV NOTE: Add Module Reordering in Training Hub
+Critical rules
+
+Do not change or affect anything else.
+
+Only add module rearranging.
+
+Do not touch:
+
+Module content editor
+Quiz system
+Course publishing
+Public training links
+Learner progress
+Certificates
+Assignments
+Existing module data
+Current issue
+
+Training Hub modules are fixed in the order they were created.
+
+If the admin creates modules in the wrong order, they currently must delete and recreate them.
+
+That is not good.
+
+Admins need a way to rearrange modules without changing the module content.
+
+Required feature
+
+Add an option to reorder modules inside the course detail page.
+
+Location:
+
+Training Hub → Course Detail → Modules section
+
+Required UI
+
+Add drag-and-drop support to the module list.
+
+Each module row should include a drag handle icon.
+
+Example:
+
+☰ Module 1: Introduction to Cleaning Safety
+☰ Module 2: Chemical Safety and WHMIS
+☰ Module 3: Personal Protective Equipment
+
+Admin can drag module 3 above module 1.
+
+After reorder, the list becomes:
+
+Personal Protective Equipment
+Introduction to Cleaning Safety
+Chemical Safety and WHMIS
+
+The module number should update automatically based on position.
+
+Alternative button support
+
+Also add simple move controls for accessibility:
+
+Move Up
+Move Down
+
+This helps if drag-and-drop does not work well on mobile.
+
+Important behavior
+
+Only change module order.
+
+Do not change:
+
+Module title
+Module description
+Module video
+Module content
+Module checklist
+Module quiz
+Required status
+Completion status
+Data requirement
+
+Use an order or sortOrder field on the module record.
+
+If this already exists, use it.
+
+If it does not exist, add the smallest safe field needed:
+
+sortOrder: number
+
+Do not change other table structure.
+
+Save behavior
+
+When modules are reordered:
+
+Update module sortOrder
+Save immediately after drop or after clicking Save Order
+Keep the new order after page refresh
+Keep the new order on public learner view
+Keep the new order in assigned employee view
+
+Preferred UX:
+
+Show a small success toast:
+
+Module order updated
+
+If save fails:
+
+Could not update module order. Please try again.
+
+Public learner behavior
+
+The learner must see modules in the admin-defined order.
+
+Course progress should follow the new order.
+
+Do not reset learner progress.
+
+Do not delete learner completion records.
+
+If a learner already completed module content, it should stay completed.
+
+Only the display order changes.
+
+Mobile behavior
+
+On mobile:
+
+Drag handle should still work if possible
+Move Up / Move Down buttons must be available
+Keep layout clean and easy to tap
+Testing required
+
+Test 1:
+Create course with 5 modules.
+
+Move module 5 to module 1.
+
+Refresh page.
+
+Confirm order stays saved.
+
+Test 2:
+Open public link.
+
+Confirm learner sees new module order.
+
+Test 3:
+Assigned employee opens course.
+
+Confirm employee sees new module order.
+
+Test 4:
+Edit a reordered module.
+
+Confirm content is unchanged.
+
+Test 5:
+Move modules up/down on mobile.
+
+Confirm order saves correctly.
+
+Test 6:
+Confirm quiz remains at the end after all modules.
+
+Expected result
+
+Admins can rearrange modules without deleting anything.
+
+Module order saves correctly.
+
+Public and assigned learner views follow the new order.
+
+No other Training Hub feature is changed.
