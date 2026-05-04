@@ -1,0 +1,228 @@
+Dev Note: Fix Training Hub Send Reminder Endpoint Not Reachable
+Current Issue
+After the first JSON error fix, the Send Reminder button now shows:
+We could not send the reminder email.
+Reminder endpoint is not reachable. Please try again.
+This confirms the frontend is no longer crashing on HTML JSON parsing, but the reminder API route is still not connected correctly.
+The Send Reminder button is calling an endpoint that does not exist, is not registered, or does not match the backend route.
+Scope
+Only fix the Training Hub Send Reminder email action.
+Do not change or affect anything else.
+Do not touch:
+Training course creation
+Modules
+Quizzes
+Assignments
+Completion tracking
+Public links
+Certificates
+Employee training page
+Live activity
+Dashboard
+Attendance
+Payroll
+Schedule
+Work Log
+Forms
+Publications
+Settings
+Auth
+Stripe
+Existing email provider setup
+Required Fix
+
+
+Locate the exact frontend request
+
+
+Find the Send Reminder handler and log/check the exact URL it calls.
+Look for:
+handleSendReminder
+sendReminder
+sendTrainingReminder
+training reminder mutation
+course reminder API call
+Confirm if it is calling something like:
+/api/training/courses/:courseId/reminder
+/api/training/:courseId/reminder
+/admin/training/:courseId/reminder
+Any route without /api
+Important:
+The button must call a backend API route, not a frontend page route.
+
+
+Add or correct the backend API route
+
+
+Create the exact backend route the frontend is calling, or update the frontend to call the correct existing backend route.
+Recommended route:
+POST /api/training/courses/:courseId/send-reminder
+Keep it simple and isolated.
+Do not reuse a public link route.
+Do not use an admin page route.
+Do not return HTML.
+The route must return JSON every time.
+
+
+Register the route properly
+
+
+Make sure this API route is actually mounted in the backend route file used by the app.
+For example, if the app uses Express:
+app.post("/api/training/courses/:courseId/send-reminder", requireAuth, async (req, res) => {
+// reminder logic
+});
+If routes are split into files, make sure the training route file is imported and registered.
+Example:
+app.use("/api/training", trainingRoutes);
+Then inside trainingRoutes:
+router.post("/courses/:courseId/send-reminder", requireAuth, sendTrainingReminderHandler);
+Do not place the route only in frontend code.
+Do not place the route under a route file that is not imported.
+
+
+Keep frontend and backend route names identical
+
+
+Use one final endpoint name everywhere:
+POST /api/training/courses/:courseId/send-reminder
+Frontend fetch should match exactly:
+await fetch(/api/training/courses/${courseId}/send-reminder, {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+},
+});
+Do not leave the frontend calling the old endpoint.
+Do not support multiple random routes unless needed for backward compatibility.
+
+
+Backend reminder logic
+
+
+The endpoint should:
+Verify the admin is logged in
+Verify the course belongs to the current company/account
+Find the course by courseId
+Find assigned employees for that course
+Filter only employees who have not completed the training
+Skip employees with missing email
+Send reminder emails using the existing Clockfield email helper
+Return a JSON result
+Do not create new assignments.
+Do not modify completed records.
+Do not change course progress.
+Do not affect public link learners.
+
+
+Use existing email system only
+
+
+Use the existing email sender already used in Clockfield.
+Do not add a new email provider.
+Do not change Mailgun setup.
+Do not create a new email service if one already exists.
+Search for current helpers like:
+sendEmail
+sendMail
+mailgunSend
+sendEmployeeInviteEmail
+sendPasswordResetEmail
+sendIncidentReportEmail
+Use the same pattern.
+
+
+Required JSON responses
+
+
+Success:
+{
+"success": true,
+"message": "Reminder emails sent successfully.",
+"sent": 1,
+"failed": 0
+}
+No assigned employees:
+{
+"success": true,
+"message": "No employees are currently assigned to this training.",
+"sent": 0,
+"failed": 0
+}
+All completed:
+{
+"success": true,
+"message": "No reminder sent. All assigned employees have completed this training.",
+"sent": 0,
+"failed": 0
+}
+Partial failure:
+{
+"success": true,
+"message": "Reminder sent to 2 employees. 1 email could not be sent.",
+"sent": 2,
+"failed": 1
+}
+Server error:
+{
+"success": false,
+"message": "Unable to send reminder emails."
+}
+
+
+Frontend toast behavior
+
+
+When success is true, show the backend message.
+Examples:
+Reminder emails sent successfully.
+No employees are currently assigned to this training.
+No reminder sent. All assigned employees have completed this training.
+When success is false or request fails, show:
+We could not send the reminder email. Please try again.
+Only log technical errors in console.
+Do not show raw endpoint/debug errors to the admin unless in development mode.
+
+
+Important check based on screenshot
+
+
+The course shows:
+COHORT: 1 enrolled
+1 not started
+That means the reminder should have at least one target employee.
+So if the endpoint is working, it should send one reminder to David, unless David has no email attached to the employee record.
+Check this specific case:
+Course has one enrolled learner
+Learner status is not started
+Learner has an email
+Reminder endpoint should send one email
+Expected toast:
+Reminder email sent successfully.
+or
+Reminder email sent to 1 employee.
+
+
+Test checklist
+
+
+Test the actual button:
+Open Admin → Training Hub
+Open Cleaning Safety Course
+Click Send Reminder
+Confirm browser network tab shows:
+POST /api/training/courses/[courseId]/send-reminder
+Confirm status is 200 or proper JSON error
+Confirm response content-type is application/json
+Confirm no HTML is returned
+Confirm no “endpoint is not reachable” toast appears
+Confirm one email sends to the enrolled incomplete employee
+Confirm completed learners are skipped
+Confirm employees without email are skipped with partial response
+Confirm Assign, Public Link, Copy Link, Edit Info, Delete, Modules, and completion tracking still work
+Expected Result
+The Send Reminder button connects to a real backend API route.
+The API sends reminder emails to assigned incomplete employees.
+The API always returns JSON.
+The frontend shows a clean success or failure message.
+Nothing else in Training Hub or Clockfield is changed.
