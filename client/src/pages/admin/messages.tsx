@@ -5,12 +5,13 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PhotoUploader, type PhotoItem } from "@/components/photo-uploader";
 import {
-  MessageSquare, Search, ChevronLeft, Send, Users, User,
+  MessageSquare, Search, ChevronLeft, Send, Users,
   Building2, Clock, AlertCircle, Plus,
-  Phone, Mail, UserPlus, Calendar, FileText, X,
-  CheckCircle2, Circle, Inbox, ArchiveX, IdCard, Tag,
-  ChevronDown, Check,
+  UserPlus, Calendar, FileText, X,
+  Circle, Inbox, ArchiveX, IdCard,
+  ChevronDown, Check, Paperclip,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -141,12 +142,14 @@ export default function AdminMessages() {
   const { toast } = useToast();
 
   // Conversation list state
-  const [category, setCategory]     = useState<Category>("all");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [search, setSearch]         = useState("");
-  const [replyText, setReplyText]   = useState("");
-  const [mobileView, setMobileView] = useState<"list" | "thread">("list");
-  const [statusOpen, setStatusOpen] = useState(false);
+  const [category, setCategory]       = useState<Category>("all");
+  const [selectedId, setSelectedId]   = useState<string | null>(null);
+  const [search, setSearch]           = useState("");
+  const [replyText, setReplyText]     = useState("");
+  const [replyPhotos, setReplyPhotos] = useState<PhotoItem[]>([]);
+  const [showReplyPhotos, setShowReplyPhotos] = useState(false);
+  const [mobileView, setMobileView]   = useState<"list" | "thread">("list");
+  const [statusOpen, setStatusOpen]   = useState(false);
 
   // New Message modal state
   const [showNewMsg, setShowNewMsg]         = useState(false);
@@ -156,6 +159,7 @@ export default function AdminMessages() {
   const [newTag, setNewTag]                 = useState("general_message");
   const [newTitle, setNewTitle]             = useState("");
   const [newBody, setNewBody]               = useState("");
+  const [newPhotos, setNewPhotos]           = useState<PhotoItem[]>([]);
 
   const threadEndRef = useRef<HTMLDivElement>(null);
   const statusRef    = useRef<HTMLDivElement>(null);
@@ -170,15 +174,20 @@ export default function AdminMessages() {
   const { data: thread = [], isLoading: threadLoading, isError: threadError } = useQuery<any[]>({
     queryKey: ["/api/client-requests", selectedId, "messages"],
     enabled: !!selectedId,
-    staleTime: 30_000,
+    staleTime: 10_000,
+    refetchInterval: 15_000,
     retry: 1,
   });
 
   // ── Mutations ────────────────────────────────────────────────────────────────
   const replyMut = useMutation({
-    mutationFn: async (body: string) => {
+    mutationFn: async () => {
+      if ((!replyText.trim() && replyPhotos.length === 0) || !selectedId) throw new Error("Message required");
       const res = await apiRequest("POST", `/api/client-requests/${selectedId}/messages`, {
-        body, photos: [], isVisibleToClient: true, isVisibleToEmployee: true,
+        body: replyText.trim() || null,
+        photos: replyPhotos,
+        isVisibleToClient: true,
+        isVisibleToEmployee: true,
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
       return res.json();
@@ -187,6 +196,8 @@ export default function AdminMessages() {
       queryClient.invalidateQueries({ queryKey: ["/api/client-requests", selectedId, "messages"] });
       queryClient.invalidateQueries({ queryKey: ["/api/client-requests"] });
       setReplyText("");
+      setReplyPhotos([]);
+      setShowReplyPhotos(false);
       toast({ title: "Reply sent" });
     },
     onError: (e: any) => toast({ title: "Failed to send", description: e.message, variant: "destructive" }),
@@ -226,6 +237,7 @@ export default function AdminMessages() {
         tag: newTag,
         title: titleToSend,
         body: newBody.trim(),
+        photos: newPhotos,
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
       return res.json();
@@ -237,6 +249,7 @@ export default function AdminMessages() {
       setNewRecipSearch("");
       setNewTitle("");
       setNewBody("");
+      setNewPhotos([]);
       setNewTag("general_message");
       setSelectedId(data.id);
       setMobileView("thread");
@@ -349,11 +362,13 @@ export default function AdminMessages() {
     setSelectedId(req.id);
     setMobileView("thread");
     setReplyText("");
+    setReplyPhotos([]);
+    setShowReplyPhotos(false);
     if (isUnread(req)) markReadMut.mutate(req.id);
   }
   function sendReply() {
-    if (!replyText.trim() || !selectedId || replyMut.isPending) return;
-    replyMut.mutate(replyText.trim());
+    if ((!replyText.trim() && replyPhotos.length === 0) || !selectedId || replyMut.isPending) return;
+    replyMut.mutate();
   }
   function openNewMsg() {
     setShowNewMsg(true);
@@ -524,6 +539,12 @@ export default function AdminMessages() {
                 data-testid="textarea-new-message-body"
                 className="w-full px-3 py-2.5 rounded-[8px] border border-[#e5e7eb] text-[13px] resize-none focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/40"
               />
+            </div>
+
+            {/* Photos */}
+            <div>
+              <p className="text-[12px] font-semibold text-[#6b7280] uppercase tracking-wide mb-2">Photos <span className="font-normal normal-case">(optional)</span></p>
+              <PhotoUploader photos={newPhotos} onChange={setNewPhotos} maxPhotos={5} />
             </div>
 
             {/* Actions */}
@@ -995,7 +1016,32 @@ export default function AdminMessages() {
                   </button>
                 ))}
               </div>
+              {/* Photo uploader */}
+              {showReplyPhotos && (
+                <div className="mb-2">
+                  <PhotoUploader photos={replyPhotos} onChange={setReplyPhotos} maxPhotos={3} />
+                </div>
+              )}
               <div className="flex items-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowReplyPhotos(p => !p)}
+                  data-testid="button-toggle-reply-photos"
+                  title="Attach photos"
+                  className={cn(
+                    "w-9 h-9 rounded-[8px] border flex items-center justify-center shrink-0 transition-colors relative",
+                    showReplyPhotos || replyPhotos.length > 0
+                      ? "border-primary/30 bg-primary/10 text-primary"
+                      : "border-[#e5e7eb] text-[#9ca3af] hover:text-primary hover:border-primary/30"
+                  )}
+                >
+                  <Paperclip className="w-4 h-4" />
+                  {replyPhotos.length > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                      {replyPhotos.length}
+                    </span>
+                  )}
+                </button>
                 <textarea
                   value={replyText}
                   onChange={e => setReplyText(e.target.value)}
@@ -1009,7 +1055,7 @@ export default function AdminMessages() {
                 />
                 <button
                   onClick={sendReply}
-                  disabled={!replyText.trim() || replyMut.isPending}
+                  disabled={(!replyText.trim() && replyPhotos.length === 0) || replyMut.isPending}
                   data-testid="button-send-reply"
                   className="w-10 h-10 rounded-[8px] bg-primary text-white flex items-center justify-center hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0 mb-0.5"
                 >
