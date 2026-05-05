@@ -1,0 +1,255 @@
+DEV NOTE: Add Visible Send Button to Employee New Message Modal
+
+Project: ClockField
+Area: Employee App Messages
+Priority: Urgent
+Scope: Employee New Message modal only
+
+Do not touch anything else.
+
+Do not change:
+
+Admin messaging
+
+Conversation reply box
+
+Client portal
+
+Employee home
+
+Employee schedule
+
+Employee profile
+
+Action button
+
+Bottom navigation
+
+Message threading
+
+Photo upload logic
+
+Existing message records
+
+Auth
+
+Stripe
+
+Paywall
+
+Only fix the employee New Message modal.
+
+Current problem
+
+The employee can open New Message.
+
+The employee can:
+
+Add subject
+
+Type message
+
+Attach photos
+
+Add photo caption
+
+But there is no visible Send button to start the conversation.
+
+This makes the New Message flow unusable.
+
+Required fix
+
+Add a clear visible button at the bottom of the New Message modal.
+
+Button text:
+
+Send Message
+
+or
+
+Start Conversation
+
+Recommended:
+
+Send Message
+
+Required behavior
+
+The Send Message button must always be visible or reachable inside the New Message modal.
+
+The employee must be able to complete the form and tap Send Message.
+
+The button must not be hidden behind:
+
+Bottom navigation
+
+Blue Action button
+
+Mobile safe area
+
+Keyboard
+
+Photo preview area
+
+Scrollbar area
+
+Mobile layout requirement
+
+For the New Message modal only:
+
+Keep the current modal design.
+
+Keep the current fields.
+
+Keep the photo upload section.
+
+Add a sticky modal footer with the Send Message button.
+
+Footer should stay above the bottom nav.
+
+Recommended modal structure
+
+Header:
+
+New Message
+
+Close icon
+
+Body:
+
+Message type
+
+Subject
+
+Message
+
+Photos
+
+Photo captions
+
+Footer:
+
+Send Message button
+
+Suggested CSS
+
+Modal container:
+
+max-height: calc(100dvh - 90px);
+display: flex;
+flex-direction: column;
+overflow: hidden;
+
+Modal body:
+
+flex: 1;
+overflow-y: auto;
+padding-bottom: calc(120px + env(safe-area-inset-bottom));
+
+Modal footer:
+
+position: sticky;
+bottom: calc(72px + env(safe-area-inset-bottom));
+background: white;
+border-top: 1px solid #e5e7eb;
+padding: 12px 16px;
+z-index: 50;
+
+Send button:
+
+width: 100%;
+height: 48px;
+border-radius: 12px;
+background: #0f6fdc;
+color: white;
+font-weight: 600;
+
+Important
+
+The footer must be inside the New Message modal.
+
+Do not place the button behind the bottom navigation.
+
+Do not rely on the user scrolling all the way below the Action button.
+
+Do not remove the photo upload area.
+
+Do not change the reply composer that was already fixed.
+
+Send button states
+
+Default:
+
+Send Message
+
+While sending:
+
+Sending...
+
+Disabled state:
+
+Disable if message body is empty and no photo is attached.
+
+Or follow the current validation rules.
+
+After successful send:
+
+Close modal.
+
+Show the new conversation in the messages list.
+
+Open the new conversation if current behavior supports it.
+
+Acceptance criteria
+
+Employee opens Messages.
+
+Employee taps New.
+
+Employee enters subject.
+
+Employee enters message.
+
+Employee attaches photo.
+
+Employee sees Send Message button.
+
+Employee taps Send Message.
+
+Conversation starts successfully.
+
+Message and photos are sent.
+
+Admin receives the new conversation.
+
+Button is visible on small mobile screens.
+
+Button is visible on large mobile screens.
+
+Button is not covered by bottom navigation.
+
+Button is not covered by the blue Action button.
+
+Button remains reachable when photo preview is added.
+
+Regression check
+
+Confirm these still work:
+
+Employee conversation reply composer
+
+Employee photo upload
+
+Employee messages list
+
+Employee bottom nav
+
+Employee Action button
+
+Admin receives employee messages
+
+Existing conversations still open
+
+Final expected result
+
+The employee New Message modal must have a visible Send Message button so the cleaner can actually start the conversation after typing the message and attaching photos.

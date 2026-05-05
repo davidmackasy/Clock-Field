@@ -391,12 +391,9 @@ export default function EmployeeMessages() {
           and only the body scrolls.
       ─────────────────────────────────────────────────────────────────────── */}
       {showCompose && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
-          {/* Sheet: max height leaves 80px for the bottom nav */}
-          <div
-            className="bg-white w-full rounded-t-2xl flex flex-col"
-            style={{ maxHeight: "calc(100dvh - 80px)" }}
-          >
+        <div className="fixed inset-x-0 top-0 bottom-20 z-50 bg-black/50 flex items-end justify-center">
+          {/* Sheet anchors to bottom-20 (80px above nav), grows upward */}
+          <div className="bg-white w-full rounded-t-2xl flex flex-col max-h-full">
             {/* Header — never scrolls */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#f0f0f0] shrink-0">
               <h2 className="text-[16px] font-bold text-[#111827]">New Message</h2>
