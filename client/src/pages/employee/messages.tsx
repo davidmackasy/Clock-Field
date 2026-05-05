@@ -7,7 +7,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PhotoUploader, type PhotoItem } from "@/components/photo-uploader";
 import {
   MessageSquare, Plus, ChevronLeft, Send, X, FileText,
-  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -236,8 +235,11 @@ export default function EmployeeMessages() {
   );
 
   // ── Thread View ───────────────────────────────────────────────────────────
+  // On mobile the outer wrapper is h-[calc(100dvh-80px)] so the flex layout
+  // is fully contained above the fixed bottom nav (80px tall).
+  // On desktop it goes back to h-full since there's no bottom nav.
   const ThreadView = selectedReq ? (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-[calc(100dvh-80px)] md:h-full">
       {/* Header */}
       <div className="bg-white border-b border-[#e5e7eb] px-4 py-3 flex items-center gap-3 shrink-0" data-testid="thread-header">
         <button onClick={() => setMobileView("list")} data-testid="button-back-to-list"
@@ -253,8 +255,8 @@ export default function EmployeeMessages() {
         </div>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-[#f7f8fb]">
+      {/* Messages — scrolls freely; reply composer below stays fixed */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-[#f7f8fb] min-h-0">
         {/* Initial request card */}
         <div className="bg-white rounded-[12px] border border-[#e5e7eb] overflow-hidden">
           <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[#f3f4f6] bg-[#fafafa]">
@@ -313,7 +315,7 @@ export default function EmployeeMessages() {
         <div ref={threadEndRef} />
       </div>
 
-      {/* Reply composer */}
+      {/* Reply composer — shrink-0 so it never scrolls away */}
       {!["resolved", "closed"].includes(selectedReq.status) && (
         <div className="bg-white border-t border-[#e5e7eb] px-3 py-3 shrink-0">
           {showPhotoBar && (
@@ -322,11 +324,12 @@ export default function EmployeeMessages() {
             </div>
           )}
           <div className="flex items-end gap-2">
+            {/* Photo toggle — relative so badge positions correctly */}
             <button
               onClick={() => setShowPhotoBar(p => !p)}
               data-testid="button-toggle-photos"
               className={cn(
-                "w-9 h-9 rounded-[8px] border flex items-center justify-center shrink-0 transition-colors",
+                "relative w-9 h-9 rounded-[8px] border flex items-center justify-center shrink-0 transition-colors",
                 showPhotoBar || replyPhotos.length > 0
                   ? "border-primary/30 bg-primary/10 text-primary"
                   : "border-[#e5e7eb] text-[#9ca3af] hover:text-primary hover:border-primary/30"
@@ -342,6 +345,7 @@ export default function EmployeeMessages() {
                 </span>
               )}
             </button>
+            {/* Text input — flex:1 so it fills remaining space */}
             <textarea
               value={replyText}
               onChange={e => setReplyText(e.target.value)}
@@ -349,8 +353,9 @@ export default function EmployeeMessages() {
               placeholder="Reply to admin..."
               rows={2}
               data-testid="textarea-employee-reply"
-              className="flex-1 min-h-[52px] max-h-28 px-3 py-2.5 rounded-[8px] border border-[#e5e7eb] text-[13.5px] resize-none focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary/30"
+              className="flex-1 min-w-0 min-h-[52px] max-h-28 px-3 py-2.5 rounded-[8px] border border-[#e5e7eb] text-[13.5px] resize-none focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary/30"
             />
+            {/* Send button — shrink-0 so it's never pushed off screen */}
             <button
               onClick={() => replyMut.mutate()}
               disabled={(!replyText.trim() && replyPhotos.length === 0) || replyMut.isPending}
@@ -380,18 +385,29 @@ export default function EmployeeMessages() {
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* ── Compose Modal ─────────────────────────────────────────────────── */}
+      {/* ── Compose Modal ─────────────────────────────────────────────────────
+          Sheet slides up from the bottom. It must not extend behind the fixed
+          bottom nav (80px). We use flex-col so the header and footer are fixed
+          and only the body scrolls.
+      ─────────────────────────────────────────────────────────────────────── */}
       {showCompose && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center">
-          <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#f0f0f0]">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
+          {/* Sheet: max height leaves 80px for the bottom nav */}
+          <div
+            className="bg-white w-full rounded-t-2xl flex flex-col"
+            style={{ maxHeight: "calc(100dvh - 80px)" }}
+          >
+            {/* Header — never scrolls */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#f0f0f0] shrink-0">
               <h2 className="text-[16px] font-bold text-[#111827]">New Message</h2>
               <button onClick={() => setShowCompose(false)} data-testid="button-close-compose"
                 className="w-8 h-8 rounded-full hover:bg-[#f3f4f6] flex items-center justify-center">
                 <X className="w-4 h-4 text-[#6b7280]" />
               </button>
             </div>
-            <div className="px-5 py-4 space-y-4">
+
+            {/* Body — scrollable form fields */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 min-h-0">
               <div>
                 <label className="text-[12px] font-semibold text-[#6b7280] uppercase tracking-wide mb-1.5 block">Message Type</label>
                 <select value={compTag} onChange={e => setCompTag(e.target.value)} data-testid="select-compose-tag"
@@ -415,18 +431,22 @@ export default function EmployeeMessages() {
                 <label className="text-[12px] font-semibold text-[#6b7280] uppercase tracking-wide mb-1.5 block">Photos <span className="font-normal normal-case">(optional)</span></label>
                 <PhotoUploader photos={compPhotos} onChange={setCompPhotos} maxPhotos={5} enableCamera />
               </div>
-              <div className="flex gap-2 pt-1 pb-2">
-                <button onClick={() => setShowCompose(false)} data-testid="button-compose-cancel"
-                  className="flex-1 py-3 rounded-[10px] text-[14px] font-medium border border-[#e5e7eb] text-[#374151] hover:bg-[#f3f4f6] transition-colors">
-                  Cancel
-                </button>
-                <button onClick={() => createMut.mutate()} disabled={createMut.isPending || !compBody.trim()}
-                  data-testid="button-compose-send"
-                  className="flex-1 py-3 rounded-[10px] text-[14px] font-semibold bg-primary text-white hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2">
-                  {createMut.isPending ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Send className="w-4 h-4" />}
-                  Send Message
-                </button>
-              </div>
+              {/* Extra space so last field isn't flush against the sticky footer */}
+              <div className="h-2" />
+            </div>
+
+            {/* Footer — always visible, never scrolls */}
+            <div className="shrink-0 px-5 py-4 border-t border-[#f0f0f0] bg-white flex gap-2">
+              <button onClick={() => setShowCompose(false)} data-testid="button-compose-cancel"
+                className="flex-1 py-3 rounded-[10px] text-[14px] font-medium border border-[#e5e7eb] text-[#374151] hover:bg-[#f3f4f6] transition-colors">
+                Cancel
+              </button>
+              <button onClick={() => createMut.mutate()} disabled={createMut.isPending || !compBody.trim()}
+                data-testid="button-compose-send"
+                className="flex-1 py-3 rounded-[10px] text-[14px] font-semibold bg-primary text-white hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2">
+                {createMut.isPending ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Send className="w-4 h-4" />}
+                Send Message
+              </button>
             </div>
           </div>
         </div>

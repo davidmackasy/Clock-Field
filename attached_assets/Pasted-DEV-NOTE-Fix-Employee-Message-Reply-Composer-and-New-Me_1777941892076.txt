@@ -1,0 +1,374 @@
+DEV NOTE: Fix Employee Message Reply Composer and New Message Modal Buttons
+
+Project: ClockField
+Area: Employee App Messages
+Priority: High
+Scope: Employee mobile messaging UI only
+
+Do not touch or change anything else.
+
+Do not touch:
+
+Admin dashboard
+
+Admin messaging logic
+
+Client portal
+
+Employee schedule
+
+Employee home
+
+Employee profile
+
+Training Hub
+
+Worklogs
+
+Payroll
+
+Attendance
+
+Auth
+
+Stripe
+
+Paywall
+
+Existing message threading
+
+Existing message records
+
+Existing photo upload logic, except where needed to keep the buttons visible
+
+Only fix the two layout issues shown in the screenshots.
+
+Issue 1: Reply box must stay fixed at the bottom of the conversation
+
+Current problem
+
+On the employee message conversation page, the reply area moves when scrolling.
+
+The reply area includes:
+
+Photo attach button
+
+Reply text box
+
+Send button
+
+This should not scroll up and down with the message list.
+
+Required behavior
+
+The conversation messages should scroll.
+
+The reply composer should stay fixed/sticky above the bottom navigation.
+
+When the employee scrolls up to read old messages, the reply box must stay in the same place.
+
+When the employee scrolls down, the reply box must still stay in the same place.
+
+The text box can grow slightly if the employee types a longer message, but the composer itself must remain attached to the bottom area.
+
+The bottom navigation must not cover the reply composer.
+
+The blue Action button must not overlap the reply composer.
+
+Required layout
+
+On employee mobile conversation screen:
+
+Message header stays at top.
+
+Message list scrolls in the middle.
+
+Reply composer stays fixed above bottom navigation.
+
+Bottom nav stays at the bottom.
+
+Structure should behave like this:
+
+Header
+
+Scrollable message list
+
+Sticky reply composer
+
+Bottom nav
+
+Suggested implementation
+
+Wrap the message page like this:
+
+Main page container:
+
+height: 100dvh;
+display: flex;
+flex-direction: column;
+overflow: hidden;
+
+Header:
+
+flex-shrink: 0;
+
+Message list:
+
+flex: 1;
+overflow-y: auto;
+padding-bottom: 16px;
+
+Reply composer:
+
+flex-shrink: 0;
+position: sticky;
+bottom: calc(72px + env(safe-area-inset-bottom));
+z-index: 40;
+background: white;
+
+Bottom nav:
+
+position: fixed;
+bottom: 0;
+height: 72px;
+
+Alternative if sticky is unreliable:
+
+Use fixed composer:
+
+position: fixed;
+left: 0;
+right: 0;
+bottom: calc(72px + env(safe-area-inset-bottom));
+z-index: 40;
+background: white;
+
+Then add padding-bottom to message list:
+
+padding-bottom: calc(140px + env(safe-area-inset-bottom));
+
+Composer row requirements
+
+The composer row should always show:
+
+Attach image button on the left
+
+Text box in the middle
+
+Send button on the right
+
+The send button must never be pushed off-screen.
+
+Use:
+
+display: flex;
+align-items: center;
+gap: 10px;
+
+Attach button:
+
+flex-shrink: 0;
+
+Text input:
+
+flex: 1;
+min-width: 0;
+max-height: 120px;
+overflow-y: auto;
+
+Send button:
+
+flex-shrink: 0;
+
+Acceptance criteria for issue 1
+
+Employee opens a message conversation on mobile.
+
+Employee scrolls up and down through messages.
+
+The reply box does not move with the messages.
+
+Photo attach button stays visible.
+
+Reply input stays visible.
+
+Send button stays visible.
+
+Bottom navigation does not cover the reply box.
+
+Action button does not cover the reply box.
+
+Employee can type a longer message and still send it.
+
+Issue 2: New Message modal bottom buttons are hidden
+
+Current problem
+
+When the employee clicks New Message, they can see:
+
+Message type
+
+Subject
+
+Message
+
+Photos
+
+But the bottom buttons are hidden behind the bottom navigation/action button.
+
+The employee cannot clearly see the final Send/Create button.
+
+Required behavior
+
+The New Message modal must scroll properly and show all bottom actions.
+
+Employee must be able to:
+
+Select message type
+
+Enter subject
+
+Enter message
+
+Add photos
+
+See selected photo count
+
+See final Send Message button
+
+Tap Send Message without the bottom nav covering it
+
+Required modal layout
+
+On employee mobile:
+
+Modal should not go behind the bottom nav.
+
+Modal content should be scrollable.
+
+Modal should have bottom padding enough for the bottom nav and action button.
+
+The modal footer button should be sticky inside the modal or visible at the bottom above the nav.
+
+Suggested implementation
+
+Modal container:
+
+max-height: calc(100dvh - 96px);
+overflow: hidden;
+display: flex;
+flex-direction: column;
+
+Modal header:
+
+flex-shrink: 0;
+
+Modal body:
+
+overflow-y: auto;
+padding-bottom: calc(130px + env(safe-area-inset-bottom));
+
+Modal footer:
+
+position: sticky;
+bottom: 0;
+background: white;
+padding: 16px;
+border-top: 1px solid #e5e7eb;
+z-index: 30;
+
+If the footer is inside a bottom sheet, use:
+
+bottom: calc(72px + env(safe-area-inset-bottom));
+
+For the body, add enough padding:
+
+padding-bottom: calc(160px + env(safe-area-inset-bottom));
+
+Required button behavior
+
+The Send Message button must be visible.
+
+The Cancel button can be included if currently available.
+
+The bottom nav must not hide the button.
+
+The action button must not overlap the button.
+
+The user should not need awkward extra scrolling to find the button.
+
+Acceptance criteria for issue 2
+
+Employee opens New Message on mobile.
+
+Employee scrolls through the form.
+
+Photos section is visible.
+
+Final Send Message button is visible.
+
+Button is above bottom navigation.
+
+Button is not covered by the blue Action button.
+
+Employee can send the message from mobile.
+
+No form field is hidden.
+
+Device testing required
+
+Test on:
+
+Small iPhone screen
+
+Large iPhone screen
+
+Android-sized mobile viewport
+
+Mobile browser
+
+PWA/app mode if available
+
+Test with keyboard open and closed.
+
+Do not rely only on desktop responsive inspector.
+
+Regression testing
+
+After the fix, confirm:
+
+Employee can still open Messages.
+
+Employee can still open an existing conversation.
+
+Employee can still reply.
+
+Employee can still attach photo.
+
+Employee can still send message.
+
+Employee can still start New Message.
+
+Bottom nav still works.
+
+Action button still works.
+
+Schedule tab still works.
+
+Home tab still works.
+
+Profile tab still works.
+
+Admin still receives the message.
+
+No unrelated employee page changed.
+
+Final expected result
+
+The employee message conversation page should feel professional.
+
+The message list scrolls, but the reply composer stays fixed above the bottom nav.
+
+The employee New Message modal should show the full form and final Send Message button.
+
+Nothing should be hidden behind the bottom navigation or blue Action button.
