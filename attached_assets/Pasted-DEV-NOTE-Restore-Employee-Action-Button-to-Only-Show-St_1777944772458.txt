@@ -1,0 +1,129 @@
+DEV NOTE: Restore Employee Action Button to Only Show Start Work and Field Note
+Project: ClockField
+Area: Employee App Bottom Action Button
+Priority: Urgent
+Scope: Employee mobile Action menu only
+Important
+Do not touch or change anything else.
+Do not touch:
+Start Work logic
+Field Note logic
+Before/after photo submission
+Scheduled Notes
+Worklog submissions
+Employee schedule
+Employee clock in/out
+Employee messages
+Employee profile
+Admin dashboard
+Client portal
+Payroll
+Attendance
+Training Hub
+Hiring package
+Auth
+Stripe
+Paywall
+Existing records
+Existing uploaded photos
+Only fix the employee middle plus Action menu.
+Current problem
+On the employee account, when the cleaner clicks the middle blue plus Action button, the menu now shows too many items.
+It currently shows extra options like:
+Report Incident
+Report Cleaning Issue
+Request Supplies
+Schedule Question
+Payroll Question
+Upload Photos
+Scheduled Notes
+Other message-related actions
+These are not needed in the Action button menu.
+This makes the employee app confusing and adds unnecessary options.
+Required fix
+The employee middle plus Action button must only show two options:
+Start Work
+Field Note
+That is it.
+Do not show any other options in this Action menu.
+Required behavior
+When an employee clicks the blue plus Action button:
+Show only:
+Start Work
+Continue with the regular work submission flow
+Field Note
+Record voice and photos for a site note or walkthrough
+No other options should appear.
+Important functional requirement
+Do not change how Start Work works.
+Start Work must continue to open the same existing work submission flow.
+It must still allow cleaners to complete the regular work proof process.
+Do not change before/after photo flow.
+Do not change location/site selection.
+Do not change scheduled work logic.
+Do not change submission saving.
+Do not change admin viewing of submissions.
+Do not change how Field Note works.
+Field Note must continue to open the same existing field note flow.
+It must still allow cleaners to record notes, voice, photos, and walkthrough information as currently designed.
+Do not change field note saving.
+Do not change admin viewing of field notes.
+Do not change existing field note/photo/audio logic.
+Messaging-related actions
+Remove these from the Action menu only:
+Report Incident
+Report Cleaning Issue
+Request Supplies
+Schedule Question
+Payroll Question
+Upload Photos
+General Message
+Any message/report/request options
+This does not mean deleting messaging.
+Messages should remain in the Messages tab.
+If an employee wants to send a message, they should use Messages, not the center Action button.
+Safe implementation
+Find the employee action sheet/menu component attached to the middle plus button.
+Update the rendered action list to only include:
+startWork
+fieldNote
+Do not remove the underlying components or routes.
+Do not delete code for messaging, reports, requests, or scheduled notes unless it is only menu display code.
+Only remove these extra options from the visible Action button menu.
+Acceptance criteria
+Employee logs in.
+Employee taps the blue plus Action button.
+Only two options appear:
+Start Work
+Field Note
+Employee taps Start Work.
+The existing Start Work flow opens and works exactly as before.
+Employee taps Field Note.
+The existing Field Note flow opens and works exactly as before.
+No extra action items appear.
+Messages tab still works.
+Schedule tab still works.
+Home tab still works.
+Profile tab still works.
+Admin worklog submissions still work.
+Admin field notes still work.
+Regression checklist
+Confirm these are not affected:
+Clock in/out
+Today’s shifts
+Upcoming shifts
+Start Work submission
+Before/after photos
+Field Notes
+Scheduled Notes
+Messages
+Employee bottom navigation
+Admin Worklog Submissions
+Admin Field Notes
+Employee login
+Admin login
+Client portal
+Final expected result
+The employee app’s middle plus Action menu is clean again.
+It only shows Start Work and Field Note.
+All existing Start Work and Field Note functionality remains unchanged and working.

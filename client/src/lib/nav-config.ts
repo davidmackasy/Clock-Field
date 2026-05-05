@@ -16,48 +16,6 @@ export const employeeCenterAction = {
     title: "Choose Action",
     options: [
       {
-        label: "New Message",
-        description: "Send a message to your admin or team",
-        icon: MessageSquare,
-        href: "/employee/messages?compose=general_message",
-      },
-      {
-        label: "Report Incident",
-        description: "Report a workplace incident or safety issue",
-        icon: AlertTriangle,
-        href: "/employee/messages?compose=incident_report",
-      },
-      {
-        label: "Report Cleaning Issue",
-        description: "Flag a cleaning concern or quality issue",
-        icon: FolderOpen,
-        href: "/employee/messages?compose=cleaning_issue",
-      },
-      {
-        label: "Request Supplies",
-        description: "Request cleaning supplies or equipment",
-        icon: Package,
-        href: "/employee/messages?compose=supply_request",
-      },
-      {
-        label: "Schedule Question",
-        description: "Ask about your shifts or schedule",
-        icon: CalendarClock,
-        href: "/employee/messages?compose=schedule_question",
-      },
-      {
-        label: "Payroll Question",
-        description: "Ask about pay, hours, or deductions",
-        icon: DollarSign,
-        href: "/employee/messages?compose=payroll_question",
-      },
-      {
-        label: "Upload Photos",
-        description: "Send photos from your current location",
-        icon: Camera,
-        href: "/employee/messages?compose=photo_report",
-      },
-      {
         label: "Start Work",
         description: "Continue with the regular work submission flow",
         icon: FileText,
@@ -68,12 +26,6 @@ export const employeeCenterAction = {
         description: "Record voice and photos for a site note or walkthrough",
         icon: NotebookPen,
         href: "/employee/field-notes",
-      },
-      {
-        label: "Scheduled Notes",
-        description: "Complete your daily photo checklists",
-        icon: ClipboardList,
-        href: "/employee/scheduled-field-notes",
       },
     ],
   },
