@@ -1,0 +1,537 @@
+DEV NOTE: Remove Worklog Requests Tab and Add Message Notification Badges
+
+Project: ClockField
+Area: Admin Worklog Navigation, Messaging Notifications
+Priority: High
+
+Important instruction
+
+Do not touch, delete, or affect anything unrelated.
+
+Do not touch:
+
+Stripe
+
+Subscriptions
+
+Paywall
+
+Authentication
+
+Payroll
+
+Attendance
+
+Scheduling
+
+Employees
+
+Clients
+
+Training Hub
+
+Hiring Package
+
+Field Notes logic
+
+Submissions logic
+
+Reports logic
+
+Scheduled Notes logic
+
+Supplies logic
+
+Existing messages
+
+Existing message threading
+
+Existing uploaded files
+
+Only update:
+
+Worklog tab navigation by removing Requests
+
+Message notification badges for admin, employee, and client where applicable
+
+Current issue
+
+The Worklog area currently has these tabs:
+
+Submissions
+
+Reports
+
+Field Notes
+
+Requests
+
+Scheduled Notes
+
+Supplies
+
+The Requests tab is no longer needed because communication and requests will now happen through Messages.
+
+We need to remove the Requests tab from the Worklog UI so the Worklog section is cleaner.
+
+Worklog should only show:
+
+Submissions
+
+Reports
+
+Field Notes
+
+Scheduled Notes
+
+Supplies
+
+Part 1: Remove Requests tab from Worklog
+
+Required change
+
+Remove the Requests tab/button from the Worklog page navigation.
+
+Do not delete request data from the database.
+
+Do not delete request components from the codebase unless they are fully unused and safe to remove.
+
+Do not break old request records.
+
+This is a UI/navigation removal only unless there is dead code that is safe to leave untouched.
+
+Safe approach
+
+Hide or remove the Requests tab from the Worklog tab list.
+
+Make sure the remaining tabs still work:
+
+Submissions
+
+Reports
+
+Field Notes
+
+Scheduled Notes
+
+Supplies
+
+If a user somehow visits the old requests route directly, handle it safely.
+
+Recommended behavior for old direct route:
+
+Redirect to Worklog Submissions
+
+or show “This section has moved to Messages” with a button to Messages
+
+Do not show a broken page.
+
+Do not delete any existing request history yet.
+
+Acceptance criteria
+
+Admin opens Worklog.
+
+Requests tab is gone.
+
+Submissions still works.
+
+Reports still works.
+
+Field Notes still works.
+
+Scheduled Notes still works.
+
+Supplies still works.
+
+No layout gap is left where Requests used to be.
+
+Old request records are not deleted.
+
+No app errors in console.
+
+Part 2: Add message notification badges
+
+Current issue
+
+Users have to guess whether they received a new message.
+
+There is no clear unread message count on the navigation/sidebar/bottom icon.
+
+Required change
+
+Add unread message notification badges for Messages.
+
+Show the number of unread messages or unread conversations.
+
+This should work for:
+
+Admin
+
+Employee
+
+Client, if client portal has Messages
+
+Badge examples:
+
+1
+
+2
+
+3
+
+9+
+
+Required locations
+
+Admin side:
+
+Sidebar Messages nav item
+
+Mobile hamburger menu if admin mobile navigation exists
+
+Any top nav message icon if available
+
+Employee side:
+
+Bottom navigation Messages icon
+
+Messages page header if useful
+
+Action/hamburger menu if applicable
+
+Client side:
+
+Messages nav item or Messages button
+
+Client portal action area if applicable
+
+Badge behavior
+
+If user has 0 unread messages:
+
+Do not show a badge.
+
+If user has 1 unread message:
+
+Show badge with 1.
+
+If user has 2 unread messages:
+
+Show badge with 2.
+
+If user has more than 9:
+
+Show 9+.
+
+Badge should update when:
+
+A new message is received.
+
+A conversation is opened/read.
+
+The user sends a reply and the other side becomes unread.
+
+Badge count definition
+
+Use unread conversations if easier and cleaner.
+
+Recommended:
+
+Count conversations where the current user has unread messages.
+
+Not total unread individual messages unless the app already tracks that.
+
+Example:
+
+Admin has 3 conversations with unread replies.
+
+Badge shows 3.
+
+Employee has 1 unread admin reply.
+
+Badge shows 1.
+
+Client has 2 unread admin replies.
+
+Badge shows 2.
+
+Unread logic requirements
+
+Track unread per participant.
+
+Opening a conversation should mark it read for the current user.
+
+Sending a message should mark it unread for the receiver, not for the sender.
+
+A user should not get an unread badge for their own sent messages.
+
+Required backend check
+
+Inspect current message/conversation tables.
+
+Use existing unread/read logic if it exists.
+
+If missing, add safe fields only.
+
+Possible safe structure:
+
+conversation_participants:
+
+conversation_id
+
+participant_type: admin, employee, client, management
+
+participant_id
+
+last_read_at
+
+unread_count, optional
+
+Alternative:
+
+messages:
+
+read_by_admin_at
+
+read_by_employee_at
+
+read_by_client_at
+
+Only use this if current schema is simpler.
+
+Preferred approach:
+
+Use participant-level last_read_at.
+
+Unread count query:
+
+Count conversations where latest message is newer than current participant last_read_at and latest message sender is not current user.
+
+Security requirements
+
+Unread counts must be scoped by business.
+
+Admin only sees unread messages for their business.
+
+Employee only sees their own messages.
+
+Client only sees their own messages.
+
+No cross-business counts.
+
+No client should see another client’s unread messages.
+
+No employee should see another employee’s unread messages.
+
+UI badge requirements
+
+Badge should be small, clean, and professional.
+
+Use ClockField blue or red/orange depending on existing style.
+
+Place badge on:
+
+Admin Messages sidebar item
+
+Employee Messages bottom nav icon
+
+Client Messages item/button
+
+Badge should not break layout.
+
+Badge should work on desktop and mobile.
+
+Badge should not cover labels badly.
+
+Suggested visual style
+
+Small circle or pill.
+
+Min width: 18px.
+
+Height: 18px.
+
+Font size: 11px or 12px.
+
+Position: top-right of icon or end of sidebar row.
+
+Examples:
+
+Messages 3
+
+Messages with small badge beside label
+
+Bottom nav icon with badge at top-right
+
+Part 3: Notifications refresh behavior
+
+Badge should update without needing a full logout/login.
+
+Acceptable options:
+
+Use existing polling system if already used.
+
+Refresh count when user navigates.
+
+Refresh count after message send.
+
+Refresh count after opening/closing messages.
+
+If real-time subscriptions already exist, use them.
+
+Do not build a risky new real-time system unless already supported.
+
+Recommended safe approach:
+
+Fetch unread count when app shell loads.
+
+Fetch unread count every 30 to 60 seconds while user is active.
+
+Fetch unread count after sending a message.
+
+Fetch unread count after opening a conversation.
+
+Do not over-poll aggressively.
+
+Part 4: Testing checklist
+
+Worklog Requests removal
+
+Open Worklog.
+
+Confirm Requests tab is removed.
+
+Confirm visible tabs are:
+
+Submissions
+
+Reports
+
+Field Notes
+
+Scheduled Notes
+
+Supplies
+
+Click each tab.
+
+Confirm each tab loads correctly.
+
+Check old direct requests route if it exists.
+
+Confirm it does not break.
+
+Message unread badge admin
+
+Employee sends admin a message.
+
+Admin sidebar Messages shows badge 1.
+
+Admin opens Messages.
+
+Admin opens the conversation.
+
+Badge disappears or decreases correctly.
+
+Admin replies.
+
+Admin should not see unread badge for their own reply.
+
+Message unread badge employee
+
+Admin sends employee a message.
+
+Employee bottom Messages icon shows badge 1.
+
+Employee opens conversation.
+
+Badge disappears or decreases correctly.
+
+Employee replies.
+
+Employee should not see unread badge for their own reply.
+
+Message unread badge client
+
+Admin sends client a message.
+
+Client Messages item shows badge 1.
+
+Client opens conversation.
+
+Badge disappears or decreases correctly.
+
+Client replies.
+
+Client should not see unread badge for their own reply.
+
+Multiple message test
+
+Send 3 unread conversations to admin.
+
+Admin badge shows 3.
+
+Open 1 conversation.
+
+Badge changes to 2.
+
+Open all.
+
+Badge disappears.
+
+Regression test
+
+Confirm these still work:
+
+Admin messaging
+
+Employee messaging
+
+Client messaging
+
+Message image attachments
+
+Message threading
+
+Submissions
+
+Reports
+
+Field Notes
+
+Scheduled Notes
+
+Supplies
+
+Employee login
+
+Client login
+
+Admin login
+
+Schedule
+
+Attendance
+
+Payroll
+
+Worklogs
+
+Training Hub
+
+Hiring Package
+
+Stripe/paywall/auth
+
+Final expected result
+
+The Worklog section no longer shows Requests.
+
+Worklog only shows Submissions, Reports, Field Notes, Scheduled Notes, and Supplies.
+
+Messages become the main place for communication and request-style conversations.
+
+Admin, employee, and client users can see unread message badges so they know when a new message is waiting.
+
+Nothing else in the app should be changed, deleted, broken, or affected.

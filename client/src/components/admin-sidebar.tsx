@@ -51,6 +51,14 @@ export function AdminSidebar() {
   });
   const unreadMessages = (messages as any[]).filter(m => !m.isRead).length;
 
+  const { data: unreadMsgs } = useQuery<{ count: number }>({
+    queryKey: ["/api/admin/messages/unread-count"],
+    enabled: !!user,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+  const unreadMsgCount = unreadMsgs?.count ?? 0;
+
   const initials = user ? `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}` : "A";
 
   // Work Log tab is active for work-log, reports, field-notes, requests sub-paths
@@ -85,12 +93,20 @@ export function AdminSidebar() {
                 const isActive = item.url === "/admin/work-log"
                   ? isWorkLogActive
                   : location === item.url || (item.url !== "/admin" && location.startsWith(item.url));
+                const isMessages = item.url === "/admin/messages";
                 return (
                   <SidebarMenuItem key={item.url}>
                     <SidebarMenuButton asChild isActive={isActive}>
                       <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
                         <item.icon className="w-4 h-4" />
-                        <span>{item.title}</span>
+                        <span className="flex items-center justify-between w-full">
+                          {item.title}
+                          {isMessages && unreadMsgCount > 0 && (
+                            <Badge className="bg-primary text-primary-foreground text-[10px] h-4 min-w-[16px] px-1 rounded-full">
+                              {unreadMsgCount > 9 ? "9+" : unreadMsgCount}
+                            </Badge>
+                          )}
+                        </span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

@@ -227,6 +227,7 @@ export const clientRequests = pgTable("client_requests", {
   requiresReplyBeforeClockOut: boolean("requires_reply_before_clock_out").notNull().default(false),
   cleanerViewedAt: text("cleaner_viewed_at"),
   adminReadReplyAt: text("admin_read_reply_at"),
+  clientReadAt: text("client_read_at"),
 });
 
 export const requestMessages = pgTable("request_messages", {

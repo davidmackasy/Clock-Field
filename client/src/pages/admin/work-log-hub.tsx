@@ -1,10 +1,9 @@
 import { useSearch, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { FileText, BookOpen, NotebookPen, MessageSquare, ClipboardList, Package } from "lucide-react";
+import { FileText, BookOpen, NotebookPen, ClipboardList, Package } from "lucide-react";
 import AdminWorkLog from "./work-log";
 import AdminReports from "./reports";
 import AdminFieldNotes from "./field-notes";
-import AdminRequests from "./requests";
 import AdminScheduledFieldNotes from "./scheduled-field-notes";
 import AdminSupplies from "./supplies";
 
@@ -12,7 +11,6 @@ const TABS = [
   { id: "submissions", label: "Submissions", icon: BookOpen },
   { id: "reports", label: "Reports", icon: FileText },
   { id: "field-notes", label: "Field Notes", icon: NotebookPen },
-  { id: "requests", label: "Requests", icon: MessageSquare },
   { id: "scheduled-notes", label: "Scheduled Notes", icon: ClipboardList },
   { id: "supplies", label: "Supplies", icon: Package },
 ];
@@ -24,7 +22,9 @@ export default function AdminWorkLogHub() {
   // Supplies uses its own path (/admin/work-log/supplies) so it's
   // shareable as a clean URL; all other tabs use ?tab= on /admin/work-log.
   const isSuppliesPath = location.startsWith("/admin/work-log/supplies");
-  const activeTab = isSuppliesPath ? "supplies" : (params.get("tab") || "submissions");
+  const rawTab = isSuppliesPath ? "supplies" : (params.get("tab") || "submissions");
+  // "requests" tab has been removed — redirect to submissions if someone lands on it directly
+  const activeTab = rawTab === "requests" ? "submissions" : rawTab;
 
   const handleTabChange = (tabId: string) => {
     if (tabId === "submissions") {
@@ -68,7 +68,6 @@ export default function AdminWorkLogHub() {
         {activeTab === "submissions" && <AdminWorkLog />}
         {activeTab === "reports" && <AdminReports />}
         {activeTab === "field-notes" && <AdminFieldNotes />}
-        {activeTab === "requests" && <AdminRequests />}
         {activeTab === "scheduled-notes" && <AdminScheduledFieldNotes />}
         {activeTab === "supplies" && <AdminSupplies />}
       </div>

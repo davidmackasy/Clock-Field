@@ -2021,21 +2021,19 @@ Welcome again, and thank you for choosing ClockField.
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
-  // Mark cleaner viewed
+  // Mark cleaner viewed (always update so repeated opens reset the unread state)
   app.post("/api/client-requests/:id/mark-viewed", requireAuth, async (req, res) => {
     try {
       const user = req.user as any;
       const target = await storage.getClientRequest(req.params.id);
       if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       if (user.role !== "employee" || target.employeeId !== user.id) return res.status(403).json({ message: "Forbidden" });
-      if (!target.cleanerViewedAt) {
-        await storage.updateClientRequest(req.params.id, { cleanerViewedAt: new Date().toISOString() } as any);
-      }
+      await storage.updateClientRequest(req.params.id, { cleanerViewedAt: new Date().toISOString() } as any);
       res.json({ ok: true });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
-  // Mark admin read reply
+  // Mark admin read reply (always update timestamp so re-opening resets badge)
   app.post("/api/client-requests/:id/mark-admin-read", requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
@@ -2043,6 +2041,85 @@ Welcome again, and thank you for choosing ClockField.
       if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       await storage.updateClientRequest(req.params.id, { adminReadReplyAt: new Date().toISOString() } as any);
       res.json({ ok: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Mark client read
+  app.post("/api/client-requests/:id/mark-client-read", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (user.role !== "client") return res.status(403).json({ message: "Forbidden" });
+      const target = await storage.getClientRequest(req.params.id);
+      if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const clientRecord = await storage.getClientByUserId(user.id);
+      if (!clientRecord || target.clientId !== clientRecord.id) return res.status(403).json({ message: "Forbidden" });
+      await storage.updateClientRequest(req.params.id, { clientReadAt: new Date().toISOString() } as any);
+      res.json({ ok: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Unread message counts ────────────────────────────────────────────────────
+
+  // Admin: count conversations with unread replies from non-admin authors
+  app.get("/api/admin/messages/unread-count", requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const result = await pool.query(`
+        SELECT COUNT(DISTINCT cr.id)::int AS count
+        FROM client_requests cr
+        WHERE cr.company_id = $1
+          AND EXISTS (
+            SELECT 1 FROM request_messages rm
+            WHERE rm.request_id = cr.id
+              AND rm.author_role != 'admin'
+              AND (cr.admin_read_reply_at IS NULL OR rm.created_at > cr.admin_read_reply_at)
+          )
+      `, [user.companyId]);
+      res.json({ count: result.rows[0]?.count ?? 0 });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Employee: count conversations with unread admin messages
+  app.get("/api/employee/messages/unread-count", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (user.role !== "employee") return res.status(403).json({ message: "Forbidden" });
+      const result = await pool.query(`
+        SELECT COUNT(DISTINCT cr.id)::int AS count
+        FROM client_requests cr
+        WHERE cr.company_id = $1
+          AND cr.employee_id = $2
+          AND EXISTS (
+            SELECT 1 FROM request_messages rm
+            WHERE rm.request_id = cr.id
+              AND rm.author_role = 'admin'
+              AND (cr.cleaner_viewed_at IS NULL OR rm.created_at > cr.cleaner_viewed_at)
+          )
+      `, [user.companyId, user.id]);
+      res.json({ count: result.rows[0]?.count ?? 0 });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Client: count conversations with unread admin messages
+  app.get("/api/client/messages/unread-count", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (user.role !== "client") return res.status(403).json({ message: "Forbidden" });
+      const clientRecord = await storage.getClientByUserId(user.id);
+      if (!clientRecord) return res.json({ count: 0 });
+      const result = await pool.query(`
+        SELECT COUNT(DISTINCT cr.id)::int AS count
+        FROM client_requests cr
+        WHERE cr.company_id = $1
+          AND cr.client_id = $2
+          AND EXISTS (
+            SELECT 1 FROM request_messages rm
+            WHERE rm.request_id = cr.id
+              AND rm.author_role = 'admin'
+              AND (cr.client_read_at IS NULL OR rm.created_at > cr.client_read_at)
+          )
+      `, [user.companyId, clientRecord.id]);
+      res.json({ count: result.rows[0]?.count ?? 0 });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

@@ -205,7 +205,10 @@ export default function AdminMessages() {
 
   const markReadMut = useMutation({
     mutationFn: (id: string) => apiRequest("POST", `/api/client-requests/${id}/mark-admin-read`, {}),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/client-requests"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/client-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/messages/unread-count"] });
+    },
   });
 
   const statusMut = useMutation({

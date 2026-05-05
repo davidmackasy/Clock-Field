@@ -112,6 +112,11 @@ export default function EmployeeMessages() {
     onError: (e: any) => toast({ title: "Failed to send", description: e.message, variant: "destructive" }),
   });
 
+  const markViewedMut = useMutation({
+    mutationFn: (id: string) => apiRequest("POST", `/api/client-requests/${id}/mark-viewed`, {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/employee/messages/unread-count"] }),
+  });
+
   const replyMut = useMutation({
     mutationFn: async () => {
       if ((!replyText.trim() && replyPhotos.length === 0) || !selectedId) throw new Error("Message required");
@@ -149,6 +154,7 @@ export default function EmployeeMessages() {
     setSelectedId(req.id);
     setMobileView("thread");
     setReplyText(""); setReplyPhotos([]); setShowPhotoBar(false);
+    markViewedMut.mutate(req.id);
   }
   function openCompose(tag?: string) {
     setCompTag(tag || "general_message");

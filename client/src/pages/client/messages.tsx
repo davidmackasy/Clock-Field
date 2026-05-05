@@ -107,6 +107,11 @@ export default function ClientMessages() {
     onError: (e: any) => toast({ title: "Failed to send", description: e.message, variant: "destructive" }),
   });
 
+  const markClientReadMut = useMutation({
+    mutationFn: (id: string) => apiRequest("POST", `/api/client-requests/${id}/mark-client-read`, {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/client/messages/unread-count"] }),
+  });
+
   const replyMut = useMutation({
     mutationFn: async () => {
       if ((!replyText.trim() && replyPhotos.length === 0) || !selectedId) throw new Error("Message required");
@@ -143,6 +148,7 @@ export default function ClientMessages() {
     setSelectedId(req.id);
     setMobileView("thread");
     setReplyText(""); setReplyPhotos([]); setShowPhotoBar(false);
+    markClientReadMut.mutate(req.id);
   }
   function openCompose(tag?: string) {
     setCompTag(tag || "general_message");

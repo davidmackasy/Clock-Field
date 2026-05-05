@@ -130,7 +130,7 @@ function AdminLayout() {
               <Route path="/admin/work-log" component={AdminWorkLogHub} />
               <Route path="/admin/reports"><Redirect to="/admin/work-log?tab=reports" /></Route>
               <Route path="/admin/field-notes"><Redirect to="/admin/work-log?tab=field-notes" /></Route>
-              <Route path="/admin/requests"><Redirect to="/admin/work-log?tab=requests" /></Route>
+              <Route path="/admin/requests"><Redirect to="/admin/messages" /></Route>
               <Route path="/admin/quote-forms/:id" component={AdminQuoteFormBuilder} />
               <Route path="/admin/quote-forms" component={AdminQuoteForms} />
               <Route path="/admin/proposals/:id" component={AdminProposalBuilder} />
@@ -185,19 +185,16 @@ function SuperAdminLayout() {
 
 function EmployeeLayout() {
   const { user } = useAuth();
-  const { data: empRequests = [] } = useQuery<any[]>({
-    queryKey: ["/api/client-requests"],
+  const { data: empUnread } = useQuery<{ count: number }>({
+    queryKey: ["/api/employee/messages/unread-count"],
     enabled: !!user?.id,
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
-  const adminRequestBadge = (empRequests as any[]).filter(
-    r => r.createdByRole === "admin" && !["closed", "resolved", "replied"].includes(r.status)
-  ).length;
+  const empUnreadCount = empUnread?.count ?? 0;
 
-  // Show unread badge on Messages nav item when admin has sent pending requests to employee
   const navItems = employeeNavItems;
-  const badges = adminRequestBadge > 0 ? { "/employee/messages": adminRequestBadge } : {};
+  const badges = empUnreadCount > 0 ? { "/employee/messages": empUnreadCount } : {};
 
   return (
     <div className="min-h-screen bg-background">
@@ -229,6 +226,15 @@ function EmployeeLayout() {
 }
 
 function ClientLayout() {
+  const { user } = useAuth();
+  const { data: clientUnread } = useQuery<{ count: number }>({
+    queryKey: ["/api/client/messages/unread-count"],
+    enabled: !!user?.id,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+  const clientBadges = clientUnread && clientUnread.count > 0 ? { "/client/messages": clientUnread.count } : {};
+
   return (
     <div className="min-h-screen bg-background">
       <main className="pb-20">
@@ -241,7 +247,7 @@ function ClientLayout() {
           <Route component={NotFound} />
         </Switch>
       </main>
-      <MobileNav items={clientNavItems} centerAction={clientCenterAction} />
+      <MobileNav items={clientNavItems} centerAction={clientCenterAction} badges={clientBadges} />
     </div>
   );
 }
