@@ -2243,3 +2243,57 @@ export const employeeDocuments = pgTable("employee_documents", {
 export const insertEmployeeDocumentSchema = createInsertSchema(employeeDocuments).omit({ id: true });
 export type EmployeeDocument = typeof employeeDocuments.$inferSelect;
 export type InsertEmployeeDocument = z.infer<typeof insertEmployeeDocumentSchema>;
+
+// ── Jobsite Walk ─────────────────────────────────────────────────────────────
+export const jobsiteWalks = pgTable("jobsite_walks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  clientId: varchar("client_id"),
+  title: text("title").notNull(),
+  siteType: text("site_type").notNull().default("commercial"),
+  status: text("status").notNull().default("draft"),
+  notes: text("notes"),
+  totalEstimatedSqft: text("total_estimated_sqft"),
+  totalConfirmedSqft: text("total_confirmed_sqft"),
+  summaryJson: text("summary_json"),
+  createdByUserId: varchar("created_by_user_id").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at"),
+});
+
+export const jobsiteWalkPhotos = pgTable("jobsite_walk_photos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  walkId: varchar("walk_id").notNull(),
+  imageBase64: text("image_base64").notNull(),
+  areaName: text("area_name"),
+  notes: text("notes"),
+  transcript: text("transcript"),
+  aiAnalysisJson: text("ai_analysis_json"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const jobsiteWalkMeasurements = pgTable("jobsite_walk_measurements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  photoId: varchar("photo_id").notNull(),
+  walkId: varchar("walk_id").notNull(),
+  label: text("label").notNull(),
+  measurementType: text("measurement_type").notNull().default("square_footage"),
+  aiEstimatedValue: text("ai_estimated_value"),
+  confirmedValue: text("confirmed_value"),
+  unit: text("unit").notNull().default("sq ft"),
+  confidenceScore: text("confidence_score"),
+  status: text("status").notNull().default("ai_estimated"),
+  notes: text("notes"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at"),
+});
+
+export const insertJobsiteWalkSchema = createInsertSchema(jobsiteWalks).omit({ id: true });
+export const insertJobsiteWalkPhotoSchema = createInsertSchema(jobsiteWalkPhotos).omit({ id: true });
+export const insertJobsiteWalkMeasurementSchema = createInsertSchema(jobsiteWalkMeasurements).omit({ id: true });
+export type JobsiteWalk = typeof jobsiteWalks.$inferSelect;
+export type InsertJobsiteWalk = z.infer<typeof insertJobsiteWalkSchema>;
+export type JobsiteWalkPhoto = typeof jobsiteWalkPhotos.$inferSelect;
+export type InsertJobsiteWalkPhoto = z.infer<typeof insertJobsiteWalkPhotoSchema>;
+export type JobsiteWalkMeasurement = typeof jobsiteWalkMeasurements.$inferSelect;
+export type InsertJobsiteWalkMeasurement = z.infer<typeof insertJobsiteWalkMeasurementSchema>;

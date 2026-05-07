@@ -11938,6 +11938,407 @@ Return ONLY valid JSON:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ── Jobsite Walk ─────────────────────────────────────────────────────────────
+
+  app.get("/api/jobsite-walks", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const walks = await storage.getJobsiteWalks(user.companyId);
+      res.json(walks);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/jobsite-walks", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const now = new Date().toISOString();
+      const walk = await storage.createJobsiteWalk({
+        companyId: user.companyId,
+        clientId: req.body.clientId ?? null,
+        title: req.body.title || "Untitled Walk",
+        siteType: req.body.siteType || "commercial",
+        status: "draft",
+        notes: req.body.notes ?? null,
+        totalEstimatedSqft: null,
+        totalConfirmedSqft: null,
+        summaryJson: null,
+        createdByUserId: user.id,
+        createdAt: now,
+        updatedAt: now,
+      });
+      res.json(walk);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/jobsite-walks/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const walk = await storage.getJobsiteWalk(req.params.id);
+      if (!walk || walk.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const photos = await storage.getJobsiteWalkPhotos(walk.id);
+      const measurements = await storage.getJobsiteWalkMeasurements(walk.id);
+      res.json({ ...walk, photos, measurements });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/jobsite-walks/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const walk = await storage.getJobsiteWalk(req.params.id);
+      if (!walk || walk.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const updated = await storage.updateJobsiteWalk(req.params.id, { ...req.body, updatedAt: new Date().toISOString() });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/jobsite-walks/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const walk = await storage.getJobsiteWalk(req.params.id);
+      if (!walk || walk.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      await storage.deleteJobsiteWalk(req.params.id);
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/jobsite-walks/:id/photos — upload base64 image + run GPT-4o vision analysis
+  app.post("/api/jobsite-walks/:id/photos", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const walk = await storage.getJobsiteWalk(req.params.id);
+      if (!walk || walk.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+
+      const { imageBase64, areaName, notes, transcript } = req.body;
+      if (!imageBase64) return res.status(400).json({ message: "imageBase64 is required" });
+
+      const now = new Date().toISOString();
+      const photo = await storage.createJobsiteWalkPhoto({
+        walkId: walk.id,
+        imageBase64,
+        areaName: areaName ?? null,
+        notes: notes ?? null,
+        transcript: transcript ?? null,
+        aiAnalysisJson: null,
+        createdAt: now,
+      });
+
+      // Run GPT-4o vision analysis asynchronously
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (apiKey) {
+        (async () => {
+          try {
+            const oai = new OpenAI({ apiKey });
+            const completion = await oai.chat.completions.create({
+              model: "gpt-4o",
+              messages: [{
+                role: "user",
+                content: [
+                  {
+                    type: "text",
+                    text: `Analyze this jobsite photo for a commercial cleaning bid walkthrough. Return ONLY valid JSON matching this schema exactly:
+{
+  "area_type": "string — type of area detected (e.g. Lobby, Washroom, Office, Hallway, Kitchen, Stairwell, Parking Garage, etc.)",
+  "surface_type": "string — primary floor/surface material (e.g. Tile, Hardwood, Carpet, Concrete, etc.)",
+  "floor_condition": "string — brief description of current condition",
+  "detected_items": ["array of notable items or features"],
+  "risks": ["potential cleaning challenges or special considerations"],
+  "recommended_services": ["suggested cleaning tasks for this area"],
+  "measurements": [
+    {
+      "label": "descriptive name for what is being measured",
+      "type": "square_footage | wall_area | window_count | door_count | fixture_count | length",
+      "value": 0,
+      "unit": "sq ft | ft | count",
+      "confidence": 0.7,
+      "status": "needs_confirmation"
+    }
+  ],
+  "estimated_cleaning_hours": 0.5,
+  "notes": "any other relevant observations"
+}
+Be conservative with estimates. Use confidence 0.9+ only when clearly visible, 0.6-0.8 for reasonable estimates, below 0.6 for guesses.`
+                  },
+                  { type: "image_url", image_url: { url: imageBase64, detail: "high" } }
+                ]
+              }],
+              response_format: { type: "json_object" },
+              max_tokens: 1200,
+            });
+
+            const raw = completion.choices[0]?.message?.content ?? "{}";
+            let analysis: any = {};
+            try { analysis = JSON.parse(raw); } catch { analysis = {}; }
+
+            await storage.updateJobsiteWalkPhoto(photo.id, { aiAnalysisJson: JSON.stringify(analysis) });
+
+            // Create measurements from AI response
+            if (Array.isArray(analysis.measurements)) {
+              for (const m of analysis.measurements) {
+                await storage.createJobsiteWalkMeasurement({
+                  photoId: photo.id,
+                  walkId: walk.id,
+                  label: m.label || "Measurement",
+                  measurementType: m.type || "square_footage",
+                  aiEstimatedValue: String(m.value ?? ""),
+                  confirmedValue: null,
+                  unit: m.unit || "sq ft",
+                  confidenceScore: String(m.confidence ?? "0.7"),
+                  status: "ai_estimated",
+                  notes: null,
+                  createdAt: now,
+                  updatedAt: now,
+                });
+              }
+            }
+
+            // Update area name if not set
+            if (!areaName && analysis.area_type) {
+              await storage.updateJobsiteWalkPhoto(photo.id, { areaName: analysis.area_type });
+            }
+          } catch (aiErr) {
+            console.error("[jobsite-walk] AI analysis failed:", aiErr);
+          }
+        })();
+      }
+
+      res.json(photo);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/jobsite-walks/:id/photos/:photoId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const walk = await storage.getJobsiteWalk(req.params.id);
+      if (!walk || walk.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const updated = await storage.updateJobsiteWalkPhoto(req.params.photoId, req.body);
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/jobsite-walks/:id/photos/:photoId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const walk = await storage.getJobsiteWalk(req.params.id);
+      if (!walk || walk.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      await storage.deleteJobsiteWalkPhoto(req.params.photoId);
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/jobsite-walks/:id/measurements/:measId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const walk = await storage.getJobsiteWalk(req.params.id);
+      if (!walk || walk.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const updated = await storage.updateJobsiteWalkMeasurement(req.params.measId, { ...req.body, updatedAt: new Date().toISOString() });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/jobsite-walks/:id/measurements/:measId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const walk = await storage.getJobsiteWalk(req.params.id);
+      if (!walk || walk.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      await storage.deleteJobsiteWalkMeasurement(req.params.measId);
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/jobsite-walks/:id/generate-summary — AI-powered full walk summary
+  app.post("/api/jobsite-walks/:id/generate-summary", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const walk = await storage.getJobsiteWalk(req.params.id);
+      if (!walk || walk.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) return res.status(503).json({ message: "AI not configured" });
+
+      const photos = await storage.getJobsiteWalkPhotos(walk.id);
+      const measurements = await storage.getJobsiteWalkMeasurements(walk.id);
+
+      const confirmedMeasurements = measurements.filter(m => m.status !== "rejected");
+      const totalSqft = confirmedMeasurements
+        .filter(m => m.measurementType === "square_footage")
+        .reduce((sum, m) => sum + parseFloat(m.confirmedValue || m.aiEstimatedValue || "0"), 0);
+
+      const photoSummaries = photos.map((p, i) => {
+        let analysis: any = {};
+        try { analysis = JSON.parse(p.aiAnalysisJson || "{}"); } catch { }
+        return `Area ${i + 1}: ${p.areaName || analysis.area_type || "Unknown"} — Surface: ${analysis.surface_type || "Unknown"}. Condition: ${analysis.floor_condition || "N/A"}. Risks: ${(analysis.risks || []).join(", ") || "None noted"}. Recommended: ${(analysis.recommended_services || []).join(", ") || "Standard cleaning"}.`;
+      }).join("\n");
+
+      const measSummary = confirmedMeasurements.map(m =>
+        `${m.label}: ${m.confirmedValue || m.aiEstimatedValue} ${m.unit} (${m.status})`
+      ).join("\n");
+
+      const oai = new OpenAI({ apiKey });
+      const completion = await oai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{
+          role: "user",
+          content: `You are a professional cleaning bid estimator. Based on the following jobsite walkthrough data, generate a structured JSON summary for a commercial cleaning proposal.
+
+Walk Title: ${walk.title}
+Site Type: ${walk.siteType}
+Total Estimated Sq Ft: ${totalSqft > 0 ? totalSqft : "Unknown"}
+Notes: ${walk.notes || "None"}
+
+Photo Analysis:
+${photoSummaries || "No photos analyzed"}
+
+Measurements:
+${measSummary || "No measurements recorded"}
+
+Return ONLY valid JSON:
+{
+  "executive_summary": "2-3 sentence overview of the jobsite and cleaning scope",
+  "total_sqft": ${totalSqft || 0},
+  "areas": [
+    { "name": "Area name", "sqft": 0, "services": ["list of services"], "frequency": "daily|weekly|monthly" }
+  ],
+  "recommended_services": ["list of all recommended cleaning services"],
+  "special_considerations": ["list of challenges or special requirements"],
+  "estimated_hours_per_visit": 0,
+  "suggested_frequency": "daily|3x/week|weekly|biweekly|monthly",
+  "scope_sections": [
+    { "title": "Section Title", "content": "Detailed description of cleaning scope for this area or service type" }
+  ],
+  "pricing_notes": "Brief notes on pricing considerations"
+}`
+        }],
+        response_format: { type: "json_object" },
+        max_tokens: 2000,
+      });
+
+      const raw = completion.choices[0]?.message?.content ?? "{}";
+      let summary: any = {};
+      try { summary = JSON.parse(raw); } catch { summary = {}; }
+
+      const updated = await storage.updateJobsiteWalk(walk.id, {
+        summaryJson: JSON.stringify(summary),
+        totalEstimatedSqft: String(summary.total_sqft || totalSqft || ""),
+        status: "complete",
+        updatedAt: new Date().toISOString(),
+      });
+
+      res.json({ walk: updated, summary });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // POST /api/jobsite-walks/:id/send-to-proposal — create a proposal pre-filled from this walk
+  app.post("/api/jobsite-walks/:id/send-to-proposal", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const walk = await storage.getJobsiteWalk(req.params.id);
+      if (!walk || walk.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const company = await storage.getCompany(user.companyId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+
+      let summary: any = {};
+      try { summary = JSON.parse(walk.summaryJson || "{}"); } catch { }
+
+      const measurements = await storage.getJobsiteWalkMeasurements(walk.id);
+
+      const token = randomBytes(32).toString("hex");
+      const proposalNumber = await storage.getNextProposalNumber(user.companyId);
+      const now = new Date().toISOString();
+
+      const snapshot = JSON.stringify({
+        name: company.name,
+        logoUrl: (company as any).companyLogoUrl ?? null,
+        address: (company as any).address ?? null,
+        city: (company as any).city ?? null,
+        province: (company as any).province ?? null,
+        postalCode: (company as any).postalCode ?? null,
+        phone: (company as any).companyPhone ?? null,
+        email: (company as any).companyEmail ?? null,
+        website: null,
+        brandColor: (company as any).brandColor ?? null,
+      });
+
+      // Build scope sections from AI summary
+      const scopeSections = Array.isArray(summary.scope_sections) && summary.scope_sections.length > 0
+        ? JSON.stringify(summary.scope_sections.map((s: any, i: number) => ({
+            id: `section_${i}`,
+            title: s.title || `Section ${i + 1}`,
+            content: s.content || "",
+            sortOrder: i,
+          })))
+        : JSON.stringify([{
+            id: "section_0",
+            title: "Cleaning Scope",
+            content: summary.executive_summary || `Jobsite walk conducted for ${walk.title}. Total area: ${walk.totalEstimatedSqft || "TBD"} sq ft.`,
+            sortOrder: 0,
+          }]);
+
+      const confirmedMeasurements = measurements.filter(m => m.status !== "rejected");
+      const sqftMeasurements = confirmedMeasurements.filter(m => m.measurementType === "square_footage");
+      const totalSqft = sqftMeasurements.reduce((s, m) => s + parseFloat(m.confirmedValue || m.aiEstimatedValue || "0"), 0);
+
+      const lineItems = sqftMeasurements.map((m, i) => ({
+        id: `item_${i}`,
+        description: m.label,
+        quantity: parseFloat(m.confirmedValue || m.aiEstimatedValue || "0"),
+        unit: m.unit,
+        rate: 0,
+        total: 0,
+      }));
+
+      const pricingConfig = JSON.stringify({
+        lineItems,
+        taxConfig: { type: "none", rate: 0, label: "No Tax" },
+        subtotalOverride: null,
+        notes: summary.pricing_notes || "",
+      });
+
+      const includedItems = JSON.stringify([
+        { id: "labour", label: "Labour", status: "included" },
+        { id: "basic_supplies", label: "Basic cleaning supplies", status: "included" },
+        { id: "garbage_bags", label: "Garbage bags", status: "included" },
+        { id: "paper_products", label: "Paper products", status: "not_included" },
+        { id: "window_cleaning", label: "Window cleaning", status: "extra_cost" },
+      ]);
+
+      const internalNotes = `Generated from Jobsite Walk: "${walk.title}" (ID: ${walk.id})\nTotal area: ${totalSqft > 0 ? `${totalSqft} sq ft` : walk.totalEstimatedSqft || "TBD"}\nSuggested frequency: ${summary.suggested_frequency || "TBD"}\nEstimated hours/visit: ${summary.estimated_hours_per_visit || "TBD"}`;
+
+      const proposal = await storage.createProposal({
+        companyId: user.companyId,
+        proposalNumber,
+        title: `Cleaning Proposal — ${walk.title}`,
+        status: "draft",
+        clientId: walk.clientId ?? null,
+        clientName: req.body.clientName ?? "",
+        clientCompany: req.body.clientCompany ?? "",
+        clientEmail: req.body.clientEmail ?? "",
+        clientPhone: req.body.clientPhone ?? "",
+        serviceAddress: req.body.serviceAddress ?? "",
+        billingAddress: req.body.billingAddress ?? "",
+        contactPerson: req.body.contactPerson ?? "",
+        leadSource: "jobsite_walk",
+        proposalDate: now.slice(0, 10),
+        expiryDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+        preparedByUserId: user.id,
+        businessSnapshot: snapshot,
+        serviceDetails: JSON.stringify({
+          serviceType: walk.siteType, frequency: summary.suggested_frequency || "",
+          daysPerWeek: "", hoursPerVisit: String(summary.estimated_hours_per_visit || ""),
+          numCleaners: "1", preferredTime: "", contractLength: "", proposedStartDate: "",
+        }),
+        scopeSections,
+        includedItems,
+        pricingConfig,
+        termsText: "",
+        internalNotes,
+        publicToken: token,
+        createdAt: now,
+        updatedAt: now,
+      } as any);
+
+      res.json({ proposal });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   return httpServer;
 }
 

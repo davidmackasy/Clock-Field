@@ -97,6 +97,10 @@ import {
   type TrainingQuizAttempt, type InsertTrainingQuizAttempt,
   employeeDocuments,
   type EmployeeDocument, type InsertEmployeeDocument,
+  jobsiteWalks, jobsiteWalkPhotos, jobsiteWalkMeasurements,
+  type JobsiteWalk, type InsertJobsiteWalk,
+  type JobsiteWalkPhoto, type InsertJobsiteWalkPhoto,
+  type JobsiteWalkMeasurement, type InsertJobsiteWalkMeasurement,
   quoteRequestWalkthroughs, quoteRequestWalkthroughPhotos, quoteRequestWalkthroughSections,
   type QuoteRequestWalkthrough, type InsertQuoteRequestWalkthrough,
   type QuoteRequestWalkthroughPhoto, type InsertQuoteRequestWalkthroughPhoto,
@@ -531,6 +535,23 @@ export interface IStorage {
   getEmployeeDocument(id: string, companyId: string): Promise<EmployeeDocument | undefined>;
   createEmployeeDocument(data: InsertEmployeeDocument): Promise<EmployeeDocument>;
   deleteEmployeeDocument(id: string, companyId: string): Promise<boolean>;
+
+  // Jobsite Walk
+  createJobsiteWalk(data: InsertJobsiteWalk): Promise<JobsiteWalk>;
+  getJobsiteWalks(companyId: string): Promise<JobsiteWalk[]>;
+  getJobsiteWalk(id: string): Promise<JobsiteWalk | undefined>;
+  updateJobsiteWalk(id: string, data: Partial<JobsiteWalk>): Promise<JobsiteWalk | undefined>;
+  deleteJobsiteWalk(id: string): Promise<void>;
+  createJobsiteWalkPhoto(data: InsertJobsiteWalkPhoto): Promise<JobsiteWalkPhoto>;
+  getJobsiteWalkPhotos(walkId: string): Promise<JobsiteWalkPhoto[]>;
+  getJobsiteWalkPhoto(id: string): Promise<JobsiteWalkPhoto | undefined>;
+  updateJobsiteWalkPhoto(id: string, data: Partial<JobsiteWalkPhoto>): Promise<JobsiteWalkPhoto | undefined>;
+  deleteJobsiteWalkPhoto(id: string): Promise<void>;
+  createJobsiteWalkMeasurement(data: InsertJobsiteWalkMeasurement): Promise<JobsiteWalkMeasurement>;
+  getJobsiteWalkMeasurements(walkId: string): Promise<JobsiteWalkMeasurement[]>;
+  getJobsiteWalkMeasurementsByPhoto(photoId: string): Promise<JobsiteWalkMeasurement[]>;
+  updateJobsiteWalkMeasurement(id: string, data: Partial<JobsiteWalkMeasurement>): Promise<JobsiteWalkMeasurement | undefined>;
+  deleteJobsiteWalkMeasurement(id: string): Promise<void>;
 
   // Per-employee training summary (read-only aggregation, admin view)
   getEmployeeTrainingSummary(employeeId: string, companyId: string): Promise<any[]>;
@@ -2805,7 +2826,64 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
-  // ── Training Module Audio Cache ───────────────────────────────────────────
+  // ── Jobsite Walk ─────────────────────────────────────────────────────────────
+  async createJobsiteWalk(data: InsertJobsiteWalk): Promise<JobsiteWalk> {
+    const [row] = await db.insert(jobsiteWalks).values(data as any).returning();
+    return row;
+  }
+  async getJobsiteWalks(companyId: string): Promise<JobsiteWalk[]> {
+    return db.select().from(jobsiteWalks).where(eq(jobsiteWalks.companyId, companyId)).orderBy(desc(jobsiteWalks.createdAt));
+  }
+  async getJobsiteWalk(id: string): Promise<JobsiteWalk | undefined> {
+    const [row] = await db.select().from(jobsiteWalks).where(eq(jobsiteWalks.id, id));
+    return row;
+  }
+  async updateJobsiteWalk(id: string, data: Partial<JobsiteWalk>): Promise<JobsiteWalk | undefined> {
+    const [row] = await db.update(jobsiteWalks).set(data as any).where(eq(jobsiteWalks.id, id)).returning();
+    return row;
+  }
+  async deleteJobsiteWalk(id: string): Promise<void> {
+    await db.delete(jobsiteWalkMeasurements).where(eq(jobsiteWalkMeasurements.walkId, id));
+    await db.delete(jobsiteWalkPhotos).where(eq(jobsiteWalkPhotos.walkId, id));
+    await db.delete(jobsiteWalks).where(eq(jobsiteWalks.id, id));
+  }
+  async createJobsiteWalkPhoto(data: InsertJobsiteWalkPhoto): Promise<JobsiteWalkPhoto> {
+    const [row] = await db.insert(jobsiteWalkPhotos).values(data as any).returning();
+    return row;
+  }
+  async getJobsiteWalkPhotos(walkId: string): Promise<JobsiteWalkPhoto[]> {
+    return db.select().from(jobsiteWalkPhotos).where(eq(jobsiteWalkPhotos.walkId, walkId)).orderBy(asc(jobsiteWalkPhotos.createdAt));
+  }
+  async getJobsiteWalkPhoto(id: string): Promise<JobsiteWalkPhoto | undefined> {
+    const [row] = await db.select().from(jobsiteWalkPhotos).where(eq(jobsiteWalkPhotos.id, id));
+    return row;
+  }
+  async updateJobsiteWalkPhoto(id: string, data: Partial<JobsiteWalkPhoto>): Promise<JobsiteWalkPhoto | undefined> {
+    const [row] = await db.update(jobsiteWalkPhotos).set(data as any).where(eq(jobsiteWalkPhotos.id, id)).returning();
+    return row;
+  }
+  async deleteJobsiteWalkPhoto(id: string): Promise<void> {
+    await db.delete(jobsiteWalkMeasurements).where(eq(jobsiteWalkMeasurements.photoId, id));
+    await db.delete(jobsiteWalkPhotos).where(eq(jobsiteWalkPhotos.id, id));
+  }
+  async createJobsiteWalkMeasurement(data: InsertJobsiteWalkMeasurement): Promise<JobsiteWalkMeasurement> {
+    const [row] = await db.insert(jobsiteWalkMeasurements).values(data as any).returning();
+    return row;
+  }
+  async getJobsiteWalkMeasurements(walkId: string): Promise<JobsiteWalkMeasurement[]> {
+    return db.select().from(jobsiteWalkMeasurements).where(eq(jobsiteWalkMeasurements.walkId, walkId)).orderBy(asc(jobsiteWalkMeasurements.createdAt));
+  }
+  async getJobsiteWalkMeasurementsByPhoto(photoId: string): Promise<JobsiteWalkMeasurement[]> {
+    return db.select().from(jobsiteWalkMeasurements).where(eq(jobsiteWalkMeasurements.photoId, photoId)).orderBy(asc(jobsiteWalkMeasurements.createdAt));
+  }
+  async updateJobsiteWalkMeasurement(id: string, data: Partial<JobsiteWalkMeasurement>): Promise<JobsiteWalkMeasurement | undefined> {
+    const [row] = await db.update(jobsiteWalkMeasurements).set(data as any).where(eq(jobsiteWalkMeasurements.id, id)).returning();
+    return row;
+  }
+  async deleteJobsiteWalkMeasurement(id: string): Promise<void> {
+    await db.delete(jobsiteWalkMeasurements).where(eq(jobsiteWalkMeasurements.id, id));
+  }
+
   async getCachedModuleAudio(moduleId: string, contentHash: string): Promise<TrainingModuleAudio | undefined> {
     const [row] = await db.select().from(trainingModuleAudio)
       .where(and(eq(trainingModuleAudio.moduleId, moduleId), eq(trainingModuleAudio.contentHash, contentHash)));

@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   NotebookPen, Plus, Search, Camera, Clock, MapPin,
   ChevronRight, Loader2, User, FileCheck, FileClock, AlertCircle,
-  FileText, Trash2, StopCircle,
+  FileText, Trash2, StopCircle, Footprints, Building2, Ruler,
 } from "lucide-react";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -24,6 +24,31 @@ type Session = {
   sessionType: string; sessionSubtype: string; status: string; aiStatus: string; aiSummary: string | null;
   startedAt: string; endedAt: string | null; photoCount: number;
 };
+
+type JobsiteWalk = {
+  id: string; title: string; siteType: string; status: string;
+  totalEstimatedSqft: string | null; summaryJson: string | null;
+  createdAt: string; updatedAt: string | null;
+};
+
+const SITE_TYPE_LABELS: Record<string, string> = {
+  commercial: "Commercial Office", restaurant: "Restaurant", retail: "Retail",
+  medical: "Medical", industrial: "Industrial", residential: "Residential",
+  post_construction: "Post-Construction", school: "School", gym: "Gym", other: "Other",
+};
+
+const JW_SITE_TYPES = [
+  { value: "commercial", label: "Commercial Office" },
+  { value: "restaurant", label: "Restaurant / Food Service" },
+  { value: "retail", label: "Retail Store" },
+  { value: "medical", label: "Medical / Healthcare" },
+  { value: "industrial", label: "Industrial / Warehouse" },
+  { value: "residential", label: "Residential" },
+  { value: "post_construction", label: "Post-Construction" },
+  { value: "school", label: "School / Educational" },
+  { value: "gym", label: "Gym / Fitness" },
+  { value: "other", label: "Other" },
+];
 
 const SESSION_TYPES = [
   { value: "site_visit", label: "Site Visit" },
@@ -144,7 +169,7 @@ function SessionCard({ s, onClick, onDelete, onStopRecording }: {
   );
 }
 
-type CreateMode = null | "walkthrough";
+type CreateMode = null | "walkthrough" | "jobsite_walk";
 
 export default function AdminFieldNotes() {
   const [, navigate] = useLocation();
@@ -154,11 +179,14 @@ export default function AdminFieldNotes() {
   const [filterType, setFilterType] = useState("all");
   const [createMode, setCreateMode] = useState<CreateMode>(null);
   const [newSession, setNewSession] = useState({ sessionType: "site_visit", locationId: "", title: "" });
+  const [newWalk, setNewWalk] = useState({ title: "", siteType: "commercial" });
   const [deleteTarget, setDeleteTarget] = useState<Session | null>(null);
   const [stopTarget, setStopTarget] = useState<Session | null>(null);
+  const [deleteWalkTarget, setDeleteWalkTarget] = useState<JobsiteWalk | null>(null);
 
   const { data: sessions = [], isLoading } = useQuery<Session[]>({ queryKey: ["/api/field-notes"] });
   const { data: locations = [] } = useQuery<any[]>({ queryKey: ["/api/locations"] });
+  const { data: walks = [], isLoading: walksLoading } = useQuery<JobsiteWalk[]>({ queryKey: ["/api/jobsite-walks"] });
 
   const startWalkthroughMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/field-notes/sessions", data).then(r => r.json()),
@@ -188,6 +216,27 @@ export default function AdminFieldNotes() {
       setStopTarget(null);
     },
     onError: (err: any) => toast({ title: err?.message ?? "Failed to stop recording", variant: "destructive" }),
+  });
+
+  const createWalkMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", "/api/jobsite-walks", data).then(r => r.json()),
+    onSuccess: (walk) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobsite-walks"] });
+      setCreateMode(null);
+      setNewWalk({ title: "", siteType: "commercial" });
+      navigate(`/admin/field-notes/jobsite-walks/${walk.id}`);
+    },
+    onError: () => toast({ title: "Failed to create walk", variant: "destructive" }),
+  });
+
+  const deleteWalkMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/jobsite-walks/${id}`).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobsite-walks"] });
+      toast({ title: "Jobsite Walk deleted." });
+      setDeleteWalkTarget(null);
+    },
+    onError: () => toast({ title: "Failed to delete", variant: "destructive" }),
   });
 
   const filtered = sessions.filter(s => {
@@ -237,9 +286,14 @@ export default function AdminFieldNotes() {
             <p className="text-[11px] text-muted-foreground mt-0.5">Walkthroughs · Documents</p>
           </div>
         </div>
-        <Button data-testid="button-new-field-note" onClick={() => setCreateMode("walkthrough")} size="sm" className="gap-1.5">
-          <Plus className="w-4 h-4" /> New
-        </Button>
+        <div className="flex gap-2">
+          <Button data-testid="button-new-jobsite-walk" onClick={() => setCreateMode("jobsite_walk")} size="sm" variant="outline" className="gap-1.5">
+            <Footprints className="w-4 h-4" /> Jobsite Walk
+          </Button>
+          <Button data-testid="button-new-field-note" onClick={() => setCreateMode("walkthrough")} size="sm" className="gap-1.5">
+            <Plus className="w-4 h-4" /> New
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -269,6 +323,85 @@ export default function AdminFieldNotes() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 space-y-8">
+
+        {/* ── Jobsite Walks Section ──────────────────────────────────────────── */}
+        {(walks.length > 0 || walksLoading) && (
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Footprints className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+              <h2 className="text-sm font-bold">Jobsite Walks</h2>
+              <div className="flex-1 h-px bg-border" />
+              <Badge variant="outline" className="text-[10px] px-2 py-0 bg-primary/5 text-primary border-primary/20">
+                {walks.length} walk{walks.length !== 1 ? "s" : ""}
+              </Badge>
+            </div>
+            {walksLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {[1, 2].map(i => <Skeleton key={i} className="h-28 w-full rounded-xl" />)}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {walks.map((w) => {
+                  return (
+                    <div
+                      key={w.id}
+                      data-testid={`card-jobsite-walk-${w.id}`}
+                      className="group rounded-xl border bg-card cursor-pointer hover:shadow-md hover:border-primary/20 transition-all duration-150 flex flex-col overflow-hidden relative"
+                      onClick={() => navigate(`/admin/field-notes/jobsite-walks/${w.id}`)}
+                    >
+                      <div className={cn("h-1 w-full", w.status === "complete" ? "bg-green-400" : "bg-amber-400")} />
+                      <button
+                        data-testid={`button-delete-walk-${w.id}`}
+                        className="absolute top-2.5 right-2.5 w-6 h-6 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10 z-10"
+                        onClick={e => { e.stopPropagation(); setDeleteWalkTarget(w); }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                      <div className="p-3.5 flex flex-col gap-2 flex-1">
+                        <div className="flex items-start gap-2">
+                          <Building2 className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-sm truncate leading-tight pr-5">{w.title}</p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">{SITE_TYPE_LABELS[w.siteType] ?? w.siteType}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap mt-auto pt-1 border-t">
+                          <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 capitalize",
+                            w.status === "complete" ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"
+                          )}>{w.status}</Badge>
+                          {w.totalEstimatedSqft && (
+                            <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
+                              <Ruler className="w-3 h-3" />{Number(w.totalEstimatedSqft).toLocaleString()} sq ft
+                            </span>
+                          )}
+                          <div className="flex-1" />
+                          <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div
+                  className="rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 text-muted-foreground cursor-pointer hover:border-primary/50 hover:text-primary transition-colors min-h-[110px]"
+                  onClick={() => setCreateMode("jobsite_walk")}
+                >
+                  <Plus className="w-5 h-5" />
+                  <span className="text-xs font-medium">New Walk</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Field Notes Section ────────────────────────────────────────────── */}
+        {walks.length > 0 && (
+          <div className="flex items-center gap-2">
+            <NotebookPen className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+            <h2 className="text-sm font-bold">Walkthrough Notes</h2>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+        )}
+
         {isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {[1, 2, 3, 4, 5, 6].map(i => <Skeleton key={i} className="h-36 w-full rounded-xl" />)}
@@ -383,7 +516,7 @@ export default function AdminFieldNotes() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirmation dialog */}
+      {/* Delete field note confirmation dialog */}
       <Dialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -404,6 +537,77 @@ export default function AdminFieldNotes() {
             >
               {deleteMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : null}
               Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── New Jobsite Walk dialog ──────────────────────────────────────────── */}
+      <Dialog open={createMode === "jobsite_walk"} onOpenChange={v => !v && setCreateMode(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Footprints className="w-4 h-4 text-primary" /> Start Jobsite Walk
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-1">
+            Capture photos of each area — AI will analyze dimensions, surfaces, and recommend cleaning services.
+          </p>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-xs font-medium mb-1.5 block">Walk Title</Label>
+              <Input
+                data-testid="input-walk-title-new"
+                placeholder="e.g. Downtown Office — Bid Walk"
+                value={newWalk.title}
+                onChange={e => setNewWalk(w => ({ ...w, title: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-medium mb-1.5 block">Site Type</Label>
+              <Select value={newWalk.siteType} onValueChange={v => setNewWalk(w => ({ ...w, siteType: v }))}>
+                <SelectTrigger data-testid="select-walk-site-type"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {JW_SITE_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setCreateMode(null)}>Cancel</Button>
+            <Button
+              data-testid="button-start-jobsite-walk"
+              disabled={createWalkMutation.isPending || !newWalk.title.trim()}
+              onClick={() => createWalkMutation.mutate(newWalk)}
+              className="flex-1 gap-1.5"
+            >
+              {createWalkMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Footprints className="w-4 h-4" />} Start Walk
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Jobsite Walk confirmation dialog */}
+      <Dialog open={!!deleteWalkTarget} onOpenChange={v => !v && setDeleteWalkTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="w-4 h-4" /> Delete Jobsite Walk?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This will permanently delete <span className="font-medium text-foreground">"{deleteWalkTarget?.title}"</span> including all photos and measurements. This action cannot be undone.
+          </p>
+          <div className="flex gap-2 justify-end mt-2">
+            <Button variant="outline" onClick={() => setDeleteWalkTarget(null)}>Cancel</Button>
+            <Button
+              data-testid="button-confirm-delete-walk"
+              variant="destructive"
+              disabled={deleteWalkMutation.isPending}
+              onClick={() => deleteWalkTarget && deleteWalkMutation.mutate(deleteWalkTarget.id)}
+            >
+              {deleteWalkMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : null}
+              Delete Walk
             </Button>
           </div>
         </DialogContent>

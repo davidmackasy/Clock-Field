@@ -1,0 +1,634 @@
+Dev Note: Add Jobsite Walk With AI-Assisted Measurement
+Goal:
+Add a new Jobsite Walk feature inside Clockfield without breaking or affecting any existing Field Notes, Worklogs, Reports, Proposals, Scheduling, Attendance, Payroll, Auth, Stripe, or client report flows.
+Placement:
+Add Jobsite Walk under Field Notes as a new walkthrough type.
+Do not create a new top-level menu item for now.
+Suggested structure:
+Field Notes
+
+
+Regular Field Note
+
+
+Jobsite Walk
+
+
+Feature Purpose:
+Jobsite Walk should help admins or employees complete bid walkthroughs using photos, AI-assisted measurements, voice notes, and project documentation.
+The goal is to let users walk through a jobsite, take photos, detect estimated measurements, save everything into the project photo log, and use the information later for proposals, estimates, and client-facing reports.
+Core Workflow:
+
+
+User opens Field Notes
+
+
+User selects Jobsite Walk
+
+
+User creates or selects a project/client
+
+
+User takes walkthrough photos
+
+
+AI analyzes each photo
+
+
+AI detects possible measurements and important site details
+
+
+User confirms, edits, or corrects AI measurement suggestions
+
+
+Confirmed measurements are saved with the photo
+
+
+Photos are stored in the project photo log
+
+
+User can generate a walkthrough summary
+
+
+Summary can feed into Proposal Builder or standalone PDF/report
+
+
+AI-Assisted Measurement Requirements:
+The system should support AI-first measurement detection.
+AI should attempt to detect:
+
+
+Room/area type
+
+
+Approximate length
+
+
+Approximate width
+
+
+Approximate square footage
+
+
+Wall size
+
+
+Floor area
+
+
+Window count
+
+
+Door count
+
+
+Washroom count
+
+
+Surface type
+
+
+Floor condition
+
+
+Cleaning risks
+
+
+Special equipment needs
+
+
+Important:
+AI measurements must be treated as estimates until confirmed by the user.
+Display wording:
+“AI-estimated measurement”
+“Needs confirmation”
+“Confirmed by user”
+Measurement Confirmation:
+After AI detects a measurement, the user must be able to:
+
+
+Accept the measurement
+
+
+Edit the value
+
+
+Delete the measurement
+
+
+Add a custom measurement
+
+
+Tap two points on the photo for a specific measurement
+
+
+Add a note to the measurement
+
+
+Example:
+AI detects: Lobby floor area: approx. 1,240 sq ft
+User options:
+
+
+Confirm
+
+
+Edit
+
+
+Delete
+
+
+Add note
+
+
+Photo Overlay:
+Each confirmed measurement should be shown on the image as an overlay.
+Example overlays:
+
+
+Lobby: 1,240 sq ft
+
+
+Wall: 18 ft
+
+
+Hallway: 42 ft
+
+
+Windows: 12
+
+
+Washrooms: 4
+
+
+Save both:
+
+
+Original image
+
+
+Image with measurement overlay
+
+
+Project Photo Log:
+Every Jobsite Walk photo should save into the project photo log with:
+
+
+Photo
+
+
+Overlay image
+
+
+AI measurement data
+
+
+User-confirmed measurement data
+
+
+Timestamp
+
+
+Client/project name
+
+
+Area name
+
+
+Voice note transcript
+
+
+Manual notes
+
+
+AI tags
+
+
+Created by user
+
+
+GPS/location if already supported
+
+
+Do not change the existing photo log behavior unless needed only for Jobsite Walk support.
+AI Walkthrough Summary:
+After the walkthrough, generate a summary with:
+
+
+Site overview
+
+
+Total estimated square footage
+
+
+Areas captured
+
+
+Key cleaning requirements
+
+
+Risks or concerns
+
+
+Suggested supplies
+
+
+Suggested equipment
+
+
+Suggested staffing
+
+
+Suggested estimated hours
+
+
+Pricing suggestions
+
+
+Proposal-ready scope of work
+
+
+Proposal Builder Connection:
+Add an option:
+“Send to Proposal Builder”
+This should pass:
+
+
+Client/project info
+
+
+Confirmed measurements
+
+
+Area notes
+
+
+Photos
+
+
+AI summary
+
+
+Suggested services
+
+
+Suggested pricing inputs
+
+
+Do not break the current Proposal Builder.
+Standalone Report Option:
+Also allow:
+“Generate Walkthrough Report”
+Report should include:
+
+
+Company logo if available
+
+
+Client/project details
+
+
+Walkthrough date
+
+
+Photos with measurements
+
+
+Summary
+
+
+Scope suggestions
+
+
+Notes
+
+
+Prepared by
+
+
+Safety Rules:
+Do not modify existing Field Notes logic unless required.
+Do not break current Field Notes.
+Do not break Reports.
+Do not break Proposal Builder.
+Do not affect Worklogs.
+Do not affect Attendance.
+Do not affect Scheduling.
+Do not affect Payroll.
+Do not affect Stripe.
+Do not affect Auth.
+Do not delete or rename existing database tables without approval.
+Do not remove any existing feature.
+Ask for approval before touching anything outside Jobsite Walk.
+Recommended Data Model:
+Create new Jobsite Walk tables instead of changing existing Field Notes tables too much.
+Suggested tables:
+jobsite_walks
+
+
+id
+
+
+business_id
+
+
+client_id
+
+
+project_id
+
+
+title
+
+
+walk_type
+
+
+status
+
+
+created_by
+
+
+created_at
+
+
+updated_at
+
+
+summary_json
+
+
+total_estimated_sqft
+
+
+total_confirmed_sqft
+
+
+jobsite_walk_photos
+
+
+id
+
+
+jobsite_walk_id
+
+
+image_url
+
+
+overlay_image_url
+
+
+area_name
+
+
+ai_tags_json
+
+
+ai_analysis_json
+
+
+transcript
+
+
+notes
+
+
+location_json
+
+
+created_at
+
+
+jobsite_walk_measurements
+
+
+id
+
+
+jobsite_walk_photo_id
+
+
+measurement_type
+
+
+label
+
+
+ai_estimated_value
+
+
+confirmed_value
+
+
+unit
+
+
+confidence_score
+
+
+status
+
+
+points_json
+
+
+notes
+
+
+created_at
+
+
+updated_at
+
+
+Measurement statuses:
+
+
+ai_estimated
+
+
+needs_confirmation
+
+
+confirmed
+
+
+edited
+
+
+rejected
+
+
+AI Integration:
+Use the existing AI provider setup if possible.
+The AI should return structured JSON, not only text.
+Expected JSON example:
+{
+“area_type”: “Lobby”,
+“estimated_dimensions”: {
+“length”: “40 ft”,
+“width”: “31 ft”,
+“square_footage”: “1240 sq ft”
+},
+“detected_items”: [“windows”, “doors”, “tile floor”],
+“risks”: [“high traffic area”, “floor stains”],
+“recommended_services”: [“daily floor cleaning”, “window cleaning”],
+“measurements”: [
+{
+“label”: “Lobby floor area”,
+“type”: “square_footage”,
+“value”: 1240,
+“unit”: “sq ft”,
+“confidence”: 0.72,
+“status”: “needs_confirmation”
+}
+]
+}
+Frontend UI Requirements:
+Keep the UI mobile-first.
+Jobsite Walk screen should include:
+
+
+Start new walkthrough
+
+
+Select client/project
+
+
+Take photo
+
+
+Upload photo
+
+
+Add voice note
+
+
+AI analyzing state
+
+
+Measurement overlay preview
+
+
+Confirm/edit measurements
+
+
+Photo log
+
+
+Generate summary
+
+
+Send to Proposal Builder
+
+
+Generate report
+
+
+Mobile UI must not require heavy scrolling.
+Use steps or tabs:
+
+
+Details
+
+
+Capture
+
+
+Measurements
+
+
+Summary
+
+
+Export
+
+
+Desktop UI:
+Use a split layout:
+
+
+Left: photo list
+
+
+Center: selected photo with overlays
+
+
+Right: AI measurements and notes
+
+
+User Experience:
+Make it clear that AI measurements are estimates.
+Do not show fake certainty.
+Use clean UI messages like:
+“AI found possible measurements. Please confirm before using them in a proposal.”
+Empty State:
+“Start a Jobsite Walk to capture photos, measurements, notes, and proposal-ready details in one place.”
+Error State:
+“AI could not detect reliable measurements from this photo. You can retake the photo, add a known reference, or enter a correction.”
+Future Upgrade:
+Add calibration later:
+
+
+User enters one known measurement
+
+
+AI improves the remaining measurement estimates
+
+
+Example: “This doorway is 36 inches wide”
+
+
+Testing Checklist:
+
+
+Existing Field Notes still work
+
+
+Existing photo uploads still work
+
+
+Existing reports still work
+
+
+Proposal Builder still works
+
+
+Jobsite Walk can be created
+
+
+Photos save correctly
+
+
+AI result saves correctly
+
+
+Measurements can be confirmed
+
+
+Measurements can be edited
+
+
+Overlay image saves correctly
+
+
+Summary generates correctly
+
+
+Proposal Builder receives correct data
+
+
+Mobile layout works
+
+
+Desktop layout works
+
+
+No existing data is changed or deleted
+
+
+Final Instruction:
+Build Jobsite Walk as a safe new feature under Field Notes. Use AI-assisted measurement detection with user confirmation. Save confirmed measurements into the project photo log and allow the data to feed into Proposal Builder and standalone client reports. Do not break, rename, remove, or affect anything else in Clockfield.

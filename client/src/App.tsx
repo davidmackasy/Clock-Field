@@ -82,6 +82,7 @@ import LandingPage from "@/pages/landing";
 import EmployeeScheduledFieldNotesList from "@/pages/employee/scheduled-field-notes-list";
 import EmployeeScheduledFieldNotesCapture from "@/pages/employee/scheduled-field-notes-capture";
 import PublicScheduledFieldNoteReport from "@/pages/public/scheduled-field-note-report";
+import AdminJobsiteWalk from "@/pages/admin/jobsite-walk";
 
 function LoadingScreen() {
   return (
@@ -127,6 +128,7 @@ function AdminLayout() {
               <Route path="/admin/field-notes/capture" component={AdminFieldNotesCapture} />
               <Route path="/admin/field-notes/session/:id" component={AdminFieldNotesSession} />
               <Route path="/admin/field-notes/page/:id" component={AdminFieldNotesPageEditor} />
+              <Route path="/admin/field-notes/jobsite-walks/:id" component={AdminJobsiteWalk} />
               <Route path="/admin/work-log" component={AdminWorkLogHub} />
               <Route path="/admin/reports"><Redirect to="/admin/work-log?tab=reports" /></Route>
               <Route path="/admin/field-notes"><Redirect to="/admin/work-log?tab=field-notes" /></Route>
