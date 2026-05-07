@@ -11951,6 +11951,7 @@ Return ONLY valid JSON:
   app.post("/api/jobsite-walks", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
+      if (!user?.companyId) return res.status(400).json({ message: "Missing company context" });
       const now = new Date().toISOString();
       const walk = await storage.createJobsiteWalk({
         companyId: user.companyId,
@@ -11966,8 +11967,12 @@ Return ONLY valid JSON:
         createdAt: now,
         updatedAt: now,
       });
+      if (!walk) return res.status(500).json({ message: "Failed to create walk — database returned no row" });
       res.json(walk);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
+    } catch (e: any) {
+      console.error("[jobsite-walk] create error:", e);
+      res.status(500).json({ message: e.message || "Failed to create walk" });
+    }
   });
 
   app.get("/api/jobsite-walks/:id", requireAuth, requireRole("admin"), async (req, res) => {

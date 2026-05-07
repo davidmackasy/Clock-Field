@@ -226,7 +226,10 @@ export default function AdminFieldNotes() {
       setNewWalk({ title: "", siteType: "commercial" });
       navigate(`/admin/field-notes/jobsite-walks/${walk.id}`);
     },
-    onError: () => toast({ title: "Failed to create walk", variant: "destructive" }),
+    onError: (err: any) => {
+      console.error("[createWalk] mutation error:", err);
+      toast({ title: err?.message ?? "Failed to create walk", variant: "destructive" });
+    },
   });
 
   const deleteWalkMutation = useMutation({

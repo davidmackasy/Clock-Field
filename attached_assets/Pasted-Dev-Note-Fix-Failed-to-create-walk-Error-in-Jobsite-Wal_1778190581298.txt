@@ -1,0 +1,122 @@
+Dev Note: Fix “Failed to create walk” Error in Jobsite Walk
+
+Issue:
+The new Jobsite Walk modal opens correctly under Field Notes, but clicking “Start Walk” triggers a red error toast:
+“Failed to create walk”
+
+The UI is already connected, so the issue is likely happening in:
+
+API route
+Database insert
+Validation
+Missing required fields
+Session/business ID
+Enum mismatch
+Missing default values
+Incorrect table mapping
+RLS/database permissions
+
+Important:
+Do not redesign or restructure Jobsite Walk yet.
+Do not touch unrelated Field Notes functionality.
+Do not touch Reports, Worklogs, Proposal Builder, Scheduling, Attendance, Payroll, Auth, Stripe, or existing uploads.
+
+Only focus on making Jobsite Walk creation work safely.
+
+What To Check:
+
+Frontend Payload
+Verify the modal is sending:
+walk title
+site type
+business ID
+user ID
+created by
+default status
+timestamps if required
+
+Console log the exact payload before submission.
+
+API Route
+Check:
+request body parsing
+required field validation
+missing null handling
+auth session retrieval
+organization/business lookup
+error handling
+
+Return detailed server logs temporarily for debugging.
+
+Database Insert
+Verify:
+table exists
+column names match insert payload
+enum values match database enums
+required columns have defaults
+no NOT NULL violations
+UUID generation works
+timestamps are auto-generated properly
+Likely Failure Areas
+Double-check:
+status enum mismatch
+walk_type mismatch
+missing business_id
+missing organization ID
+invalid session/user
+field names not matching DB schema
+RLS policy blocking insert
+Supabase auth permissions
+Add Proper Error Logging
+Current toast is too generic.
+
+Temporary debug logging:
+Frontend:
+
+console.error(full error)
+
+Backend:
+
+full database/API error logging
+
+Expected:
+
+actual SQL/database error visible in logs
+Improve Error UI
+Replace generic:
+“Failed to create walk”
+
+With:
+
+“Unable to create Jobsite Walk”
+“Missing business information”
+“Database insert failed”
+“Permission denied”
+“Invalid walk type”
+etc.
+
+Keep UI styled consistently with Clockfield.
+Do not use aggressive red full-width blocks.
+
+Default Safe Values
+If missing:
+status = “draft”
+walk_type = “jobsite_walk”
+site_type fallback = “commercial”
+summary_json = {}
+created_at = auto timestamp
+Testing Checklist
+Verify:
+Modal opens
+Walk creates successfully
+Walk saves in database
+Walk appears in Field Notes list
+Refresh persists record
+Multiple site types work
+User ownership works
+No existing Field Notes break
+Mobile works
+Desktop works
+
+Final Instruction:
+Fix the Jobsite Walk creation flow only. Diagnose the exact insert/API/database failure and safely restore walk creation without affecting any other Clockfield systems or existing Field Notes functionality.
