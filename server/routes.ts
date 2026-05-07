@@ -12262,32 +12262,36 @@ Return ONLY valid JSON:
         brandColor: (company as any).brandColor ?? null,
       });
 
-      // Build scope sections from AI summary
+      // Build scope sections from AI summary — format: { id, title, items: [{id, text}] }
       const scopeSections = Array.isArray(summary.scope_sections) && summary.scope_sections.length > 0
         ? JSON.stringify(summary.scope_sections.map((s: any, i: number) => ({
             id: `section_${i}`,
             title: s.title || `Section ${i + 1}`,
-            content: s.content || "",
-            sortOrder: i,
+            items: Array.isArray(s.bullets)
+              ? s.bullets.map((b: string, j: number) => ({ id: `bullet_${i}_${j}`, text: b }))
+              : s.content
+                ? [{ id: `bullet_${i}_0`, text: s.content }]
+                : [],
           })))
         : JSON.stringify([{
             id: "section_0",
             title: "Cleaning Scope",
-            content: summary.executive_summary || `Jobsite walk conducted for ${walk.title}. Total area: ${walk.totalEstimatedSqft || "TBD"} sq ft.`,
-            sortOrder: 0,
+            items: [{
+              id: "bullet_0_0",
+              text: summary.executive_summary || `Jobsite walk conducted for ${walk.title}. Total area: ${walk.totalEstimatedSqft || "TBD"} sq ft.`,
+            }],
           }]);
 
       const confirmedMeasurements = measurements.filter(m => m.status !== "rejected");
       const sqftMeasurements = confirmedMeasurements.filter(m => m.measurementType === "square_footage");
       const totalSqft = sqftMeasurements.reduce((s, m) => s + parseFloat(m.confirmedValue || m.aiEstimatedValue || "0"), 0);
 
+      // Line items format: { id, name, quantity, unitPrice } — matches proposal-builder's LineItem type
       const lineItems = sqftMeasurements.map((m, i) => ({
         id: `item_${i}`,
-        description: m.label,
+        name: m.label,
         quantity: parseFloat(m.confirmedValue || m.aiEstimatedValue || "0"),
-        unit: m.unit,
-        rate: 0,
-        total: 0,
+        unitPrice: 0,
       }));
 
       const pricingConfig = JSON.stringify({

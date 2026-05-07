@@ -459,9 +459,25 @@ export default function AdminProposalBuilder() {
     setTermsText(proposal.termsText);
     setEmailAddress(proposal.clientEmail || "");
     try { setServiceDetails(JSON.parse(proposal.serviceDetails)); } catch {}
-    try { setScopeSections(JSON.parse(proposal.scopeSections)); } catch {}
+    try {
+      const parsed = JSON.parse(proposal.scopeSections);
+      // Normalise sections that were created with `content` instead of `items`
+      setScopeSections(
+        (Array.isArray(parsed) ? parsed : []).map((s: any) => ({
+          ...s,
+          items: Array.isArray(s.items)
+            ? s.items
+            : s.content
+              ? [{ id: `bullet_0`, text: s.content }]
+              : [],
+        }))
+      );
+    } catch {}
     try { setIncludedItems(JSON.parse(proposal.includedItems)); } catch {}
-    try { setPricingConfig(JSON.parse(proposal.pricingConfig)); } catch {}
+    try {
+      const pc = JSON.parse(proposal.pricingConfig);
+      setPricingConfig({ ...pc, lineItems: Array.isArray(pc?.lineItems) ? pc.lineItems : [] });
+    } catch {}
   }, [proposal]);
 
   // Auto-fill email subject/message when dialog opens
@@ -988,7 +1004,7 @@ export default function AdminProposalBuilder() {
                       </Button>
                     </div>
                     <div className="p-3 space-y-1.5">
-                      {section.items.map((bullet, bIdx) => (
+                      {(section.items ?? []).map((bullet, bIdx) => (
                         <div key={bullet.id} className="flex items-center gap-2">
                           <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground flex-shrink-0 mt-px" />
                           <Input
