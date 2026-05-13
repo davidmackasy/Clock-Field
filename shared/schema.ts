@@ -1541,6 +1541,10 @@ export const proposals = pgTable("proposals", {
   proposalNumber: text("proposal_number").notNull(),
   title: text("title").notNull(),
   status: text("status").notNull().default("draft"),
+  // Sales pipeline connections (nullable — additive only)
+  submissionId: varchar("submission_id"),
+  walkthroughId: varchar("walkthrough_id"),
+  convertedClientId: varchar("converted_client_id"),
   // Client info
   clientId: varchar("client_id"),
   clientName: text("client_name").notNull().default(""),
@@ -2249,6 +2253,7 @@ export const jobsiteWalks = pgTable("jobsite_walks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   companyId: varchar("company_id").notNull(),
   clientId: varchar("client_id"),
+  submissionId: varchar("submission_id"),
   title: text("title").notNull(),
   siteType: text("site_type").notNull().default("commercial"),
   status: text("status").notNull().default("draft"),

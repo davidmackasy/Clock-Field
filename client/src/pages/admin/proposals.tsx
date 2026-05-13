@@ -6,7 +6,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -15,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus, MoreHorizontal, Copy, Mail, Eye, Pencil, Archive, Copy as CopyIcon,
   FileText, Clock, CheckCircle2, XCircle, HelpCircle, Send, AlertCircle,
+  Users, ArrowUpRight, Link2, UserPlus,
 } from "lucide-react";
 import type { Proposal } from "@shared/schema";
 
@@ -66,9 +68,27 @@ export default function AdminProposals() {
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [activeTab, setActiveTab] = useState("all");
+  const [convertProposal, setConvertProposal] = useState<Proposal | null>(null);
+  const [clientSearch, setClientSearch] = useState("");
 
   const { data: proposals = [], isLoading } = useQuery<Proposal[]>({
     queryKey: ["/api/proposals"],
+  });
+
+  const { data: allClients = [], isLoading: clientsLoading } = useQuery<any[]>({
+    queryKey: ["/api/clients"],
+    enabled: !!convertProposal,
+  });
+
+  const convertMutation = useMutation({
+    mutationFn: ({ proposalId, clientId }: { proposalId: string; clientId: string }) =>
+      apiRequest("PATCH", `/api/proposals/${proposalId}`, { convertedClientId: clientId, status: "converted" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/proposals"] });
+      toast({ title: "Converted!", description: "Proposal linked to client and marked as converted." });
+      setConvertProposal(null);
+    },
+    onError: () => toast({ title: "Error", description: "Could not convert proposal.", variant: "destructive" }),
   });
 
   const createMutation = useMutation({
@@ -221,6 +241,17 @@ export default function AdminProposals() {
 
                     {/* Actions */}
                     <div className="flex items-center gap-2 flex-shrink-0">
+                      {p.status === "accepted" && !(p as any).convertedClientId && (
+                        <Button
+                          variant="default" size="sm"
+                          onClick={() => { setConvertProposal(p); setClientSearch(""); }}
+                          data-testid={`button-convert-${p.id}`}
+                          className="hidden sm:flex bg-green-600 hover:bg-green-700 text-white gap-1.5"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
+                          Convert to Client
+                        </Button>
+                      )}
                       <Button
                         variant="outline" size="sm"
                         onClick={() => navigate(`/admin/proposals/${p.id}`)}
@@ -255,6 +286,14 @@ export default function AdminProposals() {
                           <DropdownMenuItem onClick={() => copyLink(p)}>
                             <CopyIcon className="w-4 h-4 mr-2" /> Copy Link
                           </DropdownMenuItem>
+                          {p.status === "accepted" && !(p as any).convertedClientId && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => { setConvertProposal(p); setClientSearch(""); }} className="text-green-700">
+                                <UserPlus className="w-4 h-4 mr-2" /> Convert to Client
+                              </DropdownMenuItem>
+                            </>
+                          )}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => duplicateMutation.mutate(p.id)}>
                             <Copy className="w-4 h-4 mr-2" /> Duplicate
@@ -273,6 +312,101 @@ export default function AdminProposals() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Convert to Client Dialog */}
+      <Dialog open={!!convertProposal} onOpenChange={(o) => !o && setConvertProposal(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="w-5 h-5 text-green-600" />
+              Convert to Client
+            </DialogTitle>
+            <DialogDescription>
+              Link this accepted proposal to an existing client, or create a new one.
+            </DialogDescription>
+          </DialogHeader>
+          {convertProposal && (
+            <div className="space-y-4 py-1">
+              {/* Proposal summary */}
+              <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
+                <p className="font-medium">{convertProposal.title}</p>
+                {convertProposal.clientName && <p className="text-muted-foreground">{convertProposal.clientName}{convertProposal.clientCompany ? ` · ${convertProposal.clientCompany}` : ""}</p>}
+                {convertProposal.clientEmail && <p className="text-muted-foreground text-xs">{convertProposal.clientEmail}</p>}
+              </div>
+
+              {/* Search existing clients */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Search Existing Clients</Label>
+                <Input
+                  placeholder="Search by name or email…"
+                  value={clientSearch}
+                  onChange={e => setClientSearch(e.target.value)}
+                  data-testid="input-client-search-convert"
+                />
+              </div>
+
+              {/* Client list */}
+              <div className="space-y-2 max-h-52 overflow-y-auto">
+                {clientsLoading ? (
+                  [1,2,3].map(i => <Skeleton key={i} className="h-12 rounded-lg" />)
+                ) : (() => {
+                  const q = clientSearch.toLowerCase();
+                  const filtered = (allClients as any[]).filter(c =>
+                    !q ||
+                    c.name?.toLowerCase().includes(q) ||
+                    c.email?.toLowerCase().includes(q) ||
+                    c.companyName?.toLowerCase().includes(q)
+                  );
+                  // Email match at top
+                  const sorted = [...filtered].sort((a, b) => {
+                    const aMatch = a.email === convertProposal.clientEmail ? -1 : 0;
+                    const bMatch = b.email === convertProposal.clientEmail ? -1 : 0;
+                    return aMatch - bMatch;
+                  });
+                  if (sorted.length === 0) {
+                    return <p className="text-center text-sm text-muted-foreground py-4">No existing clients found matching your search.</p>;
+                  }
+                  return sorted.map((c: any) => (
+                    <div key={c.id} className="flex items-center justify-between border rounded-lg px-3 py-2.5 bg-card" data-testid={`client-row-${c.id}`}>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{c.name || c.companyName}</span>
+                          {c.email === convertProposal.clientEmail && (
+                            <Badge className="text-[10px] h-4 bg-green-100 text-green-700 border-0">Email match</Badge>
+                          )}
+                        </div>
+                        {c.email && <p className="text-xs text-muted-foreground">{c.email}</p>}
+                      </div>
+                      <Button
+                        size="sm" variant="outline" className="gap-1.5 text-xs"
+                        data-testid={`button-link-client-${c.id}`}
+                        disabled={convertMutation.isPending}
+                        onClick={() => convertMutation.mutate({ proposalId: convertProposal.id, clientId: c.id })}
+                      >
+                        <Link2 className="w-3 h-3" /> Link
+                      </Button>
+                    </div>
+                  ));
+                })()}
+              </div>
+
+              <div className="border-t pt-3 flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">Don't see them?</p>
+                <Button
+                  variant="outline" size="sm" className="gap-1.5"
+                  data-testid="button-create-new-client"
+                  onClick={() => { setConvertProposal(null); navigate("/admin/clients"); }}
+                >
+                  <ArrowUpRight className="w-3.5 h-3.5" /> Create New Client
+                </Button>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConvertProposal(null)}>Cancel</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* New Proposal Dialog */}
       <Dialog open={newDialogOpen} onOpenChange={setNewDialogOpen}>

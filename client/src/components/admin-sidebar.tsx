@@ -21,7 +21,7 @@ import {
   DollarSign, Building2,
   Settings, LogOut, Clock, Users2, BookOpen,
   CreditCard, Bell, ShieldAlert, ChevronRight, Newspaper,
-  FileInput, GraduationCap, MessageSquare,
+  FileInput, GraduationCap, MessageSquare, TrendingUp,
 } from "lucide-react";
 
 const navItems = [
@@ -34,6 +34,7 @@ const navItems = [
   { title: "Messages", url: "/admin/messages", icon: MessageSquare },
   { title: "Management", url: "/admin/management", icon: Users2 },
   { title: "Work Log", url: "/admin/work-log", icon: BookOpen },
+  { title: "Sales", url: "/admin/sales", icon: TrendingUp },
   { title: "Forms", url: "/admin/quote-forms", icon: FileInput },
   { title: "Training Hub", url: "/admin/training", icon: GraduationCap },
   { title: "Settings", url: "/admin/settings", icon: Settings },
@@ -67,6 +68,9 @@ export function AdminSidebar() {
   const workLogPaths = ["/admin/work-log", "/admin/reports", "/admin/field-notes", "/admin/requests", "/admin/supplies"];
   const isWorkLogActive = workLogPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
 
+  const salesPaths = ["/admin/sales"];
+  const isSalesActive = salesPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
+
   // Publications is active for all publication-related paths
   const publicationsPaths = ["/admin/publications", "/admin/proposals", "/admin/agreements"];
   const isPublicationsActive = publicationsPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
@@ -92,6 +96,8 @@ export function AdminSidebar() {
               {navItems.map((item) => {
                 const isActive = item.url === "/admin/work-log"
                   ? isWorkLogActive
+                  : item.url === "/admin/sales"
+                  ? isSalesActive
                   : location === item.url || (item.url !== "/admin" && location.startsWith(item.url));
                 const isMessages = item.url === "/admin/messages";
                 return (

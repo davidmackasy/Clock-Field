@@ -241,6 +241,7 @@ function FormsTab() {
 function SubmissionsTab({ onGoToEstimator }: { onGoToEstimator: () => void }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [, navigate] = useLocation();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [stageFilter, setStageFilter] = useState("all");
   const [noteInput, setNoteInput] = useState("");
@@ -297,6 +298,19 @@ function SubmissionsTab({ onGoToEstimator }: { onGoToEstimator: () => void }) {
   const processAiMutation = useMutation({
     mutationFn: (id: string) => apiRequest("POST", `/api/admin/submissions/${id}/walkthrough/process-ai`, {}).then(r => r.json()),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/submissions", selectedId] }); toast({ title: "AI processing started." }); },
+  });
+
+  const startWalkMutation = useMutation({
+    mutationFn: (sub: Submission) => apiRequest("POST", "/api/jobsite-walks", {
+      submissionId: sub.id,
+      title: `Walk — ${sub.clientName || sub.serviceAddress || "Lead"}`,
+      siteType: ["Commercial","Industrial / Warehouse"].includes(sub.data?.propertyCategory) ? "commercial" : "residential",
+    }).then(r => r.json()),
+    onSuccess: (data) => {
+      stageMutation.mutate({ id: selectedId!, pipelineStage: "quote_ready" });
+      navigate(`/admin/field-notes/jobsite-walks/${data.id}`);
+    },
+    onError: () => toast({ title: "Failed to start walk", variant: "destructive" }),
   });
 
   const respondMutation = useMutation({
@@ -405,17 +419,30 @@ function SubmissionsTab({ onGoToEstimator }: { onGoToEstimator: () => void }) {
               <div className="flex items-center gap-1.5 text-muted-foreground"><ClipboardList className="w-3.5 h-3.5" /> {detail.formName}</div>
             </div>
 
-            {/* Pipeline stage */}
-            <div className="flex items-center gap-2">
-              <Label className="text-xs font-medium">Move to Stage:</Label>
-              <Select value={detail.pipelineStage} onValueChange={v => stageMutation.mutate({ id: detail.id, pipelineStage: v })}>
-                <SelectTrigger className="h-7 text-xs w-44" data-testid="select-pipeline-stage">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PIPELINE_STAGES.map(s => <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            {/* Pipeline stage + quick actions */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Label className="text-xs font-medium">Move to Stage:</Label>
+                <Select value={detail.pipelineStage} onValueChange={v => stageMutation.mutate({ id: detail.id, pipelineStage: v })}>
+                  <SelectTrigger className="h-7 text-xs w-44" data-testid="select-pipeline-stage">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PIPELINE_STAGES.map(s => <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm" variant="outline" className="h-7 text-xs gap-1.5"
+                  data-testid="button-start-walk"
+                  disabled={startWalkMutation.isPending}
+                  onClick={() => startWalkMutation.mutate(detail)}
+                >
+                  {startWalkMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />}
+                  Start Site Walk
+                </Button>
+              </div>
             </div>
 
             {/* AI Estimate */}

@@ -37,7 +37,7 @@ type Photo = {
 };
 
 type Walk = {
-  id: string; companyId: string; clientId: string | null; title: string;
+  id: string; companyId: string; clientId: string | null; submissionId: string | null; title: string;
   siteType: string; status: string; notes: string | null;
   totalEstimatedSqft: string | null; totalConfirmedSqft: string | null;
   summaryJson: string | null; createdByUserId: string; createdAt: string; updatedAt: string | null;
@@ -639,6 +639,19 @@ export default function JobsiteWalkPage() {
                 </div>
               ) : (
                 <div className="space-y-2 text-sm">
+                  {walk.submissionId && (
+                    <div className="flex items-center gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2">
+                      <FileText className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                      <span className="text-xs text-blue-700 font-medium">Linked from Lead Inbox</span>
+                      <button
+                        className="ml-auto text-[10px] text-blue-600 underline hover:text-blue-800"
+                        onClick={() => window.location.href = "/admin/quote-forms"}
+                        data-testid="link-view-lead"
+                      >
+                        View Lead →
+                      </button>
+                    </div>
+                  )}
                   <div className="flex gap-3">
                     <span className="text-muted-foreground w-24 flex-shrink-0">Title</span>
                     <span className="font-medium">{walk.title}</span>

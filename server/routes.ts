@@ -11956,6 +11956,7 @@ Return ONLY valid JSON:
       const walk = await storage.createJobsiteWalk({
         companyId: user.companyId,
         clientId: req.body.clientId ?? null,
+        submissionId: req.body.submissionId ?? null,
         title: req.body.title || "Untitled Walk",
         siteType: req.body.siteType || "commercial",
         status: "draft",
