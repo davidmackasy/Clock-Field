@@ -120,18 +120,37 @@ function QuoteBuilderDialog({
   const [expiresAt, setExpiresAt] = useState(existingQuote?.expiresAt || "");
   const [siteVisitNote, setSiteVisitNote] = useState(existingQuote?.siteVisitNote || (booking.siteVisitPreference === "yes" ? "A site visit was requested before final pricing." : ""));
 
+  async function safeQuoteFetch(method: string, url: string, body: object): Promise<any> {
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        credentials: "include",
+      });
+    } catch {
+      throw new Error("Network error — please check your connection and try again.");
+    }
+    const ct = res.headers.get("content-type") || "";
+    if (!ct.includes("application/json")) {
+      const text = await res.text().catch(() => "");
+      console.error(`[QuoteFetch] Non-JSON from ${method} ${url}:`, res.status, text.substring(0, 400));
+      throw new Error("Server returned an unexpected response. Please try again shortly.");
+    }
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+    return data;
+  }
+
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!quotePrice || parseFloat(quotePrice) <= 0) throw new Error("Quote needs a client name, email, service address, and price before it can be saved.");
+      if (!quotePrice || parseFloat(quotePrice) <= 0) throw new Error("Please enter a valid price before saving the quote.");
       const body = { title, clientName, companyName: quoteCompany || null, email: quoteEmail, phone: quotePhone || null, serviceAddress: serviceAddr, serviceType, customerType, scopeOfWork: scopeOfWork || null, frequency: quoteFrequency, price: quotePrice, taxes: taxes || null, discount: discount || null, deposit: deposit || null, terms: terms || null, includedItems: includedItems || null, excludedItems: excludedItems || null, internalNotes: internalNotes || null, expiresAt: expiresAt || null, siteVisitNote: siteVisitNote || null, preferredDate: booking.preferredDate, preferredTime: booking.preferredTime };
       if (existingQuote) {
-        const res = await apiRequest("PATCH", `/api/booking-requests/${booking.id}/quotes/${existingQuote.id}`, body);
-        if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
-        return res.json();
+        return safeQuoteFetch("PATCH", `/api/booking-requests/${booking.id}/quotes/${existingQuote.id}`, body);
       } else {
-        const res = await apiRequest("POST", `/api/booking-requests/${booking.id}/quotes`, body);
-        if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
-        return res.json();
+        return safeQuoteFetch("POST", `/api/booking-requests/${booking.id}/quotes`, body);
       }
     },
     onSuccess: (q) => {
@@ -141,7 +160,7 @@ function QuoteBuilderDialog({
       onSaved(q);
       onClose();
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   return (
@@ -221,26 +240,46 @@ function BookingDetailDrawer({
 
   const activeQuote = savedQuote || quotes[0] || null;
 
+  async function safeBookingFetch(method: string, url: string, body?: object): Promise<any> {
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body ?? {}),
+        credentials: "include",
+      });
+    } catch {
+      throw new Error("Network error — please check your connection and try again.");
+    }
+    const ct = res.headers.get("content-type") || "";
+    if (!ct.includes("application/json")) {
+      const text = await res.text().catch(() => "");
+      console.error(`[BookingFetch] Non-JSON response from ${method} ${url}:`, res.status, text.substring(0, 400));
+      if (res.status === 401 || res.status === 403) throw new Error("Session expired — please refresh the page and log in again.");
+      throw new Error("Server returned an unexpected response. Please try again shortly.");
+    }
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+    return data;
+  }
+
   const generateEstimate = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", `/api/booking-requests/${booking.id}/estimate`, {});
-      if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
-      return res.json();
-    },
+    mutationFn: () => safeBookingFetch("POST", `/api/booking-requests/${booking.id}/estimate`),
     onSuccess: () => {
       refetchEstimate();
       onUpdated();
       toast({ title: "Estimate generated", description: "AI estimate is ready to review." });
     },
-    onError: (e: any) => toast({ title: "Estimate failed", description: e.message, variant: "destructive" }),
+    onError: (e: any) => toast({
+      title: "Estimate failed",
+      description: e.message || "ClockField could not generate an estimate. Please check the booking details and try again.",
+      variant: "destructive",
+    }),
   });
 
   const sendQuote = useMutation({
-    mutationFn: async (quoteId: string) => {
-      const res = await apiRequest("POST", `/api/booking-requests/${booking.id}/quotes/${quoteId}/send`, {});
-      if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
-      return res.json();
-    },
+    mutationFn: (quoteId: string) => safeBookingFetch("POST", `/api/booking-requests/${booking.id}/quotes/${quoteId}/send`),
     onSuccess: (d) => {
       refetchQuotes();
       onUpdated();
@@ -251,23 +290,15 @@ function BookingDetailDrawer({
   });
 
   const updateStatus = useMutation({
-    mutationFn: async (status: string) => {
-      const res = await apiRequest("PATCH", `/api/booking-requests/${booking.id}`, { status });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
-      return res.json();
-    },
+    mutationFn: (status: string) => safeBookingFetch("PATCH", `/api/booking-requests/${booking.id}`, { status }),
     onSuccess: () => { onUpdated(); toast({ title: "Status updated" }); },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
   });
 
   const confirmBooking = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", `/api/booking-requests/${booking.id}/confirm`, {});
-      if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
-      return res.json();
-    },
+    mutationFn: () => safeBookingFetch("POST", `/api/booking-requests/${booking.id}/confirm`),
     onSuccess: () => { onUpdated(); toast({ title: "Booking confirmed!", description: "The booking has been confirmed." }); },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: "Confirm failed", description: e.message, variant: "destructive" }),
   });
 
   const copyQuoteLink = () => {

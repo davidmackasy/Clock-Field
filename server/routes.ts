@@ -12572,20 +12572,25 @@ Return ONLY a valid JSON object:
   "ai_summary": "2-3 sentence professional summary of what is needed and key factors that affect pricing"
 }`;
 
-      const OpenAI = (await import("openai")).default;
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.3,
-      });
+      let completion: Awaited<ReturnType<typeof openai.chat.completions.create>>;
+      try {
+        completion = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.3,
+        });
+      } catch (aiErr: any) {
+        return res.status(503).json({ message: "AI estimate service is not available right now. Please check that an OpenAI API key is configured and try again." });
+      }
+
       const raw = completion.choices[0].message.content || "{}";
       let parsed: any;
       try {
         const match = raw.match(/\{[\s\S]*\}/);
         parsed = JSON.parse(match ? match[0] : raw);
       } catch {
-        return res.status(500).json({ message: "AI estimate could not be generated. Please try again or check that service and property details are complete." });
+        return res.status(500).json({ message: "AI estimate could not be generated. Please try again or ensure the booking has service type and property details filled in." });
       }
 
       const now = new Date().toISOString();
@@ -12609,9 +12614,16 @@ Return ONLY a valid JSON object:
       } else {
         estimate = await storage.createBookingEstimate({ ...estimateData, companyId: user.companyId, bookingRequestId: br.id, createdBy: user.id, createdAt: now });
       }
-      await storage.updateBookingRequest(br.id, { status: "estimate_generated", estimateId: estimate!.id, updatedAt: now });
+      // Never downgrade a terminal status (confirmed, converted_to_job, cancelled, archived)
+      const terminalStatuses = ["confirmed", "converted_to_job", "cancelled", "archived"];
+      const statusUpdate = terminalStatuses.includes(br.status) ? br.status : "estimate_generated";
+      await storage.updateBookingRequest(br.id, { status: statusUpdate, estimateId: estimate!.id, updatedAt: now });
+      res.setHeader("Content-Type", "application/json");
       res.json(estimate);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
+    } catch (e: any) {
+      res.setHeader("Content-Type", "application/json");
+      res.status(500).json({ message: e.message || "An unexpected error occurred generating the estimate." });
+    }
   });
 
   // ── Booking Quotes ──────────────────────────────────────────────────────────

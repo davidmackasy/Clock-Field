@@ -1,0 +1,248 @@
+Dev Note: Fix Booking AI Estimate + Apply Estimate to Quote Without Touching Anything Else
+Goal
+Fix the Booking AI Estimate flow only.
+Current issue:
+When clicking Get AI Estimate, it fails with:
+Failed to execute 'json' on 'Response': Unexpected token '<', "<!DOCTYPE"... is not valid JSON
+This means the frontend expects JSON, but the backend is returning an HTML error page instead of a valid JSON response.
+Also fix the quote flow so that when an estimate is successfully generated, the estimate values are automatically applied to the quote draft, while still allowing the admin to edit everything before sending.
+Do not change or affect anything else.
+Do not touch:
+Schedule logic
+Attendance
+Clock in / clock out
+Clients
+Employees
+Field Notes
+Work Reports
+Public report links
+Payroll
+Training Hub
+Public booking form structure unless required for estimate input
+Existing quote email system unless only connecting the quote data safely
+Main Fix 1: AI Estimate API must always return JSON
+Find the endpoint used by the Get AI Estimate button.
+Example:
+POST /api/bookings/:bookingId/estimate
+or whatever current booking estimate endpoint exists.
+The issue is likely one of these:
+Wrong API route
+Backend route missing
+Frontend calling the wrong URL
+Auth/session redirect returning HTML
+Server error returning Vite/HTML error page
+AI service error not caught
+Response is not JSON but frontend still calls response.json()
+Fix requirement:
+The estimate endpoint must always return JSON.
+Success example:
+{
+"success": true,
+"estimate": {
+"estimatedHours": 4,
+"suggestedWorkerCount": 2,
+"suggestedLowPrice": 280,
+"suggestedHighPrice": 420,
+"recommendedPrice": 350,
+"minimumPriceWarning": "Do not charge below $260 for this scope.",
+"suggestedChecklist": [
+"Clean kitchen",
+"Clean bathrooms",
+"Vacuum floors",
+"Mop hard floors",
+"Remove garbage"
+],
+"suggestedSupplies": [
+"All-purpose cleaner",
+"Disinfectant",
+"Garbage bags",
+"Mop",
+"Vacuum"
+],
+"summary": "Residential cleaning request with high priority. Estimate is based on the provided home details and requested service type."
+}
+}
+Error example:
+{
+"success": false,
+"message": "Estimate could not be generated because service type or property details are missing."
+}
+Do not return HTML.
+Do not let frontend receive <!DOCTYPE html> from this endpoint.
+Main Fix 2: Frontend must handle non-JSON responses safely
+Update the Get AI Estimate frontend logic.
+Before calling response.json(), check the response content type.
+Required logic:
+Call estimate endpoint.
+Check response.ok.
+Check content-type includes application/json.
+If not JSON, read response.text().
+Show a clean error message.
+Log full raw response only in console for debugging.
+Do not crash the UI.
+User-facing error should be clean:
+Estimate could not be generated. Please check the booking details and try again.
+Not:
+Unexpected token '<'
+Main Fix 3: Use booking details as estimate input
+The estimate should use the full booking information, not just name and service type.
+Send these details to the estimate backend:
+Customer type
+Service type
+Frequency
+Urgency
+Preferred date/time
+Residential details, if residential
+Commercial details, if commercial
+Post-construction details, if post-construction
+Move-in/move-out details, if applicable
+Square footage, if available
+Number of rooms
+Number of bathrooms
+Number of offices
+Number of washrooms
+Number of floors/stories
+Photos, if available
+Notes
+Site visit preference
+Access instructions
+Special conditions
+This makes the AI estimate useful.
+Main Fix 4: Save generated estimate to the booking
+When estimate is generated, save it to the booking record or booking_estimates table.
+The booking drawer should update immediately.
+After success, show:
+Estimated hours
+Suggested workers
+Suggested price range
+Recommended price
+Suggested checklist
+Suggested supplies
+Summary
+Low price warning, if any
+Timeline should update:
+Estimate generated
+Do not mark quote created yet.
+Main Fix 5: Apply estimate to quote draft
+When admin clicks Create Quote after an estimate exists, the quote form should automatically prefill using the estimate.
+Prefill quote with:
+Client name
+Company name
+Email
+Phone
+Service address
+Service type
+Customer type
+Frequency
+Scope of work from estimate summary
+Checklist from estimate suggested checklist
+Recommended price from estimate recommended price
+Included items from suggested checklist
+Notes from booking notes
+Terms default from business settings if available
+Quote status should be:
+Draft
+Admin must be able to edit:
+Price
+Scope of work
+Checklist
+Included services
+Excluded services
+Terms
+Taxes
+Discount
+Deposit
+Message to client
+Do not lock the estimate price.
+Estimate should guide the quote, not control it.
+Main Fix 6: If no estimate exists, quote can still be created manually
+Create Quote should still work even if no estimate exists.
+If no estimate exists, open the quote form with booking details only.
+Show message:
+No estimate has been generated yet. You can create a manual quote or generate an estimate first.
+Buttons:
+Generate Estimate
+Continue Manual Quote
+Do not block quote creation.
+Main Fix 7: Quote should link back to estimate and booking
+When quote is created from an estimate, save:
+booking_id
+estimate_id
+quote_id
+This allows the booking drawer to show:
+Estimate generated
+Quote created
+Quote sent
+Client viewed quote
+Client responded
+Timeline must update after quote creation.
+Main Fix 8: Clean error messages
+Replace the red technical error.
+Current bad error:
+Failed to execute 'json' on 'Response': Unexpected token '<', "<!DOCTYPE"... is not valid JSON
+Replace with:
+Estimate failed
+ClockField could not generate an estimate. Please check the booking details and try again.
+For missing data:
+Estimate needs more booking details before it can be generated.
+For API route issue:
+Estimate service is not available right now. Please try again shortly.
+Keep raw technical errors in console only.
+Main Fix 9: Do not change confirmed booking status incorrectly
+In the screenshot, the booking already says Converted to Job and timeline shows Booking confirmed.
+Do not let estimate failure change booking status.
+Estimate failure should not affect:
+Booking status
+Converted to Job status
+Confirmed Booking status
+Quote status
+Calendar status
+Only show estimate error.
+Main Fix 10: Testing checklist
+Test these exact cases:
+Click Get AI Estimate on a residential booking.
+Estimate generates successfully.
+Estimate appears in booking drawer.
+Timeline shows Estimate generated.
+Click Create Quote after estimate.
+Quote draft opens with estimate data prefilled.
+Recommended price appears in quote price field.
+Checklist appears in quote scope/checklist.
+Admin can edit price and text.
+Admin can save quote draft.
+Booking timeline shows Quote created.
+Admin can send quote.
+Client can open quote link.
+Client can accept or decline.
+Admin gets notification.
+Test no estimate case:
+Open booking with no estimate.
+Click Create Quote.
+Manual quote form opens.
+No crash.
+Test API failure:
+Force backend error.
+Frontend shows clean error.
+No raw JSON/HTML error appears.
+Booking status does not change.
+Test existing features:
+Existing Schedule still works.
+Existing Booking Calendar still works.
+Existing Clients still work.
+Existing Jobs still work.
+Existing Field Notes still work.
+Existing Work Reports still work.
+Existing public links still work.
+No unrelated files should be changed.
+Acceptance Criteria
+This fix is complete when:
+Get AI Estimate no longer fails with JSON/HTML error.
+Estimate endpoint always returns valid JSON.
+Frontend handles failed estimate responses safely.
+Estimate is saved to the booking.
+Booking drawer displays the estimate.
+Create Quote uses the generated estimate to prefill the quote.
+Quote remains editable before sending.
+Quote can still be created manually without an estimate.
+Timeline updates correctly.
+No existing ClockField module is changed or broken.
