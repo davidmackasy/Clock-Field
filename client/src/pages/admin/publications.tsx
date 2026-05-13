@@ -547,12 +547,12 @@ function PublicationsSubPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Publications</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Document</h1>
           <p className="text-sm text-gray-500 mt-0.5">Create and manage your public-facing service pages</p>
         </div>
         <Link href="/admin/publications/new">
           <Button data-testid="button-new-publication">
-            <Plus className="w-4 h-4 mr-2" /> New Publication
+            <Plus className="w-4 h-4 mr-2" /> New Document
           </Button>
         </Link>
       </div>
@@ -582,10 +582,10 @@ function PublicationsSubPage() {
             </>
           ) : (
             <>
-              <p className="text-sm font-medium text-gray-700">No publications yet</p>
-              <p className="text-xs text-gray-400 mt-1">Create your first publication to share with clients</p>
+              <p className="text-sm font-medium text-gray-700">No documents yet</p>
+              <p className="text-xs text-gray-400 mt-1">Create your first document to share with clients</p>
               <Link href="/admin/publications/new">
-                <Button className="mt-4" size="sm" data-testid="button-empty-new"><Plus className="w-4 h-4 mr-2" />Create Publication</Button>
+                <Button className="mt-4" size="sm" data-testid="button-empty-new"><Plus className="w-4 h-4 mr-2" />Create Document</Button>
               </Link>
             </>
           )}
@@ -678,7 +678,7 @@ export default function AdminPublications() {
             onClick={() => setActiveTab("publications")}
             className={`flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === "publications" ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
             data-testid="tab-publications">
-            <Newspaper className="w-4 h-4" /> Publications
+            <Newspaper className="w-4 h-4" /> Document
           </button>
           <button
             onClick={() => setActiveTab("agreements")}

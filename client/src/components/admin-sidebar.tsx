@@ -37,6 +37,7 @@ const navItems = [
   { title: "Sales", url: "/admin/sales", icon: TrendingUp },
   { title: "Forms", url: "/admin/quote-forms", icon: FileInput },
   { title: "Training Hub", url: "/admin/training", icon: GraduationCap },
+  { title: "Document", url: "/admin/publications", icon: Newspaper },
   { title: "Settings", url: "/admin/settings", icon: Settings },
 ];
 
@@ -98,6 +99,8 @@ export function AdminSidebar() {
                   ? isWorkLogActive
                   : item.url === "/admin/sales"
                   ? isSalesActive
+                  : item.url === "/admin/publications"
+                  ? isPublicationsActive
                   : location === item.url || (item.url !== "/admin" && location.startsWith(item.url));
                 const isMessages = item.url === "/admin/messages";
                 return (
@@ -119,19 +122,6 @@ export function AdminSidebar() {
                 );
               })}
 
-              {/* ── Publications (single item — tabs inside page) ── */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={isPublicationsActive}
-                  data-testid="nav-publications"
-                >
-                  <Link href="/admin/publications">
-                    <Newspaper className="w-4 h-4" />
-                    <span>Publications</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

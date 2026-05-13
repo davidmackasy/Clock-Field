@@ -1,0 +1,92 @@
+ClockField Navigation Cleanup – Document Rename + Sidebar Reorder
+
+Objective:
+Clean up the ClockField sidebar navigation with a very small and safe UI/UX improvement without changing or affecting any existing functionality, routing, permissions, workflows, APIs, or database structure.
+
+Scope of Change:
+This update is ONLY for:
+
+Sidebar naming
+Sidebar order
+Matching page titles/button labels if necessary
+
+Do NOT restructure the application.
+Do NOT change backend logic.
+Do NOT move routes.
+Do NOT modify permissions.
+Do NOT refactor existing page systems.
+
+Required Changes:
+
+Rename “Publications” → “Document”
+Update the sidebar navigation label from:
+Publications
+to:
+Document
+Move “Document” Above “Settings”
+Current order:
+Settings
+Publications
+
+New order:
+
+Document
+Settings
+Keep Existing Functionality Intact
+The following existing sections/pages inside Document must remain exactly as they currently work:
+Agreements
+Proposals
+Hiring Packages
+
+Do NOT modify:
+
+data structure
+forms
+permissions
+public links
+APIs
+database models
+tabs
+workflows
+
+This is a visual/navigation naming update only.
+
+Update Page Labels for Consistency
+Where appropriate, update UI wording:
+“Publications” page title → “Document”
+“New Publication” button → “New Document”
+
+Only update visible UI text.
+Do NOT rename internal route names unless absolutely required.
+
+Preserve Existing Routes
+If current routes already work, keep them unchanged.
+Example:
+/admin/publications
+can remain as-is internally if needed.
+
+No breaking URL changes.
+
+Maintain Responsive UI
+Ensure:
+desktop sidebar spacing remains correct
+mobile navigation still functions properly
+no icon/text alignment issues occur
+no overflow or wrapping issues appear after rename
+
+Important:
+This is intentionally a very small cleanup update.
+Do not introduce additional navigation restructuring during this task.
+Do not touch:
+
+Work Log
+Forms
+Messages
+Clients
+Training Hub
+Settings logic
+Payroll
+Scheduling
+Attendance
+
+Only complete the Document rename + sidebar reorder safely.

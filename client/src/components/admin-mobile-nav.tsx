@@ -30,8 +30,8 @@ const navMoreItems = [
   { label: "Work Log",     href: "/admin/work-log",     icon: BookOpen },
   { label: "Forms",        href: "/admin/quote-forms",  icon: FileInput },
   { label: "Training Hub", href: "/admin/training",     icon: GraduationCap },
+  { label: "Document",     href: "/admin/publications", icon: Newspaper },
   { label: "Settings",     href: "/admin/settings",     icon: Settings },
-  { label: "Publications", href: "/admin/publications", icon: Newspaper },
 ];
 
 const accountMoreItems = [
@@ -58,11 +58,11 @@ const pageTitles: Record<string, string> = {
   "/admin/work-log/supplies":  "Work Log",
   "/admin/field-notes":        "Work Log",
   "/admin/quote-forms":        "Forms",
-  "/admin/proposals":          "Publications",
-  "/admin/agreements":         "Publications",
+  "/admin/proposals":          "Document",
+  "/admin/agreements":         "Document",
   "/admin/supplies":           "Work Log",
   "/admin/training":           "Training Hub",
-  "/admin/publications":       "Publications",
+  "/admin/publications":       "Document",
   "/admin/settings":           "Settings",
   "/admin/subscription":       "Subscription",
   "/admin/messages":           "Messages",
