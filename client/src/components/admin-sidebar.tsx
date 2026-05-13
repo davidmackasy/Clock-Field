@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
@@ -10,9 +11,13 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -24,15 +29,16 @@ import {
   FileInput, GraduationCap, MessageSquare, TrendingUp,
 } from "lucide-react";
 
-const navItems = [
+const preTeamItems = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
-  { title: "Employees", url: "/admin/employees", icon: Users },
+];
+
+const postTeamItems = [
   { title: "Schedule", url: "/admin/schedule", icon: Calendar },
   { title: "Attendance", url: "/admin/attendance", icon: ClipboardList },
   { title: "Payroll", url: "/admin/payroll", icon: DollarSign },
   { title: "Clients", url: "/admin/clients", icon: Building2 },
   { title: "Messages", url: "/admin/messages", icon: MessageSquare },
-  { title: "Management", url: "/admin/management", icon: Users2 },
   { title: "Work Log", url: "/admin/work-log", icon: BookOpen },
   { title: "Sales", url: "/admin/sales", icon: TrendingUp },
   { title: "Forms", url: "/admin/quote-forms", icon: FileInput },
@@ -63,18 +69,25 @@ export function AdminSidebar() {
 
   const initials = user ? `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}` : "A";
 
-  // Work Log tab is active for work-log, reports, field-notes, requests sub-paths
-  // Supplies is now nested under Work Log, so the legacy /admin/supplies
-  // path also lights up the Work Log tab.
   const workLogPaths = ["/admin/work-log", "/admin/reports", "/admin/field-notes", "/admin/requests", "/admin/supplies"];
   const isWorkLogActive = workLogPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
 
   const salesPaths = ["/admin/sales"];
   const isSalesActive = salesPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
 
-  // Publications is active for all publication-related paths
   const publicationsPaths = ["/admin/publications", "/admin/proposals", "/admin/agreements"];
   const isPublicationsActive = publicationsPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
+
+  const teamPaths = ["/admin/employees", "/admin/management", "/admin/admins"];
+  const isTeamActive = teamPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
+  const [teamOpen, setTeamOpen] = useState(false);
+
+  const getIsActive = (url: string) =>
+    url === "/admin/work-log" ? isWorkLogActive
+    : url === "/admin/sales" ? isSalesActive
+    : url === "/admin/publications" ? isPublicationsActive
+    : url === "/admin" ? location === url
+    : location === url || location.startsWith(url + "/") || location.startsWith(url + "?");
 
   return (
     <Sidebar>
@@ -94,18 +107,65 @@ export function AdminSidebar() {
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => {
-                const isActive = item.url === "/admin/work-log"
-                  ? isWorkLogActive
-                  : item.url === "/admin/sales"
-                  ? isSalesActive
-                  : item.url === "/admin/publications"
-                  ? isPublicationsActive
-                  : location === item.url || (item.url !== "/admin" && location.startsWith(item.url));
+              {/* Pre-Team items (Dashboard) */}
+              {preTeamItems.map((item) => (
+                <SidebarMenuItem key={item.url}>
+                  <SidebarMenuButton asChild isActive={getIsActive(item.url)}>
+                    <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
+                      <item.icon className="w-4 h-4" />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+
+              {/* Team collapsible */}
+              <Collapsible open={teamOpen || isTeamActive} onOpenChange={setTeamOpen}>
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton isActive={isTeamActive} data-testid="nav-team">
+                      <Users2 className="w-4 h-4" />
+                      <span>Team</span>
+                      <ChevronRight className={`ml-auto w-3.5 h-3.5 transition-transform duration-200 ${(teamOpen || isTeamActive) ? "rotate-90" : ""}`} />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={location === "/admin/employees" || location.startsWith("/admin/employees/")}>
+                          <Link href="/admin/employees" data-testid="nav-team-employees">
+                            <Users className="w-3.5 h-3.5" />
+                            <span>Employees</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={location === "/admin/management" || location.startsWith("/admin/management/")}>
+                          <Link href="/admin/management" data-testid="nav-team-managers">
+                            <Users2 className="w-3.5 h-3.5" />
+                            <span>Managers</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={location === "/admin/admins"}>
+                          <Link href="/admin/admins" data-testid="nav-team-admins">
+                            <ShieldAlert className="w-3.5 h-3.5" />
+                            <span>Admins</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
+
+              {/* Post-Team items */}
+              {postTeamItems.map((item) => {
                 const isMessages = item.url === "/admin/messages";
                 return (
                   <SidebarMenuItem key={item.url}>
-                    <SidebarMenuButton asChild isActive={isActive}>
+                    <SidebarMenuButton asChild isActive={getIsActive(item.url)}>
                       <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
                         <item.icon className="w-4 h-4" />
                         <span className="flex items-center justify-between w-full">
@@ -121,7 +181,6 @@ export function AdminSidebar() {
                   </SidebarMenuItem>
                 );
               })}
-
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
