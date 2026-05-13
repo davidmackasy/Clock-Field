@@ -101,9 +101,11 @@ import {
   type JobsiteWalk, type InsertJobsiteWalk,
   type JobsiteWalkPhoto, type InsertJobsiteWalkPhoto,
   type JobsiteWalkMeasurement, type InsertJobsiteWalkMeasurement,
-  jobs, bookingRequests,
+  jobs, bookingRequests, bookingEstimates, bookingQuotes,
   type Job, type InsertJob,
   type BookingRequest, type InsertBookingRequest,
+  type BookingEstimate, type InsertBookingEstimate,
+  type BookingQuote, type InsertBookingQuote,
   quoteRequestWalkthroughs, quoteRequestWalkthroughPhotos, quoteRequestWalkthroughSections,
   type QuoteRequestWalkthrough, type InsertQuoteRequestWalkthrough,
   type QuoteRequestWalkthroughPhoto, type InsertQuoteRequestWalkthroughPhoto,
@@ -574,6 +576,18 @@ export interface IStorage {
   getBookingRequest(id: string): Promise<BookingRequest | undefined>;
   createBookingRequest(data: InsertBookingRequest): Promise<BookingRequest>;
   updateBookingRequest(id: string, data: Partial<InsertBookingRequest>): Promise<BookingRequest | undefined>;
+
+  // ── Booking Estimates ─────────────────────────────────────────────────────
+  getBookingEstimate(bookingRequestId: string): Promise<BookingEstimate | undefined>;
+  createBookingEstimate(data: InsertBookingEstimate): Promise<BookingEstimate>;
+  updateBookingEstimate(id: string, data: Partial<InsertBookingEstimate>): Promise<BookingEstimate | undefined>;
+
+  // ── Booking Quotes ────────────────────────────────────────────────────────
+  getBookingQuotes(bookingRequestId: string): Promise<BookingQuote[]>;
+  getBookingQuote(id: string): Promise<BookingQuote | undefined>;
+  getBookingQuoteBySlug(slug: string): Promise<BookingQuote | undefined>;
+  createBookingQuote(data: InsertBookingQuote): Promise<BookingQuote>;
+  updateBookingQuote(id: string, data: Partial<InsertBookingQuote>): Promise<BookingQuote | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2966,6 +2980,45 @@ export class DatabaseStorage implements IStorage {
 
   async updateBookingRequest(id: string, data: Partial<InsertBookingRequest>): Promise<BookingRequest | undefined> {
     const [row] = await db.update(bookingRequests).set(data as any).where(eq(bookingRequests.id, id)).returning();
+    return row;
+  }
+
+  async getBookingEstimate(bookingRequestId: string): Promise<BookingEstimate | undefined> {
+    const [row] = await db.select().from(bookingEstimates).where(eq(bookingEstimates.bookingRequestId, bookingRequestId)).orderBy(desc(bookingEstimates.createdAt));
+    return row;
+  }
+
+  async createBookingEstimate(data: InsertBookingEstimate): Promise<BookingEstimate> {
+    const [row] = await db.insert(bookingEstimates).values(data as any).returning();
+    return row;
+  }
+
+  async updateBookingEstimate(id: string, data: Partial<InsertBookingEstimate>): Promise<BookingEstimate | undefined> {
+    const [row] = await db.update(bookingEstimates).set(data as any).where(eq(bookingEstimates.id, id)).returning();
+    return row;
+  }
+
+  async getBookingQuotes(bookingRequestId: string): Promise<BookingQuote[]> {
+    return db.select().from(bookingQuotes).where(eq(bookingQuotes.bookingRequestId, bookingRequestId)).orderBy(desc(bookingQuotes.createdAt));
+  }
+
+  async getBookingQuote(id: string): Promise<BookingQuote | undefined> {
+    const [row] = await db.select().from(bookingQuotes).where(eq(bookingQuotes.id, id));
+    return row;
+  }
+
+  async getBookingQuoteBySlug(slug: string): Promise<BookingQuote | undefined> {
+    const [row] = await db.select().from(bookingQuotes).where(eq(bookingQuotes.publicLinkSlug, slug));
+    return row;
+  }
+
+  async createBookingQuote(data: InsertBookingQuote): Promise<BookingQuote> {
+    const [row] = await db.insert(bookingQuotes).values(data as any).returning();
+    return row;
+  }
+
+  async updateBookingQuote(id: string, data: Partial<InsertBookingQuote>): Promise<BookingQuote | undefined> {
+    const [row] = await db.update(bookingQuotes).set(data as any).where(eq(bookingQuotes.id, id)).returning();
     return row;
   }
 }

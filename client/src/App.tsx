@@ -87,6 +87,7 @@ import AdminSalesHub from "@/pages/admin/sales-hub";
 import AdminSalesLeads from "@/pages/admin/sales-leads";
 import AdminSalesLeadDetail from "@/pages/admin/sales-lead-detail";
 import PublicBookingForm from "@/pages/public/booking-form";
+import PublicBookingQuote from "@/pages/public/booking-quote";
 
 function LoadingScreen() {
   return (
@@ -311,6 +312,14 @@ function AppRouter() {
     return (
       <Switch>
         <Route path="/public/booking/:companyId" component={PublicBookingForm} />
+      </Switch>
+    );
+  }
+
+  if (location.startsWith("/public/booking-quote/")) {
+    return (
+      <Switch>
+        <Route path="/public/booking-quote/:slug" component={PublicBookingQuote} />
       </Switch>
     );
   }

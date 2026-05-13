@@ -744,3 +744,52 @@ ${opts.companyName}`;
 
   await client.messages.create(domain, { from, to: [opts.to], subject, text, html });
 }
+
+export async function sendBookingQuoteEmail(opts: {
+  to: string;
+  clientName: string;
+  businessName: string;
+  serviceType: string;
+  quoteUrl: string;
+  price: string;
+  expiresAt?: string;
+}) {
+  const { client, domain } = getClient();
+  const from = process.env.MAIL_FROM || "Clockfield <noreply@clockfield.ca>";
+  const subject = `Your cleaning service quote from ${opts.businessName}`;
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/></head><body style="margin:0;padding:0;background:#f6f7f9;font-family:-apple-system,sans-serif;"><table width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7f9;padding:40px 0;"><tr><td align="center"><table width="580" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.09);"><tr><td style="background:#2563eb;padding:28px 36px;"><span style="color:#fff;font-size:22px;font-weight:700;">${opts.businessName}</span></td></tr><tr><td style="padding:36px;"><p style="margin:0 0 8px;font-size:22px;font-weight:800;color:#111827;">Your quote is ready</p><p style="margin:0 0 24px;font-size:15px;color:#6b7280;">Hi ${opts.clientName}, your service quote from <strong>${opts.businessName}</strong> is ready to review.</p><table cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:28px;"><tr><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280;">Service</td><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:600;">${opts.serviceType}</td></tr><tr><td style="padding:10px 14px;font-size:13px;color:#6b7280;">Quoted Price</td><td style="padding:10px 14px;font-size:15px;font-weight:700;color:#111827;">${opts.price}</td></tr></table><table cellpadding="0" cellspacing="0" style="margin-bottom:20px;"><tr><td style="background:#2563eb;border-radius:8px;"><a href="${opts.quoteUrl}" style="display:inline-block;padding:14px 32px;color:#fff;font-size:16px;font-weight:700;text-decoration:none;">View &amp; Accept Quote</a></td></tr></table><p style="margin:0;font-size:12px;color:#9ca3af;">Or copy: ${opts.quoteUrl}</p></td></tr><tr><td style="background:#f9fafb;padding:16px 36px;border-top:1px solid #e5e7eb;"><p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">${opts.businessName} · Powered by ClockField</p></td></tr></table></td></tr></table></body></html>`;
+  const text = `Hi ${opts.clientName},\n\nYour quote from ${opts.businessName} is ready.\nService: ${opts.serviceType}\nPrice: ${opts.price}\n\nView: ${opts.quoteUrl}\n\nThank you,\n${opts.businessName}`;
+  await client.messages.create(domain, { from, to: [opts.to], subject, text, html });
+}
+
+export async function sendQuoteAcceptedAdminEmail(opts: {
+  to: string;
+  clientName: string;
+  serviceType: string;
+  serviceAddress: string;
+  price: string;
+  preferredDate: string;
+  appUrl: string;
+}) {
+  const { client, domain } = getClient();
+  const from = process.env.MAIL_FROM || "Clockfield <noreply@clockfield.ca>";
+  const subject = `Quote accepted: ${opts.clientName} — ${opts.serviceType}`;
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/></head><body style="margin:0;padding:0;background:#f6f7f9;font-family:-apple-system,sans-serif;"><table width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7f9;padding:40px 0;"><tr><td align="center"><table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.09);"><tr><td style="background:#16a34a;padding:24px 32px;"><span style="color:#fff;font-size:20px;font-weight:700;">Quote Accepted</span></td></tr><tr><td style="padding:32px;"><p style="margin:0 0 16px;font-size:16px;color:#111827;">A client has accepted a quote in ClockField.</p><table cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:24px;"><tr><td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280;">Client</td><td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:600;">${opts.clientName}</td></tr><tr><td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280;">Service</td><td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;">${opts.serviceType}</td></tr><tr><td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280;">Address</td><td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;">${opts.serviceAddress}</td></tr><tr><td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280;">Price</td><td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:700;color:#16a34a;">${opts.price}</td></tr><tr><td style="padding:9px 14px;font-size:13px;color:#6b7280;">Preferred Date</td><td style="padding:9px 14px;font-size:13px;">${opts.preferredDate}</td></tr></table><table cellpadding="0" cellspacing="0"><tr><td style="background:#2563eb;border-radius:8px;"><a href="${opts.appUrl}" style="display:inline-block;padding:12px 28px;color:#fff;font-size:15px;font-weight:600;text-decoration:none;">Open Booking Requests</a></td></tr></table></td></tr></table></td></tr></table></body></html>`;
+  const text = `Quote accepted!\nClient: ${opts.clientName}\nService: ${opts.serviceType}\nAddress: ${opts.serviceAddress}\nPrice: ${opts.price}\nPreferred Date: ${opts.preferredDate}\n\nLog in: ${opts.appUrl}`;
+  await client.messages.create(domain, { from, to: [opts.to], subject, text, html });
+}
+
+export async function sendQuoteDeclinedAdminEmail(opts: {
+  to: string;
+  clientName: string;
+  serviceType: string;
+  declineReason?: string;
+  appUrl: string;
+}) {
+  const { client, domain } = getClient();
+  const from = process.env.MAIL_FROM || "Clockfield <noreply@clockfield.ca>";
+  const subject = `Quote declined: ${opts.clientName} — ${opts.serviceType}`;
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/></head><body style="margin:0;padding:0;background:#f6f7f9;font-family:-apple-system,sans-serif;"><table width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7f9;padding:40px 0;"><tr><td align="center"><table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.09);"><tr><td style="background:#dc2626;padding:24px 32px;"><span style="color:#fff;font-size:20px;font-weight:700;">Quote Declined</span></td></tr><tr><td style="padding:32px;"><p style="margin:0 0 16px;font-size:16px;color:#111827;">${opts.clientName} has declined a quote.</p><table cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:24px;"><tr><td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280;">Client</td><td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:600;">${opts.clientName}</td></tr><tr><td style="padding:9px 14px;${opts.declineReason ? "border-bottom:1px solid #e5e7eb;" : ""}font-size:13px;color:#6b7280;">Service</td><td style="padding:9px 14px;${opts.declineReason ? "border-bottom:1px solid #e5e7eb;" : ""}font-size:13px;">${opts.serviceType}</td></tr>${opts.declineReason ? `<tr><td style="padding:9px 14px;font-size:13px;color:#6b7280;">Reason</td><td style="padding:9px 14px;font-size:13px;">${opts.declineReason}</td></tr>` : ""}</table><table cellpadding="0" cellspacing="0"><tr><td style="background:#2563eb;border-radius:8px;"><a href="${opts.appUrl}" style="display:inline-block;padding:12px 28px;color:#fff;font-size:15px;font-weight:600;text-decoration:none;">Open Booking Requests</a></td></tr></table></td></tr></table></td></tr></table></body></html>`;
+  const text = `Quote declined by ${opts.clientName}.\nService: ${opts.serviceType}${opts.declineReason ? `\nReason: ${opts.declineReason}` : ""}\n\nLog in: ${opts.appUrl}`;
+  await client.messages.create(domain, { from, to: [opts.to], subject, text, html });
+}

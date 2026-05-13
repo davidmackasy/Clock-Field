@@ -5,7 +5,7 @@ import { db, pool } from "./db";
 import { setupAuth, hashPassword, comparePasswords, requireAuth, requireRole } from "./auth";
 import OpenAI from "openai";
 import { generateCourseDraft, improveText, generateQuizFromCourse, generateModuleContent, isAIAvailable, detectCourseType, type ImproveAction, type ToneOption, type AIQuizQuestion } from "./training-ai";
-import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail, sendAdminRequestReplyEmail, sendTrialAccountEmail, sendProposalEmail, sendHiringPackageEmail, sendTrainingAssignmentEmail, sendTrainingReminderEmail } from "./mail";
+import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail, sendAdminRequestReplyEmail, sendTrialAccountEmail, sendProposalEmail, sendHiringPackageEmail, sendTrainingAssignmentEmail, sendTrainingReminderEmail, sendBookingQuoteEmail, sendQuoteAcceptedAdminEmail, sendQuoteDeclinedAdminEmail } from "./mail";
 import { createHash } from "crypto";
 import passport from "passport";
 import { randomBytes } from "crypto";
@@ -12426,6 +12426,14 @@ Return ONLY valid JSON:
   });
 
   // ── Booking Requests ───────────────────────────────────────────────────────
+  app.get("/api/booking-requests/:id", requireAuth, requireRole("admin", "management"), async (req, res) => {
+    try {
+      const br = await storage.getBookingRequest(req.params.id);
+      if (!br) return res.status(404).json({ message: "Not found" });
+      res.json(br);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   app.get("/api/booking-requests", requireAuth, requireRole("admin", "management"), async (req, res) => {
     try {
       const user = req.user as any;
@@ -12478,6 +12486,300 @@ Return ONLY valid JSON:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ── Booking Estimates ──────────────────────────────────────────────────────
+  app.get("/api/booking-requests/:id/estimate", requireAuth, requireRole("admin", "management"), async (req, res) => {
+    try {
+      const estimate = await storage.getBookingEstimate(req.params.id);
+      res.json(estimate || null);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/booking-requests/:id/estimate", requireAuth, requireRole("admin", "management"), async (req, res) => {
+    try {
+      const existing = await storage.getBookingEstimate(req.params.id);
+      if (!existing) return res.status(404).json({ message: "No estimate found for this booking" });
+      const now = new Date().toISOString();
+      const updated = await storage.updateBookingEstimate(existing.id, { ...req.body, updatedAt: now });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/booking-requests/:id/estimate", requireAuth, requireRole("admin", "management"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const br = await storage.getBookingRequest(req.params.id);
+      if (!br) return res.status(404).json({ message: "Booking request not found" });
+      if (!br.serviceType) {
+        return res.status(400).json({ message: "Estimate needs service type and property details before it can be generated." });
+      }
+      const settings = await storage.getEstimatorSettings(user.companyId);
+      const isCommercial = ["Commercial", "Office", "Retail", "Property Manager"].includes(br.customerType) ||
+        ["Commercial Cleaning", "Office Cleaning", "Retail Cleaning", "Industrial Cleaning", "Medical / Clinic Cleaning"].includes(br.serviceType);
+      const commercial = (br.commercialDetails as any) || {};
+      const residential = (br.residentialDetails as any) || {};
+      const postConst = (br.postConstructionDetails as any) || {};
+      const moveInOut = (br.moveInOutDetails as any) || {};
+
+      const prompt = `You are an expert cleaning service estimator.
+
+SERVICE REQUEST:
+- Service Type: ${br.serviceType}
+- Customer Type: ${br.customerType}
+- Frequency: ${br.frequency}
+- Urgency: ${br.urgency}
+- Address: ${br.serviceAddress}${br.city ? `, ${br.city}` : ""}
+${isCommercial ? `COMMERCIAL DETAILS:
+- Business Type: ${commercial.businessType || "Not specified"}
+- Square Footage: ${commercial.squareFootage || "Not specified"}
+- Offices: ${commercial.numOffices || "?"}, Washrooms: ${commercial.numWashrooms || "?"}, Floors: ${commercial.numFloors || "?"}
+- Floor Types: ${(commercial.floorTypes || []).join(", ") || "Not specified"}
+- Floor Care Needs: ${(commercial.floorCareNeeds || []).join(", ") || "Not specified"}
+- Cleaning Time Preference: ${commercial.cleaningTimePreference || "Not specified"}
+- High-Touch Disinfection: ${commercial.highTouchDisinfection || "Not specified"}` : ""}
+${!isCommercial ? `RESIDENTIAL DETAILS:
+- Home Type: ${residential.homeType || "Not specified"}
+- Bedrooms: ${residential.numBedrooms || "?"}, Bathrooms: ${residential.numBathrooms || "?"}
+- Stories: ${residential.numStories || "?"}, Square Footage: ${residential.squareFootage || "?"}
+- Pets: ${residential.hasPets ? "Yes" : "No"}
+- Cleaning Type: ${residential.cleaningType || "Not specified"}
+- Areas to Clean: ${(residential.areasToClean || []).join(", ") || "Not specified"}
+- Special Conditions: ${(residential.specialConditions || []).join(", ") || "None"}` : ""}
+${br.serviceType === "Post-Construction Cleaning" ? `POST-CONSTRUCTION:
+- Project Type: ${postConst.projectType || "Not specified"}
+- Square Footage: ${postConst.squareFootage || "?"}, Floors: ${postConst.numFloors || "?"}
+- Heavy Dust: ${postConst.heavyDustPresent || "Not sure"}
+- Debris Removal: ${postConst.debrisRemovalNeeded || "Not sure"}` : ""}
+${["Move-In Cleaning", "Move-Out Cleaning"].includes(br.serviceType) ? `MOVE-IN/OUT:
+- Property Empty: ${moveInOut.propertyEmpty || "Not specified"}
+- Appliances: ${moveInOut.appliancesIncluded || "Not specified"}
+- Same Day: ${moveInOut.sameDayService || "No"}` : ""}
+NOTES: ${br.notes || "None"}${br.specialInstructions ? `\nSpecial Instructions: ${br.specialInstructions}` : ""}
+${settings ? `PRICING:
+- Hourly Rate: $${settings.hourlyRate}/hr
+- Minimum: $${settings.minimumJobPrice}
+${isCommercial && settings.commercialMultiplier ? `- Commercial Multiplier: ${settings.commercialMultiplier}x` : ""}` : ""}
+
+Return ONLY a valid JSON object:
+{
+  "estimated_hours": number,
+  "suggested_worker_count": number,
+  "suggested_low_price": number,
+  "suggested_high_price": number,
+  "recommended_price": number,
+  "minimum_price_warning": boolean,
+  "suggested_checklist": ["item1", "item2"],
+  "suggested_supplies": ["supply1", "supply2"],
+  "ai_summary": "2-3 sentence professional summary of what is needed and key factors that affect pricing"
+}`;
+
+      const OpenAI = (await import("openai")).default;
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.3,
+      });
+      const raw = completion.choices[0].message.content || "{}";
+      let parsed: any;
+      try {
+        const match = raw.match(/\{[\s\S]*\}/);
+        parsed = JSON.parse(match ? match[0] : raw);
+      } catch {
+        return res.status(500).json({ message: "AI estimate could not be generated. Please try again or check that service and property details are complete." });
+      }
+
+      const now = new Date().toISOString();
+      const existing = await storage.getBookingEstimate(br.id);
+      const estimateData = {
+        inputSnapshot: br as any,
+        estimatedHours: String(parsed.estimated_hours || 0),
+        suggestedWorkerCount: parsed.suggested_worker_count || 1,
+        suggestedLowPrice: String(parsed.suggested_low_price || 0),
+        suggestedHighPrice: String(parsed.suggested_high_price || 0),
+        recommendedPrice: String(parsed.recommended_price || 0),
+        minimumPriceWarning: !!parsed.minimum_price_warning,
+        suggestedChecklist: parsed.suggested_checklist || [],
+        suggestedSupplies: parsed.suggested_supplies || [],
+        aiSummary: parsed.ai_summary || "",
+        updatedAt: now,
+      };
+      let estimate;
+      if (existing) {
+        estimate = await storage.updateBookingEstimate(existing.id, estimateData);
+      } else {
+        estimate = await storage.createBookingEstimate({ ...estimateData, companyId: user.companyId, bookingRequestId: br.id, createdBy: user.id, createdAt: now });
+      }
+      await storage.updateBookingRequest(br.id, { status: "estimate_generated", estimateId: estimate!.id, updatedAt: now });
+      res.json(estimate);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Booking Quotes ──────────────────────────────────────────────────────────
+  app.get("/api/booking-requests/:id/quotes", requireAuth, requireRole("admin", "management"), async (req, res) => {
+    try { res.json(await storage.getBookingQuotes(req.params.id)); }
+    catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/booking-requests/:id/quotes", requireAuth, requireRole("admin", "management"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const br = await storage.getBookingRequest(req.params.id);
+      if (!br) return res.status(404).json({ message: "Booking request not found" });
+      if (!req.body.clientName || !req.body.email || !req.body.serviceAddress || !req.body.price) {
+        return res.status(400).json({ message: "Quote needs a client name, email, service address, and price before it can be saved." });
+      }
+      const now = new Date().toISOString();
+      const existing = await storage.getBookingQuotes(br.id);
+      const quoteNum = `BQ-${new Date().getFullYear()}-${String(existing.length + 1).padStart(3, "0")}`;
+      const slug = `bq-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+      const quote = await storage.createBookingQuote({
+        companyId: user.companyId, bookingRequestId: br.id, clientId: br.clientId || null,
+        quoteNumber: req.body.quoteNumber || quoteNum,
+        title: req.body.title || `${br.serviceType} Quote`,
+        clientName: req.body.clientName, companyName: req.body.companyName || null,
+        email: req.body.email, phone: req.body.phone || br.phone,
+        serviceAddress: req.body.serviceAddress, serviceType: req.body.serviceType || br.serviceType,
+        customerType: req.body.customerType || br.customerType,
+        scopeOfWork: req.body.scopeOfWork || null, checklist: req.body.checklist || null,
+        frequency: req.body.frequency || br.frequency, price: String(req.body.price),
+        taxes: req.body.taxes ? String(req.body.taxes) : null,
+        discount: req.body.discount ? String(req.body.discount) : null,
+        deposit: req.body.deposit ? String(req.body.deposit) : null,
+        terms: req.body.terms || null, includedItems: req.body.includedItems || null,
+        excludedItems: req.body.excludedItems || null, internalNotes: req.body.internalNotes || null,
+        publicLinkSlug: slug, status: "draft",
+        preferredDate: req.body.preferredDate || br.preferredDate,
+        preferredTime: req.body.preferredTime || br.preferredTime,
+        siteVisitNote: req.body.siteVisitNote || null,
+        expiresAt: req.body.expiresAt || null,
+        createdBy: user.id, createdAt: now, updatedAt: now,
+      });
+      await storage.updateBookingRequest(br.id, { status: "quote_draft", quoteId: quote.id, updatedAt: now });
+      res.status(201).json(quote);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/booking-requests/:id/quotes/:quoteId", requireAuth, requireRole("admin", "management"), async (req, res) => {
+    try {
+      const now = new Date().toISOString();
+      const quote = await storage.updateBookingQuote(req.params.quoteId, { ...req.body, updatedAt: now });
+      if (!quote) return res.status(404).json({ message: "Quote not found" });
+      res.json(quote);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/booking-requests/:id/quotes/:quoteId/send", requireAuth, requireRole("admin", "management"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const quote = await storage.getBookingQuote(req.params.quoteId);
+      if (!quote) return res.status(404).json({ message: "Quote not found" });
+      if (!quote.email || !quote.clientName || !quote.price) {
+        return res.status(400).json({ message: "Quote needs a client name, email, service address, and price before it can be sent." });
+      }
+      const company = await storage.getCompany(user.companyId);
+      const appBase = process.env.APP_URL || `${req.protocol}://${req.hostname}`;
+      const quoteUrl = `${appBase}/public/booking-quote/${quote.publicLinkSlug}`;
+      const now = new Date().toISOString();
+      let emailSent = true;
+      try {
+        await sendBookingQuoteEmail({
+          to: quote.email, clientName: quote.clientName,
+          businessName: company?.name || "Your Service Provider",
+          serviceType: quote.serviceType, quoteUrl,
+          price: `$${parseFloat(quote.price).toFixed(2)}`,
+          expiresAt: quote.expiresAt || undefined,
+        });
+      } catch { emailSent = false; }
+      await storage.updateBookingQuote(quote.id, { status: "sent", sentAt: now, updatedAt: now });
+      await storage.updateBookingRequest(req.params.id, { status: "quote_sent", updatedAt: now });
+      if (!emailSent) {
+        return res.json({ success: true, warning: "Quote was marked as sent, but the email could not be delivered. Please check email settings or share the quote link manually.", quoteUrl });
+      }
+      res.json({ success: true, quoteUrl });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/booking-requests/:id/confirm", requireAuth, requireRole("admin", "management"), async (req, res) => {
+    try {
+      const now = new Date().toISOString();
+      const br = await storage.updateBookingRequest(req.params.id, { status: "confirmed", updatedAt: now });
+      if (!br) return res.status(404).json({ message: "Booking request not found" });
+      res.json(br);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Public Quote View/Accept/Decline ────────────────────────────────────────
+  app.get("/api/public/booking-quote/:slug", async (req, res) => {
+    try {
+      const quote = await storage.getBookingQuoteBySlug(req.params.slug);
+      if (!quote) return res.status(404).json({ message: "Quote not found" });
+      const company = await storage.getCompany(quote.companyId);
+      if (quote.status === "sent") {
+        const now = new Date().toISOString();
+        await storage.updateBookingQuote(quote.id, { status: "viewed", viewedAt: now, updatedAt: now });
+        await storage.updateBookingRequest(quote.bookingRequestId, { status: "client_viewed", updatedAt: now });
+      }
+      const { internalNotes: _i, ...publicQuote } = quote;
+      res.json({ quote: publicQuote, businessName: company?.name || "Service Provider" });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/public/booking-quote/:slug/accept", async (req, res) => {
+    try {
+      const quote = await storage.getBookingQuoteBySlug(req.params.slug);
+      if (!quote) return res.status(404).json({ message: "Quote not found" });
+      if (["accepted", "declined"].includes(quote.status)) {
+        return res.status(400).json({ message: `This quote has already been ${quote.status}.` });
+      }
+      const now = new Date().toISOString();
+      await storage.updateBookingQuote(quote.id, { status: "accepted", acceptedAt: now, updatedAt: now });
+      await storage.updateBookingRequest(quote.bookingRequestId, { status: "quote_accepted", updatedAt: now });
+      try {
+        const admins = await storage.getAdminsByCompany(quote.companyId);
+        const adminEmail = admins[0]?.email;
+        const br = await storage.getBookingRequest(quote.bookingRequestId);
+        if (adminEmail && br) {
+          const appBase = process.env.APP_URL || "https://clockfield.app";
+          await sendQuoteAcceptedAdminEmail({
+            to: adminEmail, clientName: quote.clientName,
+            serviceType: quote.serviceType, serviceAddress: quote.serviceAddress,
+            price: `$${parseFloat(quote.price).toFixed(2)}`,
+            preferredDate: br.preferredDate || "Not specified",
+            appUrl: `${appBase}/admin/schedule`,
+          });
+        }
+      } catch { /* email failure is non-blocking */ }
+      res.json({ success: true, message: "Thank you. Your quote has been accepted. We will contact you to confirm the final booking details." });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/public/booking-quote/:slug/decline", async (req, res) => {
+    try {
+      const quote = await storage.getBookingQuoteBySlug(req.params.slug);
+      if (!quote) return res.status(404).json({ message: "Quote not found" });
+      if (["accepted", "declined"].includes(quote.status)) {
+        return res.status(400).json({ message: `This quote has already been ${quote.status}.` });
+      }
+      const now = new Date().toISOString();
+      const reason = req.body.reason || null;
+      await storage.updateBookingQuote(quote.id, { status: "declined", declinedAt: now, declineReason: reason, updatedAt: now });
+      await storage.updateBookingRequest(quote.bookingRequestId, { status: "quote_declined", updatedAt: now });
+      try {
+        const admins = await storage.getAdminsByCompany(quote.companyId);
+        const adminEmail = admins[0]?.email;
+        if (adminEmail) {
+          const appBase = process.env.APP_URL || "https://clockfield.app";
+          await sendQuoteDeclinedAdminEmail({
+            to: adminEmail, clientName: quote.clientName,
+            serviceType: quote.serviceType, declineReason: reason || undefined,
+            appUrl: `${appBase}/admin/schedule`,
+          });
+        }
+      } catch { /* non-blocking */ }
+      res.json({ success: true, message: "You have declined this quote. We appreciate your response and will follow up if needed." });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // Public booking form submission (no auth required)
   app.post("/api/public/booking-request/:companyId", async (req, res) => {
     try {
@@ -12490,8 +12792,17 @@ Return ONLY valid JSON:
         companyName: req.body.companyName || null,
         phone: req.body.phone,
         email: req.body.email,
+        bestContactMethod: req.body.bestContactMethod || null,
+        bestContactTime: req.body.bestContactTime || null,
         serviceAddress: req.body.serviceAddress,
         unitOrSuite: req.body.unitOrSuite || null,
+        city: req.body.city || null,
+        province: req.body.province || null,
+        postalCode: req.body.postalCode || null,
+        accessInstructions: req.body.accessInstructions || null,
+        parkingInstructions: req.body.parkingInstructions || null,
+        entryInstructions: req.body.entryInstructions || null,
+        alarmInstructions: req.body.alarmInstructions || null,
         serviceType: req.body.serviceType,
         customerType: req.body.customerType || "commercial",
         preferredDate: req.body.preferredDate,
@@ -12499,10 +12810,28 @@ Return ONLY valid JSON:
         alternateDate: req.body.alternateDate || null,
         alternateTime: req.body.alternateTime || null,
         frequency: req.body.frequency || "one_time",
-        notes: req.body.notes || null,
         urgency: req.body.urgency || "normal",
+        siteVisitPreference: req.body.siteVisitPreference || "no",
+        siteVisitDate: req.body.siteVisitDate || null,
+        siteVisitTime: req.body.siteVisitTime || null,
+        siteVisitContact: req.body.siteVisitContact || null,
+        commercialDetails: req.body.commercialDetails || null,
+        residentialDetails: req.body.residentialDetails || null,
+        postConstructionDetails: req.body.postConstructionDetails || null,
+        moveInOutDetails: req.body.moveInOutDetails || null,
+        uploadedPhotos: req.body.uploadedPhotos || null,
+        uploadedFiles: req.body.uploadedFiles || null,
+        notes: req.body.notes || null,
+        specialInstructions: req.body.specialInstructions || null,
+        areasAttention: req.body.areasAttention || null,
+        areasAvoid: req.body.areasAvoid || null,
+        healthSafetyConcerns: req.body.healthSafetyConcerns || null,
+        clientExpectations: req.body.clientExpectations || null,
+        consentGiven: req.body.consentGiven || false,
         status: "new",
         clientId: null,
+        estimateId: null,
+        quoteId: null,
         convertedJobId: null,
         createdAt: now,
         updatedAt: now,

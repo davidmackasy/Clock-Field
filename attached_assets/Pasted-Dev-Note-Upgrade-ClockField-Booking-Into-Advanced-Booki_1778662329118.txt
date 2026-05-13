@@ -1,0 +1,1922 @@
+Dev Note: Upgrade ClockField Booking Into Advanced Booking → Estimate → Quote → Client Approval Flow
+
+Goal
+
+Upgrade the current ClockField booking system so service businesses can collect complete booking details, review bookings in a calendar, generate estimates from booking information, create/send quotes to clients, receive client approval, and then confirm the booking.
+
+This must be done without breaking, changing, deleting, renaming, or affecting anything currently working in ClockField.
+
+Do not touch:
+
+Existing Schedule logic
+
+Existing Attendance
+
+Existing Clock In / Clock Out
+
+Existing Employees
+
+Existing Clients
+
+Existing Forms
+
+Existing Work Log
+
+Existing Field Notes
+
+Existing Reports
+
+Existing Payroll
+
+Existing Training Hub
+
+Existing Publications
+
+Existing Settings
+
+Existing public report links
+
+Existing estimate system unless only connecting to it safely
+
+This is an upgrade to Booking only.
+
+Core Concept
+
+Booking should become a full workflow:
+
+Client submits booking request
+Admin reviews booking
+Admin gets AI estimate from booking details
+Admin creates quote
+Admin sends quote link to client
+Client accepts or declines quote
+ClockField notifies admin
+Booking status updates
+Admin confirms booking
+Booking appears clearly on booking calendar
+Later, admin can create job/work from the approved booking if needed
+
+Important Rule
+
+A submitted booking is not automatically a confirmed job.
+
+A submitted booking is a request.
+
+Admin must review it, estimate it, send quote, and confirm it.
+
+Recommended Booking Statuses
+
+Use these statuses:
+
+New Booking Request
+
+Needs Review
+
+Estimate Generated
+
+Quote Draft
+
+Quote Sent
+
+Client Viewed Quote
+
+Quote Accepted
+
+Quote Declined
+
+Confirmed Booking
+
+Converted to Job
+
+Cancelled
+
+Archived
+
+Status meaning:
+
+New Booking Request
+Client submitted booking form.
+
+Needs Review
+Admin opened or needs to review details.
+
+Estimate Generated
+Admin generated estimate from booking details.
+
+Quote Draft
+Admin created quote but has not sent it.
+
+Quote Sent
+Quote link was sent to client.
+
+Client Viewed Quote
+Client opened quote link.
+
+Quote Accepted
+Client approved quote.
+
+Quote Declined
+Client declined quote.
+
+Confirmed Booking
+Admin confirmed booking after quote approval.
+
+Converted to Job
+Admin turned booking into an actual job/work plan.
+
+Cancelled
+Booking was cancelled.
+
+Archived
+Booking is no longer active.
+
+Part 1: Upgrade Public Booking Form
+
+The current form is too basic.
+
+Booking form must ask different questions based on customer type and service type.
+
+Keep the form clean. Use conditional sections so users only see questions that apply to them.
+
+Main form sections:
+
+Contact Information
+
+Service Location
+
+Service Details
+
+Property Details
+
+Cleaning Details
+
+Preferred Schedule
+
+Site Visit Option
+
+Photos / Files
+
+Additional Notes
+
+Consent
+
+Contact Information
+
+Fields:
+
+Your Name, required
+
+Company Name, optional
+
+Phone, required
+
+Email, required
+
+Best contact method
+
+Phone
+
+Email
+
+Text
+
+WhatsApp, optional
+
+Best time to contact, optional
+
+Service Location
+
+Fields:
+
+Service Address, required
+
+Unit / Suite, optional
+
+City
+
+Province / State
+
+Postal Code
+
+Access instructions, optional
+
+Parking instructions, optional
+
+Entry instructions, optional
+
+Alarm/key instructions, optional
+
+Service Details
+
+Fields:
+
+Service Type, required
+
+Customer Type, required
+
+Frequency, required
+
+Urgency, required
+
+Preferred service start date
+
+Preferred service time
+
+Alternate date
+
+Alternate time
+
+Do you need a site visit first?
+
+Yes
+
+No
+
+Not sure
+
+Service Type options:
+
+Commercial Cleaning
+
+Residential Cleaning
+
+Office Cleaning
+
+Retail Cleaning
+
+Post-Construction Cleaning
+
+Move-In Cleaning
+
+Move-Out Cleaning
+
+Deep Cleaning
+
+Recurring Cleaning
+
+One-Time Cleaning
+
+Industrial Cleaning
+
+Medical / Clinic Cleaning
+
+General Service Request
+
+Customer Type options:
+
+Commercial
+
+Residential
+
+Property Manager
+
+Construction
+
+Retail
+
+Office
+
+Other
+
+Frequency options:
+
+One-time
+
+Daily
+
+Weekly
+
+Bi-weekly
+
+Monthly
+
+Custom
+
+Urgency options:
+
+Normal
+
+Soon
+
+Urgent
+
+Emergency
+
+Commercial Conditional Questions
+
+Show these only when Customer Type is Commercial or Service Type is commercial-related.
+
+Fields:
+
+Business type
+
+Office
+
+Restaurant
+
+Retail
+
+Medical / Clinic
+
+Warehouse
+
+School / Daycare
+
+Gym
+
+Other
+
+Approximate square footage
+
+Number of offices
+
+Number of washrooms
+
+Number of toilets
+
+Number of sinks
+
+Number of kitchens / breakrooms
+
+Number of floors
+
+Number of entrances
+
+Number of common areas
+
+Number of meeting rooms
+
+Number of staff areas
+
+Number of garbage/recycling areas
+
+Floor types
+
+Tile
+
+Carpet
+
+Concrete
+
+Vinyl
+
+Hardwood
+
+Mixed
+
+Do you need floor care?
+
+Sweep
+
+Mop
+
+Vacuum
+
+Strip and wax
+
+Carpet cleaning
+
+Not sure
+
+Cleaning time preference
+
+During business hours
+
+After hours
+
+Weekend
+
+Flexible
+
+Is alarm/key access required?
+
+Yes
+
+No
+
+Not sure
+
+Any high-touch disinfection needed?
+
+Yes
+
+No
+
+Not sure
+
+Any supplies/equipment provided onsite?
+
+Yes
+
+No
+
+Some
+
+Do you need consumables restocked?
+
+Toilet paper
+
+Paper towel
+
+Soap
+
+Sanitizer
+
+Garbage bags
+
+Not needed
+
+Residential Conditional Questions
+
+Show these only when Customer Type is Residential or Service Type is residential-related.
+
+Fields:
+
+Home type
+
+House
+
+Apartment
+
+Condo
+
+Townhouse
+
+Basement suite
+
+Other
+
+Number of stories
+
+1 story
+
+2 stories
+
+3 stories
+
+Basement included
+
+Number of bedrooms
+
+Number of bathrooms
+
+Number of toilets
+
+Number of kitchens
+
+Number of living rooms
+
+Number of dining rooms
+
+Number of laundry rooms
+
+Number of basement areas
+
+Number of staircases
+
+Approximate square footage, optional
+
+Do you have pets?
+
+Yes
+
+No
+
+If yes, what type?
+
+Dogs
+
+Cats
+
+Other
+
+Cleaning type
+
+Regular clean
+
+Deep clean
+
+Move-in clean
+
+Move-out clean
+
+Post-renovation clean
+
+Airbnb/short-term rental clean
+
+Areas to clean
+
+Kitchen
+
+Bathrooms
+
+Bedrooms
+
+Living room
+
+Dining room
+
+Laundry room
+
+Basement
+
+Stairs
+
+Windows
+
+Inside appliances
+
+Inside cabinets
+
+Walls/baseboards
+
+Floors
+
+Other
+
+Inside appliance cleaning
+
+Fridge
+
+Oven
+
+Microwave
+
+Dishwasher
+
+Not needed
+
+Special conditions
+
+Heavy dust
+
+Pet hair
+
+Grease buildup
+
+Mold concern
+
+Clutter
+
+Post-renovation dust
+
+Empty property
+
+Occupied property
+
+Cleaning supplies
+
+Client provides supplies
+
+Cleaner should bring supplies
+
+Not sure
+
+Post-Construction Conditional Questions
+
+Show these for Post-Construction Cleaning.
+
+Fields:
+
+Project type
+
+New build
+
+Renovation
+
+Commercial build
+
+Residential renovation
+
+Approximate square footage
+
+Number of floors
+
+Is heavy dust present?
+
+Yes
+
+No
+
+Not sure
+
+Is debris removal needed?
+
+Yes
+
+No
+
+Not sure
+
+Are windows included?
+
+Yes
+
+No
+
+Not sure
+
+Are floors finished?
+
+Yes
+
+No
+
+Not sure
+
+Is the site safe and accessible?
+
+Yes
+
+No
+
+Not sure
+
+Preferred completion deadline
+
+Photos required before quote?
+
+Yes
+
+No
+
+Move-In / Move-Out Conditional Questions
+
+Fields:
+
+Is the property empty?
+
+Yes
+
+No
+
+Partially
+
+Are appliances included?
+
+Yes
+
+No
+
+Are cabinets included?
+
+Yes
+
+No
+
+Are carpets included?
+
+Yes
+
+No
+
+Do you need garbage removal?
+
+Yes
+
+No
+
+Do you need same-day service?
+
+Yes
+
+No
+
+Move date
+
+Key pickup/access instructions
+
+Photos / Files Upload
+
+Allow client to upload photos.
+
+Fields:
+
+Upload photos of space, optional but encouraged
+
+Upload floor plan, optional
+
+Upload checklist, optional
+
+Supported files:
+
+Images
+
+PDF
+
+Doc, optional
+
+Limit file size safely.
+
+Do not break existing upload system.
+
+Use current storage system if available.
+
+Site Visit Option
+
+Add a clear section:
+
+Would you like a site visit before we provide final pricing?
+
+Options:
+
+Yes, I want a site visit first
+
+No, please estimate based on the information I provided
+
+Not sure, contact me first
+
+If site visit is selected, ask:
+
+Preferred site visit date
+
+Preferred site visit time
+
+Who should we contact onsite?
+
+Additional Notes
+
+Fields:
+
+Special instructions
+
+Areas that need extra attention
+
+Areas to avoid
+
+Health/safety concerns
+
+Client expectations
+
+Consent
+
+Checkbox:
+
+I agree to be contacted regarding my booking request and consent to the collection of my information for the purpose of scheduling services.
+
+Submit button:
+
+Submit Booking Request
+
+After Submit Message
+
+Show:
+
+Thank you. Your booking request has been submitted. We will review the details and contact you with an estimate or quote.
+
+Do not show confirmed booking language yet.
+
+Part 2: Booking Calendar
+
+Add a proper Booking Calendar view.
+
+This should not replace the existing Schedule.
+
+This should live inside Booking area or Schedule → Booking Requests tab.
+
+Calendar Views
+
+Monthly view
+
+Weekly view
+
+Daily view
+
+List view
+
+Calendar should show:
+
+New booking requests
+
+Quote sent
+
+Quote accepted
+
+Confirmed bookings
+
+Site visit requested
+
+Cancelled bookings
+
+Calendar item should show:
+
+Client name
+
+Service type
+
+Preferred date/time
+
+Status
+
+Urgency
+
+Clicking a booking opens a preview drawer/modal.
+
+Booking Preview Drawer
+
+When admin clicks a booking, show:
+
+Client contact information
+
+Service location
+
+Service type
+
+Customer type
+
+Frequency
+
+Urgency
+
+Preferred schedule
+
+Site visit preference
+
+Commercial/residential details
+
+Uploaded photos
+
+Notes
+
+Current status
+
+Estimate section
+
+Quote section
+
+Client response section
+
+Action buttons:
+
+Get Estimate
+
+Create Quote
+
+Send Quote
+
+Mark Follow Up
+
+Confirm Booking
+
+Convert to Job, optional later
+
+Cancel
+
+Archive
+
+Important:
+
+Do not redirect admin to unrelated Forms page.
+
+Booking must have its own preview.
+
+Part 3: Connect Booking to Existing Estimate System
+
+There is already an estimate feature in the system.
+
+Do not rebuild it if it works.
+
+Add a safe connection from Booking → Estimate.
+
+Button:
+
+Get Estimate
+
+When admin clicks Get Estimate:
+
+Use booking form data as input.
+
+Send relevant details to existing estimate logic.
+
+Generate estimate idea.
+
+Save estimate to the booking record.
+
+Show estimate inside booking preview.
+
+Estimate should include:
+
+Estimated labor hours
+
+Suggested number of cleaners/workers
+
+Suggested price range
+
+Recommended price
+
+Low price warning
+
+Suggested checklist
+
+Suggested supplies
+
+Suggested notes
+
+Commercial-specific estimate factors:
+
+Square footage
+
+Number of offices
+
+Number of washrooms
+
+Number of floors
+
+Frequency
+
+After-hours access
+
+Floor types
+
+Special requirements
+
+Residential-specific estimate factors:
+
+Number of bedrooms
+
+Bathrooms
+
+Stories
+
+Kitchen
+
+Laundry
+
+Basement
+
+Pets
+
+Deep clean/move-out
+
+Special conditions
+
+Post-construction estimate factors:
+
+Dust level
+
+Square footage
+
+Debris
+
+Windows
+
+Floors
+
+Deadline
+
+Important Rules
+
+Estimate is guidance only.
+
+Admin must review and edit price.
+
+Do not automatically send estimate to client.
+
+Do not automatically create quote.
+
+Do not affect existing estimate forms.
+
+Do not break current estimate system.
+
+If estimate fails, show useful error:
+
+Estimate could not be generated because square footage, service type, or property details are missing.
+
+Not:
+
+Could not generate estimate.
+
+Part 4: Create Quote From Booking
+
+Add button:
+
+Create Quote
+
+Admin can create quote from:
+
+Booking details
+
+Generated estimate
+
+Manual price
+
+Existing client, if linked
+
+Quote Builder Fields
+
+Quote title
+
+Client name
+
+Company name
+
+Email
+
+Phone
+
+Service address
+
+Service type
+
+Customer type
+
+Scope of work
+
+Checklist
+
+Frequency
+
+Preferred date/time
+
+Site visit note, if applicable
+
+Price
+
+Taxes, optional
+
+Discount, optional
+
+Deposit, optional
+
+Terms
+
+What is included
+
+What is not included
+
+Expiration date
+
+Internal notes, hidden from client
+
+Admin can edit everything before sending.
+
+Quote Statuses
+
+Draft
+
+Sent
+
+Viewed
+
+Accepted
+
+Declined
+
+Expired
+
+Cancelled
+
+Quote Public Link
+
+Create a public quote link.
+
+Client should be able to:
+
+Open quote
+
+Read service details
+
+View price
+
+View scope
+
+View included services
+
+View terms
+
+Accept quote
+
+Decline quote
+
+Add response note, optional
+
+Important:
+
+Quote link is not the same as report link.
+
+Quote link is before work starts.
+
+Report link is after work is done.
+
+Do not change existing public report link system.
+
+Part 5: Send Quote By Email
+
+Use existing ClockField email system.
+
+Do not add a new email provider.
+
+When admin clicks Send Quote:
+
+Send client an email with quote link.
+
+Update quote status to Sent.
+
+Update booking status to Quote Sent.
+
+Save sent timestamp.
+
+Email subject example:
+
+Your cleaning service quote from [Business Name]
+
+Email body example:
+
+Hi [Client Name],
+
+Your quote is ready. You can review the service details, price, and scope of work using the link below.
+
+[View Quote]
+
+Thank you,
+[Business Name]
+
+Do not send automatically unless admin clicks Send Quote.
+
+Part 6: Client Quote Approval
+
+When client opens the quote link, update status:
+
+Client Viewed Quote
+
+When client clicks Accept:
+
+Update quote status to Accepted.
+
+Update booking status to Quote Accepted.
+
+Record accepted_at timestamp.
+
+Send email notification to admin.
+
+Show client success message:
+
+Thank you. Your quote has been accepted. We will contact you to confirm the final booking details.
+
+When client clicks Decline:
+
+Update quote status to Declined.
+
+Update booking status to Quote Declined.
+
+Ask optional reason:
+
+Price
+
+Timing
+
+Scope
+
+No longer needed
+
+Other
+
+Send admin notification.
+
+Part 7: Admin Notification For Quote Approval
+
+When quote is accepted:
+
+Send admin email notification using existing email system.
+
+Email subject:
+
+Quote accepted: [Client Name] - [Service Type]
+
+Email body:
+
+A client has accepted a quote in ClockField.
+
+Client: [Client Name]
+Service: [Service Type]
+Address: [Service Address]
+Quoted Price: [Price]
+Preferred Date: [Preferred Date]
+
+Log into ClockField and open Booking Requests to confirm the booking.
+
+Also add in-app notification:
+
+Quote accepted. Please review and confirm booking.
+
+Important:
+
+Admin should still confirm the booking after quote acceptance.
+
+Quote acceptance should not automatically create schedule or job unless admin chooses.
+
+Part 8: Confirm Booking
+
+After quote is accepted, admin should see button:
+
+Confirm Booking
+
+When admin confirms:
+
+Booking status becomes Confirmed Booking.
+
+Booking appears as confirmed on calendar.
+
+Admin can optionally:
+
+Link to existing client
+
+Create new client using existing client flow
+
+Create job, if Jobs feature exists
+
+Add internal notes
+
+Add scheduled date/time
+
+Assign worker later, if needed
+
+Important:
+
+Do not automatically modify existing Schedule.
+
+Do not automatically assign employee.
+
+Do not automatically create attendance.
+
+Confirmation should only confirm the booking record.
+
+If connecting to Job system later, use Convert to Job action.
+
+Part 9: Convert Booking to Job
+
+If Jobs feature exists or is enabled, add optional button:
+
+Convert to Job
+
+This should happen only after admin action.
+
+Convert flow:
+
+Admin opens accepted/confirmed booking.
+
+Clicks Convert to Job.
+
+Admin selects existing client or creates client through existing client flow.
+
+Admin confirms location.
+
+Admin selects date/time.
+
+Admin assigns worker or team, optional.
+
+Admin adds checklist and photo requirements.
+
+Admin saves job.
+
+Booking status becomes Converted to Job.
+
+Do not touch existing schedule logic.
+
+Do not force this step.
+
+Part 10: Data Model
+
+Use additive-only changes.
+
+Do not delete or rename existing tables.
+
+Do not modify existing records in a risky way.
+
+booking_requests table additions
+
+Add or update fields:
+
+id
+
+business_id
+
+client_id, nullable
+
+location_id, nullable
+
+name
+
+company_name, nullable
+
+phone
+
+email
+
+best_contact_method
+
+best_contact_time, nullable
+
+service_address
+
+unit_or_suite, nullable
+
+city
+
+province
+
+postal_code
+
+service_type
+
+customer_type
+
+frequency
+
+urgency
+
+preferred_date
+
+preferred_time
+
+alternate_date, nullable
+
+alternate_time, nullable
+
+site_visit_preference
+
+site_visit_date, nullable
+
+site_visit_time, nullable
+
+commercial_details, json nullable
+
+residential_details, json nullable
+
+post_construction_details, json nullable
+
+move_in_out_details, json nullable
+
+uploaded_photos, json nullable
+
+uploaded_files, json nullable
+
+notes
+
+consent_given
+
+status
+
+estimate_id, nullable
+
+quote_id, nullable
+
+converted_job_id, nullable
+
+created_at
+
+updated_at
+
+booking_estimates table
+
+If existing estimate system cannot store booking estimates safely, add:
+
+id
+
+business_id
+
+booking_request_id
+
+input_snapshot, json
+
+estimated_hours
+
+suggested_worker_count
+
+suggested_low_price
+
+suggested_high_price
+
+recommended_price
+
+minimum_price_warning
+
+suggested_checklist, json
+
+suggested_supplies, json
+
+ai_summary
+
+admin_final_price, nullable
+
+created_by
+
+created_at
+
+updated_at
+
+booking_quotes table
+
+id
+
+business_id
+
+booking_request_id
+
+client_id, nullable
+
+quote_number
+
+title
+
+client_name
+
+company_name, nullable
+
+email
+
+phone
+
+service_address
+
+service_type
+
+customer_type
+
+scope_of_work
+
+checklist, json nullable
+
+frequency
+
+price
+
+taxes, nullable
+
+discount, nullable
+
+deposit, nullable
+
+terms
+
+included_items
+
+excluded_items
+
+internal_notes, nullable
+
+public_link_slug
+
+status
+
+sent_at, nullable
+
+viewed_at, nullable
+
+accepted_at, nullable
+
+declined_at, nullable
+
+decline_reason, nullable
+
+expires_at, nullable
+
+created_by
+
+created_at
+
+updated_at
+
+Important:
+
+Use JSON fields for conditional commercial/residential details to avoid too many rigid columns.
+
+All new fields must be nullable where possible.
+
+Old booking records must still load.
+
+Part 11: Admin UI Requirements
+
+Booking page should feel premium and easy.
+
+Do not crowd the sidebar.
+
+Recommended placement:
+
+Schedule → Booking Requests
+
+or existing Bookings page if already created.
+
+Booking page tabs:
+
+Calendar
+
+Requests
+
+Quotes
+
+Accepted
+
+Archived
+
+Calendar View
+
+Monthly calendar
+
+Weekly calendar
+
+Daily list
+
+Color/status indicators
+
+Booking count per day
+
+Click booking to preview
+
+Request List View
+
+Columns/cards:
+
+Client name
+
+Service type
+
+Customer type
+
+Preferred date
+
+Urgency
+
+Status
+
+Quote status
+
+Estimate status
+
+Actions
+
+Booking Detail Drawer
+
+Use drawer/modal instead of too many new pages.
+
+Sections:
+
+Contact
+
+Location
+
+Service details
+
+Commercial/residential details
+
+Photos/files
+
+Notes
+
+Estimate
+
+Quote
+
+Client response
+
+Timeline
+
+Actions:
+
+Get Estimate
+
+Create Quote
+
+Send Quote
+
+Confirm Booking
+
+Convert to Job
+
+Cancel
+
+Archive
+
+Part 12: Public Quote Page UI
+
+Make public quote link mobile-friendly.
+
+Show:
+
+Business logo
+
+Business name
+
+Quote title
+
+Client name
+
+Service address
+
+Service type
+
+Scope of work
+
+Included services
+
+Price
+
+Terms
+
+Expiration date
+
+Accept Quote button
+
+Decline Quote button
+
+Optional message box
+
+Do not show:
+
+Internal notes
+
+AI estimate reasoning
+
+Profit margin
+
+Labor cost
+
+Worker names
+
+Admin-only data
+
+Part 13: Timeline / Activity Log
+
+Each booking should have a timeline.
+
+Track:
+
+Booking submitted
+
+Admin viewed
+
+Estimate generated
+
+Quote created
+
+Quote sent
+
+Client viewed quote
+
+Client accepted quote
+
+Client declined quote
+
+Booking confirmed
+
+Booking converted to job
+
+This helps admin understand what happened.
+
+Part 14: Error Handling
+
+Replace vague errors.
+
+Bad:
+
+Could not create quote.
+
+Good:
+
+Quote needs a client name, email, service address, and price before it can be sent.
+
+Bad:
+
+Could not generate estimate.
+
+Good:
+
+Estimate needs service type and property details before it can be generated.
+
+Bad:
+
+Could not send email.
+
+Good:
+
+Quote was created, but the email could not be sent. Please check email settings or copy the quote link manually.
+
+Part 15: Permissions
+
+Admin/Management can:
+
+View bookings
+
+Review bookings
+
+Generate estimates
+
+Create quotes
+
+Send quotes
+
+Confirm bookings
+
+Convert bookings to jobs
+
+Archive bookings
+
+Employee/Cleaner should not access:
+
+Quote pricing
+
+Estimate suggestions
+
+Client lead details
+
+Booking admin notes
+
+Public Client can:
+
+Submit booking form
+
+View quote link
+
+Accept quote
+
+Decline quote
+
+They must not access dashboard data.
+
+Part 16: Notifications
+
+Use existing notification/email system only.
+
+Notifications needed:
+
+Admin receives new booking request.
+
+Admin receives quote accepted.
+
+Admin receives quote declined.
+
+Client receives quote email.
+
+Optional:
+
+Admin receives site visit request.
+
+Admin receives urgent booking alert.
+
+Do not add a new email provider.
+
+Do not send automatic quote emails without admin action.
+
+Part 17: Testing Checklist
+
+Existing features must still work:
+
+Existing Schedule works.
+
+Existing Attendance works.
+
+Existing Clock In works.
+
+Existing Clock Out works.
+
+Existing Clients work.
+
+Existing Employees work.
+
+Existing Forms work.
+
+Existing Estimates work.
+
+Existing Field Notes work.
+
+Existing Work Reports work.
+
+Existing public report links work.
+
+Existing Payroll works.
+
+Existing Training Hub works.
+
+Existing Publications work.
+
+Booking form tests:
+
+Commercial booking shows commercial questions.
+
+Residential booking shows residential questions.
+
+Post-construction booking shows construction questions.
+
+Move-in/move-out booking shows related questions.
+
+User can upload photos.
+
+User can select site visit preference.
+
+Booking submits successfully.
+
+Booking appears in admin Booking Requests.
+
+Calendar tests:
+
+Booking appears on monthly calendar.
+
+Booking appears on selected preferred date.
+
+Admin can click booking.
+
+Booking preview opens.
+
+Status is visible.
+
+Estimate tests:
+
+Admin can click Get Estimate.
+
+Estimate uses booking data.
+
+Estimate saves to booking.
+
+Admin can edit final price.
+
+Estimate does not send to client automatically.
+
+Quote tests:
+
+Admin can create quote from booking.
+
+Admin can edit quote.
+
+Admin can send quote by email.
+
+Quote status updates to Sent.
+
+Client can open quote link.
+
+Client can accept quote.
+
+Client can decline quote.
+
+Admin receives accepted/declined notification.
+
+Booking status updates correctly.
+
+Confirmation tests:
+
+Admin can confirm accepted booking.
+
+Booking appears as confirmed on calendar.
+
+Booking does not automatically create attendance.
+
+Booking does not automatically change schedule.
+
+Booking does not automatically assign employee.
+
+Safety tests:
+
+Old booking records still load.
+
+Existing form links still work.
+
+Existing estimates still work.
+
+Existing report links still work.
+
+No data is deleted.
+
+No existing module is renamed.
+
+Acceptance Criteria
+
+This update is complete when:
+
+Booking form collects detailed commercial and residential information.
+
+Booking form changes questions based on service/customer type.
+
+Admin can view bookings in calendar form.
+
+Admin can click a booking and preview full details.
+
+Admin can generate an estimate from booking details.
+
+Admin can create a quote from booking.
+
+Admin can send quote using existing email system.
+
+Client receives quote link.
+
+Client can accept or decline quote.
+
+Admin receives email/in-app notification when quote is accepted or declined.
+
+Booking status updates after client response.
+
+Admin can confirm booking after quote acceptance.
+
+All existing ClockField features still work.
+
+Nothing existing is deleted, renamed, or broken.
+
+Final Product Flow
+
+Client submits booking request.
+Admin reviews booking on calendar.
+Admin generates estimate.
+Admin creates quote.
+Admin sends quote link.
+Client accepts quote.
+Admin gets notified.
+Admin confirms booking.
+ClockField keeps everything organized.
