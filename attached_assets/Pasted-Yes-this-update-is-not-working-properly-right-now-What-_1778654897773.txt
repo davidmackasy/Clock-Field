@@ -1,0 +1,353 @@
+Yes, this update is not working properly right now.
+What happened is the Sales Hub was added visually, but the actions are not connected to real Sales Hub workflows. It looks like buttons are being redirected to existing Forms or Clients pages instead of opening the correct Lead, Site Walk, and Proposal flows.
+Here is the dev note to fix it properly.
+Dev Note: Fix ClockField Sales Hub Routing, Actions, and Create Flows Without Affecting Existing Features
+Goal
+Fix the Sales Hub so it works as a real sales pipeline, not just a page that redirects users to unrelated existing pages.
+The current issue:
+New Proposal button shows “Could not create proposal”
+Create Proposal button shows “Could not create proposal”
+New Site Walk / Start a Walk shows an error
+Lead Inbox redirects to Forms/submissions instead of a proper Lead Inbox
+Recent Leads item redirects to the form instead of a lead detail page
+Quick Actions redirect to existing pages without proper Sales context
+Sales Hub cards are showing data, but the actions are not usable
+This must be fixed without changing or breaking:
+Existing Forms
+Existing Clients
+Existing Work Log
+Existing Field Notes
+Existing Reports
+Existing Schedules
+Existing Attendance
+Existing Clock In / Clock Out
+Existing Payroll
+Existing Publications
+Existing Training Hub
+Existing public form links
+Main Rule
+Sales Hub should not randomly redirect users to Forms or Clients.
+Sales Hub should have its own proper flow:
+Sales Hub
+→ Lead Inbox
+→ Lead Detail
+→ Start Site Walk
+→ Create Estimate / Pricing
+→ Create Proposal
+→ Send Proposal
+→ Convert to Client only when ready
+Existing Forms can still be used as the source of leads, but Sales Hub needs its own screens and actions.
+Current Problem To Fix
+Problem 1: Lead Inbox button
+Current behavior:
+Clicking Lead Inbox redirects to Forms/submissions.
+Correct behavior:
+Clicking Lead Inbox should open a Sales Lead Inbox page.
+Route example:
+/admin/sales/leads
+This page should show all sales leads created from quote request forms, estimates, or manual entry.
+Do not send the admin to the generic Forms page.
+Problem 2: Recent Lead card
+Current behavior:
+Clicking David Mackasy lead opens the shareable form or form page.
+Correct behavior:
+Clicking a lead card should open the Lead Detail page.
+Route example:
+/admin/sales/leads/:leadId
+Lead Detail should show:
+Lead name
+Company name
+Phone
+Email
+Service address
+Service type
+Lead source
+Submitted date
+Photos, if any
+Notes
+Current stage
+Linked estimate, if any
+Linked site walk, if any
+Linked proposal, if any
+Actions:
+Start Site Walk
+Create Estimate
+Create Proposal
+Mark Follow Up
+Mark Won
+Mark Lost
+Convert to Client
+Problem 3: New Site Walk / Start a Walk
+Current behavior:
+Clicking New Site Walk or Start a Walk gives an error.
+Correct behavior:
+The button should open a Site Walk creation modal or page.
+Route examples:
+/admin/sales/site-walks/new
+or modal from Sales Hub
+If user starts from a lead, pass lead_id.
+Example:
+/admin/sales/site-walks/new?leadId=123
+If user starts without a lead, allow manual selection:
+Select existing lead, optional
+Select existing client, optional
+Enter service address
+Select service type
+Add notes
+Start site walk
+Do not fail just because there is no lead selected.
+Problem 4: New Proposal / Create Proposal
+Current behavior:
+Shows error “Could not create proposal.”
+Correct behavior:
+Clicking New Proposal should open a proposal creation modal or page.
+Route examples:
+/admin/sales/proposals/new
+If started from a lead:
+/admin/sales/proposals/new?leadId=123
+If started from Sales Hub with no lead selected, show a setup screen:
+Choose lead
+or choose existing client
+or create proposal manually
+Required minimum fields before saving:
+Proposal title
+Client or lead name
+Service address
+Service type
+Scope of work
+Price
+Status = Draft
+Do not try to create a proposal with missing required data and then throw an error.
+Problem 5: Quick Actions
+Current behavior:
+Quick Actions are not clear and redirect to existing pages.
+Correct behavior:
+Quick Actions should either open Sales Hub pages or clearly say when they are using an existing system.
+Quick Action buttons should be:
+Lead Inbox → /admin/sales/leads
+New Site Walk → /admin/sales/site-walks/new
+New Proposal → /admin/sales/proposals/new
+Clients → existing Clients page is okay
+But do not make Lead Inbox open Forms.
+Do not make New Proposal open Clients.
+Do not make Site Walk open Forms.
+Correct Sales Hub Structure
+Keep Sales Hub as the main dashboard.
+Sales Hub should show:
+Pipeline Overview
+Active Leads
+Site Walks
+Proposals Sent
+Accepted
+Lead Stages
+New Request
+Estimated
+Needs Review
+Quote Ready
+Quote Sent
+Follow Up
+Won
+Lost
+Recent Leads
+Recent Walks
+Recent Proposals
+Quick Actions
+But each section must connect to a proper Sales route.
+Required Sales Routes
+Add or fix these routes:
+/admin/sales
+Main Sales Hub dashboard
+/admin/sales/leads
+Lead Inbox
+/admin/sales/leads/:leadId
+Lead Detail
+/admin/sales/site-walks
+Site Walk list
+/admin/sales/site-walks/new
+Create Site Walk
+/admin/sales/site-walks/:walkId
+Site Walk Detail
+/admin/sales/proposals
+Proposal list
+/admin/sales/proposals/new
+Create Proposal
+/admin/sales/proposals/:proposalId
+Proposal Detail / Editor
+Do not reuse public form routes for admin sales pages.
+Data Source Rules
+Forms can feed leads into Sales Hub.
+But Sales Hub should not be the same as Forms.
+Correct logic:
+Public form submission creates a Sales Lead.
+Sales Lead appears in Lead Inbox.
+Admin works on the lead inside Sales Hub.
+The original form submission can remain linked in the background.
+Do not send admin back to the public form or shareable form when they click a lead.
+Lead Detail Data
+If the lead came from a form submission, copy or map the important data into the Sales Lead view:
+Name
+Email
+Phone
+Company
+Address
+Service type
+Notes
+Uploaded photos
+Submission date
+Form source
+The admin should not need to open the Forms module just to manage a lead.
+Create Proposal Fix
+The proposal create flow should not immediately call the backend with empty data.
+Use this flow instead:
+User clicks New Proposal.
+Open proposal setup page or modal.
+Ask user to select:
+Lead
+Existing client
+or manual proposal
+Then load basic data.
+User adds required fields.
+User clicks Save Draft.
+Backend creates proposal.
+Show success.
+Open proposal editor.
+If creation fails, show a clean error with the real reason.
+Example clean error:
+“Proposal could not be created because a client, lead, or service address is required.”
+Not:
+“Could not create proposal.”
+Site Walk Fix
+The site walk create flow should not fail when there are no existing site walks.
+Use this flow:
+User clicks New Site Walk.
+Open setup modal/page.
+Ask:
+Select lead, optional
+Select client, optional
+Service address
+Service type
+Walkthrough title
+Notes
+User clicks Start Walk.
+Backend creates site walk draft.
+Open site walk detail page.
+If lead/client is not selected, allow manual walk if address is provided.
+Site Walk fields:
+id
+business_id
+lead_id, nullable
+client_id, nullable
+location_id, nullable
+title
+service_address
+service_type
+status
+notes
+photos
+created_by
+created_at
+updated_at
+Proposal fields:
+id
+business_id
+lead_id, nullable
+client_id, nullable
+site_walk_id, nullable
+title
+service_address
+service_type
+scope_of_work
+price
+status
+public_link_slug, nullable
+created_by
+created_at
+updated_at
+Important:
+lead_id and client_id should be nullable.
+This prevents errors when creating drafts.
+Better Empty States
+Recent Walks empty state currently says “No site walks yet” with Start a Walk button.
+That is good, but the button must work.
+Recent Proposals empty state says “No proposals yet” with Create Proposal button.
+That is good, but the button must work.
+Add better empty state messages:
+Recent Walks:
+“No site walks yet. Start a walkthrough from a lead or create one manually.”
+Button:
+Start Site Walk
+Recent Proposals:
+“No proposals yet. Create a draft proposal from a lead, site walk, or existing client.”
+Button:
+Create Proposal
+Error Toast Fix
+The current red error toast is too aggressive and not helpful.
+Replace generic errors with useful messages.
+Instead of:
+“Could not create proposal.”
+Use:
+“Proposal needs a lead, client, or service address before it can be created.”
+Instead of:
+“Could not create site walk.”
+Use:
+“Site walk needs a lead, client, or service address before it can be started.”
+Also log the real backend error in console/dev logs for debugging.
+Do not show raw technical errors to users.
+What Not To Do
+Do not remove the Sales Hub.
+Do not redirect Lead Inbox to Forms.
+Do not redirect proposal actions to Clients.
+Do not rebuild the existing Forms module.
+Do not change public form links.
+Do not change existing Clients page.
+Do not change existing Field Notes.
+Do not change existing Work Log.
+Do not change existing report links.
+Do not change attendance or schedule logic.
+Do not change payroll.
+Do not rename existing tables.
+Do not delete any sales data already created.
+Expected Correct User Flow
+Flow 1: Lead comes from form
+Client fills quote request form.
+Lead appears in Sales Hub.
+Admin clicks lead.
+Admin opens Lead Detail.
+Admin starts site walk.
+Admin creates estimate.
+Admin creates proposal.
+Admin sends proposal.
+If accepted, admin converts to client.
+Flow 2: Admin creates proposal manually
+Admin opens Sales Hub.
+Clicks New Proposal.
+Chooses existing client or manual proposal.
+Adds service address, scope, and price.
+Saves draft.
+Proposal appears under Recent Proposals.
+Flow 3: Admin starts site walk manually
+Admin opens Sales Hub.
+Clicks New Site Walk.
+Selects lead/client or enters address manually.
+Starts site walk.
+Site walk appears under Recent Walks.
+Acceptance Criteria
+This fix is complete when:
+Lead Inbox opens a real Sales Lead Inbox, not Forms.
+Recent lead opens Lead Detail, not public form/shareable form.
+New Site Walk opens a working creation flow.
+Start a Walk works from empty state.
+New Proposal opens a working creation flow.
+Create Proposal works from empty state.
+Proposal can be saved as Draft.
+Site Walk can be saved as Draft.
+Buttons no longer throw generic errors.
+Sales Hub actions stay inside Sales Hub.
+Existing Forms still work.
+Existing Clients still work.
+Existing Field Notes still work.
+Existing Work Log still works.
+Existing report links still work.
+Existing schedule, attendance, and payroll are untouched.
+Simple instruction to the agent
+Fix the Sales Hub so it has real internal sales routes and working create flows. Do not use the Forms page as the Lead Inbox. Forms can feed leads into Sales Hub, but Sales Hub needs its own Lead Inbox, Lead Detail, Site Walk, and Proposal pages. Do not touch or break existing ClockField modules.
