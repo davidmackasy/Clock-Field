@@ -12513,78 +12513,133 @@ Return ONLY valid JSON:
         return res.status(400).json({ message: "Estimate needs service type and property details before it can be generated." });
       }
       const settings = await storage.getEstimatorSettings(user.companyId);
-      const isCommercial = ["Commercial", "Office", "Retail", "Property Manager"].includes(br.customerType) ||
-        ["Commercial Cleaning", "Office Cleaning", "Retail Cleaning", "Industrial Cleaning", "Medical / Clinic Cleaning"].includes(br.serviceType);
+      const isCommercial = ["Commercial", "Office", "Retail", "Property Manager"].includes(br.customerType ?? "") ||
+        ["Commercial Cleaning", "Office Cleaning", "Retail Cleaning", "Industrial Cleaning", "Medical / Clinic Cleaning"].includes(br.serviceType ?? "");
       const commercial = (br.commercialDetails as any) || {};
       const residential = (br.residentialDetails as any) || {};
       const postConst = (br.postConstructionDetails as any) || {};
       const moveInOut = (br.moveInOutDetails as any) || {};
+      const hasResidentialData = Object.keys(residential).length > 0;
+      const hasCommercialData = Object.keys(commercial).length > 0;
+      const isPostConstruction = (br.serviceType ?? "").includes("Post-Construction");
+      const isMoveInOut = ["Move-In Cleaning", "Move-Out Cleaning"].some(t => (br.serviceType ?? "").includes(t.split(" ")[0]));
 
-      const prompt = `You are an expert cleaning service estimator.
+      const arr = (v: any) => Array.isArray(v) ? v.join(", ") : (v || "Not specified");
+      const val = (v: any, fallback = "Not specified") => v != null && v !== "" ? String(v) : fallback;
+
+      const prompt = `You are an expert cleaning service estimator for a professional cleaning business. Use ALL submitted booking details to produce an accurate pricing estimate. If some details are missing, make reasonable assumptions and list them clearly.
 
 SERVICE REQUEST:
-- Service Type: ${br.serviceType}
-- Customer Type: ${br.customerType}
-- Frequency: ${br.frequency}
-- Urgency: ${br.urgency}
-- Address: ${br.serviceAddress}${br.city ? `, ${br.city}` : ""}
-${isCommercial ? `COMMERCIAL DETAILS:
-- Business Type: ${commercial.businessType || "Not specified"}
-- Square Footage: ${commercial.squareFootage || "Not specified"}
-- Offices: ${commercial.numOffices || "?"}, Washrooms: ${commercial.numWashrooms || "?"}, Floors: ${commercial.numFloors || "?"}
-- Floor Types: ${(commercial.floorTypes || []).join(", ") || "Not specified"}
-- Floor Care Needs: ${(commercial.floorCareNeeds || []).join(", ") || "Not specified"}
-- Cleaning Time Preference: ${commercial.cleaningTimePreference || "Not specified"}
-- High-Touch Disinfection: ${commercial.highTouchDisinfection || "Not specified"}` : ""}
-${!isCommercial ? `RESIDENTIAL DETAILS:
-- Home Type: ${residential.homeType || "Not specified"}
-- Bedrooms: ${residential.numBedrooms || "?"}, Bathrooms: ${residential.numBathrooms || "?"}
-- Stories: ${residential.numStories || "?"}, Square Footage: ${residential.squareFootage || "?"}
-- Pets: ${residential.hasPets ? "Yes" : "No"}
-- Cleaning Type: ${residential.cleaningType || "Not specified"}
-- Areas to Clean: ${(residential.areasToClean || []).join(", ") || "Not specified"}
-- Special Conditions: ${(residential.specialConditions || []).join(", ") || "None"}` : ""}
-${br.serviceType === "Post-Construction Cleaning" ? `POST-CONSTRUCTION:
-- Project Type: ${postConst.projectType || "Not specified"}
-- Square Footage: ${postConst.squareFootage || "?"}, Floors: ${postConst.numFloors || "?"}
-- Heavy Dust: ${postConst.heavyDustPresent || "Not sure"}
-- Debris Removal: ${postConst.debrisRemovalNeeded || "Not sure"}` : ""}
-${["Move-In Cleaning", "Move-Out Cleaning"].includes(br.serviceType) ? `MOVE-IN/OUT:
-- Property Empty: ${moveInOut.propertyEmpty || "Not specified"}
-- Appliances: ${moveInOut.appliancesIncluded || "Not specified"}
-- Same Day: ${moveInOut.sameDayService || "No"}` : ""}
-NOTES: ${br.notes || "None"}${br.specialInstructions ? `\nSpecial Instructions: ${br.specialInstructions}` : ""}
-${settings ? `PRICING:
+- Service Type: ${val(br.serviceType)}
+- Customer Type: ${val(br.customerType)}
+- Frequency: ${val(br.frequency)}
+- Urgency: ${val(br.urgency)}
+- Address: ${val(br.serviceAddress)}${br.city ? `, ${br.city}` : ""}${br.province ? `, ${br.province}` : ""}
+- Preferred Date: ${val(br.preferredDate, "Flexible")}
+- Site Visit Requested: ${br.siteVisitPreference === "yes" ? "Yes" : br.siteVisitPreference === "not_sure" ? "Undecided" : "No"}
+${hasResidentialData ? `
+RESIDENTIAL PROPERTY DETAILS:
+- Home Type: ${val(residential.homeType)}
+- Stories: ${val(residential.numStories, "?")}
+- Bedrooms: ${val(residential.numBedrooms, "?")}
+- Bathrooms: ${val(residential.numBathrooms, "?")}
+- Toilets: ${val(residential.numToilets, "?")}
+- Kitchens: ${val(residential.numKitchens, "1")}
+- Living Rooms: ${val(residential.numLivingRooms, "?")}
+- Dining Rooms: ${val(residential.numDiningRooms, "?")}
+- Laundry Rooms: ${val(residential.numLaundryRooms, "?")}
+- Basement: ${residential.basement ? "Yes" : "No"}
+- Square Footage: ${val(residential.squareFootage, "Unknown")}
+- Pets: ${residential.hasPets === "Yes" || residential.hasPets === true ? `Yes — ${arr(residential.petTypes)}` : "No"}
+- Cleaning Type: ${val(residential.cleaningType)}
+- Areas to Clean: ${arr(residential.areasToClean)}
+- Appliances to Clean: ${arr(residential.appliancesToClean)}
+- Special Conditions: ${arr(residential.specialConditions)}
+- Supplies Preference: ${val(residential.suppliesPreference)}` : ""}
+${hasCommercialData ? `
+COMMERCIAL PROPERTY DETAILS:
+- Business Type: ${val(commercial.businessType)}
+- Square Footage: ${val(commercial.squareFootage, "Unknown")}
+- Offices: ${val(commercial.numOffices, "?")}
+- Washrooms: ${val(commercial.numWashrooms, "?")}
+- Toilets: ${val(commercial.numToilets, "?")}
+- Sinks: ${val(commercial.numSinks, "?")}
+- Kitchens/Break Rooms: ${val(commercial.numKitchens, "?")}
+- Floors: ${val(commercial.numFloors, "?")}
+- Entrances: ${val(commercial.entrances, "?")}
+- Common Areas: ${val(commercial.commonAreas)}
+- Meeting Rooms: ${val(commercial.meetingRooms, "?")}
+- Staff Areas: ${val(commercial.staffAreas)}
+- Floor Types: ${arr(commercial.floorTypes)}
+- Floor Care Needed: ${arr(commercial.floorCareNeeds)}
+- Cleaning Time Preference: ${val(commercial.cleaningTimePreference)}
+- Alarm/Key Access: ${val(commercial.alarmOrKeyAccess)}
+- High-Touch Disinfection: ${val(commercial.highTouchDisinfection)}
+- Supplies On Site: ${val(commercial.suppliesOnsite)}
+- Consumables Restocking: ${arr(commercial.consumablesRestocking)}` : ""}
+${isPostConstruction ? `
+POST-CONSTRUCTION DETAILS:
+- Project Type: ${val(postConst.projectType)}
+- Square Footage: ${val(postConst.squareFootage, "?")}
+- Floors: ${val(postConst.numFloors, "?")}
+- Heavy Dust Present: ${val(postConst.heavyDustPresent)}
+- Debris Removal Needed: ${val(postConst.debrisRemovalNeeded)}
+- Windows Included: ${val(postConst.windowsIncluded)}
+- Floors Finished: ${val(postConst.floorsFinished)}
+- Site Accessibility: ${val(postConst.siteAccessibility)}
+- Photos Required Before Quote: ${postConst.photosRequired ? "Yes" : "No"}` : ""}
+${isMoveInOut ? `
+MOVE-IN/MOVE-OUT DETAILS:
+- Property Empty: ${val(moveInOut.propertyEmpty)}
+- Appliances Included: ${val(moveInOut.appliancesIncluded)}
+- Cabinets Included: ${val(moveInOut.cabinetsIncluded)}
+- Carpets Included: ${val(moveInOut.carpetsIncluded)}
+- Garbage Removal: ${val(moveInOut.garbageRemoval)}
+- Same-Day Service: ${moveInOut.sameDayService ? "Yes" : "No"}
+- Move Date: ${val(moveInOut.moveDate)}` : ""}
+${br.notes || br.specialInstructions || br.areasAttention ? `
+NOTES FROM CLIENT:
+${br.notes ? `- General Notes: ${br.notes}` : ""}${br.specialInstructions ? `\n- Special Instructions: ${br.specialInstructions}` : ""}${br.areasAttention ? `\n- Areas Needing Attention: ${br.areasAttention}` : ""}${br.areasAvoid ? `\n- Areas to Avoid: ${br.areasAvoid}` : ""}${br.healthSafetyConcerns ? `\n- Health/Safety: ${br.healthSafetyConcerns}` : ""}` : ""}
+${!hasResidentialData && !hasCommercialData && !isPostConstruction && !isMoveInOut ? `
+NOTE: No detailed property information was submitted. Base estimate on service type, frequency, and urgency only. List your assumptions clearly.` : ""}
+${settings ? `
+BUSINESS PRICING CONTEXT:
 - Hourly Rate: $${settings.hourlyRate}/hr
-- Minimum: $${settings.minimumJobPrice}
+- Minimum Job Price: $${settings.minimumJobPrice}
 ${isCommercial && settings.commercialMultiplier ? `- Commercial Multiplier: ${settings.commercialMultiplier}x` : ""}` : ""}
 
-Return ONLY a valid JSON object:
+INSTRUCTIONS:
+- Return ONLY a valid JSON object. No markdown, no code fences, no prose outside JSON.
+- Base estimates on the submitted details. If details are missing, use industry-standard assumptions.
+- The minimumPriceWarning field should be a string message if the job may be below minimum threshold, or null if not applicable.
+- The assumptions array should list any assumptions made due to missing information.
+
+Return this exact JSON structure:
 {
   "estimated_hours": number,
   "suggested_worker_count": number,
   "suggested_low_price": number,
   "suggested_high_price": number,
   "recommended_price": number,
-  "minimum_price_warning": boolean,
-  "suggested_checklist": ["item1", "item2"],
+  "minimum_price_warning": "warning string or null",
+  "suggested_checklist": ["task1", "task2"],
   "suggested_supplies": ["supply1", "supply2"],
-  "ai_summary": "2-3 sentence professional summary of what is needed and key factors that affect pricing"
+  "ai_summary": "2-3 sentence professional summary of the job scope and key pricing factors",
+  "assumptions": ["assumption1 if any detail was missing", "assumption2"]
 }`;
 
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      let completion: Awaited<ReturnType<typeof openai.chat.completions.create>>;
+      let raw = "{}";
       try {
-        completion = await openai.chat.completions.create({
+        const completion = await openai.chat.completions.create({
           model: "gpt-4o-mini",
           messages: [{ role: "user", content: prompt }],
           temperature: 0.3,
         });
+        raw = completion.choices[0].message.content || "{}";
       } catch (aiErr: any) {
         return res.status(503).json({ message: "AI estimate service is not available right now. Please check that an OpenAI API key is configured and try again." });
       }
-
-      const raw = completion.choices[0].message.content || "{}";
       let parsed: any;
       try {
         const match = raw.match(/\{[\s\S]*\}/);
@@ -12596,13 +12651,19 @@ Return ONLY a valid JSON object:
       const now = new Date().toISOString();
       const existing = await storage.getBookingEstimate(br.id);
       const estimateData = {
-        inputSnapshot: br as any,
+        inputSnapshot: {
+          ...(br as any),
+          _aiAssumptions: Array.isArray(parsed.assumptions) ? parsed.assumptions : [],
+          _aiMinimumWarning: typeof parsed.minimum_price_warning === "string" && parsed.minimum_price_warning
+            ? parsed.minimum_price_warning
+            : null,
+        } as any,
         estimatedHours: String(parsed.estimated_hours || 0),
         suggestedWorkerCount: parsed.suggested_worker_count || 1,
         suggestedLowPrice: String(parsed.suggested_low_price || 0),
         suggestedHighPrice: String(parsed.suggested_high_price || 0),
         recommendedPrice: String(parsed.recommended_price || 0),
-        minimumPriceWarning: !!parsed.minimum_price_warning,
+        minimumPriceWarning: !!(parsed.minimum_price_warning),
         suggestedChecklist: parsed.suggested_checklist || [],
         suggestedSupplies: parsed.suggested_supplies || [],
         aiSummary: parsed.ai_summary || "",

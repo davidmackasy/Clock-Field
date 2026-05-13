@@ -1,0 +1,436 @@
+The estimate is failing because the AI is not receiving the full booking data properly, or the backend estimate endpoint is still not returning clean JSON. Also, the booking drawer is not showing all submitted booking details, so the admin cannot review what the client actually filled out.
+Use this dev note.
+Dev Note: Fix Booking Details Display + AI Estimate From Full Booking Data Only
+Goal
+Fix two things only:
+
+
+Show every submitted booking detail inside the booking preview drawer.
+
+
+Make Get AI Estimate send all booking details to AI and return a clean estimate.
+
+
+Do not change or affect anything else.
+Do not touch:
+Schedule logic
+Attendance
+Clock in / clock out
+Employees
+Clients
+Jobs
+Field Notes
+Work Reports
+Public report links
+Payroll
+Training Hub
+Forms outside of booking
+Existing booking calendar layout unless needed to show details
+Issue 1: Booking preview is missing submitted details
+Current problem:
+When admin opens a booking, the drawer only shows basic information:
+Address
+Service type
+Customer type
+Frequency
+Urgency
+Preferred date/time
+Notes
+But the client may have submitted more details, such as:
+Bedrooms
+Bathrooms
+Washrooms
+Offices
+Square footage
+Number of floors
+Stories
+Kitchen
+Laundry
+Supplies
+Pets
+Floor type
+Special areas
+Commercial details
+Residential details
+Post-construction details
+Move-in/move-out details
+Photos/files
+These details must show in the booking drawer.
+Fix requirement:
+When a booking is opened, show all submitted fields from the booking record.
+Do not hide fields just because they are stored inside JSON.
+The booking drawer should have sections:
+Contact Information
+Name
+Company name
+Phone
+Email
+Best contact method
+Best contact time
+Location
+Address
+Unit/suite
+City
+Province
+Postal code
+Access instructions
+Parking instructions
+Entry instructions
+Service Details
+Service type
+Customer type
+Frequency
+Urgency
+Preferred date
+Preferred time
+Alternate date
+Alternate time
+Site visit preference
+Property Details
+Show based on customer/service type.
+For Residential, show:
+Home type
+Number of stories
+Bedrooms
+Bathrooms
+Toilets
+Kitchens
+Living rooms
+Dining rooms
+Laundry rooms
+Basement
+Staircases
+Approximate square footage
+Pets
+Cleaning type
+Areas to clean
+Appliances to clean
+Special conditions
+Supplies preference
+For Commercial, show:
+Business type
+Approximate square footage
+Number of offices
+Number of washrooms
+Number of toilets
+Number of sinks
+Number of kitchens/breakrooms
+Number of floors
+Entrances
+Common areas
+Meeting rooms
+Staff areas
+Garbage/recycling areas
+Floor types
+Floor care needed
+Cleaning time preference
+Alarm/key access
+High-touch disinfection
+Supplies/equipment onsite
+Consumables restocking
+For Post-Construction, show:
+Project type
+Approximate square footage
+Number of floors
+Heavy dust
+Debris removal
+Windows included
+Floors finished
+Site accessibility
+Completion deadline
+Photos required before quote
+For Move-In / Move-Out, show:
+Property empty
+Appliances included
+Cabinets included
+Carpets included
+Garbage removal
+Same-day service
+Move date
+Key/access instructions
+Photos and Files
+Show uploaded images/files if submitted.
+Notes
+Show all client notes and special instructions.
+Important:
+If a field is empty, hide it or show “Not provided.”
+Do not show only the consent text as notes.
+Consent should be shown separately under Consent, not as the main note.
+Issue 2: AI Estimate is failing
+Current error:
+Estimate failed
+Server returned an unexpected response. Please try again shortly.
+The estimate button must use all available booking data.
+The AI should receive the full booking object, not only basic fields.
+Fix requirement:
+When admin clicks Get AI Estimate, collect the full booking payload:
+Basic info
+Contact info
+Location info
+Service details
+Residential details
+Commercial details
+Post-construction details
+Move-in/move-out details
+Photos metadata, if available
+Uploaded file metadata, if available
+Notes
+Frequency
+Urgency
+Square footage
+Rooms/washrooms/offices
+Site visit preference
+Special conditions
+Then send this to the estimate endpoint.
+Example payload:
+{
+"bookingId": "booking_id_here",
+"businessId": "business_id_here",
+"serviceType": "Residential Cleaning",
+"customerType": "residential",
+"frequency": "biweekly",
+"urgency": "high",
+"location": {
+"address": "22 Ciara Cove",
+"unit": null,
+"city": null,
+"province": null,
+"postalCode": null
+},
+"schedule": {
+"preferredDate": "2026-05-13",
+"preferredTime": "03:44",
+"alternateDate": "2026-05-25",
+"alternateTime": "03:44"
+},
+"residentialDetails": {
+"homeType": "house",
+"stories": 2,
+"bedrooms": 4,
+"bathrooms": 3,
+"toilets": 3,
+"kitchens": 1,
+"laundryRooms": 1,
+"basement": true,
+"squareFootage": 2200,
+"pets": true,
+"areasToClean": ["kitchen", "bathrooms", "bedrooms", "floors"],
+"specialConditions": ["pet hair", "deep clean"]
+},
+"commercialDetails": null,
+"notes": "Client notes here",
+"siteVisitPreference": "not sure"
+}
+Backend estimate endpoint
+Find the endpoint used by Get AI Estimate.
+Fix it so it always returns JSON.
+Never return HTML.
+Never return a Vite page.
+Never return raw server error page.
+Success response:
+{
+"success": true,
+"estimate": {
+"summary": "Biweekly residential cleaning request for a high-priority home service.",
+"estimatedHours": 4.5,
+"suggestedWorkerCount": 2,
+"suggestedLowPrice": 240,
+"suggestedHighPrice": 380,
+"recommendedPrice": 320,
+"minimumPriceWarning": "Avoid pricing below $240 because the job may require multiple cleaners and detailed bathroom/kitchen cleaning.",
+"suggestedChecklist": [
+"Clean bathrooms and toilets",
+"Clean kitchen surfaces",
+"Vacuum and mop floors",
+"Dust reachable surfaces",
+"Remove garbage",
+"Clean laundry area if included"
+],
+"suggestedSupplies": [
+"All-purpose cleaner",
+"Disinfectant",
+"Glass cleaner",
+"Mop",
+"Vacuum",
+"Garbage bags"
+],
+"assumptions": [
+"Estimate is based on the submitted booking details.",
+"Final price may change after site visit or full property review."
+]
+}
+}
+Error response:
+{
+"success": false,
+"message": "Estimate could not be generated because the booking is missing property details such as square footage, rooms, washrooms, or cleaning scope."
+}
+Frontend estimate handling
+Before response.json(), check:
+response.ok
+content-type includes application/json
+If not JSON:
+Read response.text()
+Log it in console
+Show clean message:
+Estimate failed. The estimate service returned an unexpected response. Please try again or check the booking details.
+Do not show technical JSON errors to users.
+AI prompt requirement
+The AI prompt must clearly say:
+Use the submitted booking details to create a pricing estimate for a cleaning/service business.
+Consider:
+Service type
+Customer type
+Frequency
+Urgency
+Square footage
+Bedrooms
+Bathrooms
+Washrooms
+Offices
+Stories/floors
+Areas to clean
+Special conditions
+Site visit preference
+Supplies
+Notes
+Return structured JSON only.
+Do not return markdown.
+Do not return prose outside JSON.
+Do not include code fences.
+Required AI output JSON:
+{
+"summary": "",
+"estimatedHours": 0,
+"suggestedWorkerCount": 0,
+"suggestedLowPrice": 0,
+"suggestedHighPrice": 0,
+"recommendedPrice": 0,
+"minimumPriceWarning": "",
+"suggestedChecklist": [],
+"suggestedSupplies": [],
+"assumptions": []
+}
+Important:
+The AI estimate should still work even if some fields are missing.
+If details are missing, estimate should use assumptions and clearly list assumptions.
+Do not fail just because square footage is missing.
+Only fail if there is not enough basic data, like no service type and no customer type.
+Save estimate to booking
+After estimate succeeds:
+Save the estimate to the booking.
+Show it immediately in the booking drawer.
+Update timeline:
+Estimate generated
+Do not change booking status to confirmed.
+Do not change job status.
+Do not affect converted-to-job status.
+Do not affect schedule.
+Estimate display UI
+Replace “No estimate yet” with estimate result.
+Show:
+Summary
+Estimated hours
+Suggested workers
+Price range
+Recommended price
+Minimum warning
+Suggested checklist
+Suggested supplies
+Assumptions
+Add buttons:
+Regenerate Estimate
+Create Quote
+Edit Estimate
+Editable estimate requirement
+Admin should be able to edit:
+Estimated hours
+Suggested worker count
+Low price
+High price
+Recommended price
+Checklist
+Supplies
+Summary
+Notes
+This edited estimate should be used when creating the quote.
+Create Quote from estimate
+When Create Quote is clicked after estimate exists:
+Prefill quote using estimate:
+Client name
+Email
+Phone
+Service address
+Service type
+Customer type
+Frequency
+Scope from estimate summary
+Checklist from estimate checklist
+Price from recommended price
+Notes from assumptions
+Admin can edit before sending.
+Do not send quote automatically.
+Do not lock the AI price.
+Testing checklist
+Test 1: Booking details display
+Submit residential booking with:
+Bedrooms
+Bathrooms
+Stories
+Kitchen
+Laundry
+Pets
+Square footage
+Notes
+Open booking in admin.
+Confirm all details show.
+Test 2: Commercial details display
+Submit commercial booking with:
+Offices
+Washrooms
+Square footage
+Floor type
+After-hours access
+Consumables
+Open booking.
+Confirm all details show.
+Test 3: AI estimate
+Click Get AI Estimate.
+Confirm backend receives full booking payload.
+Confirm estimate generates.
+Confirm estimate saves.
+Confirm estimate displays.
+Confirm timeline updates.
+Test 4: Missing details
+Submit booking with only basic info.
+Click Get AI Estimate.
+AI should still generate an estimate with assumptions, not fail.
+Test 5: Quote from estimate
+Generate estimate.
+Click Create Quote.
+Quote opens with recommended price and checklist.
+Admin can edit.
+Test 6: Safety
+Existing booking calendar still works.
+Existing schedule still works.
+Existing clients still work.
+Existing jobs still work.
+Existing attendance still works.
+Existing reports still work.
+No unrelated module is changed.
+Acceptance criteria
+This fix is complete when:
+Booking drawer shows every submitted booking field.
+Residential details show for residential bookings.
+Commercial details show for commercial bookings.
+Post-construction details show for post-construction bookings.
+Move-in/move-out details show when applicable.
+Consent text is not treated as the only note.
+Get AI Estimate uses the full booking data.
+Estimate endpoint always returns JSON.
+AI returns structured estimate.
+Estimate saves to booking.
+Estimate displays in the drawer.
+Estimate can be edited.
+Create Quote uses the estimate data.
+No existing ClockField feature is touched or broken.

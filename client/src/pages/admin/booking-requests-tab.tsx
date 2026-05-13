@@ -34,6 +34,7 @@ type BookingEstimate = {
   suggestedLowPrice?: string; suggestedHighPrice?: string; recommendedPrice?: string;
   minimumPriceWarning?: boolean; suggestedChecklist?: string[]; suggestedSupplies?: string[];
   aiSummary?: string; adminFinalPrice?: string;
+  inputSnapshot?: { _aiAssumptions?: string[]; _aiMinimumWarning?: string | null; [k: string]: any };
 };
 
 type BookingQuote = {
@@ -390,11 +391,11 @@ function BookingDetailDrawer({
 
             {/* Contact Info */}
             <section>
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Contact</h3>
+              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Contact Information</h3>
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm"><User className="w-4 h-4 text-gray-400" /><span className="font-medium">{booking.name}</span>{booking.companyName && <span className="text-gray-500">— {booking.companyName}</span>}</div>
-                <div className="flex items-center gap-2 text-sm"><Phone className="w-4 h-4 text-gray-400" /><a href={`tel:${booking.phone}`} className="text-blue-600">{booking.phone}</a>{booking.bestContactMethod && <span className="text-gray-400">· prefers {booking.bestContactMethod}</span>}</div>
-                <div className="flex items-center gap-2 text-sm"><Mail className="w-4 h-4 text-gray-400" /><a href={`mailto:${booking.email}`} className="text-blue-600">{booking.email}</a></div>
+                <div className="flex items-center gap-2 text-sm"><User className="w-4 h-4 text-gray-400 shrink-0" /><span className="font-medium">{booking.name}</span>{booking.companyName && <span className="text-gray-500">— {booking.companyName}</span>}</div>
+                <div className="flex items-center gap-2 text-sm"><Phone className="w-4 h-4 text-gray-400 shrink-0" /><a href={`tel:${booking.phone}`} className="text-blue-600">{booking.phone}</a>{booking.bestContactMethod && <span className="text-gray-400">· prefers {booking.bestContactMethod}</span>}</div>
+                <div className="flex items-center gap-2 text-sm"><Mail className="w-4 h-4 text-gray-400 shrink-0" /><a href={`mailto:${booking.email}`} className="text-blue-600">{booking.email}</a></div>
               </div>
             </section>
 
@@ -402,7 +403,7 @@ function BookingDetailDrawer({
             <section>
               <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Location</h3>
               <div className="flex items-start gap-2 text-sm">
-                <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
+                <MapPin className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
                 <div>
                   <p className="font-medium">{booking.serviceAddress}{booking.unitOrSuite ? ` #${booking.unitOrSuite}` : ""}</p>
                   {(booking.city || booking.province || booking.postalCode) && (
@@ -424,51 +425,82 @@ function BookingDetailDrawer({
             <section>
               <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Service Details</h3>
               <div className="grid grid-cols-2 gap-3 text-sm">
-                {[["Service Type", booking.serviceType],["Customer Type", booking.customerType],["Frequency", booking.frequency],["Urgency", booking.urgency],["Preferred Date", booking.preferredDate],["Preferred Time", booking.preferredTime],booking.alternateDate ? ["Alternate Date", booking.alternateDate] : null,booking.alternateTime ? ["Alternate Time", booking.alternateTime] : null].filter(Boolean).map(([lbl, val]: any) => (
-                  <div key={lbl as string}><p className="text-gray-400 text-xs">{lbl}</p><p className="font-medium">{val}</p></div>
+                {([
+                  ["Service Type", booking.serviceType],
+                  ["Customer Type", booking.customerType],
+                  ["Frequency", booking.frequency],
+                  ["Urgency", booking.urgency],
+                  ["Preferred Date", booking.preferredDate],
+                  ["Preferred Time", booking.preferredTime],
+                  booking.alternateDate ? ["Alternate Date", booking.alternateDate] : null,
+                  booking.alternateTime ? ["Alternate Time", booking.alternateTime] : null,
+                ] as ([string,string] | null)[]).filter(Boolean).map(([lbl, val]) => (
+                  <div key={lbl}><p className="text-gray-400 text-xs">{lbl}</p><p className="font-medium capitalize">{val}</p></div>
                 ))}
               </div>
               {booking.siteVisitPreference && booking.siteVisitPreference !== "no" && (
                 <div className="mt-3 bg-blue-50 rounded-lg p-3 text-xs">
-                  <p className="font-medium text-blue-800">Site Visit: {booking.siteVisitPreference === "yes" ? "Requested" : "Not sure"}</p>
+                  <p className="font-medium text-blue-800">Site Visit: {booking.siteVisitPreference === "yes" ? "Requested" : "Not sure / TBD"}</p>
                   {booking.siteVisitDate && <p className="text-blue-700 mt-1">{booking.siteVisitDate} {booking.siteVisitTime || ""}</p>}
                   {booking.siteVisitContact && <p className="text-blue-700">Contact: {booking.siteVisitContact}</p>}
                 </div>
               )}
             </section>
 
-            {/* Commercial Details */}
-            {booking.commercialDetails && Object.keys(com).length > 0 && (
+            {/* Residential Details */}
+            {booking.residentialDetails && Object.keys(res).length > 0 && (
               <section>
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Commercial Details</h3>
-                <div className="bg-blue-50 rounded-lg p-4 text-sm space-y-1.5">
-                  {com.businessType && <p><span className="text-gray-500">Business Type:</span> {com.businessType}</p>}
-                  {com.squareFootage && <p><span className="text-gray-500">Square Footage:</span> {com.squareFootage} sq ft</p>}
-                  {(com.numOffices || com.numWashrooms || com.numFloors) && (
-                    <p><span className="text-gray-500">Layout:</span> {[com.numOffices && `${com.numOffices} offices`, com.numWashrooms && `${com.numWashrooms} washrooms`, com.numFloors && `${com.numFloors} floors`].filter(Boolean).join(" · ")}</p>
-                  )}
-                  {com.floorTypes?.length > 0 && <p><span className="text-gray-500">Floors:</span> {com.floorTypes.join(", ")}</p>}
-                  {com.floorCareNeeds?.length > 0 && <p><span className="text-gray-500">Floor Care:</span> {com.floorCareNeeds.join(", ")}</p>}
-                  {com.cleaningTimePreference && <p><span className="text-gray-500">Cleaning Time:</span> {com.cleaningTimePreference}</p>}
-                  {com.highTouchDisinfection && com.highTouchDisinfection !== "No" && <p><span className="text-gray-500">Disinfection:</span> {com.highTouchDisinfection}</p>}
-                  {com.consumablesNeeded?.length > 0 && com.consumablesNeeded[0] !== "Not needed" && <p><span className="text-gray-500">Restock:</span> {com.consumablesNeeded.join(", ")}</p>}
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Residential Property Details</h3>
+                <div className="bg-green-50 rounded-lg p-4 text-sm space-y-1.5">
+                  {res.homeType && <p><span className="text-gray-500">Home Type:</span> <span className="font-medium capitalize">{res.homeType}</span></p>}
+                  {res.squareFootage && <p><span className="text-gray-500">Square Footage:</span> <span className="font-medium">~{res.squareFootage} sq ft</span></p>}
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-1">
+                    {res.numStories != null && <p><span className="text-gray-500">Stories:</span> {res.numStories}</p>}
+                    {res.numBedrooms != null && <p><span className="text-gray-500">Bedrooms:</span> {res.numBedrooms}</p>}
+                    {res.numBathrooms != null && <p><span className="text-gray-500">Bathrooms:</span> {res.numBathrooms}</p>}
+                    {res.numToilets != null && <p><span className="text-gray-500">Toilets:</span> {res.numToilets}</p>}
+                    {res.numKitchens != null && <p><span className="text-gray-500">Kitchens:</span> {res.numKitchens}</p>}
+                    {res.numLivingRooms != null && <p><span className="text-gray-500">Living Rooms:</span> {res.numLivingRooms}</p>}
+                    {res.numDiningRooms != null && <p><span className="text-gray-500">Dining Rooms:</span> {res.numDiningRooms}</p>}
+                    {res.numLaundryRooms != null && <p><span className="text-gray-500">Laundry Rooms:</span> {res.numLaundryRooms}</p>}
+                    {res.basement != null && <p><span className="text-gray-500">Basement:</span> {res.basement ? "Yes" : "No"}</p>}
+                  </div>
+                  {res.cleaningType && <p className="pt-1"><span className="text-gray-500">Cleaning Type:</span> {res.cleaningType}</p>}
+                  {(res.hasPets === "Yes" || res.hasPets === true) && <p><span className="text-gray-500">Pets:</span> {Array.isArray(res.petTypes) && res.petTypes.length > 0 ? res.petTypes.join(", ") : "Yes"}</p>}
+                  {Array.isArray(res.areasToClean) && res.areasToClean.length > 0 && <p><span className="text-gray-500">Areas to Clean:</span> {res.areasToClean.join(", ")}</p>}
+                  {Array.isArray(res.appliancesToClean) && res.appliancesToClean.length > 0 && <p><span className="text-gray-500">Appliances:</span> {res.appliancesToClean.join(", ")}</p>}
+                  {Array.isArray(res.specialConditions) && res.specialConditions.length > 0 && <p><span className="text-gray-500">Special Conditions:</span> {res.specialConditions.join(", ")}</p>}
+                  {res.suppliesPreference && <p><span className="text-gray-500">Supplies:</span> {res.suppliesPreference}</p>}
                 </div>
               </section>
             )}
 
-            {/* Residential Details */}
-            {booking.residentialDetails && Object.keys(res).length > 0 && (
+            {/* Commercial Details */}
+            {booking.commercialDetails && Object.keys(com).length > 0 && (
               <section>
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Residential Details</h3>
-                <div className="bg-green-50 rounded-lg p-4 text-sm space-y-1.5">
-                  {res.homeType && <p><span className="text-gray-500">Home Type:</span> {res.homeType}</p>}
-                  {res.numStories && <p><span className="text-gray-500">Stories:</span> {res.numStories}</p>}
-                  {(res.numBedrooms || res.numBathrooms) && <p><span className="text-gray-500">Rooms:</span> {[res.numBedrooms && `${res.numBedrooms} bed`, res.numBathrooms && `${res.numBathrooms} bath`].filter(Boolean).join(" · ")}</p>}
-                  {res.squareFootage && <p><span className="text-gray-500">Sq Ft:</span> {res.squareFootage}</p>}
-                  {res.cleaningType && <p><span className="text-gray-500">Cleaning Type:</span> {res.cleaningType}</p>}
-                  {res.hasPets === "Yes" && <p><span className="text-gray-500">Pets:</span> {res.petTypes?.join(", ") || "Yes"}</p>}
-                  {res.areasToClean?.length > 0 && <p><span className="text-gray-500">Areas:</span> {res.areasToClean.join(", ")}</p>}
-                  {res.specialConditions?.length > 0 && <p><span className="text-gray-500">Conditions:</span> {res.specialConditions.join(", ")}</p>}
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Commercial Property Details</h3>
+                <div className="bg-blue-50 rounded-lg p-4 text-sm space-y-1.5">
+                  {com.businessType && <p><span className="text-gray-500">Business Type:</span> <span className="font-medium">{com.businessType}</span></p>}
+                  {com.squareFootage && <p><span className="text-gray-500">Square Footage:</span> ~{com.squareFootage} sq ft</p>}
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-1">
+                    {com.numOffices != null && <p><span className="text-gray-500">Offices:</span> {com.numOffices}</p>}
+                    {com.numWashrooms != null && <p><span className="text-gray-500">Washrooms:</span> {com.numWashrooms}</p>}
+                    {com.numToilets != null && <p><span className="text-gray-500">Toilets:</span> {com.numToilets}</p>}
+                    {com.numSinks != null && <p><span className="text-gray-500">Sinks:</span> {com.numSinks}</p>}
+                    {com.numKitchens != null && <p><span className="text-gray-500">Kitchens/Break Rooms:</span> {com.numKitchens}</p>}
+                    {com.numFloors != null && <p><span className="text-gray-500">Floors:</span> {com.numFloors}</p>}
+                    {com.meetingRooms != null && <p><span className="text-gray-500">Meeting Rooms:</span> {com.meetingRooms}</p>}
+                    {com.entrances != null && <p><span className="text-gray-500">Entrances:</span> {com.entrances}</p>}
+                  </div>
+                  {Array.isArray(com.floorTypes) && com.floorTypes.length > 0 && <p className="pt-1"><span className="text-gray-500">Floor Types:</span> {com.floorTypes.join(", ")}</p>}
+                  {Array.isArray(com.floorCareNeeds) && com.floorCareNeeds.length > 0 && <p><span className="text-gray-500">Floor Care:</span> {com.floorCareNeeds.join(", ")}</p>}
+                  {com.cleaningTimePreference && <p><span className="text-gray-500">Cleaning Time:</span> {com.cleaningTimePreference}</p>}
+                  {com.alarmOrKeyAccess && <p><span className="text-gray-500">Alarm/Key Access:</span> {com.alarmOrKeyAccess}</p>}
+                  {com.highTouchDisinfection && com.highTouchDisinfection !== "No" && <p><span className="text-gray-500">High-Touch Disinfection:</span> {com.highTouchDisinfection}</p>}
+                  {com.suppliesOnsite && <p><span className="text-gray-500">Supplies On Site:</span> {com.suppliesOnsite}</p>}
+                  {Array.isArray(com.consumablesRestocking) && com.consumablesRestocking.length > 0 && com.consumablesRestocking[0] !== "Not needed" && <p><span className="text-gray-500">Restock:</span> {com.consumablesRestocking.join(", ")}</p>}
+                  {com.commonAreas && <p><span className="text-gray-500">Common Areas:</span> {com.commonAreas}</p>}
+                  {com.staffAreas && <p><span className="text-gray-500">Staff Areas:</span> {com.staffAreas}</p>}
                 </div>
               </section>
             )}
@@ -478,26 +510,49 @@ function BookingDetailDrawer({
               <section>
                 <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Post-Construction Details</h3>
                 <div className="bg-orange-50 rounded-lg p-4 text-sm space-y-1.5">
-                  {post.projectType && <p><span className="text-gray-500">Project:</span> {post.projectType}</p>}
-                  {post.squareFootage && <p><span className="text-gray-500">Sq Ft:</span> {post.squareFootage}</p>}
+                  {post.projectType && <p><span className="text-gray-500">Project Type:</span> {post.projectType}</p>}
+                  {post.squareFootage && <p><span className="text-gray-500">Square Footage:</span> ~{post.squareFootage} sq ft</p>}
+                  {post.numFloors != null && <p><span className="text-gray-500">Floors:</span> {post.numFloors}</p>}
                   {post.heavyDustPresent && <p><span className="text-gray-500">Heavy Dust:</span> {post.heavyDustPresent}</p>}
                   {post.debrisRemovalNeeded && <p><span className="text-gray-500">Debris Removal:</span> {post.debrisRemovalNeeded}</p>}
+                  {post.windowsIncluded && <p><span className="text-gray-500">Windows Included:</span> {post.windowsIncluded}</p>}
+                  {post.floorsFinished && <p><span className="text-gray-500">Floors Finished:</span> {post.floorsFinished}</p>}
+                  {post.siteAccessibility && <p><span className="text-gray-500">Site Accessibility:</span> {post.siteAccessibility}</p>}
                   {post.completionDeadline && <p><span className="text-gray-500">Deadline:</span> {post.completionDeadline}</p>}
+                  {post.photosRequired && <p><span className="text-gray-500">Photos Required:</span> Yes</p>}
                 </div>
               </section>
             )}
 
-            {/* Notes */}
-            {(booking.notes || booking.specialInstructions || booking.areasAttention || booking.areasAvoid || booking.healthSafetyConcerns || booking.clientExpectations) && (
+            {/* Move-In / Move-Out Details */}
+            {booking.moveInOutDetails && Object.keys(move).length > 0 && (
               <section>
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Notes</h3>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Move-In / Move-Out Details</h3>
+                <div className="bg-purple-50 rounded-lg p-4 text-sm space-y-1.5">
+                  {move.propertyEmpty != null && <p><span className="text-gray-500">Property Empty:</span> {move.propertyEmpty ? "Yes" : "No"}</p>}
+                  {move.appliancesIncluded != null && <p><span className="text-gray-500">Appliances Included:</span> {move.appliancesIncluded}</p>}
+                  {move.cabinetsIncluded != null && <p><span className="text-gray-500">Cabinets Included:</span> {move.cabinetsIncluded ? "Yes" : "No"}</p>}
+                  {move.carpetsIncluded != null && <p><span className="text-gray-500">Carpets Included:</span> {move.carpetsIncluded ? "Yes" : "No"}</p>}
+                  {move.garbageRemoval != null && <p><span className="text-gray-500">Garbage Removal:</span> {move.garbageRemoval ? "Yes" : "No"}</p>}
+                  {move.sameDayService && <p><span className="text-gray-500">Same-Day Service:</span> Yes</p>}
+                  {move.moveDate && <p><span className="text-gray-500">Move Date:</span> {move.moveDate}</p>}
+                  {move.keyAccessInstructions && <p><span className="text-gray-500">Key/Access:</span> {move.keyAccessInstructions}</p>}
+                </div>
+              </section>
+            )}
+
+            {/* Notes & Client Input */}
+            {(booking.notes || booking.specialInstructions || booking.areasAttention || booking.areasAvoid || booking.healthSafetyConcerns || booking.clientExpectations || booking.consentGiven) && (
+              <section>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Notes &amp; Client Input</h3>
                 <div className="space-y-2 text-sm">
-                  {booking.notes && <div className="bg-gray-50 rounded-lg p-3"><p className="text-gray-500 text-xs mb-1">Notes</p><p>{booking.notes}</p></div>}
+                  {booking.notes && <div className="bg-gray-50 rounded-lg p-3"><p className="text-gray-500 text-xs mb-1">Notes from Client</p><p>{booking.notes}</p></div>}
                   {booking.specialInstructions && <div className="bg-gray-50 rounded-lg p-3"><p className="text-gray-500 text-xs mb-1">Special Instructions</p><p>{booking.specialInstructions}</p></div>}
                   {booking.areasAttention && <div className="bg-yellow-50 rounded-lg p-3"><p className="text-gray-500 text-xs mb-1">Areas Needing Attention</p><p>{booking.areasAttention}</p></div>}
                   {booking.areasAvoid && <div className="bg-red-50 rounded-lg p-3"><p className="text-gray-500 text-xs mb-1">Areas to Avoid</p><p>{booking.areasAvoid}</p></div>}
-                  {booking.healthSafetyConcerns && <div className="bg-red-50 rounded-lg p-3"><p className="text-gray-500 text-xs mb-1">Health/Safety Concerns</p><p>{booking.healthSafetyConcerns}</p></div>}
+                  {booking.healthSafetyConcerns && <div className="bg-red-50 rounded-lg p-3"><p className="text-gray-500 text-xs mb-1">Health / Safety Concerns</p><p>{booking.healthSafetyConcerns}</p></div>}
                   {booking.clientExpectations && <div className="bg-blue-50 rounded-lg p-3"><p className="text-gray-500 text-xs mb-1">Client Expectations</p><p>{booking.clientExpectations}</p></div>}
+                  {booking.consentGiven && <div className="bg-emerald-50 rounded-lg p-3 flex items-center gap-2 text-xs text-emerald-700"><CheckCircle className="w-3.5 h-3.5 shrink-0" />Client consented to contact and data collection</div>}
                 </div>
               </section>
             )}
@@ -552,9 +607,10 @@ function BookingDetailDrawer({
                     {estimate.estimatedHours && <p>⏱ {estimate.estimatedHours} hrs estimated</p>}
                     {estimate.suggestedWorkerCount && <p>👷 {estimate.suggestedWorkerCount} worker{estimate.suggestedWorkerCount > 1 ? "s" : ""} suggested</p>}
                   </div>
-                  {estimate.minimumPriceWarning && (
-                    <div className="flex items-center gap-2 text-xs text-orange-700 bg-orange-50 rounded-lg p-2">
-                      <AlertTriangle className="w-3.5 h-3.5" /> Consider minimum pricing — this job may be below minimum threshold.
+                  {(estimate.minimumPriceWarning || estimate.inputSnapshot?._aiMinimumWarning) && (
+                    <div className="flex items-start gap-2 text-xs text-orange-700 bg-orange-50 rounded-lg p-2">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                      <span>{estimate.inputSnapshot?._aiMinimumWarning || "Consider minimum pricing — this job may be below minimum threshold."}</span>
                     </div>
                   )}
                   {estimate.suggestedChecklist && (estimate.suggestedChecklist as string[]).length > 0 && (
@@ -565,6 +621,16 @@ function BookingDetailDrawer({
                   {estimate.suggestedSupplies && (estimate.suggestedSupplies as string[]).length > 0 && (
                     <div><p className="text-xs font-medium text-purple-700 mb-1">Suggested Supplies</p>
                       <div className="flex flex-wrap gap-1">{(estimate.suggestedSupplies as string[]).map((s, idx) => <span key={idx} className="bg-white text-purple-700 text-xs px-2 py-0.5 rounded-full border border-purple-200">{s}</span>)}</div>
+                    </div>
+                  )}
+                  {estimate.inputSnapshot?._aiAssumptions && (estimate.inputSnapshot._aiAssumptions as string[]).length > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <p className="text-xs font-medium text-amber-800 mb-1.5">AI Assumptions (missing data)</p>
+                      <ul className="space-y-0.5">
+                        {(estimate.inputSnapshot._aiAssumptions as string[]).map((a, idx) => (
+                          <li key={idx} className="text-xs text-amber-700 flex items-start gap-1.5"><span className="shrink-0 mt-0.5">•</span>{a}</li>
+                        ))}
+                      </ul>
                     </div>
                   )}
                 </div>
