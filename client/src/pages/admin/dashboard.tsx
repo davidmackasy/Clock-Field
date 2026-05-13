@@ -308,6 +308,8 @@ export default function AdminDashboard() {
         ))}
       </div>
 
+      <TodayJobsWidget />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader className="pb-3">
@@ -333,6 +335,41 @@ export default function AdminDashboard() {
         <OnboardingModal onClose={() => setShowOnboarding(false)} />
       )}
     </div>
+  );
+}
+
+// ─── Today's Jobs Widget ───────────────────────────────────────────────────────
+function TodayJobsWidget() {
+  const { data: stats } = useQuery<any>({ queryKey: ["/api/jobs/stats/today"] });
+
+  if (!stats || stats.total === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <span>Today's Jobs</span>
+          <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{stats.total} total</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+          {[
+            { label: "Not Started", value: stats.notStarted, color: "text-muted-foreground" },
+            { label: "In Progress", value: stats.inProgress, color: "text-amber-600 dark:text-amber-400" },
+            { label: "Completed", value: stats.completed, color: "text-green-600 dark:text-green-400" },
+            { label: "Needs Review", value: stats.needsReview, color: "text-blue-600 dark:text-blue-400" },
+            { label: "Sent to Client", value: stats.sentToClient, color: "text-purple-600 dark:text-purple-400" },
+            { label: "Missed", value: stats.missed, color: "text-destructive" },
+          ].map(s => (
+            <div key={s.label} className="text-center" data-testid={`jobs-stat-${s.label.toLowerCase().replace(/\s+/g,"-")}`}>
+              <p className={`text-2xl font-bold ${s.color}`}>{s.value ?? 0}</p>
+              <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

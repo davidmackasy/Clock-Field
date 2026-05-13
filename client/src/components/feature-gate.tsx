@@ -17,6 +17,7 @@ const featureLabels: Record<string, string> = {
   payroll: "Payroll Estimator",
   exports: "Spreadsheet Exports",
   reports: "Reports",
+  jobs: "Jobs & Bookings",
 };
 
 const featureUpgradeMap: Record<string, string> = {

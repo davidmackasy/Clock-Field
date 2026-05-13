@@ -12349,6 +12349,168 @@ Return ONLY valid JSON:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ── Jobs ──────────────────────────────────────────────────────────────────
+  app.get("/api/jobs", requireAuth, requireRole("admin", "management"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const allJobs = await storage.getJobs(user.companyId);
+      res.json(allJobs);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/jobs", requireAuth, requireRole("admin", "management"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const now = new Date().toISOString();
+      const job = await storage.createJob({
+        ...req.body,
+        companyId: user.companyId,
+        createdBy: user.id,
+        createdAt: now,
+        updatedAt: now,
+      });
+      res.status(201).json(job);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/jobs/stats/today", requireAuth, requireRole("admin", "management"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const today = new Date().toISOString().slice(0, 10);
+      const allJobs = await storage.getJobs(user.companyId);
+      const todayJobs = allJobs.filter((j: any) => j.scheduledDate === today);
+      res.json({
+        total: todayJobs.length,
+        notStarted: todayJobs.filter((j: any) => ["draft", "scheduled", "assigned"].includes(j.status)).length,
+        inProgress: todayJobs.filter((j: any) => j.status === "in_progress").length,
+        completed: todayJobs.filter((j: any) => j.status === "completed").length,
+        needsReview: todayJobs.filter((j: any) => j.status === "needs_review").length,
+        missed: todayJobs.filter((j: any) => j.status === "missed").length,
+        sentToClient: todayJobs.filter((j: any) => j.status === "sent_to_client").length,
+      });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/jobs/:id", requireAuth, async (req, res) => {
+    try {
+      const job = await storage.getJob(req.params.id);
+      if (!job) return res.status(404).json({ message: "Not found" });
+      res.json(job);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/jobs/:id", requireAuth, requireRole("admin", "management"), async (req, res) => {
+    try {
+      const now = new Date().toISOString();
+      const job = await storage.updateJob(req.params.id, { ...req.body, updatedAt: now });
+      if (!job) return res.status(404).json({ message: "Not found" });
+      res.json(job);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/jobs/:id", requireAuth, requireRole("admin", "management"), async (req, res) => {
+    try {
+      await storage.deleteJob(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Employee's assigned jobs
+  app.get("/api/employee/my-jobs", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const allJobs = await storage.getJobs(user.companyId);
+      const myJobs = allJobs.filter((j: any) => (j.assignedEmployeeIds || []).includes(user.id));
+      res.json(myJobs);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Booking Requests ───────────────────────────────────────────────────────
+  app.get("/api/booking-requests", requireAuth, requireRole("admin", "management"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const requests = await storage.getBookingRequests(user.companyId);
+      res.json(requests);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/booking-requests/:id", requireAuth, requireRole("admin", "management"), async (req, res) => {
+    try {
+      const now = new Date().toISOString();
+      const request = await storage.updateBookingRequest(req.params.id, { ...req.body, updatedAt: now });
+      if (!request) return res.status(404).json({ message: "Not found" });
+      res.json(request);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/booking-requests/:id/convert-to-job", requireAuth, requireRole("admin", "management"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const br = await storage.getBookingRequest(req.params.id);
+      if (!br) return res.status(404).json({ message: "Booking request not found" });
+      const now = new Date().toISOString();
+      const job = await storage.createJob({
+        companyId: user.companyId,
+        clientId: req.body.clientId || br.clientId || null,
+        bookingRequestId: br.id,
+        title: req.body.title || `${br.serviceType} — ${br.name}`,
+        serviceType: br.serviceType,
+        scheduledDate: req.body.scheduledDate || br.preferredDate,
+        startTime: req.body.startTime || br.preferredTime,
+        endTime: req.body.endTime || "",
+        assignedEmployeeIds: req.body.assignedEmployeeIds || [],
+        status: "scheduled",
+        checklist: [],
+        requiredPhotoSections: [],
+        internalNotes: `Converted from booking request. Notes: ${br.notes || "none"}`,
+        clientNotes: null,
+        accessInstructions: null,
+        priority: br.urgency === "urgent" ? "urgent" : br.urgency === "high" ? "high" : "normal",
+        fieldNoteId: null,
+        workReportId: null,
+        locationId: null,
+        createdBy: user.id,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await storage.updateBookingRequest(br.id, { status: "converted_to_job", convertedJobId: job.id, updatedAt: now });
+      res.status(201).json({ job });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Public booking form submission (no auth required)
+  app.post("/api/public/booking-request/:companyId", async (req, res) => {
+    try {
+      const company = await storage.getCompany(req.params.companyId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      const now = new Date().toISOString();
+      const request = await storage.createBookingRequest({
+        companyId: company.id,
+        name: req.body.name,
+        companyName: req.body.companyName || null,
+        phone: req.body.phone,
+        email: req.body.email,
+        serviceAddress: req.body.serviceAddress,
+        unitOrSuite: req.body.unitOrSuite || null,
+        serviceType: req.body.serviceType,
+        customerType: req.body.customerType || "commercial",
+        preferredDate: req.body.preferredDate,
+        preferredTime: req.body.preferredTime,
+        alternateDate: req.body.alternateDate || null,
+        alternateTime: req.body.alternateTime || null,
+        frequency: req.body.frequency || "one_time",
+        notes: req.body.notes || null,
+        urgency: req.body.urgency || "normal",
+        status: "new",
+        clientId: null,
+        convertedJobId: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+      res.status(201).json({ success: true, id: request.id });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   return httpServer;
 }
 

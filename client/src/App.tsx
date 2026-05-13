@@ -86,6 +86,7 @@ import AdminJobsiteWalk from "@/pages/admin/jobsite-walk";
 import AdminSalesHub from "@/pages/admin/sales-hub";
 import AdminSalesLeads from "@/pages/admin/sales-leads";
 import AdminSalesLeadDetail from "@/pages/admin/sales-lead-detail";
+import PublicBookingForm from "@/pages/public/booking-form";
 
 function LoadingScreen() {
   return (
@@ -302,6 +303,14 @@ function AppRouter() {
     return (
       <Switch>
         <Route path="/public/scheduled-field-notes/:publicId" component={PublicScheduledFieldNoteReport} />
+      </Switch>
+    );
+  }
+
+  if (location.startsWith("/public/booking/")) {
+    return (
+      <Switch>
+        <Route path="/public/booking/:companyId" component={PublicBookingForm} />
       </Switch>
     );
   }

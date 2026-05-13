@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation as useWouterLocation } from "wouter";
-import { Clock, Play, Square, Calendar, ShieldAlert, ChevronRight, Zap, X as XIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon, GraduationCap } from "lucide-react";
+import { Clock, Play, Square, Calendar, ShieldAlert, ChevronRight, Zap, X as XIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon, GraduationCap, Briefcase } from "lucide-react";
 
 export default function EmployeeHome() {
   const { user } = useAuth();
@@ -498,6 +498,9 @@ export default function EmployeeHome() {
           </div>
         </div>
       )}
+      {/* My Jobs */}
+      <MyJobsSection />
+
       {/* Clock-in first dialog for priority alert action */}
       <Dialog open={paClockInDialogOpen} onOpenChange={setPaClockInDialogOpen}>
         <DialogContent className="max-w-sm" data-testid="dialog-pa-clock-in-first">
@@ -559,6 +562,57 @@ export default function EmployeeHome() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── My Jobs Section ──────────────────────────────────────────────────────────
+function MyJobsSection() {
+  const { data: jobs, isLoading } = useQuery<any[]>({ queryKey: ["/api/employee/my-jobs"] });
+
+  if (isLoading) return (
+    <div className="mx-4 mb-4 space-y-2">
+      {[1, 2].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
+    </div>
+  );
+
+  if (!jobs?.length) return null;
+
+  const upcoming = jobs.filter(j => ["scheduled", "assigned", "in_progress"].includes(j.status));
+  if (!upcoming.length) return null;
+
+  const statusColor: Record<string, string> = {
+    scheduled: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+    assigned: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+    in_progress: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  };
+
+  return (
+    <div className="px-4 mb-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Briefcase className="w-4 h-4 text-muted-foreground" />
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">My Jobs</h2>
+      </div>
+      <div className="space-y-2">
+        {upcoming.slice(0, 5).map((job: any) => (
+          <div
+            key={job.id}
+            data-testid={`job-card-${job.id}`}
+            className="flex items-center justify-between gap-3 bg-card border rounded-xl p-3.5 shadow-sm"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{job.title}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {job.scheduledDate} {job.startTime && `· ${job.startTime}`}
+                {job.serviceType && ` · ${job.serviceType}`}
+              </p>
+            </div>
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${statusColor[job.status] || "bg-muted text-muted-foreground"}`}>
+              {job.status.replace("_", " ")}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

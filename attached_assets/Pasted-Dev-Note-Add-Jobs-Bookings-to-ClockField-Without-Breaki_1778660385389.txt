@@ -1,0 +1,608 @@
+Dev Note: Add Jobs + Bookings to ClockField Without Breaking Existing Features or Crowding the App
+Goal
+Add a premium Jobs and Bookings system to ClockField so cleaning and service businesses can:
+Schedule jobs
+Assign workers
+Track job status
+Avoid missed cleans
+Avoid double bookings
+Let clients request bookings through a form
+Connect each job to photos, notes, Field Notes, Work Reports, and client report links
+Keep the app simple and not crowded with too many pages
+This must be done without changing, breaking, replacing, or removing anything that already works in ClockField.
+Important correction
+The app is ClockField.
+Do not rename anything to Clockify.
+Core safety rule
+Do not touch or rebuild existing working systems.
+Do not change:
+Existing Schedule
+Existing Attendance
+Existing Clock In
+Existing Clock Out
+Existing Clients
+Existing Employees
+Existing Field Notes
+Existing Work Log
+Existing Work Reports
+Existing Photo Uploads
+Existing Public Client Report Links
+Existing Payroll
+Existing Training Hub
+Existing Publications
+Existing Forms
+Existing Settings
+Existing time zone logic
+This update must be added as a safe layer that connects to existing systems.
+If the new Jobs and Bookings feature is disabled, ClockField must work exactly like it works today.
+Feature flag
+Add this behind a feature flag:
+enable_jobs_bookings
+When disabled:
+No new job or booking UI appears.
+All current ClockField pages work the same.
+When enabled:
+Jobs and Bookings appear inside existing areas without crowding the navigation.
+Main concept
+ClockField should feel like one place where service businesses manage the full workday.
+Simple product flow:
+Client books or requests service.
+Admin reviews the booking.
+Admin turns it into a job.
+Admin assigns worker.
+Worker clocks in like normal.
+Worker starts work or Field Note like normal.
+Worker takes photos and notes like normal.
+Admin reviews the work.
+Client gets one clean report link.
+What this feature should solve
+This upgrade should help businesses with:
+No missed cleans
+No double bookings
+Clear job assignments
+Cleaner daily job view
+Client booking requests
+Photos and notes connected to jobs
+One client proof link after work is done
+Cleaner/service worker accountability
+Simple job planning without adding too many pages
+Navigation rule
+Do not add too many new pages to the sidebar.
+Use existing ClockField structure.
+Recommended placement:
+Schedule → add Jobs tab
+Schedule → add Booking Requests tab
+Employee app → add My Jobs inside existing daily work view
+Client/Public → Booking Form link
+This keeps the app clean.
+Do not create 10 new sidebar pages.
+Best structure:
+Schedule page tabs:
+Regular Schedule
+Jobs
+Booking Requests
+Calendar
+This makes sense because jobs and bookings are related to scheduling.
+Main definitions
+Regular Schedule
+This is the worker’s shift or normal work time.
+Example:
+Fortune works Monday to Friday from 5 PM to 10 PM.
+Job
+This is the actual service work that needs to be completed.
+Example:
+Clean ABC Office on Friday from 6 PM to 8 PM.
+Booking Request
+This is a request from a client or new customer.
+Example:
+A client fills out a form asking for office cleaning next Tuesday.
+Attendance
+This remains the source of truth for clock-in, clock-out, and hours worked.
+Field Notes / Work Reports
+These remain the source of truth for photos, notes, proof, and client updates.
+Public Client Link
+This remains the way clients receive proof of work.
+Core rule
+Jobs connect to existing systems.
+Existing systems do not depend on Jobs.
+That means:
+Attendance works without a job.
+Schedule works without a job.
+Field Notes work without a job.
+Work Reports work without a job.
+Public report links work without a job.
+But a job can optionally connect to attendance, Field Notes, Work Reports, and report links.
+Feature 1: Jobs inside Schedule
+Add a Jobs tab inside the existing Schedule area.
+This tab should show all service jobs.
+Job views:
+Calendar view
+List view
+Today view
+Status view
+Do not make this a separate heavy module unless necessary.
+Job card fields:
+Job title
+Client
+Location
+Date
+Start time
+End time
+Assigned worker or team
+Service type
+Checklist
+Required photos
+Notes
+Status
+Linked Field Note, if any
+Linked Work Report, if any
+Linked client report link, if any
+Job statuses:
+Draft
+Scheduled
+Assigned
+In Progress
+Completed
+Needs Review
+Sent to Client
+Missed
+Cancelled
+Job actions:
+Create Job
+Assign Worker
+Start Job
+Edit Job
+Cancel Job
+View Proof
+Send Client Link
+Create Job flow
+Admin clicks Create Job.
+Admin selects:
+Existing client
+Existing location
+Service type
+Date
+Start time
+End time
+Assigned worker or team
+Checklist
+Required photos
+Internal notes
+Client-facing notes
+Admin saves job.
+Job appears on Schedule → Jobs.
+Worker sees job in My Jobs.
+Important:
+Use existing clients.
+Use existing locations.
+Use existing employees.
+Do not create duplicate client records.
+If client does not exist, provide Add Client using existing client creation flow.
+Feature 2: My Jobs for workers
+Add a My Jobs section in the employee app.
+Keep it simple.
+Worker should see:
+Today’s jobs
+Upcoming jobs
+Completed jobs
+Missed jobs, if any
+Each job card should show:
+Client name
+Location
+Time
+Service type
+Notes
+Checklist
+Required photos
+Clock In button if not clocked in
+Start Work button
+Start Field Note button
+Complete Job button
+Important:
+Start Work must open the existing Start Work flow.
+Start Field Note must open the existing Field Note flow.
+Do not rebuild work capture.
+Do not rebuild photo upload.
+Do not rebuild Field Notes.
+Do not rebuild reports.
+Only pass job_id in the background.
+Correct worker flow
+Worker opens ClockField.
+Worker sees Today’s Jobs.
+Worker taps the assigned job.
+Worker clocks in like normal.
+Worker taps Start Work or Start Field Note.
+Existing flow opens.
+Worker takes photos and notes.
+Worker submits like normal.
+Job becomes Completed or Needs Review.
+Admin reviews like normal.
+Admin sends client link like normal.
+Feature 3: Booking Requests
+Add Booking Requests as a tab inside Schedule or Sales/Forms area.
+Best placement:
+Schedule → Booking Requests
+Reason:
+Bookings turn into scheduled jobs.
+This avoids adding another sidebar page.
+Booking Request purpose
+Allow service businesses to receive bookings from:
+Website
+Instagram bio
+Facebook
+Google Business Profile
+WhatsApp
+Text message
+Email
+Ads
+Booking form fields
+Public booking form should collect:
+Name
+Company name, optional
+Phone
+Email
+Service address
+Unit or suite, optional
+Service type
+Commercial or residential
+Preferred date
+Preferred time
+Alternate date, optional
+Alternate time, optional
+Frequency
+Photos, optional
+Notes
+Urgency
+Consent checkbox
+Submit button
+Service type options:
+Commercial cleaning
+Residential cleaning
+Office cleaning
+Retail cleaning
+Post-construction cleaning
+Move-in cleaning
+Move-out cleaning
+Deep cleaning
+Recurring cleaning
+One-time cleaning
+General service request
+Booking request behavior
+When a customer submits the form:
+Create Booking Request.
+Show it under Schedule → Booking Requests.
+Notify admin.
+Do not create a confirmed job automatically.
+Do not create a client automatically.
+Do not create attendance.
+Do not assign worker automatically.
+Do not affect regular schedule.
+Admin must approve it first.
+Booking request statuses:
+New Request
+Reviewed
+Approved
+Converted to Job
+Rejected
+Archived
+Booking request actions:
+Review
+Approve
+Reject
+Ask for More Info
+Convert to Client
+Convert to Job
+Link to Existing Client
+Convert booking to job flow
+Admin opens Booking Request.
+Admin reviews details.
+Admin selects existing client or creates client using existing flow.
+Admin confirms location.
+Admin picks date and time.
+Admin assigns worker.
+Admin adds checklist and photo requirements.
+Admin clicks Convert to Job.
+Booking becomes a Scheduled Job.
+Job appears in Schedule → Jobs.
+Feature 4: Double booking protection
+When admin assigns a worker to a job, check for conflicts.
+Warn if:
+Worker already has a job at the same time.
+Worker already has a regular schedule conflict.
+Worker is already assigned to another client/location.
+Location already has another job at that time.
+Do not hard-block the admin.
+Show warning:
+This worker already has another job during this time.
+Allow admin to:
+Change time
+Choose another worker
+Save anyway
+This helps avoid double bookings without breaking flexibility.
+Feature 5: Missed clean protection
+Add missed job detection.
+A job should be flagged as Missed if:
+The scheduled time has passed.
+No worker started the job.
+No Field Note or Work Report was submitted.
+No admin marked it completed manually.
+Show missed jobs in:
+Schedule → Jobs
+Dashboard alert
+My Jobs for workers, if assigned
+Admin notification
+Missed job warning:
+This job may have been missed. No work was started or submitted.
+Do not change attendance logic.
+This is only a job status alert.
+Feature 6: Client proof link connection
+Do not create a new client report link system.
+Use the existing public client report link system.
+When a job has linked Field Notes or Work Reports, admin should be able to create or send the same existing client link.
+Job detail should show:
+Linked photos
+Linked notes
+Linked Field Notes
+Linked Work Reports
+Checklist status
+Admin review status
+Send Client Link button
+Important:
+Do not change public report link design.
+Do not change public report routes.
+Do not change existing report creation flow.
+Only add job context where safe.
+Feature 7: Premium daily owner view
+Add a simple section to the existing dashboard or Schedule page.
+Name:
+Today’s Operations
+Show:
+Jobs today
+Assigned workers
+Not started
+In progress
+Completed
+Needs review
+Missed
+Client links sent
+This makes ClockField feel like a manager without adding another page.
+Keep it clean and visual.
+Example cards:
+7 Jobs Today
+2 Not Started
+3 In Progress
+1 Needs Review
+1 Missed
+4 Client Links Sent
+Database additions
+Use additive-only changes.
+Add table:
+jobs
+Fields:
+id
+business_id
+client_id, nullable
+location_id, nullable
+booking_request_id, nullable
+title
+service_type
+scheduled_date
+start_time
+end_time
+assigned_employee_ids
+assigned_team_id, nullable
+status
+checklist
+required_photo_sections
+internal_notes
+client_notes
+access_instructions
+priority
+attendance_id, nullable
+field_note_id, nullable
+work_report_id, nullable
+public_report_link_id, nullable
+created_by
+created_at
+updated_at
+Add table:
+booking_requests
+Fields:
+id
+business_id
+client_id, nullable
+location_id, nullable
+name
+company_name, nullable
+phone
+email
+service_address
+unit_or_suite, nullable
+service_type
+customer_type
+preferred_date
+preferred_time
+alternate_date, nullable
+alternate_time, nullable
+frequency
+photos
+notes
+urgency
+status
+converted_job_id, nullable
+created_at
+updated_at
+Optional fields on existing tables
+Only if safe:
+job_id nullable on Field Notes
+job_id nullable on Work Reports
+job_id nullable on Attendance
+booking_request_id nullable on Jobs
+All new fields must be nullable.
+Old records must work without them.
+Do not require migration of old records.
+Important backend rules
+Do not rewrite existing schedule APIs.
+Do not rewrite attendance APIs.
+Do not rewrite Field Note APIs.
+Do not rewrite Work Report APIs.
+Do not rewrite report link APIs.
+Only add new endpoints for jobs and bookings.
+Recommended endpoints:
+GET /api/jobs
+POST /api/jobs
+GET /api/jobs/:id
+PATCH /api/jobs/:id
+DELETE /api/jobs/:id
+GET /api/booking-requests
+POST /api/public/booking-request/:businessSlug
+PATCH /api/booking-requests/:id
+POST /api/booking-requests/:id/convert-to-job
+POST /api/jobs/:id/start
+POST /api/jobs/:id/complete
+POST /api/jobs/:id/link-field-note
+POST /api/jobs/:id/link-work-report
+Permissions
+Admin/Management can:
+Create jobs
+Edit jobs
+Cancel jobs
+Assign workers
+View all jobs
+Review booking requests
+Approve booking requests
+Reject booking requests
+Convert bookings to jobs
+Review proof
+Send client report links
+Employee/Worker can:
+View assigned jobs
+Clock in using existing flow
+Start Work using existing flow
+Start Field Note using existing flow
+Upload photos using existing flow
+Submit notes using existing flow
+View own job history
+Client/Public user can:
+Submit booking form
+Upload photos if enabled
+Receive public client report link
+They must not access:
+Admin dashboard
+Employee data
+Attendance
+Payroll
+Internal notes
+Private client records
+UI rules
+Keep the interface premium and simple.
+Do not crowd the sidebar.
+Do not add unnecessary pages.
+Use tabs, modals, and drawers inside existing areas.
+Recommended UI:
+Schedule page:
+Regular Schedule tab
+Jobs tab
+Booking Requests tab
+Calendar tab
+Job detail should open in a drawer or modal, not always a full page.
+Booking request review can open in a drawer.
+Create Job can be a modal.
+Convert Booking to Job can be a guided modal.
+Employee My Jobs should be simple mobile-first cards.
+Avoid too many buttons.
+Use clear labels:
+Create Job
+Assign Worker
+Start Work
+Start Field Note
+Send Client Link
+Convert to Job
+Review Booking
+Error handling
+Do not show vague errors.
+Bad:
+Could not create job.
+Good:
+This job needs a client, location, date, and time before it can be saved.
+Bad:
+Could not convert booking.
+Good:
+Please select or create a client before converting this booking into a job.
+Bad:
+Something went wrong.
+Good:
+The job was saved, but the worker notification could not be sent.
+Notifications
+Use existing notification/email system only.
+Do not add a new email provider.
+Add notifications for:
+New booking request
+Worker assigned to job
+Upcoming job reminder
+Job started
+Job completed
+Job missed
+Report ready for review
+Client link sent
+Do not automatically send client links unless admin clicks Send.
+Testing checklist
+Existing features must still work:
+Existing Schedule works.
+Existing Attendance works.
+Existing Clock In works.
+Existing Clock Out works.
+Existing Clients work.
+Existing Employees work.
+Existing Field Notes work.
+Existing Work Reports work.
+Existing photo upload works.
+Existing public client links work.
+Existing Payroll works.
+Existing Training Hub works.
+Existing Publications work.
+Existing Forms work.
+New Jobs feature must work:
+Admin can create job.
+Admin can select existing client.
+Admin can assign worker.
+Job appears in Schedule → Jobs.
+Worker sees job in My Jobs.
+Worker can clock in using existing flow.
+Worker can start existing Start Work flow from job.
+Worker can start existing Field Note flow from job.
+Photos and notes submit normally.
+Job links to submitted proof.
+Admin can review proof.
+Admin can send existing client link.
+New Booking feature must work:
+Public booking form opens.
+Customer can submit booking.
+Booking appears in Booking Requests.
+Booking does not automatically create job.
+Booking does not automatically create client.
+Admin can approve booking.
+Admin can link booking to existing client.
+Admin can convert booking to job.
+Converted job appears in Jobs.
+Safety acceptance criteria
+This feature is complete only when:
+No existing page is broken.
+No existing route is removed.
+No existing data is deleted.
+No existing schedule logic is changed.
+No existing attendance logic is changed.
+No existing report link logic is changed.
+Jobs are optional.
+Bookings are optional.
+Old users can ignore the feature and continue using ClockField normally.
+Product explanation
+ClockField Jobs and Bookings helps service businesses receive bookings, schedule jobs, assign workers, track work, collect photos and notes, and send clients one clean proof link.
+Marketing line
+Don’t hire another manager.
+Schedule jobs, assign workers, track photos and notes, and send every client one clean link with ClockField.
+Short app copy
+No missed cleans.
+No double bookings.
+Every job, photo, and note in one place.
+Clients get one clean link.

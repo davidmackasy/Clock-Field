@@ -2302,3 +2302,64 @@ export type JobsiteWalkPhoto = typeof jobsiteWalkPhotos.$inferSelect;
 export type InsertJobsiteWalkPhoto = z.infer<typeof insertJobsiteWalkPhotoSchema>;
 export type JobsiteWalkMeasurement = typeof jobsiteWalkMeasurements.$inferSelect;
 export type InsertJobsiteWalkMeasurement = z.infer<typeof insertJobsiteWalkMeasurementSchema>;
+
+// ─── Jobs ─────────────────────────────────────────────────────────────────────
+export const jobs = pgTable("jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  clientId: varchar("client_id"),
+  locationId: varchar("location_id"),
+  bookingRequestId: varchar("booking_request_id"),
+  title: text("title").notNull(),
+  serviceType: text("service_type").notNull().default("General Service Request"),
+  scheduledDate: text("scheduled_date").notNull(),
+  startTime: text("start_time").notNull(),
+  endTime: text("end_time").notNull(),
+  assignedEmployeeIds: text("assigned_employee_ids").array().notNull().default(sql`'{}'`),
+  status: text("status").notNull().default("draft"),
+  checklist: json("checklist").notNull().default(sql`'[]'`),
+  requiredPhotoSections: json("required_photo_sections").notNull().default(sql`'[]'`),
+  internalNotes: text("internal_notes"),
+  clientNotes: text("client_notes"),
+  accessInstructions: text("access_instructions"),
+  priority: text("priority").notNull().default("normal"),
+  fieldNoteId: varchar("field_note_id"),
+  workReportId: varchar("work_report_id"),
+  createdBy: varchar("created_by").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at"),
+});
+
+export const insertJobSchema = createInsertSchema(jobs).omit({ id: true });
+export type Job = typeof jobs.$inferSelect;
+export type InsertJob = z.infer<typeof insertJobSchema>;
+
+// ─── Booking Requests ─────────────────────────────────────────────────────────
+export const bookingRequests = pgTable("booking_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  clientId: varchar("client_id"),
+  name: text("name").notNull(),
+  companyName: text("company_name"),
+  phone: text("phone").notNull(),
+  email: text("email").notNull(),
+  serviceAddress: text("service_address").notNull(),
+  unitOrSuite: text("unit_or_suite"),
+  serviceType: text("service_type").notNull(),
+  customerType: text("customer_type").notNull().default("commercial"),
+  preferredDate: text("preferred_date").notNull(),
+  preferredTime: text("preferred_time").notNull(),
+  alternateDate: text("alternate_date"),
+  alternateTime: text("alternate_time"),
+  frequency: text("frequency").notNull().default("one_time"),
+  notes: text("notes"),
+  urgency: text("urgency").notNull().default("normal"),
+  status: text("status").notNull().default("new"),
+  convertedJobId: varchar("converted_job_id"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at"),
+});
+
+export const insertBookingRequestSchema = createInsertSchema(bookingRequests).omit({ id: true });
+export type BookingRequest = typeof bookingRequests.$inferSelect;
+export type InsertBookingRequest = z.infer<typeof insertBookingRequestSchema>;

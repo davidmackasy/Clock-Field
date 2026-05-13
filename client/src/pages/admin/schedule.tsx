@@ -1,4 +1,6 @@
 import { useState, useMemo } from "react";
+import JobsTab from "@/pages/admin/jobs-tab";
+import BookingRequestsTab from "@/pages/admin/booking-requests-tab";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,6 +38,7 @@ export default function AdminSchedule() {
   const [selectedDate, setSelectedDate] = useState(() => new Date().toLocaleDateString("en-CA", { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }));
   const [viewMode, setViewMode] = useState<ViewMode>("day");
   const [open, setOpen] = useState(false);
+  const [sectionTab, setSectionTab] = useState<"schedule" | "jobs" | "bookings">("schedule");
   
   const [shiftType, setShiftType] = useState<"one-time" | "recurring" | "extra">("one-time");
   const [form, setForm] = useState({
@@ -338,9 +341,11 @@ export default function AdminSchedule() {
           <p className="text-muted-foreground text-sm mt-1">Manage employee shifts and recurring schedules</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-create-shift"><Plus className="w-4 h-4 mr-1.5" />Create Shift</Button>
-          </DialogTrigger>
+          {sectionTab === "schedule" && (
+            <DialogTrigger asChild>
+              <Button data-testid="button-create-shift"><Plus className="w-4 h-4 mr-1.5" />Create Shift</Button>
+            </DialogTrigger>
+          )}
           <DialogContent className="max-w-xl">
             <DialogHeader>
               <DialogTitle>Create Shift</DialogTitle>
@@ -484,6 +489,24 @@ export default function AdminSchedule() {
         </Dialog>
       </div>
 
+      <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg border w-fit">
+        {(["schedule", "jobs", "bookings"] as const).map((t, i) => {
+          const labels = ["Regular Schedule", "Jobs", "Booking Requests"];
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setSectionTab(t)}
+              data-testid={`tab-section-${t}`}
+              className={cn("px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap", sectionTab === t ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}
+            >
+              {labels[i]}
+            </button>
+          );
+        })}
+      </div>
+
+      {sectionTab === "schedule" && (<>
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
         <div className="flex items-center gap-2 bg-muted/50 p-1 rounded-lg border">
           <Button 
@@ -607,6 +630,9 @@ export default function AdminSchedule() {
           </div>
         )}
       </div>
+      </>)}
+      {sectionTab === "jobs" && <JobsTab />}
+      {sectionTab === "bookings" && <BookingRequestsTab />}
     </div>
   );
 }

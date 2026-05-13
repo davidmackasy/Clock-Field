@@ -101,6 +101,9 @@ import {
   type JobsiteWalk, type InsertJobsiteWalk,
   type JobsiteWalkPhoto, type InsertJobsiteWalkPhoto,
   type JobsiteWalkMeasurement, type InsertJobsiteWalkMeasurement,
+  jobs, bookingRequests,
+  type Job, type InsertJob,
+  type BookingRequest, type InsertBookingRequest,
   quoteRequestWalkthroughs, quoteRequestWalkthroughPhotos, quoteRequestWalkthroughSections,
   type QuoteRequestWalkthrough, type InsertQuoteRequestWalkthrough,
   type QuoteRequestWalkthroughPhoto, type InsertQuoteRequestWalkthroughPhoto,
@@ -558,6 +561,19 @@ export interface IStorage {
 
   // Public-learner roster for a course (admin view, read-only aggregation)
   listPublicLearnersForCourse(courseId: string, companyId: string): Promise<any[]>;
+
+  // ── Jobs ──────────────────────────────────────────────────────────────────
+  getJobs(companyId: string): Promise<Job[]>;
+  getJob(id: string): Promise<Job | undefined>;
+  createJob(data: InsertJob): Promise<Job>;
+  updateJob(id: string, data: Partial<InsertJob>): Promise<Job | undefined>;
+  deleteJob(id: string): Promise<void>;
+
+  // ── Booking Requests ──────────────────────────────────────────────────────
+  getBookingRequests(companyId: string): Promise<BookingRequest[]>;
+  getBookingRequest(id: string): Promise<BookingRequest | undefined>;
+  createBookingRequest(data: InsertBookingRequest): Promise<BookingRequest>;
+  updateBookingRequest(id: string, data: Partial<InsertBookingRequest>): Promise<BookingRequest | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2906,6 +2922,50 @@ export class DatabaseStorage implements IStorage {
 
   async insertCachedTrainingImage(data: InsertTrainingImageCache): Promise<TrainingImageCache> {
     const [row] = await db.insert(trainingImageCache).values(data as any).returning();
+    return row;
+  }
+
+  // ── Jobs ────────────────────────────────────────────────────────────────────
+  async getJobs(companyId: string): Promise<Job[]> {
+    return db.select().from(jobs).where(eq(jobs.companyId, companyId)).orderBy(desc(jobs.createdAt));
+  }
+
+  async getJob(id: string): Promise<Job | undefined> {
+    const [row] = await db.select().from(jobs).where(eq(jobs.id, id));
+    return row;
+  }
+
+  async createJob(data: InsertJob): Promise<Job> {
+    const [row] = await db.insert(jobs).values(data as any).returning();
+    return row;
+  }
+
+  async updateJob(id: string, data: Partial<InsertJob>): Promise<Job | undefined> {
+    const [row] = await db.update(jobs).set(data as any).where(eq(jobs.id, id)).returning();
+    return row;
+  }
+
+  async deleteJob(id: string): Promise<void> {
+    await db.delete(jobs).where(eq(jobs.id, id));
+  }
+
+  // ── Booking Requests ─────────────────────────────────────────────────────
+  async getBookingRequests(companyId: string): Promise<BookingRequest[]> {
+    return db.select().from(bookingRequests).where(eq(bookingRequests.companyId, companyId)).orderBy(desc(bookingRequests.createdAt));
+  }
+
+  async getBookingRequest(id: string): Promise<BookingRequest | undefined> {
+    const [row] = await db.select().from(bookingRequests).where(eq(bookingRequests.id, id));
+    return row;
+  }
+
+  async createBookingRequest(data: InsertBookingRequest): Promise<BookingRequest> {
+    const [row] = await db.insert(bookingRequests).values(data as any).returning();
+    return row;
+  }
+
+  async updateBookingRequest(id: string, data: Partial<InsertBookingRequest>): Promise<BookingRequest | undefined> {
+    const [row] = await db.update(bookingRequests).set(data as any).where(eq(bookingRequests.id, id)).returning();
     return row;
   }
 }
