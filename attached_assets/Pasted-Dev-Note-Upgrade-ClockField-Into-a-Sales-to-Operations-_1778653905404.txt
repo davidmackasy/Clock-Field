@@ -1,0 +1,855 @@
+Dev Note: Upgrade ClockField Into a Sales-to-Operations Platform Without Breaking Existing Features
+Goal
+Upgrade ClockField so it helps small cleaning and service businesses with the full business journey:
+Get a client request
+Estimate the work
+Price the job
+Create a proposal
+Turn approved work into an active client/job
+Track the worker
+Collect proof
+Send the client one clean report link
+This upgrade must improve ClockField without replacing or breaking anything that already works.
+Do not rebuild the existing app.
+Do not change existing client records.
+Do not change existing schedules.
+Do not change attendance.
+Do not change clock-in or clock-out.
+Do not change Field Notes.
+Do not change Work Reports.
+Do not change public client report links.
+Do not change payroll estimator.
+Do not change current client management.
+This should be added as a new sales-to-operations layer that connects safely to existing ClockField systems.
+Main Product Direction
+ClockField should become more than a management tool.
+New positioning:
+ClockField helps cleaning and service businesses get client requests, price jobs, create proposals, manage workers, and prove the work with photos, notes, schedules, and client report links.
+Simple product loop:
+Client requests a quote.
+Business owner reviews the lead.
+Business owner does a walkthrough.
+ClockField helps estimate time, price, staff, and checklist.
+ClockField creates a proposal.
+Client accepts.
+Admin turns the approved quote into an active client/job.
+Cleaner clocks in like normal.
+Cleaner uses existing Field Notes or Work Reports.
+Admin sends the existing public client report link.
+Core Safety Rule
+Everything new must be optional.
+Existing ClockField users should be able to keep using the app exactly as they do today.
+If the business does not use leads, quotes, walkthroughs, or proposals, nothing should change for them.
+Use additive development only.
+Add new tables.
+Add new pages.
+Add optional links to existing systems.
+Do not delete existing fields.
+Do not rename existing fields.
+Do not rewrite existing workflows.
+Do not force existing records into the new system.
+Recommended Feature Flag
+Add this behind a feature flag:
+enable_sales_operations_flow
+When disabled:
+ClockField works exactly like it does today.
+No new lead, quote, walkthrough, or proposal pages appear.
+When enabled:
+The new sales-to-operations flow appears in the admin dashboard.
+Existing systems remain unchanged.
+New Modules To Add
+Add these new modules:
+
+
+Lead Inbox
+
+
+For new client requests from public forms.
+
+
+Quote Request Form
+
+
+A public form that businesses can share to collect client requests.
+
+
+Walkthrough Assistant
+
+
+A guided tool for inspecting a job location, taking photos, adding notes, and preparing pricing details.
+
+
+AI Pricing Assistant
+
+
+A pricing support tool that helps estimate time, staff, supplies, and price range.
+
+
+Proposal Builder
+
+
+A tool that turns a quote into a clean client-facing proposal link.
+
+
+Convert to Client / Job Setup
+
+
+A safe action that turns an approved quote into existing ClockField client, location, schedule, checklist, and report setup.
+Important:
+These modules must connect to existing ClockField features, not replace them.
+Suggested Menu Placement
+Add under Management or a new Sales menu:
+Sales / Growth
+Lead Inbox
+Quote Requests
+Walkthroughs
+Pricing Assistant
+Proposals
+Optional structure:
+Management → Lead Inbox
+Management → Walkthrough Assistant
+Management → Proposals
+Management → Pricing Assistant
+Keep existing menu items where they are.
+Do not move existing pages unless approved separately.
+Module 1: Public Quote Request Form
+Purpose
+Help small cleaning and service businesses collect leads from their website, social media, WhatsApp, Google Business Profile, Facebook, Instagram, ads, or direct messages.
+This solves:
+“How do I get clients?”
+Form Name
+Request a Quote Form
+Public Link Example
+/company-name/request-quote
+Form Fields
+Client name
+Company name, optional
+Phone number
+Email address
+Service address
+Unit or suite number, optional
+Service type
+Commercial or residential
+Cleaning frequency
+Preferred date
+Preferred time
+Alternative date, optional
+Alternative time, optional
+Photos of the space, optional
+Notes
+Urgency
+How did you hear about us, optional
+Consent checkbox
+Submit button
+Service Type Options
+Commercial cleaning
+Residential cleaning
+Office cleaning
+Retail cleaning
+Post-construction cleaning
+Move-in cleaning
+Move-out cleaning
+Deep cleaning
+Recurring cleaning
+One-time cleaning
+Industrial cleaning
+Medical or clinic cleaning
+General service request
+Service-based businesses should also be able to customize service types later.
+Submission Behavior
+When the form is submitted:
+Create a new Lead.
+Save it in Lead Inbox.
+Notify admin.
+Do not automatically create a client.
+Do not automatically create a schedule.
+Do not automatically create attendance.
+Do not automatically create a report.
+Do not affect existing clients.
+Do not affect existing ClockField workflows.
+Lead Statuses
+New Lead
+Contacted
+Walkthrough Needed
+Quote In Progress
+Proposal Sent
+Accepted
+Rejected
+Converted to Client
+Archived
+Admin Actions
+Admin should be able to:
+View lead
+Edit lead
+Call/contact lead manually
+Mark as contacted
+Start walkthrough
+Create quote
+Create proposal
+Convert to existing client
+Create new client using existing client flow
+Archive lead
+Delete lead, if permission allows
+Important Rule
+If the lead already exists as a client, admin should be able to link the lead to the existing client.
+Do not create duplicate clients automatically.
+Module 2: Lead Inbox
+Purpose
+Give the business owner one place to manage all incoming quote requests.
+Lead Inbox should show:
+Client name
+Company name
+Phone
+Email
+Service address
+Service type
+Commercial/residential
+Submitted photos
+Preferred date/time
+Status
+Created date
+Assigned admin, optional
+Lead source
+Lead Inbox Filters
+Status
+Service type
+Commercial/residential
+Date received
+Urgency
+Assigned admin
+Lead source
+Search by name, phone, email, address, or company
+Lead Detail Page
+Show:
+Client information
+Service address
+Photos
+Notes
+Service type
+Urgency
+Timeline
+Admin notes
+Related walkthroughs
+Related quotes
+Related proposals
+Linked client, if converted
+Actions:
+Start Walkthrough
+Create Quote
+Create Proposal
+Convert to Client
+Archive
+Module 3: Walkthrough Assistant
+Purpose
+Help business owners inspect a job properly before pricing.
+This solves:
+“How do I determine the place?”
+“How do I know what the job includes?”
+“How do I estimate square footage?”
+“How do I know what to charge?”
+Walkthrough Entry Points
+Admin can start walkthrough from:
+Lead Inbox
+Existing client profile
+Existing location
+Manual new walkthrough
+Walkthrough Fields
+Lead ID, optional
+Client ID, optional
+Location ID, optional
+Service address
+Service type
+Commercial or residential
+Walkthrough date
+Walkthrough notes
+Photos
+Voice notes, optional if existing voice feature can be reused
+Areas inspected
+Condition rating
+Estimated square footage
+Estimated time
+Suggested staff count
+Special requirements
+Access instructions
+Client concerns
+Supplies needed
+Recommended checklist
+Walkthrough Areas
+Allow admin to add areas like:
+Kitchen
+Washroom
+Office
+Lobby
+Hallway
+Stairs
+Windows
+Floors
+Carpet
+Storage room
+Dining area
+Warehouse
+Medical room
+Classroom
+Apartment unit
+House room
+Custom area
+Each area can have:
+Area name
+Photos
+Notes
+Estimated size
+Condition
+Cleaning difficulty
+Required tasks
+Optional Square Footage Estimation
+If possible, add AI-assisted square footage estimation from photos, but do not make it fully automatic or final.
+Use safe wording:
+Estimated square footage
+Needs confirmation
+Admin can edit
+Do not present AI measurements as guaranteed.
+Admin must be able to manually correct all estimates.
+Walkthrough Output
+After walkthrough, ClockField should generate:
+Walkthrough summary
+Suggested checklist
+Suggested estimated hours
+Suggested number of cleaners
+Suggested service frequency
+Suggested price range
+Draft quote
+Optional proposal draft
+Important Rule
+Walkthrough Assistant must not replace Field Notes.
+Field Notes are for employees capturing work during or after the job.
+Walkthrough Assistant is for admin or manager inspecting before pricing.
+Keep them separate.
+Module 4: AI Pricing Assistant
+Purpose
+Help new cleaning and service businesses price jobs with more confidence.
+This solves:
+“How do I charge clients?”
+“How do I price based on square footage?”
+“How many cleaners do I need?”
+“How long will this take?”
+“Am I charging too low?”
+Inputs
+Service type
+Commercial or residential
+Square footage
+Number of rooms
+Number of bathrooms
+Number of offices
+Frequency
+Condition
+Cleaning difficulty
+Photos, optional
+Required tasks
+Location type
+Supplies included or not
+Travel time, optional
+Desired profit margin, optional
+Hourly labor cost, optional
+Number of cleaners
+Estimated hours
+Pricing Output
+AI Pricing Assistant should suggest:
+Estimated job duration
+Suggested number of cleaners
+Suggested checklist
+Suggested supplies
+Suggested price range
+Low price warning
+Recommended quote price
+Recurring price suggestion
+One-time deep clean price suggestion
+Estimated labor cost
+Estimated margin
+Example Output
+Estimated time: 3 cleaners for 2.5 hours
+Suggested price range: $320 to $420
+Recommended quote: $375
+Do not charge below: $280
+Reason: This job includes washrooms, floors, kitchen, and after-hours access.
+Important Rule
+Pricing Assistant must be guidance only.
+Admin must always be able to edit final price.
+Do not auto-send pricing to the client.
+Do not auto-create proposal without admin review.
+Pricing Types
+Support:
+One-time price
+Hourly price
+Per square foot price
+Recurring weekly price
+Bi-weekly price
+Monthly price
+Custom price
+Recurring Contract Logic
+If frequency is recurring, show:
+First clean price
+Regular recurring price
+Suggested contract length
+Monthly total
+Visit price
+Example:
+First deep clean: $450
+Weekly recurring clean: $220 per visit
+Monthly estimate: $880
+Module 5: Proposal Builder
+Purpose
+Turn a lead, walkthrough, or pricing estimate into a professional client proposal.
+This solves:
+“How do I send the quote professionally?”
+“How do I make the client accept?”
+“How do I turn a lead into a job?”
+Proposal Fields
+Proposal title
+Client name
+Company name
+Service address
+Service type
+Scope of work
+Checklist
+Frequency
+Start date
+Price
+Optional add-ons
+What is included
+What is not included
+Terms
+Photos from walkthrough, optional
+Business logo
+Business contact info
+Accept button
+Decline button
+Questions/contact button
+Proposal Statuses
+Draft
+Sent
+Viewed
+Accepted
+Declined
+Expired
+Converted to Client
+Proposal Actions
+Admin can:
+Create proposal from lead
+Create proposal from walkthrough
+Create proposal from pricing assistant
+Edit proposal
+Preview proposal
+Send proposal link
+Copy proposal link
+Mark as accepted manually
+Convert accepted proposal into client/job setup
+Client Public Proposal Page
+Client can:
+View proposal
+See scope of work
+See price
+See included services
+See terms
+Accept
+Decline
+Ask a question, optional
+Important Rule
+Proposal link is different from report link.
+Proposal link is for selling the job before work starts.
+Report link is for proving the work after work is done.
+Do not mix these.
+Module 6: Convert Approved Proposal to Client / Job Setup
+Purpose
+Make it easy to turn a sold quote into real operations.
+This solves:
+“How do I go from accepted quote to actual work?”
+When proposal is accepted, admin should see:
+Convert to Client / Setup Job
+Options:
+Link to existing client
+Create new client using existing client creation flow
+Create location using existing location flow
+Create checklist
+Create service schedule, optional
+Create first job/work plan, optional
+Assign cleaner, optional
+Set required photos
+Set report requirements
+Important Rule
+Do not create clients automatically without admin confirmation.
+Do not duplicate existing clients.
+Do not change existing client system.
+Use existing client creation and location creation flows.
+Safe Convert Flow
+Step 1: Match Client
+System checks if client email, phone, or company already exists.
+If match found, admin can link to existing client.
+If no match, admin can create new client.
+Step 2: Create Location
+Use existing location system.
+Step 3: Create Service Setup
+Create checklist and job details.
+Step 4: Optional Schedule
+Admin may create a regular schedule if needed.
+This should use existing schedule flow.
+Do not change schedule logic.
+Step 5: Existing Operations Continue
+Cleaner clocks in using existing clock-in.
+Cleaner uses existing Field Notes or Work Reports.
+Admin sends existing public report link.
+Existing ClockField Features To Reuse
+Reuse existing:
+Client records
+Locations
+Employees
+Schedules
+Attendance
+Clock-in
+Clock-out
+Field Notes
+Work Reports
+Photo upload system
+Admin review
+Public client report link
+Notification/email system, if already working
+Do not build duplicates of these.
+How New Features Connect To Existing Features
+Lead can connect to:
+Walkthrough
+Quote
+Proposal
+Client, after conversion
+Walkthrough can connect to:
+Lead
+Existing client
+Existing location
+Pricing Assistant
+Proposal
+Proposal can connect to:
+Lead
+Walkthrough
+Existing client
+New client after admin conversion
+Schedule, optional
+Work Reports later, optional
+Field Notes later, optional
+Reports later, optional
+Important:
+All connections to existing systems must be optional and nullable.
+Current records must not require these new fields.
+Database Additions
+Add new tables or equivalent models.
+leads table
+Fields:
+id
+business_id
+client_id, nullable
+location_id, nullable
+name
+company_name, nullable
+phone
+email
+service_address
+unit_or_suite, nullable
+service_type
+customer_type
+preferred_date
+preferred_time
+alternate_date, nullable
+alternate_time, nullable
+frequency
+photos
+notes
+urgency
+lead_source
+status
+assigned_admin_id, nullable
+created_at
+updated_at
+walkthroughs table
+Fields:
+id
+business_id
+lead_id, nullable
+client_id, nullable
+location_id, nullable
+service_address
+service_type
+customer_type
+walkthrough_date
+areas
+photos
+voice_notes, nullable
+notes
+estimated_square_footage
+estimated_hours
+suggested_staff_count
+condition_rating
+difficulty_rating
+supplies_needed
+access_instructions
+client_concerns
+ai_summary
+created_by
+created_at
+updated_at
+pricing_estimates table
+Fields:
+id
+business_id
+lead_id, nullable
+walkthrough_id, nullable
+client_id, nullable
+location_id, nullable
+service_type
+customer_type
+square_footage
+rooms, nullable
+bathrooms, nullable
+offices, nullable
+frequency
+condition_rating
+difficulty_rating
+required_tasks
+estimated_hours
+suggested_staff_count
+labor_cost_estimate
+supplies_cost_estimate
+suggested_low_price
+suggested_high_price
+recommended_price
+minimum_price_warning
+pricing_type
+admin_final_price, nullable
+created_by
+created_at
+updated_at
+proposals table
+Fields:
+id
+business_id
+lead_id, nullable
+walkthrough_id, nullable
+pricing_estimate_id, nullable
+client_id, nullable
+location_id, nullable
+proposal_number
+title
+client_name
+company_name, nullable
+service_address
+service_type
+scope_of_work
+checklist
+frequency
+start_date, nullable
+price
+add_ons
+included_items
+excluded_items
+terms
+photos
+public_link_slug
+status
+viewed_at, nullable
+accepted_at, nullable
+declined_at, nullable
+converted_client_id, nullable
+created_by
+created_at
+updated_at
+Optional fields to existing tables
+Only add if safe:
+lead_id, nullable
+proposal_id, nullable
+walkthrough_id, nullable
+pricing_estimate_id, nullable
+All optional.
+Do not force old records to use them.
+AI Usage Rules
+AI can help with:
+Summarizing leads
+Summarizing walkthroughs
+Suggesting checklist
+Suggesting estimated hours
+Suggesting staff count
+Suggesting pricing range
+Drafting proposals
+Drafting client-friendly wording
+AI must not:
+Automatically send quotes
+Automatically approve pricing
+Automatically create clients
+Automatically create schedules
+Automatically modify attendance
+Automatically modify payroll
+Automatically make final measurement claims
+Admin must review and confirm.
+UX Requirements
+The UI must feel simple for small business owners.
+Avoid too many technical words.
+Use plain labels like:
+New Lead
+Start Walkthrough
+Get Price Help
+Create Proposal
+Send Proposal
+Convert to Client
+Setup Work
+Send Report
+Do not make the UI feel like enterprise software.
+Make it easy for a new cleaning business owner to understand.
+Lead Inbox Page UI
+Cards should show:
+Name
+Service type
+Address
+Urgency
+Status
+Submitted date
+Quick actions:
+View
+Start Walkthrough
+Create Quote
+Create Proposal
+Walkthrough Page UI
+Use a step-by-step layout:
+Step 1: Job Info
+Step 2: Areas
+Step 3: Photos and Notes
+Step 4: Estimate
+Step 5: Pricing Help
+Step 6: Create Proposal
+Pricing Assistant UI
+Show:
+Inputs on the left
+Pricing suggestion on the right
+Editable final price
+Clear warning if price is too low
+Proposal Builder UI
+Show:
+Proposal editor
+Live preview
+Save draft
+Copy link
+Send link
+Convert after accepted
+Client Proposal Page UI
+Must be mobile-friendly.
+Show:
+Business logo
+Client name
+Service address
+Scope
+Price
+Included services
+Terms
+Accept button
+Decline button
+Contact button, optional
+Do not show internal notes.
+Do not show labor cost.
+Do not show margin.
+Do not show admin-only information.
+Permissions
+Admin/Management can:
+View leads
+Edit leads
+Start walkthroughs
+Create pricing estimates
+Create proposals
+Send proposal links
+Convert accepted proposal to client
+Link lead to existing client
+Create new client from lead
+Archive leads
+Employee/Cleaner should not access:
+Lead pricing
+Profit margin
+Proposal drafts
+Internal notes
+Client acquisition data
+Client/Public user can:
+Submit quote request
+View proposal link
+Accept proposal
+Decline proposal
+View public report link after work is completed
+They must not access dashboard, employee data, attendance, payroll, or internal notes.
+Notifications
+Use existing notification/email system only.
+Do not add a new provider.
+Notifications:
+Admin receives new quote request.
+Admin receives proposal accepted notification.
+Admin receives proposal declined notification.
+Admin receives walkthrough completed notification, optional.
+Client receives proposal link only when admin sends it.
+Do not automatically email clients without admin action unless business setting allows it.
+Testing Checklist
+Existing features must still work:
+Existing clients still load.
+Existing client profiles still work.
+Existing schedules still work.
+Existing attendance still works.
+Existing clock-in still works.
+Existing clock-out still works.
+Existing Field Notes still work.
+Existing Work Reports still work.
+Existing public report links still work.
+Existing payroll estimator still works.
+Existing training still works.
+Existing incident reports still work.
+New features must work:
+Public quote form can be opened.
+Client can submit quote request.
+Lead appears in Lead Inbox.
+Admin can view lead.
+Admin can start walkthrough.
+Admin can add photos and notes to walkthrough.
+Admin can generate pricing suggestion.
+Admin can edit final price.
+Admin can create proposal.
+Admin can preview proposal.
+Admin can copy proposal link.
+Client can view proposal.
+Client can accept proposal.
+Admin can convert accepted proposal to client.
+Admin can link to existing client.
+Admin can create new client using existing client flow.
+No duplicate client is created automatically.
+Existing report link flow still works after conversion.
+Acceptance Criteria
+This upgrade is complete when:
+ClockField can collect quote requests through public forms.
+Admins can manage leads in Lead Inbox.
+Admins can complete walkthroughs.
+ClockField can suggest pricing guidance.
+Admins can create client proposal links.
+Clients can accept proposals.
+Admins can convert accepted proposals into existing ClockField clients and operations.
+Existing ClockField clients are not affected.
+Existing attendance is not affected.
+Existing schedules are not affected.
+Existing Field Notes are not affected.
+Existing Work Reports are not affected.
+Existing public report links are not affected.
+Nothing existing is renamed, deleted, or rebuilt.
+Product-Market Fit Focus
+This upgrade should help business owners answer:
+How do I get clients?
+How do I inspect a job?
+How do I estimate square footage?
+How do I price the job?
+How do I send a professional quote?
+How do I turn the client into an active job?
+How do I track the cleaner?
+How do I prove the work was done?
+Final Product Explanation
+ClockField helps cleaning and service businesses collect client requests, inspect jobs, price work, send proposals, manage workers, and prove completed work with photos, notes, and client report links.
+Short User-Facing Copy
+Get the lead.
+Price the job.
+Send the proposal.
+Manage the work.
+Prove it with one clean link.

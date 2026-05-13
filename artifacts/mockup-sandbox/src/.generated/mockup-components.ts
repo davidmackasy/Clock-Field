@@ -4,10 +4,10 @@ export const modules: ModuleMap = {
   "./components/mockups/grid-vibes/EditorialBriefingGrid.tsx": () => import("../components/mockups/grid-vibes/EditorialBriefingGrid.tsx"),
   "./components/mockups/grid-vibes/LivingPulseGrid.tsx": () => import("../components/mockups/grid-vibes/LivingPulseGrid.tsx"),
   "./components/mockups/grid-vibes/QuietOperatorGrid.tsx": () => import("../components/mockups/grid-vibes/QuietOperatorGrid.tsx"),
-  "./components/mockups/pulse-vibes/EditorialBriefing.tsx": () => import("../components/mockups/pulse-vibes/EditorialBriefing.tsx"),
-  "./components/mockups/pulse-vibes/LivingPulse.tsx": () => import("../components/mockups/pulse-vibes/LivingPulse.tsx"),
-  "./components/mockups/pulse-vibes/QuietOperator.tsx": () => import("../components/mockups/pulse-vibes/QuietOperator.tsx"),
   "./components/mockups/training-cards/Pulse.tsx": () => import("../components/mockups/training-cards/Pulse.tsx"),
   "./components/mockups/training-cards/Roster.tsx": () => import("../components/mockups/training-cards/Roster.tsx"),
-  "./components/mockups/training-cards/Trail.tsx": () => import("../components/mockups/training-cards/Trail.tsx")
+  "./components/mockups/training-cards/Trail.tsx": () => import("../components/mockups/training-cards/Trail.tsx"),
+  "./components/mockups/pulse-vibes/EditorialBriefing.tsx": () => import("../components/mockups/pulse-vibes/EditorialBriefing.tsx"),
+  "./components/mockups/pulse-vibes/LivingPulse.tsx": () => import("../components/mockups/pulse-vibes/LivingPulse.tsx"),
+  "./components/mockups/pulse-vibes/QuietOperator.tsx": () => import("../components/mockups/pulse-vibes/QuietOperator.tsx")
 };
