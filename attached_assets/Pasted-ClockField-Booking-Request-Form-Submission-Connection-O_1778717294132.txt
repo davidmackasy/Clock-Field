@@ -1,0 +1,165 @@
+ClockField Booking Request + Form Submission Connection
+
+Objective:
+Connect Schedule Booking Requests with Forms Submissions so booking requests can be managed, viewed, and estimated from the existing Forms system without breaking the current Schedule, Forms, Quote, or Estimator flows.
+
+Scope:
+This task is only for connecting existing booking request submissions into the existing Forms submission system.
+
+Do not rebuild booking.
+Do not rebuild forms.
+Do not change database structure unless required.
+Do not remove current Schedule booking request functionality.
+Do not remove the existing public booking form.
+Do not affect regular schedules or jobs.
+
+Required changes:
+
+Keep Schedule Booking Requests working
+
+Current Schedule page has:
+
+Regular Schedule
+Jobs
+Booking Requests
+
+Keep all of this working exactly as it is.
+
+The public booking form under Schedule must still work.
+
+Booking submissions should also appear under Forms → Submissions
+
+When a client submits the public booking form from Schedule, that submission should also appear inside:
+
+Forms → Submissions
+
+It should be clearly labeled as:
+
+Booking Request
+
+Do not duplicate the client data.
+Do not create a separate fake submission.
+Use the same booking request data and expose it in the Forms submission view.
+
+Show all booking request information in Forms submission detail
+
+When an admin opens the booking request from Forms → Submissions, they must see all information the client submitted.
+
+This includes:
+
+client name
+phone
+email
+address
+city/province/postal code
+service type
+customer type
+urgency
+frequency
+preferred date
+preferred time
+residential/commercial details
+rooms, bathrooms, bedrooms, kitchens, laundry rooms, stories
+notes/client input
+consent
+any uploaded or extra fields if available
+
+Do not hide fields.
+Do not only show summary fields.
+The full client submission must be visible.
+
+Estimate button should work from the booking submission
+
+Inside the booking request submission detail, allow the admin to use the existing estimate tool.
+
+The estimate should use the booking request information and the existing Forms estimator settings.
+
+Do not create a new estimator.
+Do not change estimator pricing logic.
+Do not change estimator settings.
+
+Just make sure booking request submissions can use the existing estimate flow correctly.
+
+Schedule calendar booking click behavior
+
+When an admin clicks a booking request from the Schedule calendar, it should take them to the related Forms submission detail view for that booking request.
+
+This is better than only showing a limited side panel.
+
+The admin should land on the full booking submission page where they can:
+
+review all client details
+get an estimate
+create or send a quotation if already supported
+update status if already supported
+Keep quotation flow where it already exists
+
+Do not rebuild quotation in this task.
+
+If quotation currently works under Schedule Booking Requests, keep it there.
+
+If the booking submission detail already has access to create quote or estimate, connect safely.
+
+Do not create a new quotation system inside Forms unless it already exists.
+
+Submission types should be separated clearly
+
+Forms → Submissions should clearly show the submission source/type.
+
+Examples:
+
+Contact Form
+Smart Form
+Booking Request
+Quote Request
+
+This way the admin knows what kind of lead came in.
+
+Do not break current Forms page
+
+Keep all current Forms tabs working:
+
+Forms
+Submissions
+Pipeline
+Estimator Settings
+Email Settings
+Embed
+
+Do not remove tabs.
+Do not change existing form builder behavior.
+Do not break existing public form links.
+
+Do not break Schedule
+
+Do not affect:
+
+regular schedule
+jobs
+existing booking requests
+booking calendar
+accepted bookings
+archived bookings
+public booking link
+Safe implementation rule
+
+This should be a connection and visibility update only.
+
+The goal is:
+
+Schedule Booking Request submitted
+→ appears in Schedule Booking Requests
+→ also appears in Forms Submissions as “Booking Request”
+→ clicking it shows full client-submitted details
+→ admin can run estimate using existing estimator settings
+
+Important:
+Do not touch unrelated navigation changes.
+Do not touch Work Log.
+Do not touch Clients.
+Do not touch Messages.
+Do not touch Document.
+Do not touch Training Hub.
+Do not change authentication or permissions.
+
+Only connect booking request submissions into Forms Submissions safely.

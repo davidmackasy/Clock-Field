@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -218,6 +219,7 @@ function BookingDetailDrawer({
   booking: BookingRequest; onClose: () => void; onUpdated: () => void;
 }) {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [showQuoteBuilder, setShowQuoteBuilder] = useState(false);
   const [savedQuote, setSavedQuote] = useState<BookingQuote | null>(null);
 
@@ -346,6 +348,14 @@ function BookingDetailDrawer({
           <div className="px-6 py-5 space-y-6">
             {/* Action Buttons */}
             <div className="flex flex-wrap gap-2 pb-4 border-b border-gray-100">
+              <Button
+                data-testid="button-view-in-forms"
+                size="sm" variant="outline"
+                onClick={() => { onClose(); navigate(`/admin/quote-forms?tab=submissions&booking=${booking.id}`); }}
+                className="gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50">
+                <ExternalLink className="w-3.5 h-3.5" />
+                View in Forms
+              </Button>
               {!booking.estimateId && (
                 <Button data-testid="button-get-estimate" size="sm" variant="outline" onClick={() => generateEstimate.mutate()} disabled={generateEstimate.isPending} className="gap-1.5 border-purple-200 text-purple-700 hover:bg-purple-50">
                   <Sparkles className="w-3.5 h-3.5" />

@@ -19,7 +19,7 @@ import {
   FileText, Plus, ExternalLink, Trash2, Loader2, Copy,
   ClipboardList, Settings2, Inbox, GitBranch, Zap, Mail, Code2,
   ChevronRight, ChevronLeft, User, Phone, MapPin, Calendar,
-  RotateCw, CheckCircle2, XCircle, AlertCircle, Clock, DollarSign,
+  RotateCw, CheckCircle2, XCircle, AlertCircle, AlertTriangle, Clock, DollarSign,
   Save, ArrowRight, FileCheck, SlidersHorizontal, RefreshCw, Eye,
   Send, Sparkles, Building2, Home, BarChart3, Camera, Images, Mic,
   Edit3, X, ChevronDown, ChevronUp,
@@ -39,6 +39,27 @@ type Submission = {
   estimate?: any; quote?: any; activity?: any[];
   walkthrough?: WalkthroughDetail | null;
   hasWalkthrough?: boolean;
+};
+
+// ── Booking types (mirror of booking-requests-tab, no import needed) ──────────
+type BookingRequest = {
+  id: string; companyId: string; name: string; companyName?: string; phone: string; email: string;
+  bestContactMethod?: string; serviceAddress: string; unitOrSuite?: string; city?: string; province?: string; postalCode?: string;
+  serviceType: string; customerType: string; frequency: string; urgency: string;
+  preferredDate: string; preferredTime: string; alternateDate?: string; alternateTime?: string;
+  siteVisitPreference?: string; siteVisitDate?: string; siteVisitTime?: string; siteVisitContact?: string;
+  commercialDetails?: any; residentialDetails?: any; postConstructionDetails?: any; moveInOutDetails?: any;
+  uploadedPhotos?: any[]; notes?: string; specialInstructions?: string; areasAttention?: string;
+  areasAvoid?: string; healthSafetyConcerns?: string; clientExpectations?: string;
+  consentGiven?: boolean; status: string; estimateId?: string; quoteId?: string;
+  convertedJobId?: string; createdAt: string; updatedAt?: string;
+};
+type BookingEstimateData = {
+  id: string; estimatedHours?: string; suggestedWorkerCount?: number;
+  suggestedLowPrice?: string; suggestedHighPrice?: string; recommendedPrice?: string;
+  minimumPriceWarning?: boolean; suggestedChecklist?: string[]; suggestedSupplies?: string[];
+  aiSummary?: string; adminFinalPrice?: string;
+  inputSnapshot?: { _aiAssumptions?: string[]; _aiMinimumWarning?: string | null; [k: string]: any };
 };
 
 const PIPELINE_STAGES = [
@@ -237,8 +258,316 @@ function FormsTab() {
   );
 }
 
+// ── Booking Detail Pane ───────────────────────────────────────────────────────
+function BookingDetailPane({ bookingId, onGoToEstimator }: { bookingId: string; onGoToEstimator: () => void }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  const { data: booking, isLoading: bookingLoading } = useQuery<BookingRequest>({
+    queryKey: ["/api/booking-requests", bookingId],
+    queryFn: async () => { const r = await fetch(`/api/booking-requests/${bookingId}`, { credentials: "include" }); return r.json(); },
+    enabled: !!bookingId,
+  });
+  const { data: estimate, isLoading: estLoading } = useQuery<BookingEstimateData | null>({
+    queryKey: ["/api/booking-requests", bookingId, "estimate"],
+    queryFn: async () => { const r = await fetch(`/api/booking-requests/${bookingId}/estimate`, { credentials: "include" }); if (!r.ok) return null; return r.json(); },
+    enabled: !!bookingId,
+  });
+
+  const estimateMutation = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/booking-requests/${bookingId}/estimate`, {}).then(r => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/booking-requests", bookingId, "estimate"] });
+      qc.invalidateQueries({ queryKey: ["/api/booking-requests"] });
+      toast({ title: "Estimate generated", description: "AI estimate is ready." });
+    },
+    onError: (e: any) => toast({ title: "Estimate failed", description: e.message, variant: "destructive" }),
+  });
+
+  if (bookingLoading) return <div className="space-y-3 p-4"><Skeleton className="h-6 w-48" /><Skeleton className="h-24" /><Skeleton className="h-40" /></div>;
+  if (!booking) return null;
+
+  const com = (booking.commercialDetails as any) || {};
+  const res = (booking.residentialDetails as any) || {};
+  const post = (booking.postConstructionDetails as any) || {};
+  const move = (booking.moveInOutDetails as any) || {};
+  const photos = Array.isArray(booking.uploadedPhotos) ? booking.uploadedPhotos : [];
+
+  const BOOKING_STATUS_CLS: Record<string, string> = {
+    new: "bg-blue-100 text-blue-700", needs_review: "bg-yellow-100 text-yellow-800",
+    estimate_generated: "bg-purple-100 text-purple-700", quote_draft: "bg-orange-100 text-orange-700",
+    quote_sent: "bg-cyan-100 text-cyan-700", confirmed: "bg-emerald-100 text-emerald-700",
+    converted_to_job: "bg-teal-100 text-teal-700", cancelled: "bg-gray-100 text-gray-500",
+  };
+  const statusCls = BOOKING_STATUS_CLS[booking.status] || "bg-gray-100 text-gray-600";
+  const statusLabel = booking.status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+  return (
+    <div className="space-y-4 p-1">
+      {/* Header */}
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+          {booking.customerType?.toLowerCase().includes("commercial") ? <Building2 className="w-5 h-5 text-primary" /> : <Home className="w-5 h-5 text-primary" />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h2 className="font-semibold text-base">{booking.name}</h2>
+          <div className="flex items-center gap-2 flex-wrap mt-0.5">
+            {booking.email && <span className="text-xs text-muted-foreground">{booking.email}</span>}
+            {booking.phone && <span className="text-xs text-muted-foreground">{booking.phone}</span>}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+          <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium", statusCls)}>{statusLabel}</span>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 border border-indigo-200">Booking Request</span>
+        </div>
+      </div>
+
+      {/* Quick info row */}
+      <div className="grid grid-cols-2 gap-3 text-xs">
+        {booking.serviceType && <div className="flex items-center gap-1.5 text-muted-foreground"><FileText className="w-3.5 h-3.5" />{booking.serviceType}</div>}
+        {booking.serviceAddress && <div className="flex items-center gap-1.5 text-muted-foreground"><MapPin className="w-3.5 h-3.5" />{booking.serviceAddress}{booking.city ? `, ${booking.city}` : ""}</div>}
+        <div className="flex items-center gap-1.5 text-muted-foreground"><Calendar className="w-3.5 h-3.5" />Submitted: {fmtDate(booking.createdAt)}</div>
+        {booking.preferredDate && <div className="flex items-center gap-1.5 text-muted-foreground"><Clock className="w-3.5 h-3.5" />Preferred: {booking.preferredDate}</div>}
+      </div>
+
+      {/* Contact */}
+      <div className="rounded-xl border bg-card p-4">
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5"><User className="w-4 h-4 text-primary" />Contact Information</h3>
+        <div className="space-y-2 text-sm">
+          <div className="flex items-center gap-2"><User className="w-4 h-4 text-muted-foreground shrink-0" /><span className="font-medium">{booking.name}</span>{booking.companyName && <span className="text-muted-foreground">— {booking.companyName}</span>}</div>
+          <div className="flex items-center gap-2"><Phone className="w-4 h-4 text-muted-foreground shrink-0" /><a href={`tel:${booking.phone}`} className="text-primary">{booking.phone}</a>{booking.bestContactMethod && <span className="text-muted-foreground text-xs">· prefers {booking.bestContactMethod}</span>}</div>
+          <div className="flex items-center gap-2"><Mail className="w-4 h-4 text-muted-foreground shrink-0" /><a href={`mailto:${booking.email}`} className="text-primary">{booking.email}</a></div>
+        </div>
+      </div>
+
+      {/* Location */}
+      <div className="rounded-xl border bg-card p-4">
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5"><MapPin className="w-4 h-4 text-primary" />Location</h3>
+        <div className="flex items-start gap-2 text-sm">
+          <MapPin className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium">{booking.serviceAddress}{booking.unitOrSuite ? ` #${booking.unitOrSuite}` : ""}</p>
+            {(booking.city || booking.province || booking.postalCode) && (
+              <p className="text-muted-foreground">{[booking.city, booking.province, booking.postalCode].filter(Boolean).join(", ")}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Service Details */}
+      <div className="rounded-xl border bg-card p-4">
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5"><ClipboardList className="w-4 h-4 text-primary" />Service Details</h3>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          {([
+            ["Service Type", booking.serviceType],
+            ["Customer Type", booking.customerType],
+            ["Frequency", booking.frequency],
+            ["Urgency", booking.urgency],
+            ["Preferred Date", booking.preferredDate],
+            ["Preferred Time", booking.preferredTime],
+            booking.alternateDate ? ["Alternate Date", booking.alternateDate] : null,
+            booking.alternateTime ? ["Alternate Time", booking.alternateTime] : null,
+          ] as ([string, string] | null)[]).filter(Boolean).map(([lbl, val]) => (
+            <div key={lbl}><p className="text-muted-foreground text-xs">{lbl}</p><p className="font-medium capitalize">{val}</p></div>
+          ))}
+        </div>
+        {booking.siteVisitPreference && booking.siteVisitPreference !== "no" && (
+          <div className="mt-3 bg-blue-50 rounded-lg p-3 text-xs">
+            <p className="font-medium text-blue-800">Site Visit: {booking.siteVisitPreference === "yes" ? "Requested" : "Not sure / TBD"}</p>
+            {booking.siteVisitDate && <p className="text-blue-700 mt-1">{booking.siteVisitDate}{booking.siteVisitTime ? ` at ${booking.siteVisitTime}` : ""}</p>}
+            {booking.siteVisitContact && <p className="text-blue-700">Contact: {booking.siteVisitContact}</p>}
+          </div>
+        )}
+      </div>
+
+      {/* Residential Details */}
+      {booking.residentialDetails && Object.keys(res).length > 0 && (
+        <div className="rounded-xl border bg-card p-4">
+          <h3 className="text-sm font-semibold mb-3">Residential Property Details</h3>
+          <div className="bg-green-50 rounded-lg p-4 text-sm space-y-1.5">
+            {res.homeType && <p><span className="text-muted-foreground">Home Type:</span> <span className="font-medium capitalize">{res.homeType}</span></p>}
+            {res.squareFootage && <p><span className="text-muted-foreground">Square Footage:</span> <span className="font-medium">~{res.squareFootage} sq ft</span></p>}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-1">
+              {res.numStories != null && <p><span className="text-muted-foreground">Stories:</span> {res.numStories}</p>}
+              {res.numBedrooms != null && <p><span className="text-muted-foreground">Bedrooms:</span> {res.numBedrooms}</p>}
+              {res.numBathrooms != null && <p><span className="text-muted-foreground">Bathrooms:</span> {res.numBathrooms}</p>}
+              {res.numToilets != null && <p><span className="text-muted-foreground">Toilets:</span> {res.numToilets}</p>}
+              {res.numKitchens != null && <p><span className="text-muted-foreground">Kitchens:</span> {res.numKitchens}</p>}
+              {res.numLivingRooms != null && <p><span className="text-muted-foreground">Living Rooms:</span> {res.numLivingRooms}</p>}
+              {res.numDiningRooms != null && <p><span className="text-muted-foreground">Dining Rooms:</span> {res.numDiningRooms}</p>}
+              {res.numLaundryRooms != null && <p><span className="text-muted-foreground">Laundry Rooms:</span> {res.numLaundryRooms}</p>}
+              {res.basement != null && <p><span className="text-muted-foreground">Basement:</span> {res.basement ? "Yes" : "No"}</p>}
+            </div>
+            {res.cleaningType && <p className="pt-1"><span className="text-muted-foreground">Cleaning Type:</span> {res.cleaningType}</p>}
+            {(res.hasPets === "Yes" || res.hasPets === true) && <p><span className="text-muted-foreground">Pets:</span> {Array.isArray(res.petTypes) && res.petTypes.length > 0 ? res.petTypes.join(", ") : "Yes"}</p>}
+            {Array.isArray(res.areasToClean) && res.areasToClean.length > 0 && <p><span className="text-muted-foreground">Areas to Clean:</span> {res.areasToClean.join(", ")}</p>}
+            {Array.isArray(res.appliancesToClean) && res.appliancesToClean.length > 0 && <p><span className="text-muted-foreground">Appliances:</span> {res.appliancesToClean.join(", ")}</p>}
+            {Array.isArray(res.specialConditions) && res.specialConditions.length > 0 && <p><span className="text-muted-foreground">Special Conditions:</span> {res.specialConditions.join(", ")}</p>}
+            {res.suppliesPreference && <p><span className="text-muted-foreground">Supplies:</span> {res.suppliesPreference}</p>}
+          </div>
+        </div>
+      )}
+
+      {/* Commercial Details */}
+      {booking.commercialDetails && Object.keys(com).length > 0 && (
+        <div className="rounded-xl border bg-card p-4">
+          <h3 className="text-sm font-semibold mb-3">Commercial Property Details</h3>
+          <div className="bg-blue-50 rounded-lg p-4 text-sm space-y-1.5">
+            {com.businessType && <p><span className="text-muted-foreground">Business Type:</span> <span className="font-medium">{com.businessType}</span></p>}
+            {com.squareFootage && <p><span className="text-muted-foreground">Square Footage:</span> ~{com.squareFootage} sq ft</p>}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-1">
+              {com.numOffices != null && <p><span className="text-muted-foreground">Offices:</span> {com.numOffices}</p>}
+              {com.numWashrooms != null && <p><span className="text-muted-foreground">Washrooms:</span> {com.numWashrooms}</p>}
+              {com.numToilets != null && <p><span className="text-muted-foreground">Toilets:</span> {com.numToilets}</p>}
+              {com.numSinks != null && <p><span className="text-muted-foreground">Sinks:</span> {com.numSinks}</p>}
+              {com.numKitchens != null && <p><span className="text-muted-foreground">Kitchens/Break Rooms:</span> {com.numKitchens}</p>}
+              {com.numFloors != null && <p><span className="text-muted-foreground">Floors:</span> {com.numFloors}</p>}
+              {com.meetingRooms != null && <p><span className="text-muted-foreground">Meeting Rooms:</span> {com.meetingRooms}</p>}
+              {com.entrances != null && <p><span className="text-muted-foreground">Entrances:</span> {com.entrances}</p>}
+            </div>
+            {Array.isArray(com.floorTypes) && com.floorTypes.length > 0 && <p className="pt-1"><span className="text-muted-foreground">Floor Types:</span> {com.floorTypes.join(", ")}</p>}
+            {com.cleaningTimePreference && <p><span className="text-muted-foreground">Cleaning Time:</span> {com.cleaningTimePreference}</p>}
+            {com.suppliesOnsite && <p><span className="text-muted-foreground">Supplies On Site:</span> {com.suppliesOnsite}</p>}
+            {com.commonAreas && <p><span className="text-muted-foreground">Common Areas:</span> {com.commonAreas}</p>}
+            {com.staffAreas && <p><span className="text-muted-foreground">Staff Areas:</span> {com.staffAreas}</p>}
+          </div>
+        </div>
+      )}
+
+      {/* Post-Construction Details */}
+      {booking.postConstructionDetails && Object.keys(post).length > 0 && (
+        <div className="rounded-xl border bg-card p-4">
+          <h3 className="text-sm font-semibold mb-3">Post-Construction Details</h3>
+          <div className="bg-orange-50 rounded-lg p-4 text-sm space-y-1.5">
+            {post.projectType && <p><span className="text-muted-foreground">Project Type:</span> {post.projectType}</p>}
+            {post.squareFootage && <p><span className="text-muted-foreground">Square Footage:</span> ~{post.squareFootage} sq ft</p>}
+            {post.numFloors != null && <p><span className="text-muted-foreground">Floors:</span> {post.numFloors}</p>}
+            {post.heavyDustPresent && <p><span className="text-muted-foreground">Heavy Dust:</span> {post.heavyDustPresent}</p>}
+            {post.debrisRemovalNeeded && <p><span className="text-muted-foreground">Debris Removal:</span> {post.debrisRemovalNeeded}</p>}
+            {post.windowsIncluded && <p><span className="text-muted-foreground">Windows Included:</span> {post.windowsIncluded}</p>}
+            {post.completionDeadline && <p><span className="text-muted-foreground">Deadline:</span> {post.completionDeadline}</p>}
+            {post.photosRequired && <p><span className="text-muted-foreground">Photos Required:</span> Yes</p>}
+          </div>
+        </div>
+      )}
+
+      {/* Move-In/Out Details */}
+      {booking.moveInOutDetails && Object.keys(move).length > 0 && (
+        <div className="rounded-xl border bg-card p-4">
+          <h3 className="text-sm font-semibold mb-3">Move-In / Move-Out Details</h3>
+          <div className="bg-purple-50 rounded-lg p-4 text-sm space-y-1.5">
+            {move.propertyEmpty != null && <p><span className="text-muted-foreground">Property Empty:</span> {move.propertyEmpty ? "Yes" : "No"}</p>}
+            {move.appliancesIncluded != null && <p><span className="text-muted-foreground">Appliances Included:</span> {move.appliancesIncluded}</p>}
+            {move.cabinetsIncluded != null && <p><span className="text-muted-foreground">Cabinets Included:</span> {move.cabinetsIncluded ? "Yes" : "No"}</p>}
+            {move.carpetsIncluded != null && <p><span className="text-muted-foreground">Carpets Included:</span> {move.carpetsIncluded ? "Yes" : "No"}</p>}
+            {move.garbageRemoval != null && <p><span className="text-muted-foreground">Garbage Removal:</span> {move.garbageRemoval ? "Yes" : "No"}</p>}
+            {move.sameDayService && <p><span className="text-muted-foreground">Same-Day Service:</span> Yes</p>}
+            {move.moveDate && <p><span className="text-muted-foreground">Move Date:</span> {move.moveDate}</p>}
+            {move.keyAccessInstructions && <p><span className="text-muted-foreground">Key/Access:</span> {move.keyAccessInstructions}</p>}
+          </div>
+        </div>
+      )}
+
+      {/* Notes & Client Input */}
+      {(booking.notes || booking.specialInstructions || booking.areasAttention || booking.areasAvoid || booking.healthSafetyConcerns || booking.clientExpectations || booking.consentGiven) && (
+        <div className="rounded-xl border bg-card p-4">
+          <h3 className="text-sm font-semibold mb-3">Notes &amp; Client Input</h3>
+          <div className="space-y-2 text-sm">
+            {booking.notes && <div className="bg-muted/40 rounded-lg p-3"><p className="text-muted-foreground text-xs mb-1">Notes from Client</p><p>{booking.notes}</p></div>}
+            {booking.specialInstructions && <div className="bg-muted/40 rounded-lg p-3"><p className="text-muted-foreground text-xs mb-1">Special Instructions</p><p>{booking.specialInstructions}</p></div>}
+            {booking.areasAttention && <div className="bg-yellow-50 rounded-lg p-3"><p className="text-muted-foreground text-xs mb-1">Areas Needing Attention</p><p>{booking.areasAttention}</p></div>}
+            {booking.areasAvoid && <div className="bg-red-50 rounded-lg p-3"><p className="text-muted-foreground text-xs mb-1">Areas to Avoid</p><p>{booking.areasAvoid}</p></div>}
+            {booking.healthSafetyConcerns && <div className="bg-red-50 rounded-lg p-3"><p className="text-muted-foreground text-xs mb-1">Health / Safety Concerns</p><p>{booking.healthSafetyConcerns}</p></div>}
+            {booking.clientExpectations && <div className="bg-blue-50 rounded-lg p-3"><p className="text-muted-foreground text-xs mb-1">Client Expectations</p><p>{booking.clientExpectations}</p></div>}
+            {booking.consentGiven && <div className="bg-emerald-50 rounded-lg p-3 flex items-center gap-2 text-xs text-emerald-700"><CheckCircle2 className="w-3.5 h-3.5 shrink-0" />Client consented to contact and data collection</div>}
+          </div>
+        </div>
+      )}
+
+      {/* Uploaded Photos */}
+      {photos.length > 0 && (
+        <div className="rounded-xl border bg-card p-4">
+          <h3 className="text-sm font-semibold mb-3">Uploaded Files</h3>
+          <div className="flex flex-wrap gap-2">
+            {photos.map((p: any, i: number) => (
+              <div key={i} className="flex items-center gap-1.5 bg-muted/40 rounded-lg px-3 py-1.5 text-xs text-muted-foreground">{p.name || `File ${i + 1}`}</div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* AI Estimate */}
+      <div className="rounded-xl border bg-card p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold flex items-center gap-1.5"><Sparkles className="w-4 h-4 text-purple-500" />AI Estimate</h3>
+          <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5"
+            data-testid="button-booking-run-estimate"
+            disabled={estimateMutation.isPending}
+            onClick={() => estimateMutation.mutate()}>
+            {estimateMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCw className="w-3.5 h-3.5" />}
+            {estimate ? "Re-run" : "Get Estimate"}
+          </Button>
+        </div>
+        {estLoading ? (
+          <p className="text-xs text-muted-foreground">Loading estimate...</p>
+        ) : !estimate ? (
+          <p className="text-xs text-muted-foreground">No estimate yet. Click "Get Estimate" to generate one using the existing estimator settings.</p>
+        ) : (
+          <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 space-y-3">
+            {estimate.aiSummary && <p className="text-sm text-purple-900">{estimate.aiSummary}</p>}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-white rounded-lg p-3 text-center">
+                <p className="text-xs text-muted-foreground">Low</p>
+                <p className="text-base font-bold">${parseFloat(estimate.suggestedLowPrice || "0").toFixed(0)}</p>
+              </div>
+              <div className="bg-purple-600 rounded-lg p-3 text-center">
+                <p className="text-xs text-purple-200">Recommended</p>
+                <p className="text-base font-bold text-white">${parseFloat(estimate.recommendedPrice || "0").toFixed(0)}</p>
+              </div>
+              <div className="bg-white rounded-lg p-3 text-center">
+                <p className="text-xs text-muted-foreground">High</p>
+                <p className="text-base font-bold">${parseFloat(estimate.suggestedHighPrice || "0").toFixed(0)}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs text-purple-800">
+              {estimate.estimatedHours && <p>⏱ {estimate.estimatedHours} hrs estimated</p>}
+              {estimate.suggestedWorkerCount && <p>👷 {estimate.suggestedWorkerCount} worker{estimate.suggestedWorkerCount > 1 ? "s" : ""} suggested</p>}
+            </div>
+            {(estimate.minimumPriceWarning || estimate.inputSnapshot?._aiMinimumWarning) && (
+              <div className="flex items-start gap-2 text-xs text-orange-700 bg-orange-50 rounded-lg p-2">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>{estimate.inputSnapshot?._aiMinimumWarning || "Consider minimum pricing — this job may be below minimum threshold."}</span>
+              </div>
+            )}
+            {estimate.suggestedChecklist && (estimate.suggestedChecklist as string[]).length > 0 && (
+              <div><p className="text-xs font-medium text-purple-700 mb-1">Suggested Checklist</p>
+                <div className="flex flex-wrap gap-1">{(estimate.suggestedChecklist as string[]).map((item, idx) => <span key={idx} className="bg-white text-purple-700 text-xs px-2 py-0.5 rounded-full border border-purple-200">{item}</span>)}</div>
+              </div>
+            )}
+            {estimate.suggestedSupplies && (estimate.suggestedSupplies as string[]).length > 0 && (
+              <div><p className="text-xs font-medium text-purple-700 mb-1">Suggested Supplies</p>
+                <div className="flex flex-wrap gap-1">{(estimate.suggestedSupplies as string[]).map((s, idx) => <span key={idx} className="bg-white text-purple-700 text-xs px-2 py-0.5 rounded-full border border-purple-200">{s}</span>)}</div>
+              </div>
+            )}
+            {estimate.inputSnapshot?._aiAssumptions && (estimate.inputSnapshot._aiAssumptions as string[]).length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-xs font-medium text-amber-800 mb-1.5">AI Assumptions (missing data)</p>
+                <ul className="space-y-0.5">
+                  {(estimate.inputSnapshot._aiAssumptions as string[]).map((a, idx) => (
+                    <li key={idx} className="text-xs text-amber-700 flex items-start gap-1.5"><span className="shrink-0 mt-0.5">•</span>{a}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Submissions Tab ───────────────────────────────────────────────────────────
-function SubmissionsTab({ onGoToEstimator }: { onGoToEstimator: () => void }) {
+function SubmissionsTab({ onGoToEstimator, initialBookingId }: { onGoToEstimator: () => void; initialBookingId?: string }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [, navigate] = useLocation();
@@ -257,8 +586,11 @@ function SubmissionsTab({ onGoToEstimator }: { onGoToEstimator: () => void }) {
   const [respondSelectedPhotoIds, setRespondSelectedPhotoIds] = useState<string[]>([]);
   const [estimatorNotConfigured, setEstimatorNotConfigured] = useState(false);
   const [learnOpen, setLearnOpen] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<"all" | "submission" | "booking">(initialBookingId ? "booking" : "all");
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(initialBookingId || null);
 
   const { data: submissions = [], isLoading } = useQuery<Submission[]>({ queryKey: ["/api/admin/submissions"] });
+  const { data: bookingRequests = [], isLoading: bookingsLoading } = useQuery<BookingRequest[]>({ queryKey: ["/api/booking-requests"] });
   const { data: detail } = useQuery<Submission>({
     queryKey: ["/api/admin/submissions", selectedId],
     queryFn: async () => { if (!selectedId) throw new Error(); const r = await fetch(`/api/admin/submissions/${selectedId}`, { credentials: "include" }); return r.json(); },
@@ -335,38 +667,61 @@ function SubmissionsTab({ onGoToEstimator }: { onGoToEstimator: () => void }) {
     setRespondOpen(true);
   };
 
-  const filtered = stageFilter === "all" ? submissions : submissions.filter(s => s.pipelineStage === stageFilter);
+  // ── Unified list (form submissions + booking requests) ──────────────────────
+  type UnifiedItem = { id: string; _source: "submission" | "booking"; clientName: string; serviceType: string; submittedAt: string; pipelineStage: string; status: string; hasWalkthrough: boolean };
+  const submissionItems: UnifiedItem[] = submissions.map(s => ({ id: s.id, _source: "submission", clientName: s.clientName || "Unknown", serviceType: s.serviceType || s.formName, submittedAt: s.submittedAt, pipelineStage: s.pipelineStage, status: s.status, hasWalkthrough: s.hasWalkthrough || false }));
+  const bookingItems: UnifiedItem[] = bookingRequests.map(b => ({ id: b.id, _source: "booking", clientName: b.name, serviceType: b.serviceType, submittedAt: b.createdAt, pipelineStage: "", status: b.status, hasWalkthrough: false }));
+  const allItems = [...submissionItems, ...bookingItems].sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+  const sourceItems = sourceFilter === "submission" ? submissionItems : sourceFilter === "booking" ? bookingItems : allItems;
+  const filtered = stageFilter === "all" ? sourceItems : sourceItems.filter(item => item._source === "submission" && item.pipelineStage === stageFilter);
 
   return (
     <div className="flex gap-4 min-h-0 h-full">
       {/* List */}
       <div className="w-72 flex-shrink-0 flex flex-col gap-2">
-        <Select value={stageFilter} onValueChange={setStageFilter}>
-          <SelectTrigger className="h-8 text-xs" data-testid="select-stage-filter">
-            <SelectValue placeholder="Filter by stage" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Stages</SelectItem>
-            {PIPELINE_STAGES.map(s => <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        {/* Source filter */}
+        <div className="flex gap-1 rounded-lg bg-muted/40 p-0.5">
+          {(["all", "submission", "booking"] as const).map(f => (
+            <button key={f} data-testid={`button-source-filter-${f}`}
+              onClick={() => { setSourceFilter(f); if (f === "booking") setSelectedId(null); if (f === "submission") setSelectedBookingId(null); }}
+              className={cn("flex-1 text-[11px] font-medium py-1 rounded-md transition-colors",
+                sourceFilter === f ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}>
+              {f === "all" ? "All" : f === "submission" ? "Forms" : "Bookings"}
+            </button>
+          ))}
+        </div>
+
+        {/* Stage filter (only for submissions) */}
+        {sourceFilter !== "booking" && (
+          <Select value={stageFilter} onValueChange={setStageFilter}>
+            <SelectTrigger className="h-8 text-xs" data-testid="select-stage-filter">
+              <SelectValue placeholder="Filter by stage" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Stages</SelectItem>
+              {PIPELINE_STAGES.map(s => <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
 
         <div className="flex-1 overflow-y-auto space-y-1">
-          {isLoading ? [1,2,3].map(i => <Skeleton key={i} className="h-20 rounded-lg" />) :
+          {(isLoading || bookingsLoading) ? [1,2,3].map(i => <Skeleton key={i} className="h-20 rounded-lg" />) :
             filtered.length === 0 ? <p className="text-center text-sm text-muted-foreground py-12">No submissions yet.</p> :
-            filtered.map(sub => (
-              <button key={sub.id} data-testid={`card-submission-${sub.id}`}
+            filtered.map(item => (
+              <button key={item.id} data-testid={`card-submission-${item.id}`}
                 className={cn("w-full text-left p-3 rounded-lg border bg-card hover:border-primary/30 transition-colors",
-                  selectedId === sub.id && "border-primary/40 bg-primary/5")}
-                onClick={() => setSelectedId(sub.id)}>
+                  item._source === "submission" ? selectedId === item.id && "border-primary/40 bg-primary/5" : selectedBookingId === item.id && "border-primary/40 bg-primary/5")}
+                onClick={() => { if (item._source === "submission") { setSelectedId(item.id); setSelectedBookingId(null); } else { setSelectedBookingId(item.id); setSelectedId(null); } }}>
                 <div className="flex items-start justify-between gap-1">
-                  <span className="font-medium text-sm truncate">{sub.clientName || "Unknown Client"}</span>
-                  {stageBadge(sub.pipelineStage)}
+                  <span className="font-medium text-sm truncate">{item.clientName}</span>
+                  {item._source === "submission" ? stageBadge(item.pipelineStage) : (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-indigo-100 text-indigo-700 border border-indigo-200 shrink-0">Booking</span>
+                  )}
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{sub.serviceType || sub.formName}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{item.serviceType}</p>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <p className="text-[11px] text-muted-foreground">{fmtDate(sub.submittedAt)}</p>
-                  {sub.hasWalkthrough && (
+                  <p className="text-[11px] text-muted-foreground">{fmtDate(item.submittedAt)}</p>
+                  {item.hasWalkthrough && (
                     <span className="flex items-center gap-0.5 text-[10px] font-medium text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded-full border border-violet-200">
                       <Camera className="w-2.5 h-2.5" /> Walkthrough
                     </span>
@@ -380,7 +735,9 @@ function SubmissionsTab({ onGoToEstimator }: { onGoToEstimator: () => void }) {
 
       {/* Detail pane */}
       <div className="flex-1 overflow-y-auto">
-        {!selectedId ? (
+        {selectedBookingId ? (
+          <BookingDetailPane bookingId={selectedBookingId} onGoToEstimator={onGoToEstimator} />
+        ) : !selectedId ? (
           <div className="flex flex-col items-center justify-center h-64 text-center">
             <Inbox className="w-10 h-10 text-muted-foreground/30 mb-3" />
             <p className="text-sm text-muted-foreground">Select a submission to view details</p>
@@ -1335,9 +1692,17 @@ function EmbedTab() {
 
 // ── Main Hub Page ─────────────────────────────────────────────────────────────
 export default function AdminQuoteForms() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlTab = urlParams.get("tab");
+  const urlBooking = urlParams.get("booking");
+
   const { data: submissions = [] } = useQuery<Submission[]>({ queryKey: ["/api/admin/submissions"] });
-  const newCount = submissions.filter(s => s.pipelineStage === "new_request" && !s.archivedAt).length;
-  const [activeTab, setActiveTab] = useState("forms");
+  const { data: bookingRequests = [] } = useQuery<BookingRequest[]>({ queryKey: ["/api/booking-requests"] });
+  const newSubmissionsCount = submissions.filter(s => s.pipelineStage === "new_request" && !s.archivedAt).length;
+  const newBookingsCount = bookingRequests.filter(b => b.status === "new").length;
+  const newCount = newSubmissionsCount + newBookingsCount;
+  const [activeTab, setActiveTab] = useState(urlTab === "submissions" ? "submissions" : "forms");
+  const [initialBookingId] = useState<string | null>(urlBooking);
 
   return (
     <div className="flex flex-col h-full">
@@ -1376,7 +1741,7 @@ export default function AdminQuoteForms() {
 
           <div className="flex-1 overflow-y-auto px-4 md:px-6 py-5">
             <TabsContent value="forms" className="mt-0"><FormsTab /></TabsContent>
-            <TabsContent value="submissions" className="mt-0 h-full"><SubmissionsTab onGoToEstimator={() => setActiveTab("estimator")} /></TabsContent>
+            <TabsContent value="submissions" className="mt-0 h-full"><SubmissionsTab onGoToEstimator={() => setActiveTab("estimator")} initialBookingId={initialBookingId || undefined} /></TabsContent>
             <TabsContent value="pipeline" className="mt-0"><PipelineTab /></TabsContent>
             <TabsContent value="estimator" className="mt-0"><EstimatorSettingsTab /></TabsContent>
             <TabsContent value="email" className="mt-0"><EmailSettingsTab /></TabsContent>
