@@ -1,0 +1,283 @@
+ClockField Dev Note – Booking Form Management + Quick Schedule From Accepted Booking
+
+Objective:
+Upgrade the booking request flow safely.
+
+This task has two parts:
+
+Add Booking Form as a manageable form type under Forms
+Add a quick schedule action after a booking request or quote is accepted
+
+Do not break or affect anything else.
+
+Scope:
+Only work on:
+
+Forms booking form type
+Schedule booking request connection
+Accepted booking → quick schedule/job creation
+
+Do not touch:
+
+Work Log
+Clients
+Messages
+Document
+Training Hub
+Attendance
+Payroll
+Regular Schedule logic except where the quick schedule needs to create a job safely
+Existing booking submissions that already work
+
+Part 1 – Add Booking Form Type Under Forms
+
+Current state:
+Booking request submissions already appear under Forms → Submissions.
+Schedule → Booking Requests still works.
+Keep this working.
+
+Required changes:
+
+Add Booking Form as a form type
+
+When admin clicks “Create New Form” or “Add New Form,” show:
+
+Custom Builder
+Smart Form
+Booking Form
+
+Booking Form must be connected to the existing public booking request form used under:
+
+Schedule → Booking Requests → Public Booking Form
+
+Do not create a separate disconnected booking system.
+
+Allow admins to manage the Booking Form from Forms
+
+Admins should be able to:
+
+create a booking form
+edit booking form sections
+add questions
+remove questions
+reorder questions if the current builder already supports it
+update labels
+update required fields
+publish or unpublish if supported
+archive or delete safely
+Use existing booking fields as the default template
+
+The Booking Form should start with the current booking request fields:
+
+client name
+phone
+email
+address
+service type
+customer type
+urgency
+frequency
+preferred date
+preferred time
+property details
+notes/client input
+consent
+any existing booking-specific fields
+
+Do not remove current booking fields unless the admin intentionally edits them.
+
+Keep submissions connected
+
+When a client submits the Booking Form:
+
+it appears under Schedule → Booking Requests
+it appears under Forms → Submissions
+it is labeled as “Booking Request”
+all client-filled information is visible
+the estimate button still uses existing Forms estimator settings
+
+Do not break the current submission connection.
+
+Do not delete old data
+
+Existing booking requests and submissions must remain visible.
+
+Do not delete:
+
+old booking requests
+old form submissions
+accepted bookings
+archived bookings
+quote history
+
+Part 2 – Add Quick Schedule From Accepted Booking
+
+Current issue:
+A booking request can be accepted, and a quote can be accepted, but there is no clear button to schedule a cleaner for that specific job.
+
+Required change:
+Add a “Create Schedule” or “Schedule Cleaner” action inside the booking request detail view.
+
+This action should appear when the booking request is ready to be scheduled.
+
+Recommended visibility:
+Show the button when:
+
+booking request status is Accepted
+or
+quote status is Accepted
+or
+admin manually marks the booking as ready to schedule
+
+Button label:
+
+Schedule Cleaner
+
+Secondary option:
+
+Create Job
+
+Use whichever fits the current UI better, but keep it clear.
+
+Schedule Cleaner modal/page
+
+When admin clicks “Schedule Cleaner,” open a simple scheduling modal.
+
+It should prefill from the booking request:
+
+client name
+address
+service type
+preferred date
+preferred time
+frequency
+job notes
+estimated price if available
+quote amount if available
+
+Admin should be able to select:
+
+cleaner/employee
+job date
+start time
+end time
+one-time job or recurring job
+notes for cleaner
+internal admin notes if supported
+One-time or recurring schedule
+
+The admin should choose:
+
+One-time job
+Recurring job
+
+If One-time:
+Create one scheduled job for the selected date/time.
+
+If Recurring:
+Allow current recurrence options already supported by the app.
+Do not build a new recurrence engine.
+Use existing schedule recurring logic only.
+
+Avoid schedule conflicts
+
+Before assigning a cleaner, check whether the cleaner already has a job or shift during the selected time.
+
+If there is a conflict:
+
+show warning
+do not silently double-book
+allow admin to pick another cleaner
+show available cleaners if possible
+
+Preferred message:
+“This cleaner already has a schedule during this time. Please choose another cleaner or adjust the time.”
+
+If possible, show cleaners who are free at that date/time.
+
+Create schedule/job using existing logic
+
+When confirmed, create the schedule/job using the existing Schedule/Jobs system.
+
+Do not create a separate job system.
+
+The created schedule should appear under:
+
+Schedule calendar
+Jobs tab if existing logic supports it
+employee schedule view if already supported
+Link the booking request to the created schedule
+
+After schedule/job is created:
+
+update booking request status to Scheduled if supported
+save the schedule/job reference on the booking request if supported
+show a link/button: “View Scheduled Job”
+prevent duplicate schedule creation unless admin confirms
+
+If admin tries to schedule the same accepted booking again, show warning:
+“This booking already has a scheduled job. Do you want to create another one?”
+
+Cleaner should understand this is from a booking request
+
+In the job/schedule details, include:
+
+source: Booking Request
+client name
+service type
+address
+date/time
+notes/client input
+quotation/estimate summary if available
+
+This helps the cleaner know this is a real booked job, not a random schedule entry.
+
+Keep quote flow intact
+
+Do not rebuild quotation.
+
+If booking request currently has:
+
+Get Estimate
+Create Quote
+status dropdown
+accepted status
+
+Keep those working.
+
+Only add the scheduling step after acceptance.
+
+Safe implementation rules
+
+Do not break:
+
+current booking request submissions
+Forms → Submissions
+Schedule → Booking Requests
+public booking link
+existing quote flow
+existing estimate flow
+accepted/archived statuses
+regular schedule
+jobs
+
+Do not remove any current tabs or buttons.
+
+Expected final flow:
+
+Admin creates or edits Booking Form under Forms
+Client submits public booking form
+Submission appears in Forms → Submissions as Booking Request
+Request appears in Schedule → Booking Requests
+Admin reviews full booking details
+Admin gets estimate
+Admin creates quote if needed
+Quote or request is accepted
+Admin clicks Schedule Cleaner
+Admin selects available cleaner, date, time, and one-time/recurring job
+System checks for schedule conflicts
+System creates job using existing schedule logic
+Booking request is marked Scheduled or linked to the created job
+Cleaner can see the scheduled job with booking details
+
+This must be implemented carefully as an extension of the current working system, not a rebuild.

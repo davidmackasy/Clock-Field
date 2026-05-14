@@ -15,7 +15,9 @@ import {
   Calendar, List, ChevronLeft, ChevronRight, Plus, Search, Sparkles,
   FileText, Send, CheckCircle, XCircle, Archive, Briefcase, Phone, Mail,
   MapPin, Clock, AlertTriangle, Copy, ExternalLink, User, Building2, Info,
+  CalendarCheck,
 } from "lucide-react";
+import { ScheduleCleanerModal } from "@/components/admin/schedule-cleaner-modal";
 
 type BookingRequest = {
   id: string; companyId: string; name: string; companyName?: string; phone: string; email: string;
@@ -222,6 +224,7 @@ function BookingDetailDrawer({
   const [, navigate] = useLocation();
   const [showQuoteBuilder, setShowQuoteBuilder] = useState(false);
   const [savedQuote, setSavedQuote] = useState<BookingQuote | null>(null);
+  const [showScheduler, setShowScheduler] = useState(false);
 
   const { data: estimate, isLoading: estimateLoading, refetch: refetchEstimate } = useQuery<BookingEstimate | null>({
     queryKey: ["/api/booking-requests", booking.id, "estimate"],
@@ -355,6 +358,14 @@ function BookingDetailDrawer({
                 className="gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50">
                 <ExternalLink className="w-3.5 h-3.5" />
                 View in Forms
+              </Button>
+              <Button
+                data-testid="button-schedule-cleaner-drawer"
+                size="sm"
+                onClick={() => setShowScheduler(true)}
+                className="gap-1.5 bg-emerald-600 hover:bg-emerald-700">
+                <CalendarCheck className="w-3.5 h-3.5" />
+                Schedule Cleaner
               </Button>
               {!booking.estimateId && (
                 <Button data-testid="button-get-estimate" size="sm" variant="outline" onClick={() => generateEstimate.mutate()} disabled={generateEstimate.isPending} className="gap-1.5 border-purple-200 text-purple-700 hover:bg-purple-50">
@@ -722,6 +733,31 @@ function BookingDetailDrawer({
           booking={booking} estimate={estimate} existingQuote={activeQuote}
           companyId={booking.companyId}
           onSaved={(q) => { setSavedQuote(q); refetchQuotes(); }}
+        />
+      )}
+
+      {showScheduler && (
+        <ScheduleCleanerModal
+          open={showScheduler}
+          onClose={() => setShowScheduler(false)}
+          booking={{
+            id: booking.id,
+            name: booking.name,
+            serviceType: booking.serviceType,
+            serviceAddress: booking.serviceAddress,
+            city: booking.city,
+            notes: booking.notes,
+            specialInstructions: booking.specialInstructions,
+            preferredDate: booking.preferredDate,
+            preferredTime: booking.preferredTime,
+            frequency: booking.frequency,
+            convertedJobId: booking.convertedJobId,
+          }}
+          estimatedPrice={estimate?.adminFinalPrice || estimate?.recommendedPrice || undefined}
+          onJobCreated={() => {
+            queryClient.invalidateQueries({ queryKey: ["/api/booking-requests"] });
+            onUpdated();
+          }}
         />
       )}
     </>

@@ -22,8 +22,9 @@ import {
   RotateCw, CheckCircle2, XCircle, AlertCircle, AlertTriangle, Clock, DollarSign,
   Save, ArrowRight, FileCheck, SlidersHorizontal, RefreshCw, Eye,
   Send, Sparkles, Building2, Home, BarChart3, Camera, Images, Mic,
-  Edit3, X, ChevronDown, ChevronUp,
+  Edit3, X, ChevronDown, ChevronUp, CalendarCheck,
 } from "lucide-react";
+import { ScheduleCleanerModal, type ScheduleBookingInfo } from "@/components/admin/schedule-cleaner-modal";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type QuoteForm = { id: string; name: string; slug: string; companyId: string; isActive: boolean; createdAt: string; config: any };
@@ -101,9 +102,14 @@ function FormsTab() {
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [smartMode, setSmartMode] = useState(false);
+  const [bookingMode, setBookingMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<QuoteForm | null>(null);
 
   const { data: forms = [], isLoading } = useQuery<QuoteForm[]>({ queryKey: ["/api/admin/quote-forms"] });
+  const { data: company } = useQuery<{ id: string; name: string }>({ queryKey: ["/api/company"] });
+  const { data: allBookings = [] } = useQuery<{ id: string; status: string }[]>({ queryKey: ["/api/booking-requests"] });
+  const bookingFormUrl = company?.id ? `${window.location.origin}/public/booking/${company.id}` : "";
+  const totalBookings = allBookings.length;
 
   const createMutation = useMutation({
     mutationFn: ({ name, smart }: { name: string; smart: boolean }) =>
@@ -136,13 +142,66 @@ function FormsTab() {
           <Plus className="w-4 h-4" /> New Form
         </Button>
       </div>
+
+      {/* Booking Form — always-on system card */}
+      <div className="rounded-xl border-2 border-indigo-200 bg-indigo-50/40 overflow-hidden">
+        <div className="h-1 w-full bg-indigo-400" />
+        <div className="p-4 flex flex-col gap-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
+                <CalendarCheck className="w-4 h-4 text-indigo-600" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-sm">Booking Request Form</p>
+                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">System</span>
+                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200">Active</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Clients submit service requests, estimates are generated, quotes are sent</p>
+              </div>
+            </div>
+            {totalBookings > 0 && (
+              <span className="flex-shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                {totalBookings} booking{totalBookings !== 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
+          {bookingFormUrl && (
+            <div className="flex items-center gap-1.5 bg-white/70 border border-indigo-200 rounded-lg px-3 py-1.5">
+              <code className="text-[10px] text-muted-foreground flex-1 truncate">{bookingFormUrl}</code>
+            </div>
+          )}
+          <div className="flex items-center gap-2 pt-1 border-t border-indigo-200/60">
+            <button
+              data-testid="button-copy-booking-link"
+              className="flex items-center gap-1.5 text-[11px] text-indigo-600 hover:text-indigo-800 transition-colors"
+              onClick={() => { navigator.clipboard.writeText(bookingFormUrl); toast({ title: "Booking form link copied!" }); }}
+            >
+              <Copy className="w-3 h-3" /> Copy Link
+            </button>
+            <a href={bookingFormUrl} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-[11px] text-indigo-600 hover:text-indigo-800 transition-colors">
+              <ExternalLink className="w-3 h-3" /> Preview
+            </a>
+            <div className="flex-1" />
+            <button
+              className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-primary transition-colors"
+              onClick={() => navigate("/admin/schedule?tab=bookings")}
+            >
+              <ArrowRight className="w-3 h-3" /> View all bookings
+            </button>
+          </div>
+        </div>
+      </div>
+
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{[1,2,3].map(i => <Skeleton key={i} className="h-36 rounded-xl" />)}</div>
       ) : forms.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
+        <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4"><FileText className="w-8 h-8 text-muted-foreground/40" /></div>
-          <p className="font-semibold text-muted-foreground">No forms yet</p>
-          <p className="text-sm text-muted-foreground/70 mt-1 max-w-xs">Create a form to share with clients so they can request a quote.</p>
+          <p className="font-semibold text-muted-foreground">No custom forms yet</p>
+          <p className="text-sm text-muted-foreground/70 mt-1 max-w-xs">Create a custom form to share with clients so they can request a quote.</p>
           <Button className="mt-5 gap-1.5" onClick={() => setCreateOpen(true)}><Plus className="w-4 h-4" /> Create First Form</Button>
         </div>
       ) : (
@@ -198,45 +257,81 @@ function FormsTab() {
         </div>
       )}
 
-      <Dialog open={createOpen} onOpenChange={v => { setCreateOpen(v); if (!v) { setNewName(""); setSmartMode(false); } }}>
-        <DialogContent className="max-w-md">
+      <Dialog open={createOpen} onOpenChange={v => { setCreateOpen(v); if (!v) { setNewName(""); setSmartMode(false); setBookingMode(false); } }}>
+        <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><Settings2 className="w-4 h-4 text-primary" /> New Form</DialogTitle></DialogHeader>
           <div className="space-y-4 py-1">
-            <div>
-              <Label className="text-xs font-medium mb-1.5 block">Form Name</Label>
-              <Input data-testid="input-new-form-name" placeholder="e.g. Cleaning Quote Request" value={newName}
-                onChange={e => setNewName(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && newName.trim()) createMutation.mutate({ name: newName.trim(), smart: smartMode }); }} autoFocus />
-              <p className="text-[11px] text-muted-foreground mt-1">URL: /form/…/{newName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "form"}</p>
-            </div>
+            {!bookingMode && (
+              <div>
+                <Label className="text-xs font-medium mb-1.5 block">Form Name</Label>
+                <Input data-testid="input-new-form-name" placeholder="e.g. Cleaning Quote Request" value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && newName.trim()) createMutation.mutate({ name: newName.trim(), smart: smartMode }); }} autoFocus />
+                <p className="text-[11px] text-muted-foreground mt-1">URL: /form/…/{newName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "form"}</p>
+              </div>
+            )}
+
+            {bookingMode && (
+              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <CalendarCheck className="w-5 h-5 text-indigo-600" />
+                  <p className="font-semibold text-sm text-indigo-900">Booking Request Form</p>
+                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200">Active</span>
+                </div>
+                <p className="text-xs text-indigo-700">Your company already has a live booking request form. Clients use it to submit service requests that flow into your Schedule → Booking Requests and Forms → Submissions.</p>
+                {bookingFormUrl && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <code className="text-[10px] bg-white/80 border border-indigo-200 rounded px-2 py-1 flex-1 truncate">{bookingFormUrl}</code>
+                    <button className="text-[10px] text-indigo-600 hover:text-indigo-800 font-medium"
+                      onClick={() => { navigator.clipboard.writeText(bookingFormUrl); toast({ title: "Link copied!" }); }}>
+                      Copy
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label className="text-xs font-medium block">Form Type</Label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <button type="button"
-                  className={cn("p-3 rounded-xl border text-left transition-all", !smartMode ? "border-primary bg-primary/5 text-primary" : "border-muted bg-muted/30 text-muted-foreground hover:border-primary/30")}
-                  onClick={() => setSmartMode(false)}>
+                  className={cn("p-3 rounded-xl border text-left transition-all", !smartMode && !bookingMode ? "border-primary bg-primary/5 text-primary" : "border-muted bg-muted/30 text-muted-foreground hover:border-primary/30")}
+                  onClick={() => { setSmartMode(false); setBookingMode(false); }}>
                   <FileText className="w-4 h-4 mb-1.5" />
                   <p className="text-xs font-semibold">Custom Builder</p>
-                  <p className="text-[10px] mt-0.5 opacity-70">Build your own form with shared, residential, and commercial field groups</p>
+                  <p className="text-[10px] mt-0.5 opacity-70">Build your own form with field groups</p>
                 </button>
                 <button type="button" data-testid="button-select-smart-form"
                   className={cn("p-3 rounded-xl border text-left transition-all", smartMode ? "border-purple-500 bg-purple-50 text-purple-700" : "border-muted bg-muted/30 text-muted-foreground hover:border-purple-300")}
-                  onClick={() => setSmartMode(true)}>
+                  onClick={() => { setSmartMode(true); setBookingMode(false); }}>
                   <Sparkles className="w-4 h-4 mb-1.5" />
                   <p className="text-xs font-semibold">Smart Cleaning Form</p>
-                  <p className="text-[10px] mt-0.5 opacity-70">Pre-built cleaning quote form with residential and commercial conditional steps</p>
+                  <p className="text-[10px] mt-0.5 opacity-70">Pre-built conditional form for quotes</p>
+                </button>
+                <button type="button" data-testid="button-select-booking-form"
+                  className={cn("p-3 rounded-xl border text-left transition-all", bookingMode ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-muted bg-muted/30 text-muted-foreground hover:border-indigo-300")}
+                  onClick={() => { setBookingMode(true); setSmartMode(false); }}>
+                  <CalendarCheck className="w-4 h-4 mb-1.5" />
+                  <p className="text-xs font-semibold">Booking Form</p>
+                  <p className="text-[10px] mt-0.5 opacity-70">System booking request form for clients</p>
                 </button>
               </div>
             </div>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button data-testid="button-create-form-confirm" className={cn("flex-1", smartMode && "bg-purple-600 hover:bg-purple-700")} disabled={!newName.trim() || createMutation.isPending}
-              onClick={() => createMutation.mutate({ name: newName.trim(), smart: smartMode })}>
-              {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
-              {smartMode ? "Create Smart Form" : "Create & Edit"}
-            </Button>
+            {bookingMode ? (
+              <Button data-testid="button-view-booking-form" className="flex-1 bg-indigo-600 hover:bg-indigo-700"
+                onClick={() => { setCreateOpen(false); setBookingMode(false); window.open(bookingFormUrl, "_blank"); }}>
+                <ExternalLink className="w-4 h-4 mr-1.5" /> Open Booking Form
+              </Button>
+            ) : (
+              <Button data-testid="button-create-form-confirm" className={cn("flex-1", smartMode && "bg-purple-600 hover:bg-purple-700")} disabled={!newName.trim() || createMutation.isPending}
+                onClick={() => createMutation.mutate({ name: newName.trim(), smart: smartMode })}>
+                {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
+                {smartMode ? "Create Smart Form" : "Create & Edit"}
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -262,6 +357,7 @@ function FormsTab() {
 function BookingDetailPane({ bookingId, onGoToEstimator }: { bookingId: string; onGoToEstimator: () => void }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [showScheduler, setShowScheduler] = useState(false);
 
   const { data: booking, isLoading: bookingLoading } = useQuery<BookingRequest>({
     queryKey: ["/api/booking-requests", bookingId],
@@ -320,6 +416,24 @@ function BookingDetailPane({ bookingId, onGoToEstimator }: { bookingId: string; 
           <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium", statusCls)}>{statusLabel}</span>
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 border border-indigo-200">Booking Request</span>
         </div>
+      </div>
+
+      {/* Schedule Cleaner action */}
+      <div className="flex items-center gap-2 p-3 rounded-xl border bg-card">
+        <CalendarCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium">Ready to schedule?</p>
+          <p className="text-[11px] text-muted-foreground">Assign a cleaner and create a scheduled job from this booking.</p>
+        </div>
+        <Button
+          data-testid="button-schedule-cleaner-pane"
+          size="sm"
+          className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 shrink-0"
+          onClick={() => setShowScheduler(true)}
+        >
+          <CalendarCheck className="w-3.5 h-3.5" />
+          Schedule Cleaner
+        </Button>
       </div>
 
       {/* Quick info row */}
@@ -508,6 +622,7 @@ function BookingDetailPane({ bookingId, onGoToEstimator }: { bookingId: string; 
             {estimate ? "Re-run" : "Get Estimate"}
           </Button>
         </div>
+        {/* Link to go to estimator if no settings */}
         {estLoading ? (
           <p className="text-xs text-muted-foreground">Loading estimate...</p>
         ) : !estimate ? (
@@ -562,6 +677,31 @@ function BookingDetailPane({ bookingId, onGoToEstimator }: { bookingId: string; 
           </div>
         )}
       </div>
+
+      {showScheduler && (
+        <ScheduleCleanerModal
+          open={showScheduler}
+          onClose={() => setShowScheduler(false)}
+          booking={{
+            id: booking.id,
+            name: booking.name,
+            serviceType: booking.serviceType,
+            serviceAddress: booking.serviceAddress,
+            city: booking.city,
+            notes: booking.notes,
+            specialInstructions: booking.specialInstructions,
+            preferredDate: booking.preferredDate,
+            preferredTime: booking.preferredTime,
+            frequency: booking.frequency,
+            convertedJobId: booking.convertedJobId,
+          }}
+          estimatedPrice={estimate?.adminFinalPrice || estimate?.recommendedPrice || undefined}
+          onJobCreated={() => {
+            qc.invalidateQueries({ queryKey: ["/api/booking-requests", bookingId] });
+            qc.invalidateQueries({ queryKey: ["/api/booking-requests"] });
+          }}
+        />
+      )}
     </div>
   );
 }
