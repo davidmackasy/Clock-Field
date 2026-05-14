@@ -1,0 +1,134 @@
+ClockField Forms UI Fix – Booking Form Create/Edit Modal
+
+Objective:
+Fix the New Form modal UI so the Booking Form option fits properly on all screen sizes and allows admins to create, edit, and manage the Booking Form, not only open it.
+
+Current issue:
+The Booking Form card is overflowing outside the modal.
+The modal layout breaks on desktop and likely mobile.
+The Booking Form action only says “Open Booking Form,” but the admin needs to manage/edit the booking form inside Forms.
+
+Required changes:
+
+Fix New Form modal layout
+
+Make the modal fully responsive.
+
+The form type cards must stay inside the modal on:
+
+desktop
+tablet
+mobile
+
+Do not allow the Booking Form card to overflow outside the modal.
+
+Use a clean responsive layout:
+
+desktop: 3 cards in one row if space allows
+tablet: 2 cards per row
+mobile: 1 card per row
+
+The modal should use:
+
+max-width
+responsive padding
+scroll if content is taller than viewport
+no horizontal overflow
+Fix Booking Form card behavior
+
+The Booking Form card should behave like the other form type cards.
+
+It should not float outside the modal.
+
+It should be selectable inside the same card grid.
+
+Change CTA behavior
+
+Replace:
+
+Open Booking Form
+
+with:
+
+Manage Booking Form
+
+or:
+
+Edit Booking Form
+
+Best label:
+
+Manage Booking Form
+Allow admin to create/edit Booking Form
+
+When the admin selects Booking Form, they should be able to:
+
+create the booking form if it does not exist
+edit the existing booking form if it already exists
+add sections
+remove sections
+edit questions
+update required fields
+save changes
+
+Do not only open the public booking link.
+
+The public link should still be available, but it should not be the main action.
+
+Keep public booking link available
+
+Inside the Booking Form card or form editor, keep actions:
+
+Copy Public Link
+Preview Public Form
+
+But the primary action should be:
+
+Manage Booking Form
+Booking Form should remain connected to Schedule
+
+Any changes made to the Booking Form from Forms must update the public booking request form used in:
+
+Schedule → Booking Requests → Public Booking Form
+
+Do not create a separate disconnected booking form.
+
+Do not break existing submissions
+
+Keep the current working flow:
+
+booking request submitted
+appears under Schedule → Booking Requests
+appears under Forms → Submissions
+labeled as Booking Request
+all submitted client details visible
+estimate flow still works
+UI polish requirements
+
+Make the modal look clean and professional:
+
+no overlapping cards
+no cut-off buttons
+consistent spacing
+consistent card height
+clear selected state
+proper close button placement
+readable text on smaller screens
+no horizontal scrolling
+Do not touch unrelated areas
+
+Do not modify:
+
+Schedule regular jobs
+Work Log
+Clients
+Messages
+Document
+Training Hub
+Settings
+Payroll
+Attendance
+existing custom form builder
+existing smart cleaning form behavior
+
+Only fix the New Form modal UI and make Booking Form manageable/editable from Forms.

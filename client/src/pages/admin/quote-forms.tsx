@@ -20,9 +20,9 @@ import {
   ClipboardList, Settings2, Inbox, GitBranch, Zap, Mail, Code2,
   ChevronRight, ChevronLeft, User, Phone, MapPin, Calendar,
   RotateCw, CheckCircle2, XCircle, AlertCircle, AlertTriangle, Clock, DollarSign,
-  Save, ArrowRight, FileCheck, SlidersHorizontal, RefreshCw, Eye,
+  Save, ArrowRight, ArrowLeft, FileCheck, SlidersHorizontal, RefreshCw, Eye,
   Send, Sparkles, Building2, Home, BarChart3, Camera, Images, Mic,
-  Edit3, X, ChevronDown, ChevronUp, CalendarCheck,
+  Edit3, X, ChevronDown, ChevronUp, CalendarCheck, Globe,
 } from "lucide-react";
 import { ScheduleCleanerModal, type ScheduleBookingInfo } from "@/components/admin/schedule-cleaner-modal";
 
@@ -94,6 +94,213 @@ function fmtCurrency(v: string | number | null | undefined) {
   return new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" }).format(Number(v));
 }
 
+// ── Booking Form Management Panel ─────────────────────────────────────────────
+const BOOKING_FORM_SECTIONS = [
+  {
+    title: "Contact Information",
+    icon: "👤",
+    fields: [
+      { label: "First Name", type: "text", required: true },
+      { label: "Last Name", type: "text", required: true },
+      { label: "Email Address", type: "email", required: true },
+      { label: "Phone Number", type: "tel", required: true },
+    ],
+  },
+  {
+    title: "Service Details",
+    icon: "🧹",
+    fields: [
+      { label: "Service Type", type: "select", required: true, note: "Residential / Commercial" },
+      { label: "Property Type", type: "select", required: true, note: "House / Condo / Apartment / Office…" },
+      { label: "Cleaning Frequency", type: "select", required: true, note: "One-Time / Weekly / Bi-Weekly…" },
+    ],
+  },
+  {
+    title: "Property Address",
+    icon: "📍",
+    fields: [
+      { label: "Street Address", type: "text", required: true },
+      { label: "Unit / Apt #", type: "text", required: false },
+      { label: "City", type: "text", required: true },
+      { label: "Province", type: "select", required: true },
+      { label: "Postal Code", type: "text", required: true },
+    ],
+  },
+  {
+    title: "Scheduling Preferences",
+    icon: "📅",
+    fields: [
+      { label: "Preferred Date", type: "date", required: true },
+      { label: "Preferred Time Window", type: "select", required: true, note: "Morning / Afternoon / Evening" },
+    ],
+  },
+  {
+    title: "Property Details",
+    icon: "🏠",
+    fields: [
+      { label: "Square Footage", type: "number", required: false },
+      { label: "Number of Bedrooms", type: "number", required: false },
+      { label: "Number of Bathrooms", type: "number", required: false },
+      { label: "Special Instructions", type: "textarea", required: false },
+      { label: "Additional Notes", type: "textarea", required: false },
+    ],
+  },
+];
+
+function BookingFormManagementPanel({
+  bookingFormUrl,
+  allBookings,
+  onClose,
+  onViewSubmissions,
+  onViewBookings,
+  toast,
+}: {
+  bookingFormUrl: string;
+  allBookings: { id: string; status: string }[];
+  onClose: () => void;
+  onViewSubmissions: () => void;
+  onViewBookings: () => void;
+  toast: (args: { title: string; variant?: "default" | "destructive" }) => void;
+}) {
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
+
+  const statusCounts = allBookings.reduce<Record<string, number>>((acc, b) => {
+    acc[b.status] = (acc[b.status] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const statuses = [
+    { key: "new", label: "New", color: "bg-blue-100 text-blue-700" },
+    { key: "confirmed", label: "Confirmed", color: "bg-green-100 text-green-700" },
+    { key: "estimated", label: "Estimated", color: "bg-amber-100 text-amber-700" },
+    { key: "converted_to_job", label: "Converted", color: "bg-purple-100 text-purple-700" },
+  ];
+
+  return (
+    <div className="rounded-xl border bg-card overflow-hidden">
+      {/* Header */}
+      <div className="bg-indigo-600 px-4 py-3 flex items-center gap-3">
+        <button
+          data-testid="button-close-booking-management"
+          onClick={onClose}
+          className="w-7 h-7 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors flex-shrink-0"
+        >
+          <ArrowLeft className="w-4 h-4" />
+        </button>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-white text-sm">Booking Request Form</h3>
+          <p className="text-indigo-200 text-[11px]">System form — always live, connected to Schedule & Submissions</p>
+        </div>
+        <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-green-400/30 text-green-100 border border-green-400/40 flex-shrink-0">Active</span>
+      </div>
+
+      <div className="p-4 space-y-4">
+        {/* Public link row */}
+        <div className="flex items-center gap-2 bg-muted/40 border rounded-lg px-3 py-2">
+          <code className="text-[10px] text-muted-foreground flex-1 truncate">{bookingFormUrl}</code>
+          <button
+            data-testid="button-copy-booking-link-manage"
+            className="flex-shrink-0 flex items-center gap-1 text-[10px] font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
+            onClick={() => { navigator.clipboard.writeText(bookingFormUrl); toast({ title: "Link copied!" }); }}
+          >
+            <Copy className="w-3 h-3" /> Copy
+          </button>
+          <a href={bookingFormUrl} target="_blank" rel="noopener noreferrer"
+            className="flex-shrink-0 flex items-center gap-1 text-[10px] font-medium text-indigo-600 hover:text-indigo-800 transition-colors">
+            <ExternalLink className="w-3 h-3" /> Preview
+          </a>
+        </div>
+
+        {/* Stats row */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="rounded-lg border bg-muted/20 p-3 text-center">
+            <p className="text-2xl font-bold text-foreground">{allBookings.length}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">Total Bookings</p>
+          </div>
+          {statuses.map(s => (
+            <div key={s.key} className="rounded-lg border bg-muted/20 p-3 text-center">
+              <p className="text-2xl font-bold text-foreground">{statusCounts[s.key] ?? 0}</p>
+              <p className={cn("text-[10px] font-medium mt-0.5 px-1.5 py-0.5 rounded-full inline-block", s.color)}>{s.label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Connected flows */}
+        <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
+          <p className="text-xs font-semibold text-foreground">Connected Flows</p>
+          <div className="space-y-1.5">
+            {[
+              { label: "Public Booking Form", desc: "Clients submit requests via the link above", icon: <Globe className="w-3.5 h-3.5 text-indigo-500" /> },
+              { label: "Schedule → Booking Requests", desc: "All submissions appear in Schedule for review & scheduling", icon: <CalendarCheck className="w-3.5 h-3.5 text-emerald-500" /> },
+              { label: "Forms → Submissions", desc: "Submissions also appear here with estimate & quote tools", icon: <FileText className="w-3.5 h-3.5 text-amber-500" /> },
+            ].map(f => (
+              <div key={f.label} className="flex items-start gap-2">
+                <div className="flex-shrink-0 mt-0.5">{f.icon}</div>
+                <div>
+                  <p className="text-[11px] font-medium text-foreground">{f.label}</p>
+                  <p className="text-[10px] text-muted-foreground">{f.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Form sections / fields */}
+        <div className="space-y-1">
+          <p className="text-xs font-semibold text-foreground mb-2">Form Fields</p>
+          {BOOKING_FORM_SECTIONS.map(section => (
+            <div key={section.title} className="rounded-lg border overflow-hidden">
+              <button
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-muted/30 transition-colors"
+                onClick={() => setExpandedSection(expandedSection === section.title ? null : section.title)}
+              >
+                <span className="text-sm">{section.icon}</span>
+                <span className="flex-1 text-xs font-medium text-foreground">{section.title}</span>
+                <span className="text-[10px] text-muted-foreground">{section.fields.length} fields</span>
+                <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform", expandedSection === section.title && "rotate-180")} />
+              </button>
+              {expandedSection === section.title && (
+                <div className="border-t bg-muted/10 px-3 py-2 space-y-1.5">
+                  {section.fields.map(field => (
+                    <div key={field.label} className="flex items-center justify-between gap-2 py-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0" />
+                        <span className="text-xs text-foreground">{field.label}</span>
+                        {field.note && <span className="text-[10px] text-muted-foreground">({field.note})</span>}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{field.type}</span>
+                        {field.required
+                          ? <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-200">required</span>
+                          : <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">optional</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t">
+          <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={onViewSubmissions}>
+            <FileText className="w-3.5 h-3.5" /> View Submissions
+          </Button>
+          <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={onViewBookings}>
+            <CalendarCheck className="w-3.5 h-3.5" /> View Booking Requests
+          </Button>
+          <a href={bookingFormUrl} target="_blank" rel="noopener noreferrer">
+            <Button size="sm" className="w-full gap-1.5 bg-indigo-600 hover:bg-indigo-700">
+              <ExternalLink className="w-3.5 h-3.5" /> Open Public Form
+            </Button>
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Forms Tab ─────────────────────────────────────────────────────────────────
 function FormsTab() {
   const [, navigate] = useLocation();
@@ -104,6 +311,7 @@ function FormsTab() {
   const [smartMode, setSmartMode] = useState(false);
   const [bookingMode, setBookingMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<QuoteForm | null>(null);
+  const [managingBookingForm, setManagingBookingForm] = useState(false);
 
   const { data: forms = [], isLoading } = useQuery<QuoteForm[]>({ queryKey: ["/api/admin/quote-forms"] });
   const { data: company } = useQuery<{ id: string; name: string }>({ queryKey: ["/api/company"] });
@@ -186,6 +394,13 @@ function FormsTab() {
             </a>
             <div className="flex-1" />
             <button
+              data-testid="button-manage-booking-form-card"
+              className="flex items-center gap-1.5 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+              onClick={() => setManagingBookingForm(true)}
+            >
+              <Settings2 className="w-3 h-3" /> Manage
+            </button>
+            <button
               className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-primary transition-colors"
               onClick={() => navigate("/admin/schedule?tab=bookings")}
             >
@@ -195,16 +410,28 @@ function FormsTab() {
         </div>
       </div>
 
-      {isLoading ? (
+      {/* ── Booking Form Management Panel ── */}
+      {managingBookingForm && (
+        <BookingFormManagementPanel
+          bookingFormUrl={bookingFormUrl}
+          allBookings={allBookings}
+          onClose={() => setManagingBookingForm(false)}
+          onViewSubmissions={() => { setManagingBookingForm(false); navigate("/admin/quote-forms?tab=submissions"); }}
+          onViewBookings={() => navigate("/admin/schedule?tab=bookings")}
+          toast={toast}
+        />
+      )}
+
+      {!managingBookingForm && isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{[1,2,3].map(i => <Skeleton key={i} className="h-36 rounded-xl" />)}</div>
-      ) : forms.length === 0 ? (
+      ) : !managingBookingForm && forms.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4"><FileText className="w-8 h-8 text-muted-foreground/40" /></div>
           <p className="font-semibold text-muted-foreground">No custom forms yet</p>
           <p className="text-sm text-muted-foreground/70 mt-1 max-w-xs">Create a custom form to share with clients so they can request a quote.</p>
           <Button className="mt-5 gap-1.5" onClick={() => setCreateOpen(true)}><Plus className="w-4 h-4" /> Create First Form</Button>
         </div>
-      ) : (
+      ) : !managingBookingForm ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {forms.map(form => {
             const publicUrl = `${window.location.origin}/form/${form.companyId}/${form.slug}`;
@@ -255,75 +482,110 @@ function FormsTab() {
             );
           })}
         </div>
-      )}
+      ) : null}
 
       <Dialog open={createOpen} onOpenChange={v => { setCreateOpen(v); if (!v) { setNewName(""); setSmartMode(false); setBookingMode(false); } }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><Settings2 className="w-4 h-4 text-primary" /> New Form</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-1">
-            {!bookingMode && (
-              <div>
-                <Label className="text-xs font-medium mb-1.5 block">Form Name</Label>
-                <Input data-testid="input-new-form-name" placeholder="e.g. Cleaning Quote Request" value={newName}
-                  onChange={e => setNewName(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter" && newName.trim()) createMutation.mutate({ name: newName.trim(), smart: smartMode }); }} autoFocus />
-                <p className="text-[11px] text-muted-foreground mt-1">URL: /form/…/{newName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "form"}</p>
-              </div>
-            )}
+        <DialogContent className="w-full max-w-md mx-auto overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Settings2 className="w-4 h-4 text-primary" /> New Form</DialogTitle>
+          </DialogHeader>
 
+          <div className="space-y-4 py-1 max-h-[70vh] overflow-y-auto pr-1">
+            {/* Form type selector — vertical radio list, never overflows */}
+            <div className="space-y-2">
+              <Label className="text-xs font-medium block">Form Type</Label>
+              <div className="flex flex-col gap-2">
+                {/* Custom Builder */}
+                <button type="button"
+                  className={cn("flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full",
+                    !smartMode && !bookingMode ? "border-primary bg-primary/5" : "border-muted bg-muted/20 hover:border-primary/40")}
+                  onClick={() => { setSmartMode(false); setBookingMode(false); }}>
+                  <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
+                    !smartMode && !bookingMode ? "bg-primary/10" : "bg-muted")}>
+                    <FileText className={cn("w-4 h-4", !smartMode && !bookingMode ? "text-primary" : "text-muted-foreground")} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={cn("text-xs font-semibold", !smartMode && !bookingMode ? "text-primary" : "text-foreground")}>Custom Builder</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Build your own multi-step form with custom field groups</p>
+                  </div>
+                  {!smartMode && !bookingMode && <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />}
+                </button>
+
+                {/* Smart Cleaning Form */}
+                <button type="button" data-testid="button-select-smart-form"
+                  className={cn("flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full",
+                    smartMode ? "border-purple-500 bg-purple-50" : "border-muted bg-muted/20 hover:border-purple-300")}
+                  onClick={() => { setSmartMode(true); setBookingMode(false); }}>
+                  <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
+                    smartMode ? "bg-purple-100" : "bg-muted")}>
+                    <Sparkles className={cn("w-4 h-4", smartMode ? "text-purple-600" : "text-muted-foreground")} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={cn("text-xs font-semibold", smartMode ? "text-purple-700" : "text-foreground")}>Smart Cleaning Form</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Pre-built cleaning quote form with conditional residential/commercial steps</p>
+                  </div>
+                  {smartMode && <div className="w-2 h-2 rounded-full bg-purple-500 flex-shrink-0" />}
+                </button>
+
+                {/* Booking Form */}
+                <button type="button" data-testid="button-select-booking-form"
+                  className={cn("flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full",
+                    bookingMode ? "border-indigo-500 bg-indigo-50" : "border-muted bg-muted/20 hover:border-indigo-300")}
+                  onClick={() => { setBookingMode(true); setSmartMode(false); }}>
+                  <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
+                    bookingMode ? "bg-indigo-100" : "bg-muted")}>
+                    <CalendarCheck className={cn("w-4 h-4", bookingMode ? "text-indigo-600" : "text-muted-foreground")} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={cn("text-xs font-semibold", bookingMode ? "text-indigo-700" : "text-foreground")}>Booking Form</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">System booking request form — already live and collecting client bookings</p>
+                  </div>
+                  {bookingMode && <div className="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Booking Form info panel (shown when bookingMode selected) */}
             {bookingMode && (
-              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <CalendarCheck className="w-5 h-5 text-indigo-600" />
-                  <p className="font-semibold text-sm text-indigo-900">Booking Request Form</p>
+              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 space-y-2">
+                <div className="flex items-center gap-1.5">
                   <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200">Active</span>
+                  <span className="text-xs text-indigo-700">Connected to Schedule → Booking Requests and Forms → Submissions</span>
                 </div>
-                <p className="text-xs text-indigo-700">Your company already has a live booking request form. Clients use it to submit service requests that flow into your Schedule → Booking Requests and Forms → Submissions.</p>
                 {bookingFormUrl && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <code className="text-[10px] bg-white/80 border border-indigo-200 rounded px-2 py-1 flex-1 truncate">{bookingFormUrl}</code>
-                    <button className="text-[10px] text-indigo-600 hover:text-indigo-800 font-medium"
+                  <div className="flex items-center gap-2">
+                    <code className="text-[10px] bg-white/80 border border-indigo-200 rounded px-2 py-1.5 flex-1 truncate text-muted-foreground">{bookingFormUrl}</code>
+                    <button className="text-[10px] text-indigo-600 hover:text-indigo-800 font-medium flex-shrink-0 flex items-center gap-1"
                       onClick={() => { navigator.clipboard.writeText(bookingFormUrl); toast({ title: "Link copied!" }); }}>
-                      Copy
+                      <Copy className="w-3 h-3" /> Copy
                     </button>
+                    <a href={bookingFormUrl} target="_blank" rel="noopener noreferrer"
+                      className="text-[10px] text-indigo-600 hover:text-indigo-800 font-medium flex-shrink-0 flex items-center gap-1">
+                      <ExternalLink className="w-3 h-3" /> Preview
+                    </a>
                   </div>
                 )}
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label className="text-xs font-medium block">Form Type</Label>
-              <div className="grid grid-cols-3 gap-2">
-                <button type="button"
-                  className={cn("p-3 rounded-xl border text-left transition-all", !smartMode && !bookingMode ? "border-primary bg-primary/5 text-primary" : "border-muted bg-muted/30 text-muted-foreground hover:border-primary/30")}
-                  onClick={() => { setSmartMode(false); setBookingMode(false); }}>
-                  <FileText className="w-4 h-4 mb-1.5" />
-                  <p className="text-xs font-semibold">Custom Builder</p>
-                  <p className="text-[10px] mt-0.5 opacity-70">Build your own form with field groups</p>
-                </button>
-                <button type="button" data-testid="button-select-smart-form"
-                  className={cn("p-3 rounded-xl border text-left transition-all", smartMode ? "border-purple-500 bg-purple-50 text-purple-700" : "border-muted bg-muted/30 text-muted-foreground hover:border-purple-300")}
-                  onClick={() => { setSmartMode(true); setBookingMode(false); }}>
-                  <Sparkles className="w-4 h-4 mb-1.5" />
-                  <p className="text-xs font-semibold">Smart Cleaning Form</p>
-                  <p className="text-[10px] mt-0.5 opacity-70">Pre-built conditional form for quotes</p>
-                </button>
-                <button type="button" data-testid="button-select-booking-form"
-                  className={cn("p-3 rounded-xl border text-left transition-all", bookingMode ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-muted bg-muted/30 text-muted-foreground hover:border-indigo-300")}
-                  onClick={() => { setBookingMode(true); setSmartMode(false); }}>
-                  <CalendarCheck className="w-4 h-4 mb-1.5" />
-                  <p className="text-xs font-semibold">Booking Form</p>
-                  <p className="text-[10px] mt-0.5 opacity-70">System booking request form for clients</p>
-                </button>
+            {/* Name input — only for non-booking modes */}
+            {!bookingMode && (
+              <div>
+                <Label className="text-xs font-medium mb-1.5 block">Form Name</Label>
+                <Input data-testid="input-new-form-name" placeholder="e.g. Cleaning Quote Request" value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && newName.trim()) createMutation.mutate({ name: newName.trim(), smart: smartMode }); }} />
+                <p className="text-[11px] text-muted-foreground mt-1">URL: /form/…/{newName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "form"}</p>
               </div>
-            </div>
+            )}
           </div>
-          <div className="flex gap-2">
+
+          <div className="flex gap-2 pt-1">
             <Button variant="outline" className="flex-1" onClick={() => setCreateOpen(false)}>Cancel</Button>
             {bookingMode ? (
-              <Button data-testid="button-view-booking-form" className="flex-1 bg-indigo-600 hover:bg-indigo-700"
-                onClick={() => { setCreateOpen(false); setBookingMode(false); window.open(bookingFormUrl, "_blank"); }}>
-                <ExternalLink className="w-4 h-4 mr-1.5" /> Open Booking Form
+              <Button data-testid="button-manage-booking-form" className="flex-1 bg-indigo-600 hover:bg-indigo-700 gap-1.5"
+                onClick={() => { setCreateOpen(false); setBookingMode(false); setManagingBookingForm(true); }}>
+                <Settings2 className="w-4 h-4" /> Manage Booking Form
               </Button>
             ) : (
               <Button data-testid="button-create-form-confirm" className={cn("flex-1", smartMode && "bg-purple-600 hover:bg-purple-700")} disabled={!newName.trim() || createMutation.isPending}
