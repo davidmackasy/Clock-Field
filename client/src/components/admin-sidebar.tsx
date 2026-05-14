@@ -40,7 +40,6 @@ const postTeamItems = [
   { title: "Clients", url: "/admin/clients", icon: Building2 },
   { title: "Messages", url: "/admin/messages", icon: MessageSquare },
   { title: "Work Log", url: "/admin/work-log", icon: BookOpen },
-  { title: "Sales", url: "/admin/sales", icon: TrendingUp },
   { title: "Forms", url: "/admin/quote-forms", icon: FileInput },
   { title: "Training Hub", url: "/admin/training", icon: GraduationCap },
   { title: "Document", url: "/admin/publications", icon: Newspaper },
@@ -72,9 +71,6 @@ export function AdminSidebar() {
   const workLogPaths = ["/admin/work-log", "/admin/reports", "/admin/field-notes", "/admin/requests", "/admin/supplies"];
   const isWorkLogActive = workLogPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
 
-  const salesPaths = ["/admin/sales"];
-  const isSalesActive = salesPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
-
   const publicationsPaths = ["/admin/publications", "/admin/proposals", "/admin/agreements"];
   const isPublicationsActive = publicationsPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
 
@@ -84,7 +80,6 @@ export function AdminSidebar() {
 
   const getIsActive = (url: string) =>
     url === "/admin/work-log" ? isWorkLogActive
-    : url === "/admin/sales" ? isSalesActive
     : url === "/admin/publications" ? isPublicationsActive
     : url === "/admin" ? location === url
     : location === url || location.startsWith(url + "/") || location.startsWith(url + "?");
