@@ -1,0 +1,101 @@
+Dev note: Remove the onboarding workspace checklist from the ClockField dashboard only
+
+Task:
+Remove the onboarding card shown at the top of the Dashboard page.
+
+Remove this full section:
+
+Set up your Clockfield workspace
+Progress bar
+Step 1: Add your company details
+Step 2: Add your team
+Step 3: Create your first schedule
+Step 4: Create your first client report
+Step 5: Assign employee training
+All related buttons inside this card:
+Complete Company Profile
+Add Employee
+Create Schedule
+Go to Reports
+Set Up Training
+
+Important:
+Do not touch anything else on the dashboard.
+
+Keep these sections exactly as they are:
+
+Dashboard title
+Overview of today’s operations
+Left sidebar navigation
+Stats cards below the onboarding section
+Active Now
+Late Today
+Missed Shifts
+Total Employees
+Open Requests
+Hours Today
+All dashboard metrics
+All dashboard links
+All existing data fetching
+All permissions
+All routing
+All mobile layout outside this removed card
+
+Implementation instructions:
+
+Find the dashboard component that renders the onboarding/workspace setup checklist.
+
+Likely names could be:
+
+Dashboard.tsx
+AdminDashboard.tsx
+BusinessDashboard.tsx
+DashboardPage.tsx
+OnboardingChecklist.tsx
+WorkspaceSetupChecklist.tsx
+SetupWorkspaceCard.tsx
+
+Remove only the JSX/component render for the onboarding checklist.
+
+Best safe approach:
+
+If the onboarding section is imported as a component, remove only this render:
+
+<OnboardingChecklist />
+
+or
+
+<WorkspaceSetupChecklist />
+
+or
+
+<SetupWorkspaceCard />
+
+Do not delete the component file unless it is unused everywhere else.
+
+If the onboarding section is written directly inside the dashboard file, remove only the parent card/container for that onboarding block.
+
+Do not remove dashboard data hooks unless they are used only for this onboarding card.
+
+After removal, the stats cards should move up naturally under:
+
+Dashboard
+Overview of today’s operations
+
+Spacing fix:
+After removing the onboarding card, make sure there is clean spacing between the dashboard header and the stats cards.
+
+Use the existing dashboard spacing style. Do not redesign the page.
+
+Acceptance criteria:
+
+The onboarding checklist no longer appears on the Dashboard.
+The dashboard stats still load correctly.
+The sidebar still works.
+No routes are changed.
+No auth logic is changed.
+No subscription logic is changed.
+No dashboard metrics are removed.
+No mobile layout is broken.
+No other page is touched.
+The only visible change is that the onboarding workspace checklist is gone.

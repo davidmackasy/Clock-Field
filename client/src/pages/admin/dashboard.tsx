@@ -217,15 +217,6 @@ export default function AdminDashboard() {
   const [showOnboarding, setShowOnboarding] = useState(() =>
     localStorage.getItem("cf_onboarding_needed") === "1"
   );
-  const [showChecklist, setShowChecklist] = useState(() =>
-    localStorage.getItem("cf_checklist_dismissed") !== "1"
-  );
-
-  const dismissChecklist = () => {
-    localStorage.setItem("cf_checklist_dismissed", "1");
-    setShowChecklist(false);
-  };
-
   const hours = stats?.totalWorkedToday ? Math.floor(stats.totalWorkedToday / 60) : 0;
   const mins = stats?.totalWorkedToday ? stats.totalWorkedToday % 60 : 0;
   const hoursDisplay = stats?.totalWorkedToday ? `${hours}h ${mins}m` : "0h";
@@ -293,14 +284,6 @@ export default function AdminDashboard() {
         <h1 className="text-2xl font-bold" data-testid="text-dashboard-title">Dashboard</h1>
         <p className="text-muted-foreground text-sm mt-1">Overview of today's operations</p>
       </div>
-
-      {/* Setup checklist for new businesses */}
-      {showChecklist && (
-        <SetupChecklist
-          totalEmployees={stats?.totalEmployees ?? 0}
-          onDismiss={dismissChecklist}
-        />
-      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
         {statCards.map((card, i) => (
