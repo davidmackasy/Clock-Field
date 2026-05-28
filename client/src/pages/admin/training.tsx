@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { AdminBlockEditor } from "@/components/training/admin-block-editor";
@@ -504,27 +504,38 @@ type LearnerDetail = {
 function LearnerDetailModal({ target, onClose }: { target: LearnerModalTarget; onClose: () => void }) {
   const [tab, setTab] = useState<"overview" | "quiz" | "certificate">("overview");
   const [expandedAttempt, setExpandedAttempt] = useState<string | null>(null);
+  const [data, setData] = useState<LearnerDetail | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [fetchKey, setFetchKey] = useState(0);
 
   const learnerId = target.employeeId || target.publicLearnerId || "";
 
-  const { data, isLoading, isError, refetch } = useQuery<LearnerDetail>({
-    queryKey: ["learner-detail", target.courseId, learnerId],
-    queryFn: async () => {
-      const qs = new URLSearchParams();
-      if (target.employeeId) qs.set("employeeId", target.employeeId);
-      else if (target.publicLearnerId) qs.set("publicLearnerId", target.publicLearnerId);
-      const res = await fetch(
-        `/api/training/admin/courses/${target.courseId}/learner-detail?${qs}`,
-        { credentials: "include" },
-      );
-      if (!res.ok) {
-        const msg = await res.text().catch(() => res.statusText);
-        throw new Error(`${res.status}: ${msg}`);
-      }
-      return res.json() as Promise<LearnerDetail>;
-    },
-    retry: false,
-  });
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    setFetchError(null);
+    setData(null);
+    const qs = new URLSearchParams();
+    if (target.employeeId) qs.set("employeeId", target.employeeId);
+    else if (target.publicLearnerId) qs.set("publicLearnerId", target.publicLearnerId);
+    const url = `/api/training/admin/courses/${target.courseId}/learner-detail?${qs.toString()}`;
+    fetch(url, { credentials: "include" })
+      .then(async res => {
+        if (!res.ok) {
+          const msg = await res.text().catch(() => res.statusText);
+          throw new Error(`${res.status}: ${msg}`);
+        }
+        return res.json() as Promise<LearnerDetail>;
+      })
+      .then(json => {
+        if (!cancelled) { setData(json); setIsLoading(false); }
+      })
+      .catch(err => {
+        if (!cancelled) { setFetchError(err?.message ?? "Unknown error"); setIsLoading(false); }
+      });
+    return () => { cancelled = true; };
+  }, [target.courseId, target.employeeId, target.publicLearnerId, fetchKey]);
 
   const color = colorHexForLearner(learnerId || target.learnerName);
   const initials = initialsFromName(target.learnerName);
@@ -569,12 +580,12 @@ function LearnerDetailModal({ target, onClose }: { target: LearnerModalTarget; o
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             <span className="ml-2 text-sm text-muted-foreground">Loading learner details…</span>
           </div>
-        ) : isError || !data ? (
+        ) : fetchError || !data ? (
           <div className="py-10 text-center space-y-3">
             <AlertCircle className="w-8 h-8 text-muted-foreground/50 mx-auto" />
             <div className="text-sm font-medium text-muted-foreground">Could not load learner data</div>
-            <div className="text-xs text-muted-foreground">Check your connection or try again.</div>
-            <Button size="sm" variant="outline" onClick={() => refetch()} data-testid="btn-retry-learner-detail">
+            {fetchError && <div className="text-xs text-muted-foreground font-mono">{fetchError}</div>}
+            <Button size="sm" variant="outline" onClick={() => setFetchKey(k => k + 1)} data-testid="btn-retry-learner-detail">
               Retry
             </Button>
           </div>
