@@ -502,6 +502,7 @@ export interface IStorage {
 
   createTrainingCertificate(data: InsertTrainingCertificate): Promise<TrainingCertificate>;
   getTrainingCertificate(courseId: string, employeeId?: string, publicLearnerId?: string): Promise<TrainingCertificate | undefined>;
+  getTrainingCertificateByCertCode(certCode: string): Promise<TrainingCertificate | undefined>;
 
   // Training Quizzes
   getTrainingQuizByCourse(courseId: string): Promise<(TrainingQuiz & { questions: TrainingQuizQuestion[] }) | undefined>;
@@ -2622,6 +2623,11 @@ export class DatabaseStorage implements IStorage {
     if (employeeId) conditions.push(eq(trainingCertificates.employeeId, employeeId));
     if (publicLearnerId) conditions.push(eq(trainingCertificates.publicLearnerId, publicLearnerId));
     const [row] = await db.select().from(trainingCertificates).where(and(...conditions));
+    return row;
+  }
+
+  async getTrainingCertificateByCertCode(certCode: string): Promise<TrainingCertificate | undefined> {
+    const [row] = await db.select().from(trainingCertificates).where(eq(trainingCertificates.certificateCode, certCode));
     return row;
   }
 

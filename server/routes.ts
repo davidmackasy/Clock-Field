@@ -11501,6 +11501,165 @@ Return ONLY valid JSON:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ── Training: Admin Learner Detail ───────────────────────────────────────
+
+  // GET /api/training/admin/courses/:courseId/learner-detail — admin/management
+  // Query: ?employeeId=... OR ?publicLearnerId=...
+  app.get("/api/training/admin/courses/:courseId/learner-detail", requireAuth, requireRole("admin", "management"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { courseId } = req.params;
+      const employeeId = (req.query.employeeId as string) || undefined;
+      const publicLearnerId = (req.query.publicLearnerId as string) || undefined;
+
+      if (!employeeId && !publicLearnerId) {
+        return res.status(400).json({ message: "employeeId or publicLearnerId is required" });
+      }
+
+      const course = await storage.getTrainingCourse(courseId);
+      if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Course not found" });
+
+      const modules = await storage.getTrainingModules(courseId);
+      const progress = await storage.getTrainingProgress(courseId, employeeId, publicLearnerId);
+      const completedModuleIds = new Set(progress.map((p: any) => p.moduleId));
+      const modulesCompleted = modules.filter((m: any) => completedModuleIds.has(m.id)).length;
+      const totalModules = modules.length;
+      const progressPct = totalModules > 0 ? Math.round((modulesCompleted / totalModules) * 100) : 0;
+
+      const cert = await storage.getTrainingCertificate(courseId, employeeId, publicLearnerId);
+
+      let learnerName = "";
+      let learnerEmail = "";
+      if (employeeId) {
+        const emp = await storage.getUser(employeeId);
+        learnerName = emp ? `${emp.firstName} ${emp.lastName}` : "Unknown";
+        learnerEmail = emp?.email ?? "";
+      } else if (publicLearnerId) {
+        const learner = await storage.getPublicLearner(publicLearnerId);
+        learnerName = learner?.name ?? "";
+        learnerEmail = learner?.email ?? "";
+      }
+
+      const quiz = await storage.getTrainingQuizByCourse(courseId);
+      let attempts: any[] = [];
+      if (quiz) {
+        const rawAttempts = await storage.getTrainingQuizAttempts(quiz.id, employeeId, publicLearnerId);
+        attempts = rawAttempts.map((a: any) => {
+          let answers: Record<string, any> = {};
+          try { answers = JSON.parse(a.answersJson || "{}"); } catch {}
+          const review = quiz.questions.map((q: any) => {
+            const given = answers[q.id];
+            const isCorrect = scoreTrainingQuestion(q, given);
+            let correctAnswer: any = null;
+            try { correctAnswer = JSON.parse(q.correctAnswerJson); } catch {}
+            let options: any[] = [];
+            try { options = JSON.parse(q.optionsJson || "[]"); } catch {}
+            return {
+              questionId: q.id,
+              questionText: q.questionText,
+              questionType: q.questionType,
+              options,
+              given: given ?? null,
+              isCorrect,
+              correctAnswer,
+              explanation: q.explanation ?? null,
+            };
+          });
+          return {
+            id: a.id,
+            score: a.score,
+            passed: a.passed,
+            startedAt: a.startedAt,
+            completedAt: a.completedAt,
+            review,
+          };
+        });
+      }
+
+      res.json({
+        learner: { id: employeeId || publicLearnerId || "", name: learnerName, email: learnerEmail },
+        course: { title: course.title, category: course.category, moduleCount: totalModules },
+        progress: { modulesCompleted, totalModules, progressPct },
+        certificate: cert
+          ? { id: cert.id, certificateCode: cert.certificateCode, issuedAt: cert.issuedAt, learnerName: cert.learnerName }
+          : null,
+        quiz: quiz
+          ? { id: quiz.id, title: quiz.title, passingScore: quiz.passingScore, allowRetake: quiz.allowRetake }
+          : null,
+        attempts,
+      });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // GET /api/training/certificate/:certCode — public, returns a printable HTML certificate
+  app.get("/api/training/certificate/:certCode", async (req, res) => {
+    try {
+      function escHtml(s: string) {
+        return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      }
+      const cert = await storage.getTrainingCertificateByCertCode(req.params.certCode);
+      if (!cert) {
+        return res.status(404).send(`<!DOCTYPE html><html><head><title>Not Found</title></head><body style="font-family:sans-serif;text-align:center;padding:80px"><h2>Certificate not found</h2><p style="color:#666">This certificate code is invalid or no longer available.</p></body></html>`);
+      }
+      const course = await storage.getTrainingCourse(cert.courseId);
+      const company = await storage.getCompany(cert.companyId);
+      const issuedDate = new Date(cert.issuedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Certificate — ${escHtml(course?.title ?? "Training Course")}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#f5f0e8;font-family:Georgia,"Times New Roman",serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+    .cert{background:#fff;max-width:760px;width:100%;padding:52px 60px;position:relative;box-shadow:0 8px 48px rgba(0,0,0,.14)}
+    .cert::before{content:"";position:absolute;inset:12px;border:1px solid #c9a84c;opacity:.45;pointer-events:none}
+    .top-bar{height:6px;background:linear-gradient(90deg,#b8860b,#f0d060,#b8860b);margin-bottom:32px;border-radius:2px}
+    .seal{text-align:center;margin-bottom:20px;font-size:48px;line-height:1}
+    .org{font-family:Arial,sans-serif;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#888;text-align:center;margin-bottom:6px}
+    h1{font-size:30px;font-weight:400;letter-spacing:.06em;color:#1a1201;text-align:center;margin-bottom:6px}
+    .divider{width:70px;height:2px;background:linear-gradient(90deg,transparent,#c9a84c,transparent);margin:18px auto}
+    .certifies{font-family:Arial,sans-serif;font-size:12px;color:#888;letter-spacing:.14em;text-transform:uppercase;text-align:center;margin-bottom:10px}
+    .name{font-size:38px;color:#1a1201;text-align:center;border-bottom:1.5px solid #e8d9a0;padding-bottom:12px;max-width:480px;margin:0 auto 14px}
+    .completed{font-family:Arial,sans-serif;font-size:12px;color:#888;letter-spacing:.14em;text-transform:uppercase;text-align:center;margin-bottom:10px}
+    .course{font-size:21px;color:#1a1201;text-align:center;font-style:italic;margin-bottom:36px}
+    .meta{display:flex;justify-content:space-between;align-items:flex-end;padding-top:24px;border-top:1px solid #ede5cc;margin-top:8px}
+    .meta-item label{font-family:Arial,sans-serif;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#aaa;display:block;margin-bottom:3px}
+    .meta-item span{font-family:Arial,sans-serif;font-size:13px;color:#444}
+    .cert-code{font-family:monospace;font-size:11px;color:#bbb;letter-spacing:.08em}
+    .print-area{margin-top:28px;text-align:center}
+    .print-area button{font-family:Arial,sans-serif;font-size:13px;padding:10px 30px;background:#1a1201;color:#fff;border:none;border-radius:6px;cursor:pointer;letter-spacing:.04em}
+    .print-area button:hover{background:#3a2f0b}
+    @media print{body{background:#fff;padding:0}.cert{box-shadow:none;border:1px solid #c9a84c}.print-area{display:none}}
+  </style>
+</head>
+<body>
+  <div class="cert">
+    <div class="top-bar"></div>
+    <div class="seal">&#127942;</div>
+    <div class="org">${escHtml(company?.name ?? "ClockField")}</div>
+    <h1>Certificate of Completion</h1>
+    <div class="divider"></div>
+    <div class="certifies">This is to certify that</div>
+    <div class="name">${escHtml(cert.learnerName)}</div>
+    <div class="completed">has successfully completed</div>
+    <div class="course">${escHtml(course?.title ?? "Training Course")}</div>
+    <div class="meta">
+      <div class="meta-item"><label>Date Issued</label><span>${escHtml(issuedDate)}</span></div>
+      <div class="meta-item" style="text-align:center"><label>Issued By</label><span>${escHtml(company?.name ?? "ClockField")}</span></div>
+      <div class="meta-item" style="text-align:right"><label>Certificate ID</label><span class="cert-code">${escHtml(cert.certificateCode)}</span></div>
+    </div>
+  </div>
+  <div class="print-area"><button onclick="window.print()">Print / Save as PDF</button></div>
+</body>
+</html>`;
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.send(html);
+    } catch (e: any) { res.status(500).send("Error loading certificate"); }
+  });
+
   // ── Training AI Backbone ──────────────────────────────────────────────────
 
   // POST /api/training/ai/generate-course — wizard step 2 backbone

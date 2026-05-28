@@ -16,7 +16,7 @@ import {
   Globe, Lock, Copy, ExternalLink, Play, FileText, Image, CheckCircle2,
   BarChart3, Loader2, X, GripVertical, Eye, EyeOff, Award, Search,
   ChevronDown, ChevronUp, Upload, AlertCircle, Check, ShieldCheck,
-  Sparkles, Wrench, GraduationCap, HeartHandshake, Activity, Mail, XCircle,
+  Sparkles, Wrench, GraduationCap, HeartHandshake, Activity, Mail, XCircle, Download,
 } from "lucide-react";
 
 type PublicLearnerRow = {
@@ -173,8 +173,8 @@ type RosterLearner = {
 };
 
 function CohortRoster({
-  learners, totalAssigned, totalModules, onAssign,
-}: { learners: RosterLearner[]; totalAssigned: number; totalModules: number; onAssign: () => void }) {
+  learners, totalAssigned, totalModules, onAssign, onLearnerClick,
+}: { learners: RosterLearner[]; totalAssigned: number; totalModules: number; onAssign: () => void; onLearnerClick?: (l: RosterLearner) => void }) {
   if (totalAssigned === 0) {
     return (
       <div className="bg-card border border-border rounded-xl p-5" data-testid="card-cohort-roster">
@@ -218,7 +218,12 @@ function CohortRoster({
       {/* Featured rings */}
       <div className={`grid gap-3 mb-5 ${featured.length === 1 ? "grid-cols-1" : featured.length === 2 ? "grid-cols-2" : featured.length === 3 ? "grid-cols-3" : "grid-cols-4"}`}>
         {featured.map((l) => (
-          <div key={l.id} className="flex flex-col items-center text-center" data-testid={`ring-${l.id}`}>
+          <div
+            key={l.id}
+            className={`flex flex-col items-center text-center rounded-lg p-1 transition-colors ${onLearnerClick ? "cursor-pointer hover:bg-muted/50" : ""}`}
+            data-testid={`ring-${l.id}`}
+            onClick={() => onLearnerClick?.(l)}
+          >
             <ProgressRing progress={l.progress} color={l.color} initials={l.initials} />
             <div className="mt-2 text-[12px] font-medium text-foreground leading-tight truncate w-full" title={l.name}>
               {l.name.split(/\s+/)[0]}
@@ -283,13 +288,13 @@ function CohortRoster({
 
       {/* Full learner list — collapsible to preserve per-employee detail */}
       {sorted.length > 0 && (
-        <RosterFullList learners={sorted} />
+        <RosterFullList learners={sorted} onLearnerClick={onLearnerClick} />
       )}
     </div>
   );
 }
 
-function RosterFullList({ learners }: { learners: RosterLearner[] }) {
+function RosterFullList({ learners, onLearnerClick }: { learners: RosterLearner[]; onLearnerClick?: (l: RosterLearner) => void }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="mt-3 border-t border-border pt-3">
@@ -305,7 +310,12 @@ function RosterFullList({ learners }: { learners: RosterLearner[] }) {
       {open && (
         <div className="mt-3 space-y-2 max-h-64 overflow-y-auto pr-1">
           {learners.map((l) => (
-            <div key={l.id} className="flex items-center gap-3" data-testid={`row-learner-${l.id}`}>
+            <div
+              key={l.id}
+              className={`flex items-center gap-3 rounded-lg px-2 py-1 -mx-2 transition-colors ${onLearnerClick ? "cursor-pointer hover:bg-muted/50" : ""}`}
+              data-testid={`row-learner-${l.id}`}
+              onClick={() => onLearnerClick?.(l)}
+            >
               <div
                 className="h-7 w-7 rounded-full flex items-center justify-center text-white text-[10px] font-semibold flex-shrink-0"
                 style={{ backgroundColor: l.color }}
@@ -331,8 +341,8 @@ function RosterFullList({ learners }: { learners: RosterLearner[] }) {
   );
 }
 function PublicLearnersRoster({
-  learners, publicLink, onCopy,
-}: { learners: PublicLearnerRow[]; publicLink: string | null; onCopy: () => void }) {
+  learners, publicLink, onCopy, onLearnerClick,
+}: { learners: PublicLearnerRow[]; publicLink: string | null; onCopy: () => void; onLearnerClick?: (l: PublicLearnerRow) => void }) {
   const passed = learners.filter(l => l.quizPassed).length;
   const inProgress = learners.filter(l => !l.quizPassed && l.modulesCompleted > 0).length;
   return (
@@ -377,7 +387,12 @@ function PublicLearnersRoster({
             const initials = initialsFromName(l.name);
             const color = colorHexForLearner(l.id);
             return (
-              <div key={l.id} className="border border-border rounded-lg p-3 hover:bg-muted/30 transition-colors" data-testid={`row-public-learner-${l.id}`}>
+              <div
+                key={l.id}
+                className={`border border-border rounded-lg p-3 hover:bg-muted/30 transition-colors ${onLearnerClick ? "cursor-pointer" : ""}`}
+                data-testid={`row-public-learner-${l.id}`}
+                onClick={() => onLearnerClick?.(l)}
+              >
                 <div className="flex items-start gap-3">
                   <div
                     className="h-8 w-8 rounded-full flex items-center justify-center text-white text-[11px] font-semibold flex-shrink-0"
@@ -449,6 +464,328 @@ function relativeTime(iso: string | Date | null | undefined): string {
   if (h < 24) return `${h}h ago`;
   const d = Math.floor(h / 24);
   return `${d}d ago`;
+}
+
+// ── Learner Detail Modal ──────────────────────────────────────────────────
+
+type LearnerModalTarget = {
+  courseId: string;
+  courseTitle: string;
+  employeeId?: string;
+  publicLearnerId?: string;
+  learnerName: string;
+};
+
+type LearnerDetail = {
+  learner: { id: string; name: string; email: string };
+  course: { title: string; category: string | null; moduleCount: number };
+  progress: { modulesCompleted: number; totalModules: number; progressPct: number };
+  certificate: { id: string; certificateCode: string; issuedAt: string; learnerName: string } | null;
+  quiz: { id: string; title: string; passingScore: number; allowRetake: boolean } | null;
+  attempts: Array<{
+    id: string;
+    score: number | null;
+    passed: boolean;
+    startedAt: string;
+    completedAt: string | null;
+    review: Array<{
+      questionId: string;
+      questionText: string;
+      questionType: string;
+      options: string[];
+      given: any;
+      isCorrect: boolean;
+      correctAnswer: any;
+      explanation: string | null;
+    }>;
+  }>;
+};
+
+function LearnerDetailModal({ target, onClose }: { target: LearnerModalTarget; onClose: () => void }) {
+  const [tab, setTab] = useState<"overview" | "quiz" | "certificate">("overview");
+  const [expandedAttempt, setExpandedAttempt] = useState<string | null>(null);
+
+  const paramStr = target.employeeId
+    ? `?employeeId=${target.employeeId}`
+    : `?publicLearnerId=${target.publicLearnerId}`;
+  const queryUrl = `/api/training/admin/courses/${target.courseId}/learner-detail${paramStr}`;
+
+  const { data, isLoading } = useQuery<LearnerDetail>({ queryKey: [queryUrl] });
+
+  const color = colorHexForLearner(target.employeeId || target.publicLearnerId || target.learnerName);
+  const initials = initialsFromName(target.learnerName);
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="dialog-learner-detail">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-3">
+            <div
+              className="h-9 w-9 rounded-full flex items-center justify-center text-white text-sm font-semibold flex-shrink-0"
+              style={{ backgroundColor: color }}
+            >
+              {initials}
+            </div>
+            <div>
+              <div className="font-semibold" data-testid="text-learner-modal-name">{target.learnerName}</div>
+              <div className="text-xs font-normal text-muted-foreground">{target.courseTitle}</div>
+            </div>
+          </DialogTitle>
+        </DialogHeader>
+
+        {/* Tab bar */}
+        <div className="flex gap-1 border-b border-border mb-4">
+          {(["overview", "quiz", "certificate"] as const).map(t => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={`px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                tab === t ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+              data-testid={`tab-learner-${t}`}
+            >
+              {t === "quiz" ? "Quiz Results" : t === "certificate" ? "Certificate" : "Overview"}
+            </button>
+          ))}
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : !data ? (
+          <div className="py-8 text-center text-muted-foreground text-sm">Failed to load learner data.</div>
+        ) : (
+          <>
+            {/* ── Overview tab ── */}
+            {tab === "overview" && (
+              <div className="space-y-4">
+                {data.learner.email && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Mail className="w-4 h-4 flex-shrink-0" />
+                    <span data-testid="text-learner-email">{data.learner.email}</span>
+                  </div>
+                )}
+                {/* Progress bar */}
+                <div className="bg-muted/40 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">Course Progress</span>
+                    <span className="text-sm font-bold tabular-nums" data-testid="text-learner-progress-pct">{data.progress.progressPct}%</span>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${data.progress.progressPct}%`, backgroundColor: data.progress.progressPct >= 100 ? "#10b981" : color }}
+                    />
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1.5">
+                    {data.progress.modulesCompleted} of {data.progress.totalModules} modules completed
+                  </div>
+                </div>
+                {/* Quiz summary */}
+                {data.quiz && (
+                  <div className="bg-muted/40 rounded-lg p-4">
+                    <div className="text-sm font-medium mb-2">Quiz Summary</div>
+                    {data.attempts.filter(a => a.completedAt).length === 0 ? (
+                      <div className="text-sm text-muted-foreground">Not attempted yet</div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {data.attempts.filter(a => a.completedAt).map((a, i) => {
+                          const num = data.attempts.filter(x => x.completedAt).length - i;
+                          return (
+                            <div key={a.id} className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Attempt {num}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium tabular-nums">{a.score ?? 0}%</span>
+                                {a.passed
+                                  ? <Badge className="bg-emerald-500 text-white text-[10px] h-4 px-1">Passed</Badge>
+                                  : <Badge variant="outline" className="text-amber-600 border-amber-300 text-[10px] h-4 px-1">Failed</Badge>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div className="text-xs text-muted-foreground pt-1">Passing score: {data.quiz.passingScore}%</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Certificate quick view */}
+                {data.certificate && (
+                  <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg p-3 dark:bg-amber-950/20 dark:border-amber-800">
+                    <Award className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-amber-900 dark:text-amber-200">Certificate Issued</div>
+                      <div className="text-xs text-amber-700 dark:text-amber-400">
+                        {new Date(data.certificate.issuedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs gap-1 border-amber-300 text-amber-800 hover:bg-amber-100 dark:text-amber-300 flex-shrink-0"
+                      onClick={() => window.open(`/api/training/certificate/${data.certificate!.certificateCode}`, "_blank")}
+                      data-testid="btn-view-cert-overview"
+                    >
+                      <Download className="w-3 h-3" />
+                      View
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Quiz Results tab ── */}
+            {tab === "quiz" && (
+              <div>
+                {!data.quiz ? (
+                  <div className="py-8 text-center text-muted-foreground text-sm">No quiz attached to this course.</div>
+                ) : data.attempts.filter(a => a.completedAt).length === 0 ? (
+                  <div className="py-8 text-center text-muted-foreground text-sm">Learner hasn&apos;t taken the quiz yet.</div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="text-xs text-muted-foreground">Passing score: {data.quiz.passingScore}%</div>
+                    {data.attempts.filter(a => a.completedAt).map((attempt, idx) => {
+                      const attemptNum = data.attempts.filter(a => a.completedAt).length - idx;
+                      const isExpanded = expandedAttempt === attempt.id;
+                      return (
+                        <div key={attempt.id} className="border border-border rounded-lg overflow-hidden" data-testid={`card-attempt-${attempt.id}`}>
+                          <button
+                            type="button"
+                            className="w-full flex items-center gap-3 p-3 hover:bg-muted/40 transition-colors text-left"
+                            onClick={() => setExpandedAttempt(isExpanded ? null : attempt.id)}
+                            data-testid={`btn-expand-attempt-${attempt.id}`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">Attempt {attemptNum}</span>
+                                {attempt.passed
+                                  ? <Badge className="bg-emerald-500 text-white text-[10px] h-4 px-1">Passed</Badge>
+                                  : <Badge variant="outline" className="text-amber-600 border-amber-300 text-[10px] h-4 px-1">Failed</Badge>}
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                {attempt.completedAt ? new Date(attempt.completedAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
+                              </div>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <div className="text-lg font-bold tabular-nums" data-testid={`text-attempt-score-${attempt.id}`}>{attempt.score ?? 0}%</div>
+                            </div>
+                            {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
+                          </button>
+
+                          {isExpanded && attempt.review.length > 0 && (
+                            <div className="border-t border-border divide-y divide-border">
+                              {attempt.review.map((q, qi) => (
+                                <div key={q.questionId} className="p-3" data-testid={`row-question-${q.questionId}`}>
+                                  <div className="flex items-start gap-2">
+                                    {q.isCorrect
+                                      ? <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                                      : <XCircle className="w-4 h-4 text-rose-500 flex-shrink-0 mt-0.5" />}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-sm font-medium text-foreground">{qi + 1}. {q.questionText}</div>
+                                      {q.options && q.options.length > 0 ? (
+                                        <div className="mt-2 space-y-1">
+                                          {q.options.map((opt, oi) => {
+                                            const optStr = String(opt).trim();
+                                            const isGiven = String(q.given ?? "").trim() === optStr;
+                                            const isCorrect = String(q.correctAnswer ?? "").trim() === optStr;
+                                            return (
+                                              <div
+                                                key={oi}
+                                                className={`text-xs px-2.5 py-1.5 rounded-md flex items-center gap-1.5 ${
+                                                  isCorrect
+                                                    ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300"
+                                                    : isGiven && !q.isCorrect
+                                                    ? "bg-rose-50 text-rose-800 dark:bg-rose-950/30 dark:text-rose-300"
+                                                    : "text-muted-foreground"
+                                                }`}
+                                              >
+                                                {isCorrect && <CheckCircle2 className="w-3 h-3 flex-shrink-0" />}
+                                                {isGiven && !q.isCorrect && <XCircle className="w-3 h-3 flex-shrink-0" />}
+                                                <span>{opt}</span>
+                                                {isCorrect && !isGiven && <span className="ml-auto text-[10px] font-semibold">Correct answer</span>}
+                                                {isGiven && !q.isCorrect && <span className="ml-auto text-[10px] font-semibold">Your answer</span>}
+                                                {isCorrect && isGiven && <span className="ml-auto text-[10px] font-semibold">Correct ✓</span>}
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      ) : (
+                                        <div className="mt-1.5 space-y-0.5 text-xs">
+                                          <div>
+                                            Your answer:{" "}
+                                            <span className={q.isCorrect ? "text-emerald-600 font-medium" : "text-rose-600 font-medium"}>
+                                              {String(q.given ?? "—")}
+                                            </span>
+                                          </div>
+                                          {!q.isCorrect && (
+                                            <div>Correct answer: <span className="text-emerald-600 font-medium">{String(q.correctAnswer ?? "—")}</span></div>
+                                          )}
+                                        </div>
+                                      )}
+                                      {q.explanation && (
+                                        <div className="mt-2 text-xs text-muted-foreground italic border-l-2 border-muted pl-2">
+                                          {q.explanation}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Certificate tab ── */}
+            {tab === "certificate" && (
+              <div>
+                {!data.certificate ? (
+                  <div className="py-8 text-center">
+                    <Award className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                    <div className="text-sm font-medium text-muted-foreground">No certificate issued</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {data.progress.progressPct < 100
+                        ? "Learner must complete all required modules to receive a certificate."
+                        : "Certificate will be issued once all quiz requirements are met."}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="border border-amber-200 rounded-xl p-6 bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/20 dark:to-yellow-950/20 dark:border-amber-800 text-center">
+                      <Award className="w-10 h-10 text-amber-500 mx-auto mb-3" />
+                      <div className="text-[11px] uppercase tracking-widest text-amber-700 dark:text-amber-400 mb-2">Certificate of Completion</div>
+                      <div className="text-xl font-semibold text-foreground mb-1" data-testid="text-cert-learner-name">{data.certificate.learnerName}</div>
+                      <div className="text-sm text-muted-foreground mb-4">{data.course.title}</div>
+                      <div className="font-mono text-[11px] text-muted-foreground bg-background/60 rounded px-3 py-1 inline-block mb-1">
+                        {data.certificate.certificateCode}
+                      </div>
+                      <div className="text-xs text-muted-foreground mb-5">
+                        Issued {new Date(data.certificate.issuedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+                      </div>
+                      <Button
+                        onClick={() => window.open(`/api/training/certificate/${data.certificate!.certificateCode}`, "_blank")}
+                        className="gap-2"
+                        data-testid="btn-open-certificate"
+                      >
+                        <Download className="w-4 h-4" />
+                        View &amp; Print Certificate
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function LiveActivityPulse({
@@ -810,6 +1147,7 @@ export default function AdminTrainingHub() {
   const [dragVisualSrc, setDragVisualSrc] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const [localModules, setLocalModules] = useState<any[] | null>(null);
+  const [learnerModal, setLearnerModal] = useState<LearnerModalTarget | null>(null);
 
   const { data: courses = [], isLoading } = useQuery<Course[]>({ queryKey: ["/api/training/courses"] });
   const { data: stats } = useQuery<{ totalCourses: number; totalAssigned: number; totalCompleted: number; totalPending: number }>({
@@ -1475,6 +1813,7 @@ export default function AdminTrainingHub() {
               {/* Right: cohort roster + public learners */}
               <div className="space-y-4">
                 <CohortRoster
+                  onLearnerClick={(l) => setLearnerModal({ courseId: selectedId!, courseTitle: detail.course.title, employeeId: l.id, learnerName: l.name })}
                   learners={detail.assignments.map((a: any) => {
                     const completedModules = new Set(
                       detail.completions
@@ -1500,6 +1839,7 @@ export default function AdminTrainingHub() {
                 {/* Public Link Learners */}
                 {course.publicLinkEnabled && (
                   <PublicLearnersRoster
+                    onLearnerClick={(l) => setLearnerModal({ courseId: selectedId!, courseTitle: detail.course.title, publicLearnerId: l.id, learnerName: l.name })}
                     learners={publicLearners}
                     publicLink={course.publicId ? getPublicLink(course.publicId) : null}
                     onCopy={() => {
@@ -1521,6 +1861,13 @@ export default function AdminTrainingHub() {
         onOpenChange={setAiWizardOpen}
         onCreated={(courseId) => { setSelectedId(courseId); setView("detail"); }}
       />
+
+      {learnerModal && (
+        <LearnerDetailModal
+          target={learnerModal}
+          onClose={() => setLearnerModal(null)}
+        />
+      )}
 
       {/* ── CREATE COURSE DIALOG ── */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
