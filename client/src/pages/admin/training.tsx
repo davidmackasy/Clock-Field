@@ -505,14 +505,28 @@ function LearnerDetailModal({ target, onClose }: { target: LearnerModalTarget; o
   const [tab, setTab] = useState<"overview" | "quiz" | "certificate">("overview");
   const [expandedAttempt, setExpandedAttempt] = useState<string | null>(null);
 
-  const paramStr = target.employeeId
-    ? `?employeeId=${target.employeeId}`
-    : `?publicLearnerId=${target.publicLearnerId}`;
-  const queryUrl = `/api/training/admin/courses/${target.courseId}/learner-detail${paramStr}`;
+  const learnerId = target.employeeId || target.publicLearnerId || "";
 
-  const { data, isLoading } = useQuery<LearnerDetail>({ queryKey: [queryUrl] });
+  const { data, isLoading, isError, refetch } = useQuery<LearnerDetail>({
+    queryKey: ["learner-detail", target.courseId, learnerId],
+    queryFn: async () => {
+      const qs = new URLSearchParams();
+      if (target.employeeId) qs.set("employeeId", target.employeeId);
+      else if (target.publicLearnerId) qs.set("publicLearnerId", target.publicLearnerId);
+      const res = await fetch(
+        `/api/training/admin/courses/${target.courseId}/learner-detail?${qs}`,
+        { credentials: "include" },
+      );
+      if (!res.ok) {
+        const msg = await res.text().catch(() => res.statusText);
+        throw new Error(`${res.status}: ${msg}`);
+      }
+      return res.json() as Promise<LearnerDetail>;
+    },
+    retry: false,
+  });
 
-  const color = colorHexForLearner(target.employeeId || target.publicLearnerId || target.learnerName);
+  const color = colorHexForLearner(learnerId || target.learnerName);
   const initials = initialsFromName(target.learnerName);
 
   return (
@@ -553,9 +567,17 @@ function LearnerDetailModal({ target, onClose }: { target: LearnerModalTarget; o
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            <span className="ml-2 text-sm text-muted-foreground">Loading learner details…</span>
           </div>
-        ) : !data ? (
-          <div className="py-8 text-center text-muted-foreground text-sm">Failed to load learner data.</div>
+        ) : isError || !data ? (
+          <div className="py-10 text-center space-y-3">
+            <AlertCircle className="w-8 h-8 text-muted-foreground/50 mx-auto" />
+            <div className="text-sm font-medium text-muted-foreground">Could not load learner data</div>
+            <div className="text-xs text-muted-foreground">Check your connection or try again.</div>
+            <Button size="sm" variant="outline" onClick={() => refetch()} data-testid="btn-retry-learner-detail">
+              Retry
+            </Button>
+          </div>
         ) : (
           <>
             {/* ── Overview tab ── */}

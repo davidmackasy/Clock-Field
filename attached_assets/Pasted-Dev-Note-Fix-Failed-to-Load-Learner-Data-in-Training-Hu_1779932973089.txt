@@ -1,0 +1,397 @@
+Dev Note: Fix “Failed to Load Learner Data” in Training Hub Certificate / Quiz Modal
+
+Goal
+
+Fix the Training Hub learner detail modal so clicking a learner from Public Link Learners or Cohort Learners properly loads:
+
+Overview
+
+Quiz Results
+
+Certificate
+
+Activity
+
+Right now, the modal opens, but the content says:
+
+Failed to load learner data.
+
+This must be fixed without breaking or affecting anything else currently working in ClockField.
+
+Do not rebuild the Training Hub.
+Do not change the course assignment system.
+Do not change public link completion logic.
+Do not change course progress calculation unless the bug is directly connected to the learner detail fetch.
+
+Issue Seen
+
+From the screenshot:
+
+The admin clicks a learner under Public Link Learners.
+
+The modal opens correctly.
+
+The learner name and course title show.
+
+The tabs show:
+
+Overview
+
+Quiz Results
+
+Certificate
+
+But the body fails with:
+
+Failed to load learner data.
+
+The learner row still has useful data showing outside the modal:
+
+Name: me
+
+Email: david@gmail.com
+
+Status: Failed
+
+Progress: 100%
+
+Modules: 2/2
+
+Quiz: 0%
+
+Last activity: 23d ago
+
+This means the list data is loading, but the detail endpoint or modal fetch is failing.
+
+Likely Causes
+
+Check these first:
+
+The frontend is calling the wrong learner detail endpoint.
+Public link learners may not have the same ID structure as assigned employees.
+The modal may be sending employeeId when it should send publicLearnerId, enrollmentId, attemptId, or assignmentId.
+Failed learners may not have a certificate record, so the certificate tab might crash the whole modal.
+The backend may only support completed or passed learners, not failed learners.
+The API may be returning 404 because this learner came from a public link instead of a logged-in employee account.
+The query may require courseId + learnerId, but the frontend is only sending learnerId.
+
+Required Fix
+
+Make the Learner Detail Modal Support Both Learner Types
+
+The modal must support:
+
+Logged-in cleaner training records
+
+Assigned employee training records
+
+Public link learner records
+
+Use a normalized payload.
+
+Frontend should pass:
+
+courseId
+
+businessId
+
+learnerType: employee | public
+
+employeeId, only when learner is a real employee
+
+publicLearnerId, only when learner came from public link
+
+enrollmentId, if available
+
+latestAttemptId, if available
+
+Do not assume every learner has employeeId.
+
+Create One Safe Backend Resolver
+
+Add a backend helper like:
+
+resolveTrainingLearnerDetail(params)
+
+It should safely detect:
+
+Is this a logged-in employee?
+
+Is this a public link learner?
+
+Is this a training enrollment?
+
+Does this learner have quiz attempts?
+
+Does this learner have certificate eligibility?
+
+Return a clean response even if some records are missing.
+
+Do not throw a full failure just because the certificate does not exist.
+
+Modal Must Not Fail Fully If Certificate Is Missing
+
+If learner failed:
+
+Certificate tab should show:
+
+Certificate not available because this learner has not passed the course yet.
+
+Do not show “Failed to load learner data.”
+
+If learner has not started:
+
+Show:
+
+No quiz attempt has been submitted yet.
+
+If learner passed but certificate is missing:
+
+Show:
+
+Certificate is ready to generate.
+
+Button:
+
+Generate Certificate
+
+Backend Endpoint Requirement
+
+Add or fix endpoint:
+
+GET /api/training/courses/:courseId/learners/:learnerId/detail
+
+Support query params:
+
+learnerType=employee|public
+
+enrollmentId=
+
+attemptId=
+
+The response should always return a stable shape:
+
+{
+learner: {
+id,
+type,
+name,
+email,
+avatarInitials
+},
+course: {
+id,
+title,
+moduleCount
+},
+progress: {
+status,
+percent,
+modulesCompleted,
+totalModules,
+lastActivityAt
+},
+quiz: {
+status,
+score,
+passingScore,
+attempts
+},
+certificate: {
+eligible,
+status,
+certificateId,
+downloadUrl,
+reasonUnavailable
+}
+}
+
+Fix Failed Learner Detail
+
+For failed learners, modal should load normally.
+
+Overview tab should show:
+
+Status: Failed
+
+Progress: 100%
+
+Modules completed: 2/2
+
+Quiz score: 0%
+
+Passing score required
+
+Last activity
+
+Quiz Results tab should show:
+
+Attempt date
+
+Score
+
+Passed/Failed
+
+Wrong questions
+
+Correct answers
+
+Cleaner answers
+
+Explanation, if available
+
+Certificate tab should show:
+
+Certificate unavailable
+
+Reason:
+
+This learner completed the modules but did not pass the quiz.
+
+Fix Passed Learner Detail
+
+For passed learners, modal should show:
+
+Overview:
+
+Passed
+
+Score
+
+Completion date
+
+Modules completed
+
+Certificate tab:
+
+View Certificate
+
+Download Certificate
+
+Print
+
+Copy Certificate Link
+
+If certificate record does not exist yet:
+
+Generate Certificate
+
+Then download.
+
+Frontend Error Handling
+
+Replace the generic modal failure with section-level fallbacks.
+
+Bad current behavior:
+
+Whole modal says Failed to load learner data.
+
+Better behavior:
+
+If overview loads but quiz does not:
+
+Overview still displays.
+
+Quiz Results tab says:
+
+Quiz result data could not be loaded. Please try again.
+
+If certificate is not available:
+
+Certificate tab explains why.
+
+Only show full modal error if the main learner and course cannot be found.
+
+Add Debug Logging Temporarily
+
+Log this during development only:
+
+courseId
+
+learnerType
+
+learnerId
+
+employeeId
+
+publicLearnerId
+
+enrollmentId
+
+attemptId
+
+API response status
+
+Backend error message
+
+Remove noisy logs before production release.
+
+UI Fix Based on Screenshot
+
+The modal already looks good structurally.
+
+Keep the current modal layout.
+
+Fix the body content.
+
+Add loading state:
+
+Loading learner details...
+
+Then show content.
+
+Do not leave the modal blank.
+
+Do not make users click Certificate first and then fail.
+
+Testing Checklist
+
+Test these exact cases:
+
+Click passed public link learner
+
+Click failed public link learner
+
+Click in-progress public link learner
+
+Click passed logged-in cleaner
+
+Click failed logged-in cleaner
+
+Click learner with no quiz attempt
+
+Click learner with completed modules but failed quiz
+
+Click learner with passed quiz but no certificate generated yet
+
+Click learner with existing certificate
+
+Certificate download works
+
+Certificate tab does not crash for failed learners
+
+Quiz Results tab shows wrong answers
+
+Modal works on mobile
+
+Existing Public Link Learners list still works
+
+Existing Cohort card still works
+
+Existing Send Reminder still works
+
+Existing Copy Link still works
+
+Existing course progress still works
+
+Do not break or affect anything else.
+
+Expected Result
+
+When the admin clicks the learner row, the modal should load properly.
+
+For failed learners, the admin should see why they failed and which quiz questions were wrong.
+
+For passed learners, the admin should view and download the branded certificate.
+
+The modal should never fail just because the learner came from a public link or does not have a certificate yet.
