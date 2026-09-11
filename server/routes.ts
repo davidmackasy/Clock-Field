@@ -28,6 +28,15 @@ function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+const FIT_FOR_DUTY_QUESTIONS = [
+  "Are you fit and able to safely perform your assigned duties today?",
+  "Are you currently affected by alcohol, cannabis, recreational drugs, or any other substance that could impair your ability to work safely?",
+  "Is anything currently affecting your judgment, coordination, concentration, reaction time, or ability to work safely?",
+  "Are you excessively tired, fatigued, or otherwise not alert enough to safely perform your duties?",
+  "Is there any other reason you believe you may not be able to safely perform your assigned duties today?",
+];
+const FIT_FOR_DUTY_DECLARATION = "I confirm that the answers I provided are true and accurate and that I am fit to safely perform my assigned duties.";
+
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
@@ -1547,13 +1556,102 @@ Welcome again, and thank you for choosing ClockField.
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  app.post("/api/fit-for-duty", requireRole("employee"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { answers, confirmationAccepted, shiftId } = req.body || {};
+      if (!Array.isArray(answers) || answers.length !== 5 || answers.some((a: any) => typeof a !== "boolean")) {
+        return res.status(400).json({ message: "All five answers are required" });
+      }
+      if (confirmationAccepted !== true) return res.status(400).json({ message: "Confirmation is required" });
+      let shift = shiftId ? await storage.getShift(String(shiftId)) : null;
+      if (shift && (shift.companyId !== user.companyId || shift.employeeId !== user.id)) {
+        return res.status(403).json({ message: "Shift not available" });
+      }
+      const acceptedAt = new Date().toISOString();
+      const status = answers[0] === true && answers.slice(1).every((a: boolean) => a === false) ? "safe" : "flagged";
+      const original = { answers, confirmationAccepted: true, submittedAt: acceptedAt };
+      const row = await storage.createFitForDutyVerification({
+        companyId: user.companyId, employeeId: user.id, shiftId: shift?.id || null,
+        locationId: shift?.locationId || null, clockInId: null,
+        questionTextSnapshot: JSON.stringify(FIT_FOR_DUTY_QUESTIONS),
+        answerSnapshot: JSON.stringify(answers), declarationTextSnapshot: FIT_FOR_DUTY_DECLARATION,
+        declarationVersion: "1", confirmationAccepted: true, acceptedAt, status,
+        originalSubmission: JSON.stringify(original),
+      });
+      if (status === "flagged") {
+        await storage.createPlatformMessage({
+          companyId: user.companyId,
+          senderUserId: user.id,
+          senderRole: "employee",
+          subject: "Fit for Duty review required",
+          body: "An employee submitted a Fit for Duty check that requires supervisor review. Open Fit for Duty in the admin dashboard to review it.",
+          messageType: "fit_for_duty_alert",
+          isRead: false,
+          isBroadcast: false,
+          parentMessageId: null,
+          createdAt: acceptedAt,
+          deliveryMode: "in_app",
+          emailSubject: null,
+          emailCtaLabel: null,
+          emailCtaUrl: null,
+          emailSentAt: null,
+          emailStatus: null,
+        });
+      }
+      res.status(201).json({ id: row.id, status: row.status, message: status === "flagged" ? "Supervisor Review Required" : undefined });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/admin/fit-for-duty", requireRole("admin"), async (req, res) => {
+    try {
+      const admin = req.user as any;
+      const rows = await storage.getFitForDutyVerificationsByCompany(admin.companyId);
+      const result = await Promise.all(rows.map(async row => {
+        const employee = await storage.getUser(row.employeeId);
+        const location = row.locationId ? await storage.getLocation(row.locationId) : null;
+        return { ...row, employeeName: employee ? `${employee.firstName} ${employee.lastName}` : "Unknown", employeeNumber: employee?.employeeId || "", locationName: location?.name || "—", reviews: await storage.getFitForDutyReviews(row.id, admin.companyId) };
+      }));
+      res.json(result);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/admin/fit-for-duty/:id/review", requireRole("admin"), async (req, res) => {
+    try {
+      const admin = req.user as any;
+      const row = await storage.getFitForDutyVerification(req.params.id);
+      if (!row || row.companyId !== admin.companyId) return res.status(404).json({ message: "Not found" });
+      const decision = req.body?.decision;
+      if (!["cleared", "blocked"].includes(decision)) return res.status(400).json({ message: "Invalid decision" });
+      const review = await storage.createFitForDutyReview({ verificationId: row.id, companyId: admin.companyId, decision, reviewerId: admin.id, note: typeof req.body?.note === "string" ? req.body.note.trim() || null : null, createdAt: new Date().toISOString() });
+      await storage.updateFitForDutyVerification(row.id, { status: decision });
+      res.json(review);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   app.post("/api/time-entries/clock-in", requireRole("employee"), async (req, res) => {
     try {
       const user = req.user as any;
       const existing = await storage.getActiveTimeEntry(user.id);
       if (existing) return res.status(400).json({ message: "Already clocked in" });
-      const { shiftId } = req.body;
+      const { shiftId, verificationId } = req.body;
+      const verification = verificationId ? await storage.getFitForDutyVerification(verificationId) : null;
+      if (
+        !verification ||
+        verification.companyId !== user.companyId ||
+        verification.employeeId !== user.id ||
+        verification.status !== "safe" ||
+        verification.clockInId
+      ) {
+        return res.status(400).json({ message: "A completed Fit for Duty verification is required" });
+      }
+      if ((verification.shiftId || null) !== (shiftId || null)) {
+        return res.status(400).json({ message: "Fit for Duty verification does not match this shift" });
+      }
       let shift = shiftId ? await storage.getShift(shiftId) : null;
+      if (shift && (shift.companyId !== user.companyId || shift.employeeId !== user.id)) {
+        return res.status(403).json({ message: "Shift not available" });
+      }
       const now = new Date().toISOString();
       let flags: string[] = [];
       if (shift) {
@@ -1564,7 +1662,6 @@ Welcome again, and thank you for choosing ClockField.
           scheduledStartLocal: shift.scheduledStartAt,
           timezone: tz,
         });
-        await storage.updateShift(shiftId!, { status: "in_progress" });
       } else {
         flags.push("unscheduled_clock_in");
       }
@@ -1578,6 +1675,8 @@ Welcome again, and thank you for choosing ClockField.
         status: "active",
         flags: flags.length ? flags : null,
       });
+      if (shift) await storage.updateShift(shiftId!, { status: "in_progress" });
+      await storage.updateFitForDutyVerification(verification.id, { clockInId: entry.id });
       // Send late clock-in email alert if enabled
       if (flags.includes("late_clock_in") && shift) {
         try {

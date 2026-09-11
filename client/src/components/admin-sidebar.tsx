@@ -26,7 +26,7 @@ import {
   DollarSign, Building2,
   Settings, LogOut, Clock, Users2, BookOpen,
   CreditCard, Bell, ShieldAlert, ChevronRight, Newspaper,
-  FileInput, GraduationCap, MessageSquare, TrendingUp,
+  FileInput, GraduationCap, MessageSquare, TrendingUp, ShieldCheck,
 } from "lucide-react";
 
 const preTeamItems = [
@@ -36,6 +36,7 @@ const preTeamItems = [
 const postTeamItems = [
   { title: "Schedule", url: "/admin/schedule", icon: Calendar },
   { title: "Attendance", url: "/admin/attendance", icon: ClipboardList },
+  { title: "Fit for Duty", url: "/admin/fit-for-duty", icon: ShieldCheck },
   { title: "Payroll", url: "/admin/payroll", icon: DollarSign },
   { title: "Clients", url: "/admin/clients", icon: Building2 },
   { title: "Messages", url: "/admin/messages", icon: MessageSquare },

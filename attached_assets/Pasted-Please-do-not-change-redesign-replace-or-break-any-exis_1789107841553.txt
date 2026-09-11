@@ -1,0 +1,226 @@
+Please do **not change, redesign, replace, or break any existing employee account, login, authentication, clock-in, clock-out, shift, location, or admin flow.**
+
+Everything that currently works must stay exactly as it is.
+
+We only want to add **one additional verification step** to the existing employee clock-in process.
+
+Current flow:
+
+Employee enters Employee ID + Password → Employee clocks in
+
+New flow:
+
+Employee enters Employee ID + Password → Existing authentication succeeds → Fit for Duty verification appears → Employee completes verification → Existing clock-in continues normally
+
+This must be implemented as an **additional layer on top of the current working system**, not as a replacement.
+
+### Employee Experience
+
+After the employee successfully authenticates for clock-in, show a clean, professional full-screen modal or second-step screen.
+
+Do not make the screen aggressive, accusatory, or say things like:
+
+“Are you drunk?”
+
+or
+
+“Did you take drugs?”
+
+The introduction should feel professional and workplace-safety focused.
+
+Use wording similar to:
+
+**Fit for Duty Check**
+
+“To help maintain a safe workplace for employees, clients, and the public, we require a quick fitness-for-duty check before starting your shift.
+
+Please answer the following questions honestly. Your responses help confirm that you are able to perform your duties safely today.”
+
+Then show the questions.
+
+### Questions
+
+1. **Are you fit and able to safely perform your assigned duties today?**
+
+   * Yes
+   * No
+
+2. **Are you currently affected by alcohol, cannabis, recreational drugs, or any other substance that could impair your ability to work safely?**
+
+   * Yes
+   * No
+
+3. **Is anything currently affecting your judgment, coordination, concentration, reaction time, or ability to work safely?**
+
+   * Yes
+   * No
+
+4. **Are you excessively tired, fatigued, or otherwise not alert enough to safely perform your duties?**
+
+   * Yes
+   * No
+
+5. **Is there any other reason you believe you may not be able to safely perform your assigned duties today?**
+
+   * Yes
+   * No
+
+Keep this simple. Do not ask for medical diagnoses, medication names, drug names, or unnecessary personal details.
+
+### Final Confirmation
+
+At the bottom, require a checkbox:
+
+**I confirm that the answers I provided are true and accurate and that I am fit to safely perform my assigned duties.**
+
+Then:
+
+**Confirm & Continue**
+
+### Normal Flow
+
+If the employee gives safe answers:
+
+Fit for Duty completed → save verification record → continue the existing clock-in process exactly as it already works.
+
+Do not create a separate clock-in system.
+
+Do not duplicate shifts.
+
+Do not change existing clock-in logic.
+
+The Fit for Duty verification should simply attach to the existing employee and clock-in record.
+
+### Flagged Flow
+
+If the employee indicates they are not fit for work or that alcohol/drugs/substances are currently affecting them:
+
+Save the answers.
+
+Do not complete the clock-in.
+
+Show a professional message such as:
+
+**Supervisor Review Required**
+
+“Based on your responses, your clock-in cannot be completed automatically. Please contact your supervisor before beginning work.”
+
+Notify the appropriate admin/supervisor.
+
+### Admin
+
+Add only the minimum required admin functionality.
+
+The existing admin system should remain unchanged.
+
+Add a small **Fit for Duty** section where authorized admins can see:
+
+* Employee name
+* Employee ID
+* Location
+* Date/time
+* Answers
+* Confirmation accepted
+* Cleared or Flagged status
+* Related existing clock-in/shift
+* Supervisor review if applicable
+
+The admin should be able to open a record and see exactly what the employee answered.
+
+### Important Data Rule
+
+Every verification must be associated with the employee who authenticated using the existing Employee ID/password system.
+
+Store:
+
+* employee_id
+* existing shift_id if available
+* existing location_id
+* existing clock_in_id
+* submission time
+* questions
+* answers
+* confirmation accepted
+* status
+
+Do not create another employee profile or authentication system.
+
+### Very Important Development Constraint
+
+**DO NOT TOUCH WORKING FUNCTIONALITY UNLESS ABSOLUTELY REQUIRED TO INSERT THIS STEP.**
+
+Do not:
+
+* redesign employee accounts
+* change Employee ID/password authentication
+* change how shifts work
+* change locations
+* replace clock-in
+* replace clock-out
+* modify scheduling
+* modify existing permissions unnecessarily
+* modify unrelated database tables
+* change the existing employee UI
+* refactor working systems just because a different architecture might look cleaner
+
+Treat the existing application as production functionality.
+
+The task is simply:
+
+**Existing authentication → new Fit for Duty step → existing clock-in**
+
+Make the smallest safe implementation necessary.
+
+Before changing existing code, inspect the current employee authentication and clock-in flow and integrate into it rather than rebuilding it.
+
+### Expected Flow
+
+Employee opens existing Clockfield employee account
+
+↓
+
+Enters existing Employee ID + Password
+
+↓
+
+Authentication succeeds
+
+↓
+
+**NEW: Fit for Duty Check**
+
+↓
+
+Employee answers questions
+
+↓
+
+Employee confirms answers
+
+↓
+
+Safe answers
+
+↓
+
+Existing clock-in continues normally
+
+OR
+
+Flagged answer
+
+↓
+
+Clock-in stopped
+
+↓
+
+Admin notified
+
+↓
+
+Supervisor review
+
+That is the entire feature.
+
+Please preserve everything currently working and implement this as a modular second-step verification only.

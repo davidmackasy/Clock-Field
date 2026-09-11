@@ -21,6 +21,7 @@ import AdminDashboard from "@/pages/admin/dashboard";
 import AdminEmployees from "@/pages/admin/employees";
 import AdminSchedule from "@/pages/admin/schedule";
 import AdminAttendance from "@/pages/admin/attendance";
+import AdminFitForDuty from "@/pages/admin/fit-for-duty";
 import AdminPayroll from "@/pages/admin/payroll";
 import AdminClients from "@/pages/admin/clients";
 import AdminRequests from "@/pages/admin/requests";
@@ -118,6 +119,7 @@ function AdminLayout() {
               <Route path="/admin/employees" component={AdminEmployees} />
               <Route path="/admin/schedule" component={AdminSchedule} />
               <Route path="/admin/attendance" component={AdminAttendance} />
+              <Route path="/admin/fit-for-duty" component={AdminFitForDuty} />
               <Route path="/admin/payroll">
                 <FeatureGate feature="payroll"><AdminPayroll /></FeatureGate>
               </Route>

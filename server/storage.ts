@@ -12,6 +12,7 @@ import {
   reports, reportSignatures, reportActivityLog, reportAccessTokens,
   fieldNotesSessions, fieldNotesAssets, fieldNotesTranscriptChunks, fieldNotesEntries, fieldNotesEntryTags, fieldNotesTodos,
   attendanceAdjustments,
+  fitForDutyVerifications, fitForDutyReviews,
   type Report, type InsertReport,
   type ReportSignature, type InsertReportSignature,
   type ReportActivityLog,
@@ -46,6 +47,8 @@ import {
   type FieldNotesEntryTag,
   type FieldNotesTodo, type InsertFieldNotesTodo,
   type AttendanceAdjustment, type InsertAttendanceAdjustment,
+  type FitForDutyVerification, type InsertFitForDutyVerification,
+  type FitForDutyReview, type InsertFitForDutyReview,
   type PriorityCleanAlert, type InsertPriorityCleanAlert,
   type PriorityCleanPhoto, type InsertPriorityCleanPhoto,
   publications, publicationSections, publicationMedia, publicationPricing, publicationVotes,
@@ -171,6 +174,12 @@ export interface IStorage {
   deleteShift(id: string): Promise<void>;
 
   createTimeEntry(data: InsertTimeEntry): Promise<TimeEntry>;
+  createFitForDutyVerification(data: InsertFitForDutyVerification): Promise<FitForDutyVerification>;
+  getFitForDutyVerification(id: string): Promise<FitForDutyVerification | undefined>;
+  getFitForDutyVerificationsByCompany(companyId: string): Promise<FitForDutyVerification[]>;
+  updateFitForDutyVerification(id: string, data: Partial<InsertFitForDutyVerification>): Promise<FitForDutyVerification | undefined>;
+  createFitForDutyReview(data: InsertFitForDutyReview): Promise<FitForDutyReview>;
+  getFitForDutyReviews(verificationId: string, companyId: string): Promise<FitForDutyReview[]>;
   getTimeEntry(id: string): Promise<TimeEntry | undefined>;
   getActiveTimeEntry(employeeId: string): Promise<TimeEntry | undefined>;
   getTimeEntriesByCompany(companyId: string): Promise<TimeEntry[]>;
@@ -767,6 +776,29 @@ export class DatabaseStorage implements IStorage {
   async createTimeEntry(data: InsertTimeEntry): Promise<TimeEntry> {
     const [entry] = await db.insert(timeEntries).values(data).returning();
     return entry;
+  }
+
+  async createFitForDutyVerification(data: InsertFitForDutyVerification): Promise<FitForDutyVerification> {
+    const [row] = await db.insert(fitForDutyVerifications).values(data).returning();
+    return row;
+  }
+  async getFitForDutyVerification(id: string): Promise<FitForDutyVerification | undefined> {
+    const [row] = await db.select().from(fitForDutyVerifications).where(eq(fitForDutyVerifications.id, id));
+    return row;
+  }
+  async getFitForDutyVerificationsByCompany(companyId: string): Promise<FitForDutyVerification[]> {
+    return db.select().from(fitForDutyVerifications).where(eq(fitForDutyVerifications.companyId, companyId)).orderBy(desc(fitForDutyVerifications.acceptedAt));
+  }
+  async updateFitForDutyVerification(id: string, data: Partial<InsertFitForDutyVerification>): Promise<FitForDutyVerification | undefined> {
+    const [row] = await db.update(fitForDutyVerifications).set(data).where(eq(fitForDutyVerifications.id, id)).returning();
+    return row;
+  }
+  async createFitForDutyReview(data: InsertFitForDutyReview): Promise<FitForDutyReview> {
+    const [row] = await db.insert(fitForDutyReviews).values(data).returning();
+    return row;
+  }
+  async getFitForDutyReviews(verificationId: string, companyId: string): Promise<FitForDutyReview[]> {
+    return db.select().from(fitForDutyReviews).where(and(eq(fitForDutyReviews.verificationId, verificationId), eq(fitForDutyReviews.companyId, companyId))).orderBy(desc(fitForDutyReviews.createdAt));
   }
 
   async getTimeEntry(id: string): Promise<TimeEntry | undefined> {

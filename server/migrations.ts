@@ -73,6 +73,25 @@ export async function runStartupMigrations() {
       ADD COLUMN IF NOT EXISTS email_notification_sent_at text;
     `);
     await client.query(`
+      CREATE TABLE IF NOT EXISTS fit_for_duty_verifications (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(), company_id varchar NOT NULL,
+        employee_id varchar NOT NULL, shift_id varchar, location_id varchar, clock_in_id varchar,
+        question_text_snapshot text NOT NULL, answer_snapshot text NOT NULL,
+        declaration_text_snapshot text NOT NULL, declaration_version text NOT NULL DEFAULT '1',
+        confirmation_accepted boolean NOT NULL DEFAULT false, accepted_at text NOT NULL,
+        status text NOT NULL DEFAULT 'flagged', original_submission text NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS fit_for_duty_reviews (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(), verification_id varchar NOT NULL,
+        company_id varchar NOT NULL, decision text NOT NULL, reviewer_id varchar NOT NULL,
+        note text, created_at text NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_fit_for_duty_company ON fit_for_duty_verifications(company_id);
+      CREATE INDEX IF NOT EXISTS idx_fit_for_duty_company_status ON fit_for_duty_verifications(company_id, status);
+      CREATE INDEX IF NOT EXISTS idx_fit_for_duty_employee_submitted ON fit_for_duty_verifications(employee_id, accepted_at);
+      CREATE INDEX IF NOT EXISTS idx_fit_for_duty_reviews_verification ON fit_for_duty_reviews(verification_id);
+    `);
+    await client.query(`
       ALTER TABLE training_assignments
       ADD COLUMN IF NOT EXISTS last_reminder_email_sent_at text;
     `);

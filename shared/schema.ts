@@ -196,6 +196,34 @@ export const timeEntries = pgTable("time_entries", {
   manualClockOutReason: text("manual_clock_out_reason"),
 });
 
+// Immutable employee fit-for-duty submissions; review fields live separately.
+export const fitForDutyVerifications = pgTable("fit_for_duty_verifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  employeeId: varchar("employee_id").notNull(),
+  shiftId: varchar("shift_id"),
+  locationId: varchar("location_id"),
+  clockInId: varchar("clock_in_id"),
+  questionTextSnapshot: text("question_text_snapshot").notNull(),
+  answerSnapshot: text("answer_snapshot").notNull(),
+  declarationTextSnapshot: text("declaration_text_snapshot").notNull(),
+  declarationVersion: text("declaration_version").notNull().default("1"),
+  confirmationAccepted: boolean("confirmation_accepted").notNull().default(false),
+  acceptedAt: text("accepted_at").notNull(),
+  status: text("status").notNull().default("flagged"),
+  originalSubmission: text("original_submission").notNull(),
+});
+
+export const fitForDutyReviews = pgTable("fit_for_duty_reviews", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  verificationId: varchar("verification_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  decision: text("decision").notNull(),
+  reviewerId: varchar("reviewer_id").notNull(),
+  note: text("note"),
+  createdAt: text("created_at").notNull(),
+});
+
 export const payrollDeductions = pgTable("payroll_deductions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   companyId: varchar("company_id").notNull(),
@@ -417,6 +445,8 @@ export const insertLocationSchema = createInsertSchema(locations).omit({ id: tru
 export const insertRecurringScheduleSchema = createInsertSchema(recurringSchedules).omit({ id: true });
 export const insertShiftSchema = createInsertSchema(shifts).omit({ id: true });
 export const insertTimeEntrySchema = createInsertSchema(timeEntries).omit({ id: true });
+export const insertFitForDutyVerificationSchema = createInsertSchema(fitForDutyVerifications).omit({ id: true });
+export const insertFitForDutyReviewSchema = createInsertSchema(fitForDutyReviews).omit({ id: true });
 export const insertClientRequestSchema = createInsertSchema(clientRequests).omit({ id: true });
 
 export type Company = typeof companies.$inferSelect;
@@ -433,6 +463,10 @@ export type Shift = typeof shifts.$inferSelect;
 export type InsertShift = z.infer<typeof insertShiftSchema>;
 export type TimeEntry = typeof timeEntries.$inferSelect;
 export type InsertTimeEntry = z.infer<typeof insertTimeEntrySchema>;
+export type FitForDutyVerification = typeof fitForDutyVerifications.$inferSelect;
+export type InsertFitForDutyVerification = z.infer<typeof insertFitForDutyVerificationSchema>;
+export type FitForDutyReview = typeof fitForDutyReviews.$inferSelect;
+export type InsertFitForDutyReview = z.infer<typeof insertFitForDutyReviewSchema>;
 export type ClientRequest = typeof clientRequests.$inferSelect;
 export type InsertClientRequest = z.infer<typeof insertClientRequestSchema>;
 export type PayrollDeduction = typeof payrollDeductions.$inferSelect;

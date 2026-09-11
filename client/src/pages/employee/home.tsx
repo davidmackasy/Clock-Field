@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation as useWouterLocation } from "wouter";
 import { Clock, Play, Square, Calendar, ShieldAlert, ChevronRight, Zap, X as XIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon, GraduationCap, Briefcase } from "lucide-react";
@@ -24,6 +25,11 @@ export default function EmployeeHome() {
   const [paDismissed, setPaDismissed] = useState(false);
   const [paClockInDialogOpen, setPaClockInDialogOpen] = useState(false);
   const [paLightbox, setPaLightbox] = useState<{ photoIds: string[]; idx: number } | null>(null);
+  const [fitOpen, setFitOpen] = useState(false);
+  const [fitShiftId, setFitShiftId] = useState<string | undefined>();
+  const [fitAnswers, setFitAnswers] = useState<(boolean | undefined)[]>([undefined, undefined, undefined, undefined, undefined]);
+  const [fitConfirmed, setFitConfirmed] = useState(false);
+  const [fitMessage, setFitMessage] = useState("");
 
   const { data: tzData } = useQuery<{ timezone: string }>({
     queryKey: ["/api/settings/timezone"],
@@ -77,11 +83,12 @@ export default function EmployeeHome() {
   });
 
   const clockInMut = useMutation({
-    mutationFn: async (shiftId?: string) => {
-      const res = await apiRequest("POST", "/api/time-entries/clock-in", { shiftId });
+    mutationFn: async ({ shiftId, verificationId }: { shiftId?: string; verificationId: string }) => {
+      const res = await apiRequest("POST", "/api/time-entries/clock-in", { shiftId, verificationId });
       return res.json();
     },
     onSuccess: () => {
+      setFitOpen(false);
       queryClient.invalidateQueries({ queryKey: ["/api/time-entries/active"] });
       queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
       queryClient.invalidateQueries({ queryKey: ["/api/shifts"] });
@@ -89,6 +96,25 @@ export default function EmployeeHome() {
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
+
+  const fitSubmitMut = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/fit-for-duty", { answers: fitAnswers, confirmationAccepted: fitConfirmed, shiftId: fitShiftId });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.status === "flagged") {
+        setFitMessage("Supervisor Review Required — Based on your responses, your clock-in cannot be completed automatically. Please contact your supervisor before beginning work.");
+        return;
+      }
+      clockInMut.mutate({ shiftId: fitShiftId, verificationId: data.id });
+    },
+    onError: (err: any) => toast({ title: "Unable to save verification", description: err.message, variant: "destructive" }),
+  });
+
+  const openFit = (shiftId?: string) => {
+    setFitShiftId(shiftId); setFitAnswers([undefined, undefined, undefined, undefined, undefined]); setFitConfirmed(false); setFitMessage(""); setFitOpen(true);
+  };
 
   const clockOutMut = useMutation({
     mutationFn: async () => {
@@ -139,6 +165,36 @@ export default function EmployeeHome() {
 
   return (
     <div className="p-4 pb-24 space-y-5">
+      <Dialog open={fitOpen} onOpenChange={setFitOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Fit for Duty Check</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">To help maintain a safe workplace for employees, clients, and the public, we require a quick fitness-for-duty check before starting your shift. Please answer the following questions honestly.</p>
+          <div className="space-y-5 mt-2">
+            {[
+              "Are you fit and able to safely perform your assigned duties today?",
+              "Are you currently affected by alcohol, cannabis, recreational drugs, or any other substance that could impair your ability to work safely?",
+              "Is anything currently affecting your judgment, coordination, concentration, reaction time, or ability to work safely?",
+              "Are you excessively tired, fatigued, or otherwise not alert enough to safely perform your duties?",
+              "Is there any other reason you believe you may not be able to safely perform your assigned duties today?",
+            ].map((question, i) => (
+              <div key={question} className="space-y-2">
+                <p className="text-sm font-medium">{i + 1}. {question}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[true, false].map(value => (
+                    <Button key={String(value)} type="button" variant={fitAnswers[i] === value ? "default" : "outline"} className="h-12 text-base" onClick={() => setFitAnswers(a => a.map((x, j) => j === i ? value : x))}>{value ? "Yes" : "No"}</Button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <label className="flex items-start gap-3 text-sm mt-3 cursor-pointer">
+            <Checkbox checked={fitConfirmed} onCheckedChange={v => setFitConfirmed(v === true)} className="mt-0.5" />
+            <span>I confirm that the answers I provided are true and accurate and that I am fit to safely perform my assigned duties.</span>
+          </label>
+          {fitMessage && <p className="rounded-md bg-amber-50 text-amber-800 p-3 text-sm font-medium">{fitMessage}</p>}
+          {!fitMessage && <Button className="w-full h-12 text-base" disabled={fitAnswers.some(a => a === undefined) || !fitConfirmed || fitSubmitMut.isPending} onClick={() => fitSubmitMut.mutate()}>Confirm &amp; Continue</Button>}
+        </DialogContent>
+      </Dialog>
       {/* Clock-out blocker modal */}
       <Dialog open={blockClockOutOpen} onOpenChange={setBlockClockOutOpen}>
         <DialogContent className="max-w-sm">
@@ -419,7 +475,7 @@ export default function EmployeeHome() {
                       key={shift.id}
                       size="lg"
                       className="w-full h-14 text-base font-semibold"
-                      onClick={() => clockInMut.mutate(shift.id)}
+                       onClick={() => openFit(shift.id)}
                       disabled={clockInMut.isPending}
                       data-testid={`button-clock-in-${shift.id}`}
                     >
@@ -432,7 +488,7 @@ export default function EmployeeHome() {
                 <Button
                   size="lg"
                   className="w-full h-14 text-base font-semibold"
-                  onClick={() => clockInMut.mutate()}
+                   onClick={() => openFit()}
                   disabled={clockInMut.isPending}
                   data-testid="button-clock-in"
                 >
