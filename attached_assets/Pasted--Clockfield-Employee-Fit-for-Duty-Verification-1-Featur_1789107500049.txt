@@ -1,0 +1,908 @@
+# Clockfield — Employee Fit for Duty Verification
+
+## 1. Feature Name
+
+**Fit for Duty Check**
+
+This feature adds a mandatory pre-shift safety verification to the employee clock-in process.
+
+Its purpose is to help employers confirm that employees are reporting to client locations fit, alert, unimpaired, and capable of safely performing their assigned work.
+
+The verification must be completed before an employee can successfully clock in for their first shift.
+
+---
+
+# 2. Main User Flow
+
+Current flow:
+
+**Employee opens Clockfield → selects location/job → taps Clock In → employee is clocked in**
+
+New flow:
+
+**Employee opens Clockfield → selects location/job → taps Clock In → Fit for Duty Check appears → employee answers questions → employee accepts declaration → system evaluates answers → Clock In completes or is blocked/reviewed**
+
+The Fit for Duty Check should normally appear only once for the employee's first clock-in for that shift.
+
+If the employee clocks out temporarily and clocks back into the same active shift, the form should not automatically be required again unless:
+
+* an administrator requests another verification;
+* a configurable number of hours has passed;
+* the employee starts a different scheduled shift;
+* the employee starts work at another location where a new verification is required.
+
+---
+
+# 3. Employee Pop-Up
+
+When the employee taps **Clock In**, do not immediately complete the clock-in.
+
+Display a full-screen modal/page.
+
+### Header
+
+**Fit for Duty Check**
+
+Supporting text:
+
+> Before starting your shift, please confirm that you are fit and able to perform your duties safely today.
+
+The employee must answer every required question before continuing.
+
+---
+
+# 4. Recommended Questions
+
+Keep the questions short and focused on the employee's ability to work safely.
+
+### Question 1
+
+**Are you fit and able to safely perform your assigned duties today?**
+
+Options:
+
+**Yes**
+
+**No**
+
+Expected safe answer: **Yes**
+
+---
+
+### Question 2
+
+**Are you currently under the influence of alcohol, cannabis, recreational drugs, or any other substance that could affect your ability to work safely?**
+
+Options:
+
+**Yes**
+
+**No**
+
+Expected safe answer: **No**
+
+Do not ask the employee what specific substance they used unless an authorized supervisor later needs additional information as part of an incident investigation.
+
+---
+
+### Question 3
+
+**Have you consumed anything before this shift that is currently affecting your judgment, coordination, concentration, reaction time, or ability to work safely?**
+
+Options:
+
+**Yes**
+
+**No**
+
+Expected safe answer: **No**
+
+---
+
+### Question 4
+
+**Are you taking any medication or treatment that is currently affecting your ability to safely perform your assigned duties?**
+
+Options:
+
+**Yes**
+
+**No**
+
+Expected safe answer: **No**
+
+Do not ask for the medication name or medical diagnosis through this routine form.
+
+---
+
+### Question 5
+
+**Are you excessively tired, fatigued, or lacking enough alertness to safely perform your work?**
+
+Options:
+
+**Yes**
+
+**No**
+
+Expected safe answer: **No**
+
+---
+
+### Question 6
+
+**Is there any illness, injury, physical limitation, or other condition today that prevents you from safely completing your assigned duties?**
+
+Options:
+
+**Yes**
+
+**No**
+
+Expected safe answer: **No**
+
+The system should not request a diagnosis.
+
+If the employee answers Yes, provide an option to contact the employer/supervisor to discuss whether modified duties or another arrangement is required.
+
+---
+
+### Question 7
+
+**Do you believe you can work safely around customers, coworkers, equipment, chemicals, vehicles, and client property during this shift?**
+
+Options:
+
+**Yes**
+
+**No**
+
+Expected safe answer: **Yes**
+
+---
+
+### Question 8
+
+**Is there anything affecting you today that you believe your supervisor should know about before you begin work?**
+
+Options:
+
+**No**
+
+**Yes — I need to speak with my supervisor**
+
+Avoid requesting sensitive details in a free-text box.
+
+If Yes is selected, flag the employee for supervisor review.
+
+---
+
+# 5. Employee Declaration
+
+After answering the questions, show a mandatory acknowledgement.
+
+Checkbox:
+
+☐ **I confirm that the answers I provided are true and accurate to the best of my knowledge. I confirm that I am fit to perform my assigned duties safely and understand that I must immediately report any change that could affect my ability to work safely.**
+
+Underneath display:
+
+### Workplace Fitness & Impairment Acknowledgement
+
+> I understand that I must report to work and remain fit for duty throughout my shift. I must not perform work while impaired or otherwise unable to perform my duties safely.
+>
+> I understand that providing knowingly false information, reporting to work impaired, or continuing to work after becoming unfit for duty may result in removal from the worksite and disciplinary action, up to and including termination of employment, subject to company policy, applicable law, investigation, and any applicable accommodation requirements.
+>
+> I also understand that if a client, property owner, site manager, supervisor, or other authorized person raises a reasonable concern regarding my fitness for duty, my employer may investigate the matter and may require me to stop working while the situation is assessed.
+>
+> If I require workplace accommodation or support relating to a medical condition, disability, treatment, or substance dependency, I understand that I may contact my employer privately.
+
+Employee cannot continue without checking:
+
+**I have read and agree**
+
+Button:
+
+### Confirm & Clock In
+
+---
+
+# 6. Safe Clock-In Result
+
+If all answers indicate the employee is fit for work:
+
+1. Save the Fit for Duty record.
+2. Save the acknowledgement.
+3. Record the policy/declaration version.
+4. Complete the employee's clock-in.
+5. Show:
+
+**You're Clocked In**
+
+Secondary text:
+
+**Fit for Duty Check completed successfully.**
+
+---
+
+# 7. Failed / Concerning Answer
+
+Any unsafe answer should trigger a different workflow.
+
+Examples:
+
+* Not fit for work = HIGH RISK
+* Currently impaired = HIGH RISK
+* Substance currently affecting ability = HIGH RISK
+* Medication currently impairing ability = REVIEW
+* Excessive fatigue = REVIEW
+* Condition preventing safe work = REVIEW
+* Wants supervisor contact = REVIEW
+
+For HIGH RISK answers:
+
+### Do Not Complete Clock-In
+
+Show:
+
+**Clock-In Requires Supervisor Review**
+
+> Based on your responses, we cannot automatically complete your clock-in. Please contact your supervisor before beginning work.
+
+Buttons:
+
+**Contact Supervisor**
+
+**Close**
+
+The employee must not be automatically marked as working.
+
+Immediately notify administrators/supervisors.
+
+---
+
+# 8. Admin Dashboard
+
+Add a new section:
+
+## Workforce → Fit for Duty
+
+or inside the employee management area:
+
+## Employees → Fit for Duty Records
+
+Admin should see a table:
+
+| Employee | Location | Shift   | Status    | Completed | Declaration |
+| -------- | -------- | ------- | --------- | --------- | ----------- |
+| John Doe | Store A  | Evening | ✅ Cleared | 8:02 PM   | Accepted    |
+| Jane Doe | Store B  | Evening | ⚠ Review  | 7:57 PM   | Accepted    |
+
+Status options:
+
+**Cleared**
+
+**Review Required**
+
+**Clock-In Blocked**
+
+**Supervisor Cleared**
+
+**Incident Reported**
+
+---
+
+# 9. Individual Verification Record
+
+Clicking a record should display:
+
+### Employee
+
+Employee name
+
+Employee ID
+
+### Work Information
+
+Location
+
+Client/site
+
+Scheduled shift
+
+Clock-in time
+
+### Verification
+
+Date
+
+Time submitted
+
+All questions shown exactly as presented to the employee
+
+Employee's answer beside every question
+
+Example:
+
+**Are you fit and able to safely perform your assigned duties today?**
+
+Employee response:
+
+**YES**
+
+---
+
+**Are you currently under the influence of alcohol, cannabis, recreational drugs or another substance that could affect your ability to work safely?**
+
+Employee response:
+
+**NO**
+
+Continue for every question.
+
+---
+
+# 10. Declaration Evidence
+
+The administrator must also be able to see:
+
+**Employee Declaration: ACCEPTED**
+
+Completed:
+
+September 10, 2026 — 8:02 PM
+
+Declaration version:
+
+Fitness Policy v1.0
+
+Employee:
+
+John Doe
+
+Shift:
+
+Evening Cleaning
+
+Location:
+
+Client Store A
+
+The database should store the exact declaration text/version accepted at that time.
+
+This is important because changing the declaration later must not alter historical records.
+
+---
+
+# 11. Admin Notification
+
+When an employee successfully completes the verification:
+
+### Normal Notification
+
+**John Doe completed Fit for Duty Check**
+
+Store A • 8:02 PM
+
+**Status: Cleared**
+
+Tap to view details.
+
+Do not overwhelm admins with push notifications for every normal employee if there are many employees.
+
+Normal successful checks can appear inside the notification/activity centre.
+
+---
+
+# 12. High-Risk Notification
+
+Risk notifications should be immediate.
+
+Example:
+
+### ⚠ Fit for Duty Alert
+
+**John Doe requires supervisor review**
+
+Location: Store A
+
+Shift: Evening Cleaning
+
+Reason:
+
+**Employee indicated they may not currently be fit to safely perform their duties.**
+
+**Clock-in has been blocked.**
+
+Buttons:
+
+**Review**
+
+**Call Employee**
+
+---
+
+# 13. Admin Review
+
+When an administrator reviews a flagged employee:
+
+### Fit for Duty Review
+
+Employee: John Doe
+
+Location: Store A
+
+Status: **Clock-In Blocked**
+
+Answers requiring review should be highlighted.
+
+Admin actions:
+
+**Clear Employee for Work**
+
+**Send Home / Do Not Allow Clock-In**
+
+**Request Employee Contact**
+
+**Create Incident Report**
+
+**Add Private Admin Note**
+
+Every action must be logged.
+
+---
+
+# 14. Important Safety Rule
+
+Never let an administrator silently change an employee's original answers.
+
+Employee answers are immutable.
+
+If an administrator clears an employee, store it separately:
+
+**Original employee response**
+
+*
+
+**Supervisor decision**
+
+*
+
+**Supervisor name**
+
+*
+
+**Date/time**
+
+*
+
+**Optional supervisor note**
+
+This preserves the audit trail.
+
+---
+
+# 15. Employee History
+
+Inside:
+
+**Employee Account → Fit for Duty**
+
+Employees should be able to see their previous submissions.
+
+Example:
+
+### Fit for Duty History
+
+September 10
+
+8:02 PM
+
+Store A
+
+✅ Cleared
+
+September 9
+
+8:05 PM
+
+Store A
+
+✅ Cleared
+
+September 8
+
+7:59 PM
+
+Store A
+
+✅ Cleared
+
+Employee can tap a record to see:
+
+**Completed**
+
+**Accepted**
+
+**Status**
+
+The company may choose not to expose internal supervisor/investigation notes.
+
+---
+
+# 16. Admin Employee Profile
+
+Inside every employee's admin profile add:
+
+### Fit for Duty
+
+Summary:
+
+**Last Check:** Today 8:02 PM
+
+**Current Status:** Cleared
+
+**Checks this month:** 18
+
+**Flags this month:** 0
+
+**View History →**
+
+---
+
+# 17. Incident Connection
+
+Add another useful feature:
+
+### Report Fitness Concern
+
+If a manager receives a complaint from a client such as:
+
+> Employee appears intoxicated.
+
+Admin can select the employee and create an incident.
+
+The system should automatically attach that day's Fit for Duty declaration to the incident.
+
+Example:
+
+### Incident
+
+**Reported by:** Client Manager
+
+**Issue:** Suspected impairment
+
+**Time:** 9:17 PM
+
+### Employee Pre-Shift Declaration
+
+Completed: 8:02 PM
+
+Employee declared:
+
+Fit to work: **YES**
+
+Currently impaired: **NO**
+
+Substances affecting work: **NO**
+
+Declaration: **ACCEPTED**
+
+This creates a strong chronological record without changing the employee's original declaration.
+
+---
+
+# 18. Database Structure
+
+Recommended table:
+
+### `fitness_for_duty_checks`
+
+Fields:
+
+`id`
+
+`employee_id`
+
+`company_id`
+
+`location_id`
+
+`shift_id`
+
+`clock_in_id`
+
+`submitted_at`
+
+`status`
+
+`declaration_accepted`
+
+`declaration_accepted_at`
+
+`declaration_version`
+
+`declaration_text_snapshot`
+
+`created_at`
+
+---
+
+### `fitness_for_duty_answers`
+
+Fields:
+
+`id`
+
+`check_id`
+
+`question_id`
+
+`question_text_snapshot`
+
+`answer`
+
+`risk_level`
+
+`created_at`
+
+---
+
+### `fitness_for_duty_reviews`
+
+Fields:
+
+`id`
+
+`check_id`
+
+`reviewed_by`
+
+`decision`
+
+`private_note`
+
+`reviewed_at`
+
+---
+
+# 19. Question Configuration
+
+Do not hard-code everything permanently.
+
+Admin settings should eventually have:
+
+**Settings → Fit for Duty**
+
+Options:
+
+**Enable Fit for Duty Check**
+
+ON/OFF
+
+**Require before first clock-in**
+
+ON/OFF
+
+**Require every new shift**
+
+ON/OFF
+
+**Prevent clock-in after unsafe response**
+
+ON/OFF
+
+**Notify administrators of flagged checks**
+
+ON/OFF
+
+**Require acknowledgement**
+
+ON/OFF
+
+Questions can initially be system-controlled.
+
+Custom questions can be Phase 2.
+
+---
+
+# 20. Privacy & Permissions
+
+These records contain sensitive employment information.
+
+They should not be visible to everyone.
+
+Recommended permissions:
+
+Employee:
+
+Can see own verification history.
+
+Supervisor:
+
+Can see employees assigned to locations they supervise.
+
+Administrator:
+
+Can view records for company employees.
+
+Owner:
+
+Full access.
+
+Client:
+
+**NO ACCESS**
+
+Clients should never be able to open Clockfield and browse employee Fit for Duty questionnaires.
+
+If a client reports suspected impairment, they can submit a concern, but the underlying employee questionnaire remains internal.
+
+---
+
+# 21. Audit Log
+
+Every event should create an audit entry.
+
+Examples:
+
+`FITNESS_CHECK_STARTED`
+
+`FITNESS_CHECK_COMPLETED`
+
+`FITNESS_CHECK_CLEARED`
+
+`FITNESS_CHECK_FLAGGED`
+
+`CLOCK_IN_BLOCKED_FITNESS`
+
+`SUPERVISOR_REVIEWED_FITNESS`
+
+`SUPERVISOR_CLEARED_EMPLOYEE`
+
+`FITNESS_INCIDENT_CREATED`
+
+Never delete the historical event when a supervisor changes the employee's status.
+
+---
+
+# 22. UX Requirement
+
+This should NOT feel like an eight-page application.
+
+Employee experience should take approximately one screen or a few very short steps.
+
+Recommended mobile design:
+
+### Fit for Duty
+
+**1 of 8**
+
+Are you fit and able to safely perform your assigned duties today?
+
+[ YES ]
+
+[ NO ]
+
+↓
+
+Next question.
+
+At the end:
+
+### Declaration
+
+☐ I confirm my answers are accurate and that I am fit for duty.
+
+**Confirm & Clock In**
+
+Use large buttons because cleaners will usually complete this from their phones immediately before entering a client property.
+
+---
+
+# 23. Simplified MVP
+
+For the first implementation, build only:
+
+**Employee**
+
+Clock In
+
+↓
+
+Fit for Duty questionnaire
+
+↓
+
+Declaration
+
+↓
+
+Pass → Clock In
+
+Flag → Block Clock In + notify admin
+
+**Admin**
+
+Fit for Duty dashboard
+
+↓
+
+View employee submission
+
+↓
+
+View answers
+
+↓
+
+View declaration/timestamp
+
+↓
+
+Review flagged submissions
+
+↓
+
+Approve or keep employee blocked
+
+This gives Clockfield the important functionality without turning the first version into a complicated HR system.
+
+---
+
+# 24. Critical Development Rules
+
+Do not break the existing clock-in/clock-out system.
+
+The Fit for Duty flow should intercept the clock-in request before the final clock-in database transaction.
+
+A successful verification and clock-in should be connected using the same `shift_id` / `clock_in_id`.
+
+Do not allow the frontend alone to decide whether someone can clock in.
+
+The backend must verify:
+
+1. employee is authenticated;
+2. required questions were answered;
+3. declaration was accepted;
+4. responses pass company rules;
+5. Fit for Duty record was saved;
+6. only then create the clock-in.
+
+This prevents someone from bypassing the questionnaire by directly calling the clock-in API.
+
+---
+
+# 25. Final Product Flow
+
+**Employee**
+
+Clock In
+
+↓
+
+**Fit for Duty Check**
+
+↓
+
+Answer questions
+
+↓
+
+Accept declaration
+
+↓
+
+### SAFE
+
+Record submission → Clock employee in → Admin activity recorded
+
+or
+
+### FLAGGED
+
+Record submission → Do not clock employee in → Alert supervisor → Supervisor reviews → Decision recorded.
+
+The central principle is:
+
+> Every employee's first clock-in should have a traceable Fit for Duty record showing what they declared, when they declared it, which policy they accepted, and whether Clockfield allowed them to begin the shift.
