@@ -1,0 +1,106 @@
+Please update the Fit for Duty flow.
+
+**Important:** The questionnaire must NOT block the employee from clocking in, regardless of how they answer.
+
+Right now, the system can show:
+
+**“Supervisor Review Required — Based on your responses, your clock-in cannot be completed automatically. Please contact your supervisor before beginning work.”**
+
+Remove this blocking behavior completely.
+
+The new required flow is:
+
+**Employee enters Employee ID + Password → Fit for Duty questionnaire appears → Employee answers all questions → Employee confirms declaration → Employee is clocked in normally.**
+
+This must happen even if the employee answers:
+
+* No, they are not fit to work
+* Yes, they are affected by alcohol
+* Yes, they are affected by drugs or another substance
+* Yes, something is affecting judgment or coordination
+* Yes, they are too fatigued
+* Yes, there is another reason they may not be able to work safely
+
+The employee should still be clocked in.
+
+### What happens with concerning answers
+
+Instead of blocking clock-in:
+
+1. Save the complete questionnaire submission.
+2. Complete the employee's normal clock-in.
+3. Mark the questionnaire internally as **Flagged** if any concerning answer is selected.
+4. Immediately send the submission/alert to the admin.
+5. Let the admin review the employee's answers from the Fit for Duty section.
+
+Example admin alert:
+
+**Fit for Duty Alert**
+
+**Employee:** John Doe
+**Location:** Store A
+**Clock-in:** 8:02 PM
+**Status:** Flagged
+
+**Reason:** Employee provided one or more responses that may require review.
+
+Admin should be able to open the notification and see all original answers.
+
+### Employee-side behavior
+
+After they submit the questionnaire, simply show:
+
+**Clock-In Successful**
+
+“Your Fit for Duty Check has been submitted.”
+
+Then continue into the existing employee account exactly as the normal clock-in currently does.
+
+Do NOT show:
+
+* Supervisor Review Required
+* Clock-in blocked
+* Contact your supervisor before beginning work
+* Waiting for approval
+* Pending supervisor review
+
+Do NOT require an admin to approve the employee before clock-in.
+
+### Backend behavior
+
+The Fit for Duty questionnaire is now an **information and alerting system**, not a clock-in authorization system.
+
+The backend flow should be:
+
+**Save questionnaire → determine Cleared/Flagged status → create existing clock-in → notify admin if flagged.**
+
+The questionnaire submission should remain attached to:
+
+* employee_id
+* location_id
+* shift_id
+* clock_in_id
+* submitted_at
+* all questions and answers
+* declaration accepted
+* status: Cleared or Flagged
+
+### Critical
+
+Do not change anything else in the existing employee clock-in system.
+
+Do not redesign authentication.
+
+Do not alter clock-out.
+
+Do not alter shifts.
+
+Do not alter locations.
+
+Do not add supervisor approval before clock-in.
+
+We only want:
+
+**Existing Login → Questionnaire → Always Clock In → Save Submission → Notify Admin if Needed.**
+
+Please update the current implementation to follow this exact behavior.

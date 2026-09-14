@@ -1569,7 +1569,7 @@ Welcome again, and thank you for choosing ClockField.
         return res.status(403).json({ message: "Shift not available" });
       }
       const acceptedAt = new Date().toISOString();
-      const status = answers[0] === true && answers.slice(1).every((a: boolean) => a === false) ? "safe" : "flagged";
+      const status = answers[0] === true && answers.slice(1).every((a: boolean) => a === false) ? "cleared" : "flagged";
       const original = { answers, confirmationAccepted: true, submittedAt: acceptedAt };
       const row = await storage.createFitForDutyVerification({
         companyId: user.companyId, employeeId: user.id, shiftId: shift?.id || null,
@@ -1579,27 +1579,7 @@ Welcome again, and thank you for choosing ClockField.
         declarationVersion: "1", confirmationAccepted: true, acceptedAt, status,
         originalSubmission: JSON.stringify(original),
       });
-      if (status === "flagged") {
-        await storage.createPlatformMessage({
-          companyId: user.companyId,
-          senderUserId: user.id,
-          senderRole: "employee",
-          subject: "Fit for Duty review required",
-          body: "An employee submitted a Fit for Duty check that requires supervisor review. Open Fit for Duty in the admin dashboard to review it.",
-          messageType: "fit_for_duty_alert",
-          isRead: false,
-          isBroadcast: false,
-          parentMessageId: null,
-          createdAt: acceptedAt,
-          deliveryMode: "in_app",
-          emailSubject: null,
-          emailCtaLabel: null,
-          emailCtaUrl: null,
-          emailSentAt: null,
-          emailStatus: null,
-        });
-      }
-      res.status(201).json({ id: row.id, status: row.status, message: status === "flagged" ? "Supervisor Review Required" : undefined });
+      res.status(201).json({ id: row.id, status: row.status });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
@@ -1640,7 +1620,7 @@ Welcome again, and thank you for choosing ClockField.
         !verification ||
         verification.companyId !== user.companyId ||
         verification.employeeId !== user.id ||
-        verification.status !== "safe" ||
+        !["safe", "cleared", "flagged"].includes(verification.status) ||
         verification.clockInId
       ) {
         return res.status(400).json({ message: "A completed Fit for Duty verification is required" });
@@ -1677,6 +1657,47 @@ Welcome again, and thank you for choosing ClockField.
       });
       if (shift) await storage.updateShift(shiftId!, { status: "in_progress" });
       await storage.updateFitForDutyVerification(verification.id, { clockInId: entry.id });
+      if (verification.status === "flagged") {
+        try {
+          const location = entry.locationId ? await storage.getLocation(entry.locationId) : null;
+          const employeeName = `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.employeeId || "Employee";
+          const submittedAnswers = JSON.parse(verification.answerSnapshot) as boolean[];
+          const answerDetails = FIT_FOR_DUTY_QUESTIONS
+            .map((question, index) => `${index + 1}. ${question}\nAnswer: ${submittedAnswers[index] ? "Yes" : "No"}`)
+            .join("\n\n");
+          await storage.createPlatformMessage({
+            companyId: user.companyId,
+            senderUserId: user.id,
+            senderRole: "employee",
+            subject: "Fit for Duty Alert",
+            body: `Employee: ${employeeName}
+Location: ${location?.name || "Unscheduled / no location"}
+Clock-in: ${new Date(entry.clockInAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+Status: Flagged
+
+Reason: Employee provided one or more responses that may require review.
+
+Original answers:
+
+${answerDetails}
+
+Open Fit for Duty in the admin dashboard to review this submission.`,
+            messageType: "fit_for_duty_alert",
+            isRead: false,
+            isBroadcast: false,
+            parentMessageId: null,
+            createdAt: new Date().toISOString(),
+            deliveryMode: "in_app",
+            emailSubject: null,
+            emailCtaLabel: null,
+            emailCtaUrl: null,
+            emailSentAt: null,
+            emailStatus: null,
+          });
+        } catch (alertErr: any) {
+          console.error("[fit-for-duty] Failed to create flagged alert:", alertErr.message);
+        }
+      }
       // Send late clock-in email alert if enabled
       if (flags.includes("late_clock_in") && shift) {
         try {

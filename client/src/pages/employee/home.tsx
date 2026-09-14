@@ -29,7 +29,6 @@ export default function EmployeeHome() {
   const [fitShiftId, setFitShiftId] = useState<string | undefined>();
   const [fitAnswers, setFitAnswers] = useState<(boolean | undefined)[]>([undefined, undefined, undefined, undefined, undefined]);
   const [fitConfirmed, setFitConfirmed] = useState(false);
-  const [fitMessage, setFitMessage] = useState("");
 
   const { data: tzData } = useQuery<{ timezone: string }>({
     queryKey: ["/api/settings/timezone"],
@@ -92,7 +91,7 @@ export default function EmployeeHome() {
       queryClient.invalidateQueries({ queryKey: ["/api/time-entries/active"] });
       queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
       queryClient.invalidateQueries({ queryKey: ["/api/shifts"] });
-      toast({ title: "Clocked in!" });
+      toast({ title: "Clock-In Successful", description: "Your Fit for Duty Check has been submitted." });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
@@ -103,17 +102,13 @@ export default function EmployeeHome() {
       return res.json();
     },
     onSuccess: (data) => {
-      if (data.status === "flagged") {
-        setFitMessage("Supervisor Review Required — Based on your responses, your clock-in cannot be completed automatically. Please contact your supervisor before beginning work.");
-        return;
-      }
       clockInMut.mutate({ shiftId: fitShiftId, verificationId: data.id });
     },
     onError: (err: any) => toast({ title: "Unable to save verification", description: err.message, variant: "destructive" }),
   });
 
   const openFit = (shiftId?: string) => {
-    setFitShiftId(shiftId); setFitAnswers([undefined, undefined, undefined, undefined, undefined]); setFitConfirmed(false); setFitMessage(""); setFitOpen(true);
+    setFitShiftId(shiftId); setFitAnswers([undefined, undefined, undefined, undefined, undefined]); setFitConfirmed(false); setFitOpen(true);
   };
 
   const clockOutMut = useMutation({
@@ -191,8 +186,7 @@ export default function EmployeeHome() {
             <Checkbox checked={fitConfirmed} onCheckedChange={v => setFitConfirmed(v === true)} className="mt-0.5" />
             <span>I confirm that the answers I provided are true and accurate and that I am fit to safely perform my assigned duties.</span>
           </label>
-          {fitMessage && <p className="rounded-md bg-amber-50 text-amber-800 p-3 text-sm font-medium">{fitMessage}</p>}
-          {!fitMessage && <Button className="w-full h-12 text-base" disabled={fitAnswers.some(a => a === undefined) || !fitConfirmed || fitSubmitMut.isPending} onClick={() => fitSubmitMut.mutate()}>Confirm &amp; Continue</Button>}
+          <Button className="w-full h-12 text-base" disabled={fitAnswers.some(a => a === undefined) || !fitConfirmed || fitSubmitMut.isPending || clockInMut.isPending} onClick={() => fitSubmitMut.mutate()}>Confirm &amp; Continue</Button>
         </DialogContent>
       </Dialog>
       {/* Clock-out blocker modal */}
