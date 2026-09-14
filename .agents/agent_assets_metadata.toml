@@ -1,0 +1,24 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "RPKz2iX3ibXTMxPcgOJQW"
+uri = "file://attached_assets/generated_audio/clockfield-fit-duty-background.mp3"
+type = "audio"
+title = "ClockField product background"
+description = "Generated music: Modern optimistic corporate technology instrumental for a polished SaaS product overview. Light electronic pulse, warm marimba-like plucks, soft synth pads, subtle percussion, calm a…"
+logical_id = "38a2435e-ed21-461a-a3cc-f7a63689c01b"
+
+[[outputs]]
+id = "XpmNzvijWsjB89gYzhyUN"
+uri = "file://attached_assets/generated_videos/clockfield-fit-for-duty-overview.mp4"
+type = "video"
+title = "ClockField Fit for Duty — Animated Overview"
+description = "A 56-second, 16:9 animated product overview with captions and original background music. Covers the questionnaire, private live photo, declaration, normal clock-in, admin review, and configurable email alerts."
+logical_id = "8993ca06-df9f-43d5-a149-cb0bc32ad49f"
+content_hash = "sha256:2bbbca4389d010cafa6c3b62e3951103b7c3588b2eaf2e4925455870608e4a8f"
+size = 9870765
+mtime_ms = 1789426760755
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:24598a7d-f9ad-49b0-ae25-a6539d0b4cc9/8993ca06-df9f-43d5-a149-cb0bc32ad49f/c6cf2006-d9e2-4467-b6da-f5780fa07330"
+storage_version_token = "1789426779047518"
+content_type = "video/mp4"
