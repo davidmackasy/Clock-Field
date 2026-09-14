@@ -39,6 +39,8 @@ const FIT_FOR_DUTY_DECLARATION = "I confirm that the answers I provided are true
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+const FIT_FOR_DUTY_PHOTOS_DIR = path.join(process.cwd(), "private_fit_for_duty_photos");
+if (!fs.existsSync(FIT_FOR_DUTY_PHOTOS_DIR)) fs.mkdirSync(FIT_FOR_DUTY_PHOTOS_DIR, { recursive: true });
 
 /**
  * Convert a UTC datetime string to a local ISO datetime string (no TZ suffix)
@@ -1559,26 +1561,48 @@ Welcome again, and thank you for choosing ClockField.
   app.post("/api/fit-for-duty", requireRole("employee"), async (req, res) => {
     try {
       const user = req.user as any;
-      const { answers, confirmationAccepted, shiftId } = req.body || {};
+      const { answers, confirmationAccepted, shiftId, facePhotoData, facePhotoCapturedAt } = req.body || {};
       if (!Array.isArray(answers) || answers.length !== 5 || answers.some((a: any) => typeof a !== "boolean")) {
         return res.status(400).json({ message: "All five answers are required" });
       }
       if (confirmationAccepted !== true) return res.status(400).json({ message: "Confirmation is required" });
+      if (typeof facePhotoData !== "string" || !facePhotoData.startsWith("data:image/jpeg;base64,")) {
+        return res.status(400).json({ message: "A live face photo is required" });
+      }
+      const photoBuffer = Buffer.from(facePhotoData.slice("data:image/jpeg;base64,".length), "base64");
+      const isJpeg = photoBuffer.length >= 3 && photoBuffer[0] === 0xff && photoBuffer[1] === 0xd8 && photoBuffer[2] === 0xff;
+      if (!isJpeg || photoBuffer.length > 3 * 1024 * 1024) {
+        return res.status(400).json({ message: "Live face photo must be under 3 MB" });
+      }
+      const photoCapturedAt = new Date(facePhotoCapturedAt);
+      if (!facePhotoCapturedAt || Number.isNaN(photoCapturedAt.getTime()) || Math.abs(Date.now() - photoCapturedAt.getTime()) > 10 * 60_000) {
+        return res.status(400).json({ message: "Please take a new live face photo" });
+      }
       let shift = shiftId ? await storage.getShift(String(shiftId)) : null;
       if (shift && (shift.companyId !== user.companyId || shift.employeeId !== user.id)) {
         return res.status(403).json({ message: "Shift not available" });
       }
       const acceptedAt = new Date().toISOString();
       const status = answers[0] === true && answers.slice(1).every((a: boolean) => a === false) ? "cleared" : "flagged";
-      const original = { answers, confirmationAccepted: true, submittedAt: acceptedAt };
-      const row = await storage.createFitForDutyVerification({
-        companyId: user.companyId, employeeId: user.id, shiftId: shift?.id || null,
-        locationId: shift?.locationId || null, clockInId: null,
-        questionTextSnapshot: JSON.stringify(FIT_FOR_DUTY_QUESTIONS),
-        answerSnapshot: JSON.stringify(answers), declarationTextSnapshot: FIT_FOR_DUTY_DECLARATION,
-        declarationVersion: "1", confirmationAccepted: true, acceptedAt, status,
-        originalSubmission: JSON.stringify(original),
-      });
+      const photoFileName = `${user.companyId}-${user.id}-${Date.now()}-${randomBytes(12).toString("hex")}.jpg`;
+      const photoFilePath = path.join(FIT_FOR_DUTY_PHOTOS_DIR, photoFileName);
+      fs.writeFileSync(photoFilePath, photoBuffer);
+      const original = { answers, confirmationAccepted: true, submittedAt: acceptedAt, facePhotoCapturedAt: photoCapturedAt.toISOString() };
+      let row;
+      try {
+        row = await storage.createFitForDutyVerification({
+          companyId: user.companyId, employeeId: user.id, shiftId: shift?.id || null,
+          locationId: shift?.locationId || null, clockInId: null,
+          questionTextSnapshot: JSON.stringify(FIT_FOR_DUTY_QUESTIONS),
+          answerSnapshot: JSON.stringify(answers), declarationTextSnapshot: FIT_FOR_DUTY_DECLARATION,
+          declarationVersion: "1", confirmationAccepted: true, acceptedAt,
+          facePhotoPath: photoFileName, facePhotoCapturedAt: photoCapturedAt.toISOString(), status,
+          originalSubmission: JSON.stringify(original),
+        });
+      } catch (error) {
+        try { fs.unlinkSync(photoFilePath); } catch {}
+        throw error;
+      }
       res.status(201).json({ id: row.id, status: row.status });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -1590,9 +1614,26 @@ Welcome again, and thank you for choosing ClockField.
       const result = await Promise.all(rows.map(async row => {
         const employee = await storage.getUser(row.employeeId);
         const location = row.locationId ? await storage.getLocation(row.locationId) : null;
-        return { ...row, employeeName: employee ? `${employee.firstName} ${employee.lastName}` : "Unknown", employeeNumber: employee?.employeeId || "", locationName: location?.name || "—", reviews: await storage.getFitForDutyReviews(row.id, admin.companyId) };
+        const { facePhotoPath: _privatePhotoPath, ...safeRow } = row;
+        return { ...safeRow, hasFacePhoto: !!row.facePhotoPath, employeeName: employee ? `${employee.firstName} ${employee.lastName}` : "Unknown", employeeNumber: employee?.employeeId || "", locationName: location?.name || "—", reviews: await storage.getFitForDutyReviews(row.id, admin.companyId) };
       }));
       res.json(result);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/admin/fit-for-duty/:id/photo", requireRole("admin"), async (req, res) => {
+    try {
+      const admin = req.user as any;
+      const row = await storage.getFitForDutyVerification(String(req.params.id));
+      if (!row || row.companyId !== admin.companyId || !row.facePhotoPath) {
+        return res.status(404).json({ message: "Photo not found" });
+      }
+      const fileName = path.basename(row.facePhotoPath);
+      const filePath = path.join(FIT_FOR_DUTY_PHOTOS_DIR, fileName);
+      if (!fs.existsSync(filePath)) return res.status(404).json({ message: "Photo not found" });
+      res.setHeader("Content-Type", "image/jpeg");
+      res.setHeader("Cache-Control", "private, no-store");
+      res.sendFile(filePath);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

@@ -92,6 +92,12 @@ export async function runStartupMigrations() {
       CREATE INDEX IF NOT EXISTS idx_fit_for_duty_reviews_verification ON fit_for_duty_reviews(verification_id);
     `);
     await client.query(`
+      ALTER TABLE fit_for_duty_verifications
+      ADD COLUMN IF NOT EXISTS face_photo_path text;
+      ALTER TABLE fit_for_duty_verifications
+      ADD COLUMN IF NOT EXISTS face_photo_captured_at text;
+    `);
+    await client.query(`
       ALTER TABLE training_assignments
       ADD COLUMN IF NOT EXISTS last_reminder_email_sent_at text;
     `);

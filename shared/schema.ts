@@ -210,6 +210,8 @@ export const fitForDutyVerifications = pgTable("fit_for_duty_verifications", {
   declarationVersion: text("declaration_version").notNull().default("1"),
   confirmationAccepted: boolean("confirmation_accepted").notNull().default(false),
   acceptedAt: text("accepted_at").notNull(),
+  facePhotoPath: text("face_photo_path"),
+  facePhotoCapturedAt: text("face_photo_captured_at"),
   status: text("status").notNull().default("flagged"),
   originalSubmission: text("original_submission").notNull(),
 });

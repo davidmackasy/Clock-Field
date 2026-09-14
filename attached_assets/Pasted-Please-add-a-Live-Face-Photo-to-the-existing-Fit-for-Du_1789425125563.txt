@@ -1,0 +1,80 @@
+Please add a Live Face Photo to the existing Fit for Duty questionnaire. Do not change or break any existing authentication, employee account, questionnaire, or clock-in functionality.
+
+The updated flow should be:
+
+Employee ID + Password → Fit for Duty Questions → Live Face Photo → Confirmation → Submit → Employee is Clocked In
+
+Live Face Photo
+
+After the employee answers the Fit for Duty questions, show:
+
+Quick Photo Verification
+
+“Please take a quick live photo to confirm your attendance for this shift.”
+
+Add a Take Photo button that opens the device's front-facing camera.
+
+Requirements:
+
+Use the live camera.
+Default to the front/selfie camera.
+Employee should see a camera preview.
+Allow Retake Photo before submitting.
+Do not allow selecting an old image from the photo gallery.
+The photo is part of the same Fit for Duty submission.
+Do not use facial recognition or automatically determine whether the employee is drunk/high from their face.
+Do not compare biometric facial identity unless we explicitly add that feature later.
+
+After taking the photo, show the captured image with:
+
+Retake
+
+Use Photo
+
+Then show the existing declaration:
+
+☐ I confirm that the answers I provided are true and accurate and that I am fit to safely perform my assigned duties.
+
+Then:
+
+Confirm & Clock In
+
+Important Clock-In Rule
+
+Once all questions are answered, a live photo has been captured, and the declaration is accepted, the employee must still be clocked in regardless of their questionnaire answers.
+
+Do not introduce Supervisor Review Required or block clock-in.
+
+If there are concerning questionnaire answers:
+
+Save submission → Save live photo → Flag submission → Clock employee in normally → Notify admin.
+
+Admin View
+
+In the existing Fit for Duty submission details, display:
+
+Employee: John Doe
+Location: Store A
+Clock-in: 8:02 PM
+Status: Cleared / Flagged
+Live Photo: [photo taken during this submission]
+
+Then show all questions and answers below it.
+
+The administrator should be able to see the exact live photo associated with that specific clock-in.
+
+Data
+
+Add the photo to the existing Fit for Duty record using something like:
+
+face_photo_url
+
+face_photo_captured_at
+
+Do not store the image directly as base64 in the main database. Upload it to the app's existing secure file/storage system and store only the reference/path in the Fit for Duty submission.
+
+Access to these photos must follow the same restricted permissions as the Fit for Duty records. They should only be visible to authorized admins/supervisors and the appropriate employee if employee history displays them.
+
+Do not expose these photos to clients.
+
+Again, this is an addition to the current working flow only. Do not rebuild or modify unrelated employee functionality.

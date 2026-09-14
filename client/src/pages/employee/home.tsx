@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation as useWouterLocation } from "wouter";
@@ -29,6 +29,13 @@ export default function EmployeeHome() {
   const [fitShiftId, setFitShiftId] = useState<string | undefined>();
   const [fitAnswers, setFitAnswers] = useState<(boolean | undefined)[]>([undefined, undefined, undefined, undefined, undefined]);
   const [fitConfirmed, setFitConfirmed] = useState(false);
+  const [facePhotoData, setFacePhotoData] = useState<string | null>(null);
+  const [facePhotoCapturedAt, setFacePhotoCapturedAt] = useState<string | null>(null);
+  const [facePhotoAccepted, setFacePhotoAccepted] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const faceVideoRef = useRef<HTMLVideoElement>(null);
+  const faceStreamRef = useRef<MediaStream | null>(null);
 
   const { data: tzData } = useQuery<{ timezone: string }>({
     queryKey: ["/api/settings/timezone"],
@@ -98,7 +105,7 @@ export default function EmployeeHome() {
 
   const fitSubmitMut = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/fit-for-duty", { answers: fitAnswers, confirmationAccepted: fitConfirmed, shiftId: fitShiftId });
+      const res = await apiRequest("POST", "/api/fit-for-duty", { answers: fitAnswers, confirmationAccepted: fitConfirmed, shiftId: fitShiftId, facePhotoData, facePhotoCapturedAt });
       return res.json();
     },
     onSuccess: (data) => {
@@ -108,8 +115,52 @@ export default function EmployeeHome() {
   });
 
   const openFit = (shiftId?: string) => {
-    setFitShiftId(shiftId); setFitAnswers([undefined, undefined, undefined, undefined, undefined]); setFitConfirmed(false); setFitOpen(true);
+    setFitShiftId(shiftId); setFitAnswers([undefined, undefined, undefined, undefined, undefined]); setFitConfirmed(false); setFacePhotoData(null); setFacePhotoCapturedAt(null); setFacePhotoAccepted(false); setCameraError(""); setFitOpen(true);
   };
+
+  const stopFaceCamera = () => {
+    faceStreamRef.current?.getTracks().forEach(track => track.stop());
+    faceStreamRef.current = null;
+    if (faceVideoRef.current) faceVideoRef.current.srcObject = null;
+    setCameraActive(false);
+  };
+
+  const startFaceCamera = async () => {
+    stopFaceCamera();
+    setFacePhotoData(null);
+    setFacePhotoCapturedAt(null);
+    setFacePhotoAccepted(false);
+    setCameraError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+      faceStreamRef.current = stream;
+      setCameraActive(true);
+      requestAnimationFrame(() => {
+        if (faceVideoRef.current) {
+          faceVideoRef.current.srcObject = stream;
+          void faceVideoRef.current.play();
+        }
+      });
+    } catch {
+      setCameraError("Camera access is required. Please allow camera access and try again.");
+    }
+  };
+
+  const captureFacePhoto = () => {
+    const video = faceVideoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) return;
+    const maxWidth = 720;
+    const scale = Math.min(1, maxWidth / video.videoWidth);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    setFacePhotoData(canvas.toDataURL("image/jpeg", 0.82));
+    setFacePhotoCapturedAt(new Date().toISOString());
+    stopFaceCamera();
+  };
+
+  useEffect(() => () => stopFaceCamera(), []);
 
   const clockOutMut = useMutation({
     mutationFn: async () => {
@@ -160,9 +211,9 @@ export default function EmployeeHome() {
 
   return (
     <div className="p-4 pb-24 space-y-5">
-      <Dialog open={fitOpen} onOpenChange={setFitOpen}>
+      <Dialog open={fitOpen} onOpenChange={(open) => { if (!open) stopFaceCamera(); setFitOpen(open); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Fit for Duty Check</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Fit for Duty Check</DialogTitle><DialogDescription>Complete each question and take a live photo before clocking in.</DialogDescription></DialogHeader>
           <p className="text-sm text-muted-foreground">To help maintain a safe workplace for employees, clients, and the public, we require a quick fitness-for-duty check before starting your shift. Please answer the following questions honestly.</p>
           <div className="space-y-5 mt-2">
             {[
@@ -182,11 +233,18 @@ export default function EmployeeHome() {
               </div>
             ))}
           </div>
-          <label className="flex items-start gap-3 text-sm mt-3 cursor-pointer">
-            <Checkbox checked={fitConfirmed} onCheckedChange={v => setFitConfirmed(v === true)} className="mt-0.5" />
-            <span>I confirm that the answers I provided are true and accurate and that I am fit to safely perform my assigned duties.</span>
-          </label>
-          <Button className="w-full h-12 text-base" disabled={fitAnswers.some(a => a === undefined) || !fitConfirmed || fitSubmitMut.isPending || clockInMut.isPending} onClick={() => fitSubmitMut.mutate()}>Confirm &amp; Continue</Button>
+          {!fitAnswers.some(answer => answer === undefined) && <div className="space-y-3 rounded-lg border p-4">
+            <div><p className="font-semibold">Quick Photo Verification</p><p className="text-sm text-muted-foreground">Please take a quick live photo to confirm your attendance for this shift.</p></div>
+            {!cameraActive && !facePhotoData && <Button type="button" variant="outline" className="w-full h-12" onClick={startFaceCamera}>Take Photo</Button>}
+            {cameraActive && <div className="space-y-3"><video ref={faceVideoRef} autoPlay playsInline muted className="aspect-[4/3] w-full rounded-lg bg-black object-cover [transform:scaleX(-1)]" /><Button type="button" className="w-full" onClick={captureFacePhoto}>Capture Photo</Button></div>}
+            {facePhotoData && <div className="space-y-3"><img src={facePhotoData} alt="Captured live attendance verification" className="aspect-[4/3] w-full rounded-lg object-cover [transform:scaleX(-1)]" /><div className="grid grid-cols-2 gap-2"><Button type="button" variant="outline" onClick={startFaceCamera}>Retake</Button><Button type="button" onClick={() => setFacePhotoAccepted(true)} disabled={facePhotoAccepted}>{facePhotoAccepted ? "Photo Selected" : "Use Photo"}</Button></div></div>}
+            {cameraError && <p className="text-sm text-destructive">{cameraError}</p>}
+          </div>}
+          {facePhotoAccepted && <label className="flex items-start gap-3 text-sm mt-3 cursor-pointer">
+              <Checkbox checked={fitConfirmed} onCheckedChange={v => setFitConfirmed(v === true)} className="mt-0.5" />
+              <span>I confirm that the answers I provided are true and accurate and that I am fit to safely perform my assigned duties.</span>
+            </label>}
+          <Button className="w-full h-12 text-base" disabled={fitAnswers.some(a => a === undefined) || !facePhotoAccepted || !fitConfirmed || fitSubmitMut.isPending || clockInMut.isPending} onClick={() => fitSubmitMut.mutate()}>Confirm &amp; Clock In</Button>
         </DialogContent>
       </Dialog>
       {/* Clock-out blocker modal */}

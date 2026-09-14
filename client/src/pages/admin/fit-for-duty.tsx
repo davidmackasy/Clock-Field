@@ -21,6 +21,7 @@ export default function AdminFitForDuty() {
       const answers = JSON.parse(row.answerSnapshot || "[]");
       const questions = JSON.parse(row.questionTextSnapshot || "[]");
       return <Card key={row.id}><CardHeader><CardTitle className="flex justify-between text-base"><span>{row.employeeName} ({row.employeeNumber || "No ID"})</span><Badge variant={row.status === "flagged" ? "destructive" : "secondary"}>{row.status}</Badge></CardTitle><p className="text-sm text-muted-foreground">{row.locationName} · {new Date(row.acceptedAt).toLocaleString()}</p></CardHeader><CardContent className="space-y-3">
+        {row.hasFacePhoto && <div className="space-y-2"><p className="text-sm font-semibold">Live Photo</p><img src={`/api/admin/fit-for-duty/${row.id}/photo`} alt={`Live attendance verification for ${row.employeeName}`} className="max-h-80 w-full max-w-sm rounded-lg border object-cover" /></div>}
         <div className="space-y-1 text-sm">{questions.map((q: string, i: number) => <p key={q}><b>{i + 1}.</b> {q} — <span className="font-semibold">{answers[i] ? "Yes" : "No"}</span></p>)}</div>
         <div className="grid gap-1 text-sm sm:grid-cols-2">
           <p><b>Confirmation:</b> {row.confirmationAccepted ? "Accepted" : "Not accepted"}</p>
