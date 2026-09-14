@@ -98,6 +98,10 @@ export async function runStartupMigrations() {
       ADD COLUMN IF NOT EXISTS face_photo_captured_at text;
     `);
     await client.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS fit_for_duty_email_preference text NOT NULL DEFAULT 'flagged_only';
+    `);
+    await client.query(`
       ALTER TABLE training_assignments
       ADD COLUMN IF NOT EXISTS last_reminder_email_sent_at text;
     `);

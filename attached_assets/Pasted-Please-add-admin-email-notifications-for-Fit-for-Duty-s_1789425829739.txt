@@ -1,0 +1,106 @@
+Please add admin email notifications for Fit for Duty submissions.
+
+Keep the current in-app Fit for Duty admin page exactly as it is. Do not remove or replace the existing dashboard notification. Email should be an additional notification only.
+
+Required behavior
+
+Every time an employee submits the Fit for Duty questionnaire:
+
+Save submission → Clock employee in normally → Show submission in Admin Fit for Duty → Send email notification to authorized admin email address(es).
+
+This applies to both:
+
+Cleared submissions
+Flagged submissions
+
+Flagged submissions should have a more urgent subject line.
+
+Example email — Cleared
+
+Subject: Fit for Duty Submission — David Maluti — Cleared
+
+Employee: David Maluti
+Employee ID: EMP-1005
+Date/Time: September 14, 2026, 3:35 PM
+Location/Shift: [existing location or shift]
+Status: Cleared
+Confirmation: Accepted
+
+Questionnaire responses:
+
+Fit and able to safely perform duties — Yes
+Currently affected by alcohol/drugs/substances — No
+Anything affecting judgment/coordination — No
+Excessively tired/fatigued — No
+Any other reason unable to work safely — No
+
+View submission in ClockField
+
+Example email — Flagged
+
+Subject: ⚠ Fit for Duty Alert — David Maluti — Flagged
+
+Employee: David Maluti
+Employee ID: EMP-1005
+Date/Time: September 14, 2026, 3:35 PM
+Status: Flagged
+
+Attention: One or more responses may require admin review.
+
+Include all questionnaire answers in the email and clearly highlight the answers that caused the submission to be flagged.
+
+Add a button/link:
+
+View Full Submission
+
+This should open the related Fit for Duty record inside the existing admin panel.
+
+Live Photo
+
+Since the submission now includes a live face photo, do not attach the actual photo directly to the email by default.
+
+The email should say:
+
+Live Photo: Captured
+
+Admin can click View Full Submission to securely see the photo inside ClockField.
+
+This is better for privacy and avoids placing employee photos in email inboxes.
+
+Admin recipients
+
+Send notifications only to authorized company admins.
+
+Use the company/admin email records that already exist in ClockField. Do not hard-code one email address.
+
+If there are multiple authorized admins, support sending to all admins who have Fit for Duty email notifications enabled.
+
+Recommended setting
+
+Add a simple setting:
+
+Settings → Notifications → Fit for Duty Emails
+
+Email me all submissions
+Email me flagged submissions only
+Off
+
+Default can be:
+
+Flagged submissions only
+
+unless the company enables all submissions.
+
+Important
+
+Email sending must not delay or prevent the employee from clocking in.
+
+The employee flow must remain:
+
+Submit questionnaire → Save live photo → Clock in successfully
+
+Email should be processed separately after the submission is saved.
+
+If email delivery fails, the employee must still remain clocked in and the Fit for Duty submission must still appear in the admin dashboard.
+
+Do not change any existing authentication, clock-in, clock-out, Fit for Duty questions, live photo, or admin review functionality.

@@ -67,12 +67,23 @@ const PROVINCES = [
 export default function AdminSettings() {
   const { toast } = useToast();
   const { data: company, isLoading } = useQuery<any>({ queryKey: ["/api/company"] });
+  const { data: fitForDutyEmailSetting } = useQuery<{ preference: string }>({ queryKey: ["/api/admin/fit-for-duty-email-preference"] });
   const { data: customDeductions, isLoading: deductionsLoading } = useQuery<any[]>({ queryKey: ["/api/payroll-deductions"] });
   const [form, setForm] = useState<any>(null);
   const [newDeduction, setNewDeduction] = useState({ label: "", type: "percent", value: "" });
   const [addingDeduction, setAddingDeduction] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [fitForDutyEmailPreference, setFitForDutyEmailPreference] = useState("flagged_only");
   const logoInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (fitForDutyEmailSetting?.preference) setFitForDutyEmailPreference(fitForDutyEmailSetting.preference);
+  }, [fitForDutyEmailSetting]);
+
+  const fitForDutyEmailMut = useMutation({
+    mutationFn: (preference: string) => apiRequest("PATCH", "/api/admin/fit-for-duty-email-preference", { preference }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/admin/fit-for-duty-email-preference"] }),
+  });
 
   async function handleLogoUpload(file: File) {
     const ALLOWED = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
@@ -630,6 +641,20 @@ export default function AdminSettings() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2 border-b pb-4">
+              <Label htmlFor="fit-for-duty-email-preference">Fit for Duty Emails</Label>
+              <Select value={fitForDutyEmailPreference} onValueChange={setFitForDutyEmailPreference}>
+                <SelectTrigger id="fit-for-duty-email-preference" data-testid="select-fit-for-duty-email-preference">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Email me all submissions</SelectItem>
+                  <SelectItem value="flagged_only">Email me flagged submissions only</SelectItem>
+                  <SelectItem value="off">Off</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Controls Fit for Duty emails sent to your admin email address. Live photos stay private in ClockField.</p>
+            </div>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">Late Clock-In</p>
@@ -678,8 +703,16 @@ export default function AdminSettings() {
           </CardContent>
         </Card>
 
-        <Button onClick={() => updateMut.mutate(form)} disabled={updateMut.isPending} className="w-full" data-testid="button-save-settings">
-          {updateMut.isPending ? "Saving..." : "Save Settings"}
+        <Button
+          onClick={() => {
+            updateMut.mutate(form);
+            fitForDutyEmailMut.mutate(fitForDutyEmailPreference);
+          }}
+          disabled={updateMut.isPending || fitForDutyEmailMut.isPending}
+          className="w-full"
+          data-testid="button-save-settings"
+        >
+          {updateMut.isPending || fitForDutyEmailMut.isPending ? "Saving..." : "Save Settings"}
         </Button>
       </div>
     </div>

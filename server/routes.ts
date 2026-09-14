@@ -5,7 +5,7 @@ import { db, pool } from "./db";
 import { setupAuth, hashPassword, comparePasswords, requireAuth, requireRole } from "./auth";
 import OpenAI from "openai";
 import { generateCourseDraft, improveText, generateQuizFromCourse, generateModuleContent, isAIAvailable, detectCourseType, type ImproveAction, type ToneOption, type AIQuizQuestion } from "./training-ai";
-import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail, sendAdminRequestReplyEmail, sendTrialAccountEmail, sendProposalEmail, sendHiringPackageEmail, sendTrainingAssignmentEmail, sendTrainingReminderEmail, sendBookingQuoteEmail, sendQuoteAcceptedAdminEmail, sendQuoteDeclinedAdminEmail } from "./mail";
+import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail, sendAdminRequestReplyEmail, sendTrialAccountEmail, sendProposalEmail, sendHiringPackageEmail, sendTrainingAssignmentEmail, sendTrainingReminderEmail, sendBookingQuoteEmail, sendQuoteAcceptedAdminEmail, sendQuoteDeclinedAdminEmail, sendFitForDutySubmissionEmail } from "./mail";
 import { createHash } from "crypto";
 import passport from "passport";
 import { randomBytes } from "crypto";
@@ -1226,6 +1226,23 @@ Welcome again, and thank you for choosing ClockField.
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  app.get("/api/admin/fit-for-duty-email-preference", requireRole("admin"), async (req, res) => {
+    const admin = req.user as any;
+    res.json({ preference: admin.fitForDutyEmailPreference || "flagged_only" });
+  });
+
+  app.patch("/api/admin/fit-for-duty-email-preference", requireRole("admin"), async (req, res) => {
+    try {
+      const admin = req.user as any;
+      const preference = req.body?.preference;
+      if (!["all", "flagged_only", "off"].includes(preference)) {
+        return res.status(400).json({ message: "Invalid Fit for Duty email preference" });
+      }
+      const updated = await storage.updateUser(admin.id, { fitForDutyEmailPreference: preference });
+      res.json({ preference: updated?.fitForDutyEmailPreference || preference });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   // ── Dashboard stats ───────────────────────────────────────────────────────
   app.get("/api/dashboard/stats", requireRole("admin"), async (req, res) => {
     try {
@@ -1739,6 +1756,53 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
           console.error("[fit-for-duty] Failed to create flagged alert:", alertErr.message);
         }
       }
+      // Email is intentionally fire-and-forget so delivery cannot delay or undo clock-in.
+      void (async () => {
+        try {
+          const [company, admins, location] = await Promise.all([
+            storage.getCompany(user.companyId),
+            storage.getAdminsByCompany(user.companyId),
+            entry.locationId ? storage.getLocation(entry.locationId) : Promise.resolve(null),
+          ]);
+          const recipients = admins.filter(admin =>
+            admin.isActive &&
+            !!admin.email &&
+            admin.fitForDutyEmailPreference !== "off" &&
+            (verification.status === "flagged" || admin.fitForDutyEmailPreference === "all")
+          );
+          if (!recipients.length) return;
+          const answers = JSON.parse(verification.answerSnapshot) as boolean[];
+          const questions = JSON.parse(verification.questionTextSnapshot) as string[];
+          const flaggedAnswerIndexes = answers
+            .map((answer, index) => (index === 0 ? answer !== true : answer !== false) ? index : -1)
+            .filter(index => index >= 0);
+          const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+          const submissionUrl = `${appUrl}/admin/fit-for-duty?submission=${encodeURIComponent(verification.id)}`;
+          const timezone = company?.timezone || "UTC";
+          const submittedAt = new Intl.DateTimeFormat("en-US", {
+            timeZone: timezone, month: "long", day: "numeric", year: "numeric",
+            hour: "numeric", minute: "2-digit",
+          }).format(new Date(verification.acceptedAt));
+          const locationOrShift = location?.name || shift?.shiftLabel || "Unscheduled / no location";
+          const employeeName = `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Employee";
+          await Promise.allSettled(recipients.map(admin => sendFitForDutySubmissionEmail({
+            to: admin.email!,
+            adminName: `${admin.firstName || ""} ${admin.lastName || ""}`.trim() || "Admin",
+            employeeName,
+            employeeId: user.employeeId || "",
+            submittedAt,
+            locationOrShift,
+            status: verification.status as "cleared" | "flagged",
+            confirmationAccepted: verification.confirmationAccepted,
+            questions,
+            answers,
+            flaggedAnswerIndexes,
+            submissionUrl,
+          })));
+        } catch (emailErr: any) {
+          console.error("[fit-for-duty-email] Notification failed:", emailErr.message);
+        }
+      })();
       // Send late clock-in email alert if enabled
       if (flags.includes("late_clock_in") && shift) {
         try {

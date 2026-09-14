@@ -502,6 +502,93 @@ ${opts.body}
   await client.messages.create(domain, { from, to: [opts.to], subject: opts.subject, text, html });
 }
 
+function escapeEmailHtml(value: string): string {
+  return value.replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  })[char]!);
+}
+
+export async function sendFitForDutySubmissionEmail(opts: {
+  to: string;
+  adminName: string;
+  employeeName: string;
+  employeeId: string;
+  submittedAt: string;
+  locationOrShift: string;
+  status: "cleared" | "flagged";
+  confirmationAccepted: boolean;
+  questions: string[];
+  answers: boolean[];
+  flaggedAnswerIndexes: number[];
+  submissionUrl: string;
+}) {
+  const { client, domain } = getClient();
+  const from = process.env.MAIL_FROM || "Clockfield <noreply@clockfield.ca>";
+  const flagged = opts.status === "flagged";
+  const statusLabel = flagged ? "Flagged" : "Cleared";
+  const subject = flagged
+    ? `⚠ Fit for Duty Alert — ${opts.employeeName} — Flagged`
+    : `Fit for Duty Submission — ${opts.employeeName} — Cleared`;
+  const responseText = opts.questions.map((question, index) =>
+    `${question} — ${opts.answers[index] ? "Yes" : "No"}${opts.flaggedAnswerIndexes.includes(index) ? " [FLAGGED]" : ""}`
+  ).join("\n");
+  const text = `Hi ${opts.adminName},
+
+Employee: ${opts.employeeName}
+Employee ID: ${opts.employeeId || "—"}
+Date/Time: ${opts.submittedAt}
+Location/Shift: ${opts.locationOrShift}
+Status: ${statusLabel}
+Confirmation: ${opts.confirmationAccepted ? "Accepted" : "Not accepted"}
+Live Photo: Captured
+${flagged ? "\nAttention: One or more responses may require admin review.\n" : ""}
+Questionnaire responses:
+
+${responseText}
+
+View Full Submission:
+${opts.submissionUrl}
+
+Admin can securely view the live photo inside ClockField.
+
+– The ClockField Team`;
+  const responseRows = opts.questions.map((question, index) => {
+    const isFlagged = opts.flaggedAnswerIndexes.includes(index);
+    return `<tr style="${isFlagged ? "background:#fef2f2;" : ""}">
+      <td style="padding:12px;border-bottom:1px solid #e5e7eb;color:#374151;">${escapeEmailHtml(question)}</td>
+      <td style="padding:12px;border-bottom:1px solid #e5e7eb;font-weight:700;color:${isFlagged ? "#b91c1c" : "#111827"};">${opts.answers[index] ? "Yes" : "No"}${isFlagged ? " — Flagged" : ""}</td>
+    </tr>`;
+  }).join("");
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#f6f7f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7f9;padding:40px 0;"><tr><td align="center">
+<table width="620" cellpadding="0" cellspacing="0" style="max-width:620px;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08);">
+<tr><td style="background:${flagged ? "#b91c1c" : "#2563eb"};padding:24px 32px;color:#fff;font-size:20px;font-weight:700;">ClockField</td></tr>
+<tr><td style="padding:32px;">
+<h1 style="margin:0 0 20px;font-size:22px;color:#111827;">${flagged ? "Fit for Duty Alert" : "Fit for Duty Submission"}</h1>
+<p style="color:#374151;">Hi ${escapeEmailHtml(opts.adminName)},</p>
+${flagged ? '<p style="padding:12px;background:#fef2f2;border-left:4px solid #dc2626;color:#991b1b;font-weight:600;">Attention: One or more responses may require admin review.</p>' : ""}
+<table width="100%" cellpadding="5" cellspacing="0" style="margin:18px 0;color:#374151;">
+<tr><td><strong>Employee</strong></td><td>${escapeEmailHtml(opts.employeeName)}</td></tr>
+<tr><td><strong>Employee ID</strong></td><td>${escapeEmailHtml(opts.employeeId || "—")}</td></tr>
+<tr><td><strong>Date/Time</strong></td><td>${escapeEmailHtml(opts.submittedAt)}</td></tr>
+<tr><td><strong>Location/Shift</strong></td><td>${escapeEmailHtml(opts.locationOrShift)}</td></tr>
+<tr><td><strong>Status</strong></td><td><strong>${statusLabel}</strong></td></tr>
+<tr><td><strong>Confirmation</strong></td><td>${opts.confirmationAccepted ? "Accepted" : "Not accepted"}</td></tr>
+<tr><td><strong>Live Photo</strong></td><td>Captured</td></tr>
+</table>
+<h2 style="font-size:16px;color:#111827;">Questionnaire responses</h2>
+<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;">${responseRows}</table>
+<p style="margin:26px 0;"><a href="${escapeEmailHtml(opts.submissionUrl)}" style="display:inline-block;padding:12px 20px;background:${flagged ? "#b91c1c" : "#2563eb"};color:#fff;text-decoration:none;border-radius:6px;font-weight:600;">View Full Submission</a></p>
+<p style="font-size:13px;color:#6b7280;">The live photo is not attached to this email. You can securely view it inside ClockField.</p>
+</td></tr></table></td></tr></table></body></html>`;
+  await client.messages.create(domain, { from, to: [opts.to], subject, text, html });
+}
+
 export async function sendBroadcastEmails(recipients: { email: string; name: string }[], subject: string, body: string) {
   const { client, domain } = getClient();
   const from = process.env.MAIL_FROM || "Clockfield <noreply@clockfield.ca>";

@@ -113,6 +113,8 @@ export const users = pgTable("users", {
   temporaryPasswordExpiresAt: text("temporary_password_expires_at"),
   temporaryPasswordLastSentAt: text("temporary_password_last_sent_at"),
   createdBySuperAdmin: boolean("created_by_super_admin").notNull().default(false),
+  // Per-admin Fit for Duty email preference: all | flagged_only | off
+  fitForDutyEmailPreference: text("fit_for_duty_email_preference").notNull().default("flagged_only"),
 });
 
 export const clients = pgTable("clients", {
