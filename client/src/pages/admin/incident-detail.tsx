@@ -50,7 +50,7 @@ export default function AdminIncidentDetail() {
     setLinkBusy(true);
     try {
       const response = await apiRequest("POST", `/api/admin/incidents/${id}/send-client`, {
-        allowlist: ["title", "summary", "incidentDate", "incidentTime", "incidentCategory", "areaAffected", "immediateAction"],
+        allowlist: ["companySiteName", "departmentCrew", "exactLocation", "incidentDate", "incidentTime", "shift", "cleanerName", "cleanerRole", "incidentTypes", "description", "injuryDetails", "witnesses", "immediateActions", "immediateActionsNotes", "rootCause", "actionsResolution", "preventiveMeasures"],
       });
       const result = await response.json();
       const url = result.clientPath ? `${window.location.origin}${result.clientPath}` : result.clientUrl;

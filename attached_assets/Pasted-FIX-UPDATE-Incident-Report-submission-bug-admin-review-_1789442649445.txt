@@ -1,0 +1,80 @@
+FIX + UPDATE: Incident Report — submission bug, admin review sync, client report
+
+CRITICAL — READ FIRST
+The cleaner-facing public incident form is working well and should not be 
+restructured — its fields, layout, and flow stay as they are. This work is: 
+(1) fix the submission failure bug, (2) bring the admin review screen up to 
+date with what the public form actually collects, (3) build the professional 
+client-facing signed report.
+- Do NOT change the public cleaner form's fields, layout, or flow beyond 
+  what's needed to fix the submission bug.
+- Do NOT touch the main marketing website (14 pages, contact form, chat 
+  widgets).
+- After each change, verify a full test submission goes through end-to-end: 
+  cleaner fills form → submits successfully → appears correctly in admin → 
+  admin reviews and signs off → client report generates correctly.
+
+────────────────────────────────────────
+1. FIX: "We could not submit this report" error
+────────────────────────────────────────
+- Reproduce the failure: fill out the form exactly as in the attached 
+  screenshot (checkboxes, action notes, typed name, confirmation checkbox, 
+  signature) and submit — confirm the same error occurs.
+- Check the actual error being thrown/returned (network tab / server logs), 
+  not just the generic user-facing message — the real cause could be a 
+  validation mismatch, a field the backend expects that the frontend isn't 
+  sending, a signature encoding/size issue, or a database write failure.
+- Confirm the draft-save path (which is working, since "your draft is still 
+  saved" appears) and the final-submit path are hitting the same/correct 
+  data shape — a common cause of this exact symptom is the submit endpoint 
+  expecting a field the draft-save endpoint doesn't require.
+- Fix root cause, not just the error message. Add a more specific error 
+  message in place of the generic one if the failure is something the user 
+  can actually act on (e.g. "signature required" vs. a silent backend 500).
+
+────────────────────────────────────────
+2. ADMIN REVIEW — sync to match the public form
+────────────────────────────────────────
+- Audit every field currently on the public cleaner form (location, date/
+  time, incident type checkboxes, description, injury details, witnesses, 
+  action-taken checkboxes + notes, photos, typed name, confirmation 
+  checkbox, signature) against what the admin review screen currently 
+  displays — identify and close any gaps so admin can see everything the 
+  cleaner actually submitted, nothing missing or mismatched.
+- Photos: must display clearly, full-size viewable (click to enlarge), not 
+  cropped or hidden.
+- Signature and typed name: shown clearly with the confirmation checkbox 
+  status and auto-recorded date/time.
+- Add to the admin screen (if not already present):
+  - Root cause notes (optional, admin-entered)
+  - Actions Taken / Resolution (admin-entered)
+  - Next Steps / Preventive Measures (admin-entered)
+  - Admin signature (signature pad, typed name, date)
+  - "Generate Client Report" action
+
+────────────────────────────────────────
+3. CLIENT-FACING RESOLUTION REPORT — make it professional
+────────────────────────────────────────
+- Currently not professional-looking — rebuild the output as a properly 
+  branded document (Master Commercial Cleaning logo, brand colors, clean 
+  letterhead-style layout), not a raw data dump of form fields.
+- Sections, in order:
+  - Branded header: logo, report reference number, date
+  - Incident Summary: what happened, when, where — written clearly, 
+    factual, client-appropriate tone
+  - Photo evidence, clearly displayed
+  - Actions Taken / Resolution (from admin's input)
+  - Going Forward / Preventive Measures (from admin's input)
+  - Signatures section: cleaner's signature (captured at submission, shown 
+    as-is) and admin/company signature — both already present on this 
+    document
+  - Client signature/acknowledgment section: a public link the client opens 
+    to review the report and sign (typed name + signature pad, or 
+    click-to-acknowledge)
+- Once the client signs, record timestamp and update status to "Resolved & 
+  Acknowledged" — reflected back in the admin dashboard.
+
+NOT IN SCOPE
+- No changes to the public cleaner form's fields/layout beyond the 
+  submission bug fix.
+- No changes to the main marketing website.
