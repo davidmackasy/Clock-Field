@@ -1,0 +1,104 @@
+FEATURE: Incident Report System — Cleaner Submission → Admin Review → 
+Client-Facing Resolution Report (Master Commercial Cleaning)
+
+OVERVIEW
+Three connected pieces:
+1. A mobile-friendly digital incident report a cleaner fills out via a link 
+   (sent after an incident occurs), including required photos and a 
+   signature.
+2. An admin review screen where we read what the cleaner submitted, add the 
+   actions taken and resolution, and sign off.
+3. A professional, branded PDF/webpage sent to the client showing what 
+   happened, what was done about it, and what's being done going forward — 
+   with the cleaner's signature already on it and a place for the client to 
+   sign/acknowledge.
+
+Do not affect the existing website (14 pages, contact form, WhatsApp/Zoho 
+chat, client logo carousel) — this is a new, separate section/flow.
+
+────────────────────────────────────────
+PART 1 — CLEANER-FACING INCIDENT FORM
+────────────────────────────────────────
+- Accessed via a unique link sent to the cleaner (SMS, email, or WhatsApp — 
+  whichever we already have a channel for) after an incident happens.
+- Mobile-first design, matches Master Commercial Cleaning's brand (logo, 
+  colors, fonts) — not a generic form.
+- Fields (based on the incident report template already built):
+  - Company/site name, department/crew, exact location
+  - Date and time of incident
+  - Cleaner's name, role
+  - Type of incident (checkboxes): injury/illness, near miss, property 
+    damage, slip/trip/fall, chemical exposure, struck by/against, cut, 
+    burn, overexertion, vehicle incident, fire, other
+  - Description of what happened (free text)
+  - Injury details (body part, nature of injury, treatment level) — only 
+    shown/required if "injury/illness" is checked
+  - Witness name(s) and contact, if any
+  - Immediate actions taken (checkboxes + free text)
+  - PHOTOS — required, minimum 1, supports multiple. Must allow direct 
+    camera capture from the phone (not just file upload), and must display 
+    clearly/full-size in the submission, not as tiny broken thumbnails.
+  - Cleaner signature — signature pad (draw with finger/mouse), plus typed 
+    name and date/time auto-captured.
+- Submission is blocked until required fields (location, date/time, 
+  description, at least 1 photo, signature) are filled.
+- On submit: confirmation screen thanking the cleaner, and the submission 
+  is saved with status "Pending Review."
+
+────────────────────────────────────────
+PART 2 — ADMIN REVIEW
+────────────────────────────────────────
+- New admin dashboard section listing all incident submissions, sortable/
+  filterable by status (Pending Review / Reviewed / Sent to Client / 
+  Resolved & Acknowledged) and by client/site.
+- Admin notified (email/dashboard alert) when a new submission comes in.
+- Admin opens a submission and sees everything the cleaner filled out, 
+  photos displayed clearly (full-size viewable, not cropped/hidden), and 
+  the cleaner's signature.
+- Admin adds:
+  - Root cause (optional notes)
+  - Actions Taken / Resolution (what was actually done in response)
+  - Next Steps / Preventive Measures (what's being done going forward)
+  - Admin/company signature — signature pad, typed name, date
+- Admin clicks "Generate Client Report" to produce the client-facing 
+  document (Part 3) from everything above.
+- Status updates to "Sent to Client" once generated/sent.
+
+────────────────────────────────────────
+PART 3 — CLIENT-FACING RESOLUTION REPORT
+────────────────────────────────────────
+- Professional, fully branded document (Master Commercial Cleaning logo, 
+  colors, letterhead-style header) — this is the client-facing deliverable, 
+  it needs to look polished, not like a raw internal form.
+- Sections:
+  - Header: company branding, report reference number, date
+  - Incident Summary: what happened, when, where, who was involved 
+    (client-appropriate framing — factual, not alarmist)
+  - Photo evidence (clearly displayed)
+  - Actions Taken / Resolution (from admin's input)
+  - Going Forward / Preventive Measures (from admin's input)
+  - Signatures: cleaner's signature (captured at submission), company/admin 
+    signature — both already present
+  - Client signature/acknowledgment section: client can review the report 
+    via a link and sign electronically (typed name + signature pad, or 
+    click-to-acknowledge) to confirm they've seen and accept the report
+- Delivered to the client via a shareable link (and/or downloadable PDF, 
+  matching however client-facing docs are currently delivered from this 
+  system).
+- Once the client signs, status updates to "Resolved & Acknowledged" with 
+  timestamp recorded, and the admin dashboard reflects this.
+
+────────────────────────────────────────
+DATA & ACCESS
+────────────────────────────────────────
+- All submissions, photos, and signatures stored securely, linked to the 
+  relevant client/site.
+- Access control: cleaners can only access their own submission link (no 
+  login/dashboard needed for them), admin sees everything, clients only see 
+  the read-only report for their own incident plus the sign/acknowledge 
+  action — nothing else in the admin system is exposed to them.
+
+NOT IN SCOPE (for this pass — flag if wanted later)
+- SMS/automated reminder nudges for incomplete cleaner submissions
+- Multi-cleaner / multi-incident batch reporting
+- Any changes to the existing 14-page marketing site

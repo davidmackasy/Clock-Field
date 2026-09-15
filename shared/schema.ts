@@ -658,6 +658,7 @@ export const reports = pgTable("reports", {
   incidentMinPhotos: integer("incident_min_photos").notNull().default(0),
   incidentQuestionsJson: text("incident_questions_json"),
   incidentDeclarationText: text("incident_declaration_text"),
+  incidentCleanerDraftJson: text("incident_cleaner_draft_json"),
   // Timestamps
   sentAt: text("sent_at"),
   finalizedAt: text("finalized_at"),
@@ -735,6 +736,23 @@ export const incidentEmployeeSnapshots = pgTable("incident_employee_snapshots", 
   signedAt: text("signed_at").notNull(),
   submittedAt: text("submitted_at").notNull(),
   createdAt: text("created_at").notNull(),
+  companySiteName: text("company_site_name"),
+  departmentCrew: text("department_crew"),
+  exactLocation: text("exact_location"),
+  incidentDate: text("incident_date"),
+  incidentTime: text("incident_time"),
+  shift: text("shift"),
+  cleanerName: text("cleaner_name"),
+  cleanerRole: text("cleaner_role"),
+  incidentTypesJson: text("incident_types_json").notNull().default("[]"),
+  description: text("description"),
+  injuryDetailsJson: text("injury_details_json"),
+  witnessesJson: text("witnesses_json").notNull().default("[]"),
+  immediateActionsJson: text("immediate_actions_json").notNull().default("[]"),
+  immediateActionsNotes: text("immediate_actions_notes"),
+  cleanerSignerName: text("cleaner_signer_name"),
+  cleanerSignatureDataUrl: text("cleaner_signature_data_url"),
+  cleanerSignedAt: text("cleaner_signed_at"),
 });
 export const incidentEvidence = pgTable("incident_evidence", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -745,6 +763,7 @@ export const incidentEvidence = pgTable("incident_evidence", {
   mimeType: text("mime_type").notNull(),
   fileSize: integer("file_size").notNull(),
   caption: text("caption"),
+  evidenceType: text("evidence_type"),
   uploadedByUserId: varchar("uploaded_by_user_id").notNull(),
   uploadedAt: text("uploaded_at").notNull(),
 });
@@ -781,6 +800,12 @@ export const incidentInvestigations = pgTable("incident_investigations", {
   clientAllowlistJson: text("client_allowlist_json").notNull().default("[]"),
   updatedByUserId: varchar("updated_by_user_id").notNull(),
   updatedAt: text("updated_at").notNull(),
+  rootCause: text("root_cause"),
+  actionsResolution: text("actions_resolution"),
+  preventiveMeasures: text("preventive_measures"),
+  adminSignerName: text("admin_signer_name"),
+  adminSignatureDataUrl: text("admin_signature_data_url"),
+  adminSignedAt: text("admin_signed_at"),
 });
 export const insertIncidentEmployeeSnapshotSchema = createInsertSchema(incidentEmployeeSnapshots).omit({ id: true });
 export const insertIncidentEvidenceSchema = createInsertSchema(incidentEvidence).omit({ id: true });

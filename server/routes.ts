@@ -5210,7 +5210,22 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     return out;
   }
   function incidentEvidenceMeta(row: any) {
-    return { id: row.id, reportId: row.reportId, originalName: row.originalName, mimeType: row.mimeType, fileSize: row.fileSize, caption: row.caption, uploadedByUserId: row.uploadedByUserId, uploadedAt: row.uploadedAt };
+    return { id: row.id, reportId: row.reportId, originalName: row.originalName, mimeType: row.mimeType, fileSize: row.fileSize, evidenceType: row.evidenceType || (row.mimeType?.startsWith("image/") ? "photo" : "document"), caption: row.caption, uploadedByUserId: row.uploadedByUserId, uploadedAt: row.uploadedAt };
+  }
+  const incidentCleanerKeys = ["companySiteName", "departmentCrew", "exactLocation", "incidentDate", "incidentTime", "shift", "cleanerName", "cleanerRole", "incidentTypes", "description", "injuryDetails", "witnesses", "immediateActions", "immediateActionsNotes", "cleanerSignerName", "cleanerSignatureDataUrl"];
+  function incidentCleanerPayload(report: any, body: any = {}) {
+    const draft = incidentJson(report?.incidentCleanerDraftJson, {});
+    const payload: any = {};
+    for (const key of incidentCleanerKeys) {
+      const value = body[key] !== undefined ? body[key] : draft[key];
+      if (value !== undefined) payload[key] = value;
+    }
+    for (const key of ["incidentTypes", "witnesses", "immediateActions"]) {
+      if (payload[key] !== undefined && !Array.isArray(payload[key])) {
+        try { payload[key] = JSON.parse(String(payload[key])); } catch { payload[key] = []; }
+      }
+    }
+    return payload;
   }
   function incidentFileMatchesMime(buffer: Buffer, mime: string) {
     if (mime === "image/jpeg") return buffer.length > 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
@@ -5248,13 +5263,17 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
 
   app.get("/api/admin/incidents/dashboard", requireRole("admin"), async (req: any, res) => {
     try {
-      const rows: any[] = await db.select().from(reports).where(and(eq(reports.companyId, req.user.companyId), eq(reports.reportType, "incident"))).orderBy(desc(reports.createdAt));
+      const dashboardConditions: any[] = [eq(reports.companyId, req.user.companyId), eq(reports.reportType, "incident")];
+      if (req.query.status) dashboardConditions.push(eq(reports.status, String(req.query.status)));
+      if (req.query.clientId) dashboardConditions.push(eq(reports.assignedClientId, String(req.query.clientId)));
+      if (req.query.locationId) dashboardConditions.push(eq(reports.assignedLocationId, String(req.query.locationId)));
+      const rows: any[] = await db.select().from(reports).where(and(...dashboardConditions)).orderBy(desc(reports.createdAt));
       const ids = rows.map(r => r.id);
       const tokens: any[] = ids.length ? await db.select().from(reportAccessTokens).where(and(inArray(reportAccessTokens.reportId, ids), eq(reportAccessTokens.recipientType, "employee"), isNull(reportAccessTokens.revokedAt))) : [];
       const tokenByReport = new Map(tokens.map(t => [t.reportId, t]));
       const incidents = rows.map(r => {
         const token = tokenByReport.get(r.id);
-        const status = token && incidentExpired(token) && !["submitted", "in_review", "admin_signed", "sent_to_client", "closed"].includes(r.status) ? "expired" : r.status;
+        const status = token && incidentExpired(token) && !["pending_review", "submitted", "in_review", "admin_signed", "sent_to_client", "resolved_acknowledged", "closed"].includes(r.status) ? "expired" : r.status;
         return { id: r.id, title: r.title, status, assignedEmployeeId: r.assignedEmployeeId, incidentDate: r.incidentDate, createdAt: r.createdAt, updatedAt: r.updatedAt };
       });
       const counts: Record<string, number> = {};
@@ -5284,6 +5303,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
         configuredQuestions = incidentJson(template.questionsJson, []);
       }
       const now = incidentNow();
+      const configuredMinPhotos = Number(req.body.minPhotos || req.body.incidentMinPhotos || 1);
       const allowedCreate = ["title", "summary", "incidentDate", "incidentTime", "severity", "riskLevel", "incidentCategory", "areaAffected", "clientPropertyAffected", "companyEquipmentAffected", "immediateAction", "workStopped", "customerInformed", "witnesses", "itemAffected", "itemDescription", "damageType", "assignedClientId", "assignedLocationId", "incidentTypes", "peopleInvolved", "narrativeSummary", "rootCause", "contributingFactors", "correctiveActionsStructured", "clientNotificationDetail", "witnessList", "equipmentInvolved", "areaSecured", "attachmentsChecklist"];
       const createData: any = {};
       for (const key of allowedCreate) if (req.body[key] !== undefined) createData[key] = typeof req.body[key] === "object" ? JSON.stringify(req.body[key]) : req.body[key];
@@ -5291,7 +5311,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       const report: any = await storage.createReport({
         ...createData, companyId: user.companyId, reportType: "incident", status: "pending",
         createdByUserId: user.id, createdByRole: "admin", assignedEmployeeId: employee.id,
-        incidentMinPhotos: Math.max(0, Math.min(20, Number(req.body.minPhotos || req.body.incidentMinPhotos || 0))),
+        incidentMinPhotos: Number.isFinite(configuredMinPhotos) ? Math.max(1, Math.min(20, configuredMinPhotos)) : 1,
         incidentQuestionsJson: JSON.stringify(configuredQuestions),
         incidentDeclarationText: String(req.body.declarationText || "I declare that the information provided is true and complete."),
         createdAt: now, updatedAt: now,
@@ -5317,7 +5337,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     try {
       const report: any = await storage.getReport(req.params.id, req.user.companyId);
       if (!report || report.reportType !== "incident") return res.status(404).json({ message: "Incident not found" });
-      if (["submitted", "in_review", "admin_signed", "sent_to_client", "closed"].includes(report.status)) return res.status(403).json({ message: "Submitted incident content is immutable" });
+      if (["pending_review", "submitted", "in_review", "admin_signed", "sent_to_client", "resolved_acknowledged", "closed"].includes(report.status)) return res.status(403).json({ message: "Submitted incident content is immutable" });
       const allowed = ["title", "summary", "incidentDate", "incidentTime", "severity", "riskLevel", "incidentCategory", "areaAffected", "immediateAction", "workStopped", "customerInformed", "incidentTypes", "peopleInvolved", "narrativeSummary", "rootCause", "contributingFactors", "correctiveActionsStructured", "clientNotificationDetail", "witnessList", "equipmentInvolved", "areaSecured", "attachmentsChecklist"];
       const update: any = {};
       for (const key of allowed) if (req.body[key] !== undefined) update[key] = typeof req.body[key] === "object" ? JSON.stringify(req.body[key]) : req.body[key];
@@ -5346,14 +5366,15 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     try {
       const report: any = await storage.getReport(req.params.id, req.user.companyId);
       if (!report || report.reportType !== "incident") return res.status(404).json({ message: "Incident not found" });
-      const [snapshot, evidence, amendments, investigation, activity] = await Promise.all([
+      const [snapshot, evidence, amendments, investigation, signatures, activity] = await Promise.all([
         db.select().from(incidentEmployeeSnapshots).where(and(eq(incidentEmployeeSnapshots.reportId, report.id), eq(incidentEmployeeSnapshots.companyId, req.user.companyId))).then(r => r[0]),
         db.select().from(incidentEvidence).where(and(eq(incidentEvidence.reportId, report.id), eq(incidentEvidence.companyId, req.user.companyId))).orderBy(asc(incidentEvidence.uploadedAt)),
         db.select().from(incidentAmendments).where(and(eq(incidentAmendments.reportId, report.id), eq(incidentAmendments.companyId, req.user.companyId))).orderBy(desc(incidentAmendments.createdAt)),
         db.select().from(incidentInvestigations).where(and(eq(incidentInvestigations.reportId, report.id), eq(incidentInvestigations.companyId, req.user.companyId))).then(r => r[0]),
+        db.select().from(reportSignatures).where(eq(reportSignatures.reportId, report.id)),
         storage.getReportActivity(report.id),
       ]);
-      res.json({ incident: report, snapshot: snapshot || null, evidence: evidence.map(incidentEvidenceMeta), amendments, investigation, activity });
+      res.json({ incident: report, snapshot: snapshot || null, evidence: evidence.map(incidentEvidenceMeta), amendments, investigation, signatures, activity });
     } catch (err: any) { res.status(500).json({ message: "Unable to load incident" }); }
   });
 
@@ -5361,7 +5382,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     try {
       const report: any = await storage.getReport(req.params.id, req.user.companyId);
       if (!report || report.reportType !== "incident") return res.status(404).json({ message: "Incident not found" });
-      if (["submitted", "in_review", "admin_signed", "sent_to_client", "closed"].includes(report.status)) return res.status(409).json({ message: "A submitted incident cannot be reissued" });
+      if (["pending_review", "submitted", "in_review", "admin_signed", "sent_to_client", "resolved_acknowledged", "closed"].includes(report.status)) return res.status(409).json({ message: "A submitted incident cannot be reissued" });
       await db.update(reportAccessTokens).set({ revokedAt: incidentNow() }).where(and(eq(reportAccessTokens.reportId, report.id), eq(reportAccessTokens.recipientType, "employee"), isNull(reportAccessTokens.revokedAt)));
       const employee = report.assignedEmployeeId ? await storage.getUser(report.assignedEmployeeId) : null;
       if (!employee) return res.status(409).json({ message: "Incident has no assigned employee" });
@@ -5377,11 +5398,16 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     try {
       const report: any = await storage.getReport(req.params.id, req.user.companyId);
       if (!report || report.reportType !== "incident") return res.status(404).json({ message: "Incident not found" });
-      const allowed = ["findings", "correctiveAction", "finalDecision", "nextSteps", "clientAllowlistJson"];
-      const data: any = {}; for (const k of allowed) if (req.body[k] !== undefined) data[k] = k === "clientAllowlistJson" ? JSON.stringify(Array.isArray(req.body[k]) ? req.body[k] : incidentJson(req.body[k], [])) : req.body[k];
+      if (["admin_signed", "sent_to_client", "resolved_acknowledged", "closed"].includes(report.status)) return res.status(403).json({ message: "Signed incident investigation is immutable" });
+      const allowed = ["findings", "correctiveAction", "finalDecision", "nextSteps", "clientAllowlistJson", "rootCause", "actionsResolution", "preventiveMeasures"];
+      const data: any = {};
+      for (const k of allowed) if (req.body[k] !== undefined) {
+        const target = k === "rootCause" ? "rootCause" : k === "actionsResolution" ? "actionsResolution" : k === "preventiveMeasures" ? "preventiveMeasures" : k;
+        data[target] = k === "clientAllowlistJson" ? JSON.stringify(Array.isArray(req.body[k]) ? req.body[k] : incidentJson(req.body[k], [])) : String(req.body[k]);
+      }
       data.companyId = req.user.companyId; data.reportId = report.id; data.updatedByUserId = req.user.id; data.updatedAt = incidentNow();
       const [saved] = await db.insert(incidentInvestigations).values(data).onConflictDoUpdate({ target: incidentInvestigations.reportId, set: data }).returning();
-      if (report.status === "submitted") await storage.updateReport(report.id, req.user.companyId, { status: "in_review" });
+      if (["pending_review", "submitted"].includes(report.status)) await storage.updateReport(report.id, req.user.companyId, { status: "in_review" });
       res.json(saved);
     } catch (err: any) { res.status(500).json({ message: "Unable to save investigation" }); }
   });
@@ -5390,27 +5416,53 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     try {
       const report: any = await storage.getReport(req.params.id, req.user.companyId);
       if (!report || report.reportType !== "incident") return res.status(404).json({ message: "Incident not found" });
-      if (!["submitted", "in_review"].includes(report.status)) return res.status(409).json({ message: "Incident is not ready to finalize" });
+      if (!["pending_review", "submitted", "in_review"].includes(report.status)) return res.status(409).json({ message: "Incident is not ready to finalize" });
       const signerName = String(req.body.signerName || "").trim();
       const signatureDataUrl = String(req.body.signatureDataUrl || "");
       if (req.body.declarationAccepted !== true || !signerName || !signatureDataUrl.startsWith("data:image/png;base64,") || signatureDataUrl.length > 1_500_000) {
         return res.status(400).json({ message: "Admin declaration, name and drawn signature are required" });
       }
-      const existingSignature = await storage.getReportSignatureByUser(report.id, req.user.id);
+      const [existingSignature] = await db.select({ id: reportSignatures.id }).from(reportSignatures).where(and(eq(reportSignatures.reportId, report.id), eq(reportSignatures.signerRole, "admin"))).limit(1);
       if (existingSignature) return res.status(409).json({ message: "Incident already has an admin signature" });
       const now = incidentNow();
-      await storage.createReportSignature({ reportId: report.id, signerUserId: req.user.id, signerRole: "admin", signerName, signatureType: "drawn", signedAt: now, acknowledgementText: String(req.body.acknowledgementText || "I confirm I reviewed this incident and the investigation record."), signatureDataUrl, publicAccessTokenId: null });
-      const updated = await storage.updateReport(report.id, req.user.companyId, { status: "admin_signed", finalizedAt: now });
+      const updated = await db.transaction(async tx => {
+        await tx.insert(reportSignatures).values({ reportId: report.id, signerUserId: req.user.id, signerRole: "admin", signerName, signatureType: "drawn", signedAt: now, acknowledgementText: String(req.body.acknowledgementText || "I confirm I reviewed this incident and the investigation record."), signatureDataUrl, publicAccessTokenId: null });
+        const [investigation] = await tx.select().from(incidentInvestigations).where(and(eq(incidentInvestigations.reportId, report.id), eq(incidentInvestigations.companyId, req.user.companyId))).limit(1);
+        const investigationFields: any = { adminSignerName: signerName, adminSignatureDataUrl: signatureDataUrl, adminSignedAt: now, updatedByUserId: req.user.id, updatedAt: now };
+        if (investigation) await tx.update(incidentInvestigations).set(investigationFields).where(eq(incidentInvestigations.id, investigation.id));
+        else await tx.insert(incidentInvestigations).values({ reportId: report.id, companyId: req.user.companyId, ...investigationFields });
+        const [saved] = await tx.update(reports).set({ status: "admin_signed", finalizedAt: now, updatedAt: now }).where(and(eq(reports.id, report.id), eq(reports.companyId, req.user.companyId))).returning();
+        return saved;
+      });
       await logReportActivity(report.id, "finalized", req.user.id, "admin");
       res.json(updated);
     } catch (err: any) { res.status(500).json({ message: "Unable to finalize incident" }); }
   });
 
-  function incidentHtml(report: any, snapshot: any, investigation: any, client = false) {
-    const allow = incidentJson(investigation?.clientAllowlistJson, ["title", "summary", "incidentDate", "incidentCategory", "areaAffected", "immediateAction"]);
-    const data = client ? incidentPublicReport(report, allow) : { ...incidentPublicReport(report, safeIncidentFields), findings: investigation?.findings, correctiveAction: investigation?.correctiveAction, finalDecision: investigation?.finalDecision, nextSteps: investigation?.nextSteps, employeeStatement: snapshot?.statementSnapshot };
+  function incidentHtml(report: any, snapshot: any, investigation: any, evidence: any[] = [], signatures: any[] = [], client = false) {
+    const data: any = client ? {
+      "Report reference": report.id, "Site": snapshot?.companySiteName, "Location": snapshot?.exactLocation,
+      "Date": snapshot?.incidentDate || report.incidentDate, "Time": snapshot?.incidentTime || report.incidentTime,
+      "Shift": snapshot?.shift, "Cleaner": snapshot?.cleanerName, "Description": snapshot?.description || snapshot?.statementSnapshot,
+      "Actions taken": investigation?.actionsResolution || investigation?.correctiveAction,
+      "Preventive measures": investigation?.preventiveMeasures || investigation?.nextSteps,
+    } : {
+      "Report reference": report.id, "Company/site": snapshot?.companySiteName, "Department/crew": snapshot?.departmentCrew,
+      "Exact location": snapshot?.exactLocation, "Date": snapshot?.incidentDate || report.incidentDate,
+      "Time": snapshot?.incidentTime || report.incidentTime, "Shift": snapshot?.shift, "Cleaner": snapshot?.cleanerName,
+      "Cleaner role": snapshot?.cleanerRole, "Incident types": incidentJson(snapshot?.incidentTypesJson, []).join(", "),
+      "Description": snapshot?.description || snapshot?.statementSnapshot, "Injury details": incidentJson(snapshot?.injuryDetailsJson, null),
+      "Witnesses": incidentJson(snapshot?.witnessesJson, []), "Immediate actions": incidentJson(snapshot?.immediateActionsJson, []),
+      "Immediate action notes": snapshot?.immediateActionsNotes, "Root cause": investigation?.rootCause || investigation?.findings,
+      "Actions / resolution": investigation?.actionsResolution || investigation?.correctiveAction,
+      "Preventive measures": investigation?.preventiveMeasures || investigation?.nextSteps,
+    };
     const rows = Object.entries(data).filter(([, v]) => v !== null && v !== undefined && v !== "").map(([k, v]) => `<tr><th>${escHtml(k)}</th><td>${escHtml(typeof v === "string" ? v : JSON.stringify(v))}</td></tr>`).join("");
-    return `<!doctype html><html><head><meta charset="utf-8"><title>Incident report</title><style>body{font-family:Arial;padding:32px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{width:28%;background:#f5f5f5}</style></head><body><h1>Incident report</h1><table>${rows}</table></body></html>`;
+    const photoRows = evidence.map((item: any) => `<li>${escHtml(item.evidenceType || item.mimeType)}: ${escHtml(item.originalName)}${item.caption ? ` — ${escHtml(item.caption)}` : ""}</li>`).join("");
+    const cleaner = signatures.find((s: any) => s.signerRole === "employee") || { signerName: snapshot?.cleanerSignerName, signedAt: snapshot?.cleanerSignedAt };
+    const admin = signatures.find((s: any) => s.signerRole === "admin") || { signerName: investigation?.adminSignerName, signedAt: investigation?.adminSignedAt };
+    const signRows = `<p><strong>Cleaner signature:</strong> ${escHtml(cleaner.signerName || snapshot?.cleanerName || "")} (${escHtml(cleaner.signedAt || "")})</p><p><strong>Company/admin signature:</strong> ${escHtml(admin.signerName || "")} (${escHtml(admin.signedAt || "")})</p>`;
+    return `<!doctype html><html><head><meta charset="utf-8"><title>Incident report</title><style>body{font-family:Arial;padding:32px;color:#163842}header{border-bottom:4px solid #1d8b83;padding-bottom:16px;margin-bottom:20px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left;vertical-align:top}th{width:28%;background:#f5f5f5}section{margin-top:24px}li{margin:6px 0}</style></head><body><header><h1>Master Commercial Cleaning</h1><p>Incident resolution report · ${escHtml(report.id)}</p></header><table>${rows}</table><section><h2>Evidence</h2><ul>${photoRows || "<li>No evidence listed.</li>"}</ul></section><section><h2>Signatures</h2>${signRows}</section></body></html>`;
   }
   app.get("/api/admin/incidents/:id/pdf", requireRole("admin"), async (req: any, res) => {
     try {
@@ -5418,7 +5470,9 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       if (!report || report.reportType !== "incident") return res.status(404).send("Incident not found");
       const [snapshot] = await db.select().from(incidentEmployeeSnapshots).where(eq(incidentEmployeeSnapshots.reportId, report.id));
       const [investigation] = await db.select().from(incidentInvestigations).where(eq(incidentInvestigations.reportId, report.id));
-      res.type("html").send(incidentHtml(report, snapshot, investigation, req.query.version === "client"));
+      const evidence = await db.select().from(incidentEvidence).where(and(eq(incidentEvidence.reportId, report.id), eq(incidentEvidence.companyId, req.user.companyId)));
+      const signatures = await db.select().from(reportSignatures).where(eq(reportSignatures.reportId, report.id));
+      res.type("html").send(incidentHtml(report, snapshot, investigation, evidence, signatures, req.query.version === "client"));
     } catch { res.status(500).send("Unable to render incident"); }
   });
   app.get("/api/admin/incidents/:id/evidence/:evidenceId", requireRole("admin"), async (req: any, res) => {
@@ -5431,14 +5485,15 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     } catch { res.status(404).send("Evidence not found"); }
   });
 
-  app.post("/api/admin/incidents/:id/send-client", requireRole("admin"), async (req: any, res) => {
+  app.post(["/api/admin/incidents/:id/send-client", "/api/admin/incidents/:id/generate-client-report", "/api/admin/incidents/:id/client-report"], requireRole("admin"), async (req: any, res) => {
     try {
       const report: any = await storage.getReport(req.params.id, req.user.companyId);
       if (!report || report.reportType !== "incident") return res.status(404).json({ message: "Incident not found" });
       if (!["admin_signed", "sent_to_client"].includes(report.status)) return res.status(409).json({ message: "Finalize the incident with an admin signature before client sharing" });
       const client = report.assignedClientId ? await storage.getClient(report.assignedClientId) : null;
       if (client && client.companyId !== req.user.companyId) return res.status(400).json({ message: "Assigned client is invalid" });
-      const allowlist = Array.isArray(req.body.allowlist) ? req.body.allowlist.filter((v: any) => ["title", "summary", "incidentDate", "incidentTime", "severity", "incidentCategory", "areaAffected", "immediateAction"].includes(v)) : ["title", "summary", "incidentDate", "incidentCategory", "areaAffected", "immediateAction"];
+      const allowlistFields = ["title", "summary", "incidentDate", "incidentTime", "severity", "incidentCategory", "areaAffected", "immediateAction", "companySiteName", "departmentCrew", "exactLocation", "shift", "cleanerName", "cleanerRole", "incidentTypes", "description", "injuryDetails", "witnesses", "immediateActions", "immediateActionsNotes", "rootCause", "actionsResolution", "preventiveMeasures"];
+      const allowlist = Array.isArray(req.body.allowlist) ? req.body.allowlist.filter((v: any) => allowlistFields.includes(v)) : allowlistFields;
       const now = incidentNow(); const raw = randomBytes(32).toString("base64url");
       await db.update(reportAccessTokens).set({ revokedAt: now }).where(and(eq(reportAccessTokens.reportId, report.id), eq(reportAccessTokens.recipientType, "client"), isNull(reportAccessTokens.revokedAt)));
       await storage.createReportAccessToken({ reportId: report.id, recipientType: "client", recipientEmail: client?.contactEmail || "manual-delivery@invalid.local", tokenHash: incidentHash(raw), permissions: ["read"], createdAt: now, expiresAt: null, revokedAt: null, lastAccessedAt: null, signedAt: null, createdByUserId: req.user.id });
@@ -5456,22 +5511,72 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     try {
       const token: any = await incidentToken(req.params.token);
       const [report]: any[] = token ? await db.select().from(reports).where(eq(reports.id, token.reportId)).limit(1) : [];
-      if (!token || !report) return res.status(404).json({ message: "Incident link not found" });
+      if (!token || !report || report.reportType !== "incident") return res.status(404).json({ message: "Incident link not found" });
       if (token.revokedAt || incidentExpired(token)) return res.status(410).json({ message: "Incident link expired" });
       if (token.recipientType === "client") {
         const [investigation] = await db.select().from(incidentInvestigations).where(and(eq(incidentInvestigations.reportId, report.id), eq(incidentInvestigations.companyId, report.companyId)));
         const [snapshot] = await db.select().from(incidentEmployeeSnapshots).where(and(eq(incidentEmployeeSnapshots.reportId, report.id), eq(incidentEmployeeSnapshots.companyId, report.companyId)));
+        const evidence = await db.select().from(incidentEvidence).where(and(eq(incidentEvidence.reportId, report.id), eq(incidentEvidence.companyId, report.companyId))).orderBy(asc(incidentEvidence.uploadedAt));
+        const signatures = await db.select().from(reportSignatures).where(eq(reportSignatures.reportId, report.id));
         const allowlist = incidentJson(investigation?.clientAllowlistJson, []);
-        const clientReport = incidentPublicReport({
-          ...report,
-          summary: investigation?.findings || report.summary || snapshot?.statementSnapshot,
-        }, allowlist);
+        const clientReport: any = {
+          reportNumber: report.id, title: report.title, status: report.status, companyName: (await storage.getCompany(report.companyId))?.name || null,
+          companySiteName: snapshot?.companySiteName, departmentCrew: snapshot?.departmentCrew, exactLocation: snapshot?.exactLocation,
+          incidentDate: snapshot?.incidentDate || report.incidentDate, incidentTime: snapshot?.incidentTime || report.incidentTime, shift: snapshot?.shift,
+          cleanerName: snapshot?.cleanerName, cleanerRole: snapshot?.cleanerRole, incidentTypes: incidentJson(snapshot?.incidentTypesJson, []),
+          description: snapshot?.description || snapshot?.statementSnapshot, injuryDetails: incidentJson(snapshot?.injuryDetailsJson, null),
+          witnesses: incidentJson(snapshot?.witnessesJson, []), immediateActions: incidentJson(snapshot?.immediateActionsJson, []),
+          immediateActionsNotes: snapshot?.immediateActionsNotes, rootCause: investigation?.rootCause || investigation?.findings,
+          actionsResolution: investigation?.actionsResolution || investigation?.correctiveAction,
+          preventiveMeasures: investigation?.preventiveMeasures || investigation?.nextSteps,
+          evidence: evidence.map((item: any) => ({ id: item.id, originalName: item.originalName, evidenceType: item.evidenceType || (item.mimeType?.startsWith("image/") ? "photo" : "document"), mimeType: item.mimeType, fileSize: item.fileSize, caption: item.caption, uploadedAt: item.uploadedAt, url: `/api/public/incidents/${encodeURIComponent(req.params.token)}/evidence/${item.id}` })),
+          cleanerSignature: { name: snapshot?.cleanerSignerName || snapshot?.employeeNameSnapshot, signatureDataUrl: snapshot?.cleanerSignatureDataUrl || snapshot?.signatureDataUrl, signedAt: snapshot?.cleanerSignedAt || snapshot?.signedAt },
+          adminSignature: (() => { const signature: any = signatures.find((s: any) => s.signerRole === "admin"); return { name: investigation?.adminSignerName || signature?.signerName || null, signatureDataUrl: investigation?.adminSignatureDataUrl || signature?.signatureDataUrl || null, signedAt: investigation?.adminSignedAt || signature?.signedAt || null }; })(),
+          clientAcknowledgment: (() => { const signature: any = signatures.find((s: any) => s.signerRole === "client"); return signature ? { name: signature.signerName, signatureDataUrl: signature.signatureDataUrl, acknowledgedAt: signature.signedAt, acknowledgementText: signature.acknowledgementText } : null; })(),
+        };
+        const allowedFields = allowlist.length ? new Set(allowlist) : null;
+        if (allowedFields) for (const key of ["companySiteName", "departmentCrew", "exactLocation", "incidentDate", "incidentTime", "shift", "cleanerName", "cleanerRole", "incidentTypes", "description", "injuryDetails", "witnesses", "immediateActions", "immediateActionsNotes", "rootCause", "actionsResolution", "preventiveMeasures"]) if (!allowedFields.has(key)) delete clientReport[key];
         return res.json({ report: clientReport, expiresAt: token.expiresAt || null, requiresAuthentication: false });
       }
       if (token.recipientType !== "employee") return res.status(404).json({ message: "Incident link not found" });
       const company = await storage.getCompany(report.companyId);
       res.json({ title: report.title, companyName: company?.name || null, incidentDate: report.incidentDate, category: report.incidentCategory, status: report.status, expiresAt: token.expiresAt, requiresAuthentication: true });
     } catch { res.status(500).json({ message: "Unable to load incident link" }); }
+  });
+  app.get("/api/public/incidents/:token/evidence/:evidenceId", async (req: any, res) => {
+    try {
+      const token: any = await incidentToken(req.params.token);
+      if (!token || token.recipientType !== "client" || token.revokedAt || incidentExpired(token)) return res.status(404).send("Evidence not found");
+      const [report]: any[] = await db.select().from(reports).where(and(eq(reports.id, token.reportId), eq(reports.reportType, "incident"))).limit(1);
+      if (!report) return res.status(404).send("Evidence not found");
+      const [evidence] = await db.select().from(incidentEvidence).where(and(eq(incidentEvidence.id, req.params.evidenceId), eq(incidentEvidence.reportId, report.id), eq(incidentEvidence.companyId, report.companyId)));
+      if (!evidence) return res.status(404).send("Evidence not found");
+      res.set({ "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store", "Content-Disposition": "inline; filename=\"evidence\"" }).type(evidence.mimeType).sendFile(path.join(INCIDENT_EVIDENCE_DIR, evidence.storageName));
+    } catch { res.status(404).send("Evidence not found"); }
+  });
+  app.post(["/api/public/incidents/:token/acknowledge", "/api/client/incidents/:token/acknowledge"], async (req: any, res) => {
+    try {
+      const token: any = await incidentToken(req.params.token);
+      if (!token || token.recipientType !== "client" || token.revokedAt || incidentExpired(token)) return res.status(404).json({ message: "Incident link not found" });
+      const [report]: any[] = await db.select().from(reports).where(and(eq(reports.id, token.reportId), eq(reports.reportType, "incident"))).limit(1);
+      if (!report) return res.status(404).json({ message: "Incident not found" });
+      if (!["sent_to_client", "resolved_acknowledged"].includes(report.status)) return res.status(409).json({ message: "Incident is not available for acknowledgment" });
+      const signerName = String(req.body.signerName || req.body.name || "").trim().slice(0, 255);
+      const signatureDataUrl = String(req.body.signatureDataUrl || "");
+      const explicitAcknowledgment = req.body.acknowledgementAccepted === true || req.body.explicitAcknowledgment === true;
+      if (!signerName || (!explicitAcknowledgment && !signatureDataUrl)) return res.status(400).json({ message: "A typed name and drawn signature or explicit acknowledgment are required" });
+      if (signatureDataUrl && (!signatureDataUrl.startsWith("data:image/png;base64,") || signatureDataUrl.length > 1_500_000)) return res.status(400).json({ message: "Invalid drawn signature" });
+      const now = incidentNow();
+      const updated = await db.transaction(async tx => {
+        const [existing] = await tx.select({ id: reportSignatures.id }).from(reportSignatures).where(and(eq(reportSignatures.reportId, report.id), eq(reportSignatures.signerRole, "client"))).limit(1);
+        if (existing) throw Object.assign(new Error("Incident has already been acknowledged"), { code: "ACK_EXISTS" });
+        await tx.insert(reportSignatures).values({ reportId: report.id, signerUserId: null, signerRole: "client", signerName, signatureType: signatureDataUrl ? "drawn" : "typed", signedAt: now, acknowledgementText: String(req.body.acknowledgementText || (explicitAcknowledgment ? "Client explicitly acknowledged receipt and review." : "Client signed the incident report.")), signatureDataUrl: signatureDataUrl || null, publicAccessTokenId: token.id });
+        await tx.update(reportAccessTokens).set({ signedAt: now }).where(eq(reportAccessTokens.id, token.id));
+        const [saved] = await tx.update(reports).set({ status: "resolved_acknowledged", updatedAt: now }).where(and(eq(reports.id, report.id), eq(reports.companyId, report.companyId))).returning();
+        return saved;
+      });
+      res.json({ ok: true, status: updated.status, acknowledgedAt: now });
+    } catch (err: any) { if (err?.code === "ACK_EXISTS") return res.status(409).json({ message: err.message }); res.status(500).json({ message: "Unable to acknowledge incident" }); }
   });
 
   app.post("/api/public/incidents/:token/authenticate", async (req: any, res) => {
@@ -5500,15 +5605,17 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     try {
       const found = await employeeIncident(req, res); if (!found) return;
       const evidence = await db.select().from(incidentEvidence).where(eq(incidentEvidence.reportId, found.report.id)).orderBy(asc(incidentEvidence.uploadedAt));
-      res.json({ incident: found.report, evidence: evidence.map(incidentEvidenceMeta) });
+      res.json({ incident: found.report, cleanerDraft: incidentCleanerPayload(found.report), evidence: evidence.map(incidentEvidenceMeta) });
     } catch { res.status(500).json({ message: "Unable to load incident draft" }); }
   });
   app.patch("/api/employee/incidents/:token/draft", async (req: any, res) => {
     try {
       const found = await employeeIncident(req, res); if (!found) return;
-      if (["submitted", "in_review", "admin_signed", "sent_to_client", "closed"].includes(found.report.status)) return res.status(409).json({ message: "Submitted incident cannot be edited" });
+       if (["pending_review", "submitted", "in_review", "admin_signed", "sent_to_client", "resolved_acknowledged", "closed"].includes(found.report.status)) return res.status(409).json({ message: "Submitted incident cannot be edited" });
+      const draft = incidentCleanerPayload(found.report, req.body);
       const employeeDraftFields = ["incidentDate", "incidentTime", "areaAffected", "employeeStatement", "immediateAction", "incidentTypes", "peopleInvolved", "witnesses", "equipmentInvolved", "workStopped", "customerInformed", "areaSecured"];
       const update: any = {}; for (const key of employeeDraftFields) if (req.body[key] !== undefined) update[key] = typeof req.body[key] === "object" ? JSON.stringify(req.body[key]) : req.body[key];
+      update.incidentCleanerDraftJson = JSON.stringify(draft);
       update.status = found.report.status === "pending" ? "opened" : found.report.status; update.updatedAt = incidentNow();
       const updated = await storage.updateReport(found.report.id, found.report.companyId, update);
       res.json(updated);
@@ -5519,14 +5626,14 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       try {
         if (uploadErr) return res.status(400).json({ message: "Evidence must be an image or PDF under 10MB" });
         const found = await employeeIncident(req, res); if (!found) return;
-        if (["submitted", "in_review", "admin_signed", "sent_to_client", "closed"].includes(found.report.status)) return res.status(409).json({ message: "Evidence cannot be changed after submission" });
+        if (["pending_review", "submitted", "in_review", "admin_signed", "sent_to_client", "resolved_acknowledged", "closed"].includes(found.report.status)) return res.status(409).json({ message: "Evidence cannot be changed after submission" });
         const count = await db.select({ id: incidentEvidence.id }).from(incidentEvidence).where(eq(incidentEvidence.reportId, found.report.id));
         if (count.length >= 20) return res.status(400).json({ message: "Maximum 20 evidence files allowed" });
         const file = req.file as Express.Multer.File; if (!file) return res.status(400).json({ message: "No file uploaded" });
         if (!incidentFileMatchesMime(file.buffer, file.mimetype)) return res.status(400).json({ message: "File contents do not match its MIME type" });
         const storageName = `${randomBytes(24).toString("hex")}.${file.mimetype === "application/pdf" ? "pdf" : file.mimetype.split("/")[1]}`;
         await fs.promises.writeFile(path.join(INCIDENT_EVIDENCE_DIR, storageName), file.buffer, { flag: "wx" });
-        const [saved] = await db.insert(incidentEvidence).values({ reportId: found.report.id, companyId: found.report.companyId, storageName, originalName: path.basename(file.originalname).slice(0, 255), mimeType: file.mimetype, fileSize: file.size, caption: String(req.body.caption || "").slice(0, 500) || null, uploadedByUserId: found.report.assignedEmployeeId!, uploadedAt: incidentNow() }).returning();
+        const [saved] = await db.insert(incidentEvidence).values({ reportId: found.report.id, companyId: found.report.companyId, storageName, originalName: path.basename(file.originalname).slice(0, 255), mimeType: file.mimetype, fileSize: file.size, evidenceType: String(req.body.evidenceType || (file.mimetype.startsWith("image/") ? "photo" : "document")).slice(0, 80), caption: String(req.body.caption || "").slice(0, 500) || null, uploadedByUserId: found.report.assignedEmployeeId!, uploadedAt: incidentNow() }).returning();
         res.status(201).json(incidentEvidenceMeta(saved));
       } catch { res.status(500).json({ message: "Unable to save evidence" }); }
     });
@@ -5542,10 +5649,14 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
   app.post("/api/employee/incidents/:token/submit", async (req: any, res) => {
     try {
       const found = await employeeIncident(req, res); if (!found) return;
-      if (found.report.status === "submitted" || found.report.status === "in_review") return res.status(409).json({ message: "Incident already submitted" });
-      const statement = String(req.body.employeeStatement || req.body.statement || found.report.employeeStatement || "").trim();
+      if (["pending_review", "submitted", "in_review", "admin_signed", "sent_to_client", "resolved_acknowledged", "closed"].includes(found.report.status)) return res.status(409).json({ message: "Incident already submitted" });
+      const cleaner = incidentCleanerPayload(found.report, req.body);
+      const statement = String(cleaner.description || req.body.employeeStatement || req.body.statement || found.report.employeeStatement || "").trim();
       const declarationAccepted = req.body.declarationAccepted === true;
-      const signature = String(req.body.signatureDataUrl || "");
+      const signature = String(cleaner.cleanerSignatureDataUrl || req.body.signatureDataUrl || "");
+      const incidentTypes = Array.isArray(cleaner.incidentTypes) ? cleaner.incidentTypes.filter((v: any) => String(v).trim()).map((v: any) => String(v).trim()) : [];
+      const injurySelected = incidentTypes.some((v: string) => ["injury/illness", "injury", "illness"].includes(v.toLowerCase()));
+      const injuryDetails = cleaner.injuryDetails && typeof cleaner.injuryDetails === "object" ? cleaner.injuryDetails : incidentJson(cleaner.injuryDetails, null);
       const answers = incidentJson(req.body.answers, incidentJson(found.report.incidentQuestionsJson, {}));
       const configuredQuestions: any[] = incidentJson(found.report.incidentQuestionsJson, []);
       const missingQuestion = Array.isArray(configuredQuestions) && configuredQuestions.find((q: any, i: number) => {
@@ -5555,12 +5666,36 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       });
       const [evidence] = await db.select({ count: sql<number>`count(*)` }).from(incidentEvidence).where(and(eq(incidentEvidence.reportId, found.report.id), inArray(incidentEvidence.mimeType, ["image/jpeg", "image/png", "image/webp"])));
       if (!statement || missingQuestion || !declarationAccepted || !signature.startsWith("data:image/png;base64,") || signature.length > 1_500_000) return res.status(400).json({ message: "All required sections, declaration acceptance and drawn signature are required" });
-      if (Number(evidence?.count || 0) < Number(found.report.incidentMinPhotos || 0)) return res.status(400).json({ message: `At least ${found.report.incidentMinPhotos} evidence photo(s) are required` });
+      const requiredPhotoCount = Math.max(1, Number(found.report.incidentMinPhotos || 0));
+      if (Number(evidence?.count || 0) < requiredPhotoCount) return res.status(400).json({ message: `At least ${requiredPhotoCount} evidence photo(s) are required` });
+      const requiredMissing = [
+        ["exactLocation", cleaner.exactLocation],
+        ["incidentDate", cleaner.incidentDate], ["incidentTime", cleaner.incidentTime],
+        ["description", statement],
+        ["cleanerSignerName", cleaner.cleanerSignerName],
+      ].find(([, value]) => !String(value || "").trim());
+      if (requiredMissing || (injurySelected && (!injuryDetails || !Object.values(injuryDetails).some((v: any) => String(v || "").trim())))) return res.status(400).json({ message: "All required cleaner incident fields must be completed" });
       const employee: any = await storage.getUser(found.report.assignedEmployeeId!);
       const now = incidentNow();
       const updated = await db.transaction(async tx => {
-        await tx.insert(incidentEmployeeSnapshots).values({ reportId: found.report.id, companyId: found.report.companyId, employeeId: employee.id, employeeIdSnapshot: employee.employeeId || employee.id, employeeNameSnapshot: `${employee.firstName} ${employee.lastName}`.trim(), positionSnapshot: employee.position, statementSnapshot: statement, answersJson: JSON.stringify(answers), declarationTextSnapshot: found.report.incidentDeclarationText || "I declare that the information provided is true and complete.", signatureDataUrl: signature, signedAt: now, submittedAt: now, createdAt: now });
-        const finalFields: any = { employeeStatement: statement, status: "submitted", updatedAt: now };
+        await tx.insert(incidentEmployeeSnapshots).values({
+          reportId: found.report.id, companyId: found.report.companyId, employeeId: employee.id,
+          employeeIdSnapshot: employee.employeeId || employee.id, employeeNameSnapshot: `${employee.firstName} ${employee.lastName}`.trim(),
+          positionSnapshot: employee.position, statementSnapshot: statement, answersJson: JSON.stringify(answers),
+          declarationTextSnapshot: found.report.incidentDeclarationText || "I declare that the information provided is true and complete.",
+          signatureDataUrl: signature, signedAt: now, submittedAt: now, createdAt: now,
+          companySiteName: String(cleaner.companySiteName || "").trim() || null, departmentCrew: String(cleaner.departmentCrew || "").trim() || null,
+          exactLocation: String(cleaner.exactLocation).trim(), incidentDate: String(cleaner.incidentDate).trim(),
+          incidentTime: String(cleaner.incidentTime).trim(), shift: String(cleaner.shift || "").trim() || null,
+          cleanerName: String(cleaner.cleanerName || "").trim() || `${employee.firstName} ${employee.lastName}`.trim(), cleanerRole: String(cleaner.cleanerRole || employee.position || "Cleaner").trim(),
+          incidentTypesJson: JSON.stringify(incidentTypes), description: statement,
+          injuryDetailsJson: injuryDetails ? JSON.stringify(injuryDetails) : null,
+          witnessesJson: JSON.stringify(Array.isArray(cleaner.witnesses) ? cleaner.witnesses : []),
+          immediateActionsJson: JSON.stringify(Array.isArray(cleaner.immediateActions) ? cleaner.immediateActions : []),
+          immediateActionsNotes: String(cleaner.immediateActionsNotes || "").trim() || null,
+          cleanerSignerName: String(cleaner.cleanerSignerName).trim(), cleanerSignatureDataUrl: signature, cleanerSignedAt: now,
+        });
+        const finalFields: any = { employeeStatement: statement, status: "pending_review", updatedAt: now, incidentCleanerDraftJson: null };
         for (const key of ["incidentDate", "incidentTime", "areaAffected", "immediateAction"]) if (req.body[key] !== undefined) finalFields[key] = String(req.body[key]);
         const [saved] = await tx.update(reports).set(finalFields).where(and(eq(reports.id, found.report.id), eq(reports.companyId, found.report.companyId))).returning();
         return saved;

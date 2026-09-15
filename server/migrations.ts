@@ -113,6 +113,7 @@ export async function runStartupMigrations() {
       ALTER TABLE reports ADD COLUMN IF NOT EXISTS incident_min_photos integer NOT NULL DEFAULT 0;
       ALTER TABLE reports ADD COLUMN IF NOT EXISTS incident_questions_json text;
       ALTER TABLE reports ADD COLUMN IF NOT EXISTS incident_declaration_text text;
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS incident_cleaner_draft_json text;
       CREATE TABLE IF NOT EXISTS incident_employee_snapshots (
         id varchar PRIMARY KEY DEFAULT gen_random_uuid(), report_id varchar NOT NULL UNIQUE,
         company_id varchar NOT NULL, employee_id varchar NOT NULL,
@@ -146,6 +147,30 @@ export async function runStartupMigrations() {
         final_decision text, next_steps text, client_allowlist_json text NOT NULL DEFAULT '[]',
         updated_by_user_id varchar NOT NULL, updated_at text NOT NULL
       );
+      ALTER TABLE incident_employee_snapshots ADD COLUMN IF NOT EXISTS company_site_name text;
+      ALTER TABLE incident_employee_snapshots ADD COLUMN IF NOT EXISTS department_crew text;
+      ALTER TABLE incident_employee_snapshots ADD COLUMN IF NOT EXISTS exact_location text;
+      ALTER TABLE incident_employee_snapshots ADD COLUMN IF NOT EXISTS incident_date text;
+      ALTER TABLE incident_employee_snapshots ADD COLUMN IF NOT EXISTS incident_time text;
+      ALTER TABLE incident_employee_snapshots ADD COLUMN IF NOT EXISTS shift text;
+      ALTER TABLE incident_employee_snapshots ADD COLUMN IF NOT EXISTS cleaner_name text;
+      ALTER TABLE incident_employee_snapshots ADD COLUMN IF NOT EXISTS cleaner_role text;
+      ALTER TABLE incident_employee_snapshots ADD COLUMN IF NOT EXISTS incident_types_json text NOT NULL DEFAULT '[]';
+      ALTER TABLE incident_employee_snapshots ADD COLUMN IF NOT EXISTS description text;
+      ALTER TABLE incident_employee_snapshots ADD COLUMN IF NOT EXISTS injury_details_json text;
+      ALTER TABLE incident_employee_snapshots ADD COLUMN IF NOT EXISTS witnesses_json text NOT NULL DEFAULT '[]';
+      ALTER TABLE incident_employee_snapshots ADD COLUMN IF NOT EXISTS immediate_actions_json text NOT NULL DEFAULT '[]';
+      ALTER TABLE incident_employee_snapshots ADD COLUMN IF NOT EXISTS immediate_actions_notes text;
+      ALTER TABLE incident_employee_snapshots ADD COLUMN IF NOT EXISTS cleaner_signer_name text;
+      ALTER TABLE incident_employee_snapshots ADD COLUMN IF NOT EXISTS cleaner_signature_data_url text;
+      ALTER TABLE incident_employee_snapshots ADD COLUMN IF NOT EXISTS cleaner_signed_at text;
+      ALTER TABLE incident_evidence ADD COLUMN IF NOT EXISTS evidence_type text;
+      ALTER TABLE incident_investigations ADD COLUMN IF NOT EXISTS root_cause text;
+      ALTER TABLE incident_investigations ADD COLUMN IF NOT EXISTS actions_resolution text;
+      ALTER TABLE incident_investigations ADD COLUMN IF NOT EXISTS preventive_measures text;
+      ALTER TABLE incident_investigations ADD COLUMN IF NOT EXISTS admin_signer_name text;
+      ALTER TABLE incident_investigations ADD COLUMN IF NOT EXISTS admin_signature_data_url text;
+      ALTER TABLE incident_investigations ADD COLUMN IF NOT EXISTS admin_signed_at text;
       CREATE INDEX IF NOT EXISTS idx_incident_snapshots_company ON incident_employee_snapshots(company_id);
       CREATE INDEX IF NOT EXISTS idx_incident_evidence_report ON incident_evidence(report_id, company_id);
       CREATE INDEX IF NOT EXISTS idx_incident_amendments_report ON incident_amendments(report_id, company_id);
