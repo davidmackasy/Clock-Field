@@ -1,0 +1,796 @@
+Yes. I would make this a **dedicated Incident Reports module inside Clockfield**, using the existing employee authentication and Clockfield design system. It should feel like part of Clockfield, not a separate form product.
+
+The research supports a two-part structure: first, the employee records the facts and evidence; then management reviews the report, investigates causes, adds corrective actions, signs it, and produces the final report. CCOHS recommends collecting physical evidence, photos, witness information, sequence of events and contributing factors rather than simply assigning blame. Manitoba guidance similarly expects incident reports to document who was involved, when and where it happened, what happened, evidence, causes and corrective actions. ([CCOHS][1])
+
+## Clockfield — Incident Reports
+
+I would add **Incident Reports** to the Clockfield admin navigation.
+
+The workflow would be:
+
+**Admin creates incident → Clockfield generates secure link → cleaner authenticates → cleaner completes report → cleaner signs → admin receives report → admin reviews/investigates → admin signs → final report is generated → admin sends report to client.**
+
+### 1. Admin creates the incident request
+
+Admin clicks:
+
+**Incident Reports → + New Incident Report**
+
+The creation screen should look like the rest of Clockfield and use the existing Clockfield logo, typography, buttons, cards and colours.
+
+Admin selects:
+
+* Client
+* Location/site
+* Assigned employee/cleaner
+* Incident category
+* Date of incident, if already known
+* Approximate time, if known
+* Area of building, if known
+* Priority: Low / Medium / High / Critical
+* Sections the cleaner must complete
+* Whether photos are required
+* Minimum number of photos, if appropriate
+* Additional custom questions
+* Internal admin note
+* Delivery method: Copy Link / Email / SMS, depending on what Clockfield supports
+
+Clockfield automatically displays:
+
+> **Report must be submitted within 24 hours.**
+
+The expiration should be calculated server-side from the moment the link is created.
+
+Example:
+
+**Created:** September 14, 2026 · 9:15 PM
+**Expires:** September 15, 2026 · 9:15 PM
+
+Admin clicks:
+
+**Generate & Send Report**
+
+---
+
+# 2. The link
+
+The employee receives something like:
+
+`clockfield.com/incident/IR-A8X29P`
+
+The token should not expose the employee ID, client ID, location ID or internal database IDs.
+
+When opened, show a simple branded page:
+
+**Clockfield logo**
+
+### Incident Report
+
+You've been requested to complete an incident report for an event at:
+
+**Client:** ABC Property Management
+**Location:** 123 Main Street
+**Report:** INC-2026-00142
+
+**This report must be completed by September 15 at 9:15 PM.**
+
+Then:
+
+**Employee ID**
+**Password**
+
+**Continue to Incident Report**
+
+This should use the **existing Clockfield employee ID/password authentication**. Do not create another employee account system and do not change the existing employee login architecture.
+
+If the report is assigned to EMP-1010, another employee should not be able to authenticate and complete it.
+
+---
+
+# 3. Cleaner Incident Report
+
+Once authenticated, their information should automatically populate.
+
+### Incident Information
+
+**Incident #**
+INC-2026-00142
+
+**Employee**
+Jane Smith
+
+**Employee ID**
+EMP-1010
+
+**Client**
+ABC Property Management
+
+**Location**
+123 Main Street
+
+These should be **read-only** because the admin already selected them.
+
+Then ask:
+
+**When did the incident happen?**
+
+Date
+Time
+
+**Where exactly did it happen?**
+
+Example:
+
+> Men's washroom, second floor, beside the north entrance.
+
+---
+
+# 4. Incident Type
+
+The cleaner selects one or more categories.
+
+For a cleaning company, I would include:
+
+* Injury / Illness
+* Slip / Trip / Fall
+* Near Miss
+* Property Damage
+* Equipment Damage
+* Chemical Spill / Exposure
+* Water Leak / Flood
+* Broken Glass / Fixture
+* Biohazard / Sharps
+* Security Concern
+* Theft / Vandalism
+* Alarm / Access Issue
+* Vehicle Incident
+* Client Complaint / Concern
+* Employee Conduct Incident
+* Fire / Smoke
+* Hazardous Condition
+* Lost / Found Property
+* Other
+
+Clockfield should then show **dynamic questions depending on the category**.
+
+This is important because a chemical spill does not require exactly the same information as a broken client's television.
+
+---
+
+# 5. What Happened?
+
+This should be the most important section.
+
+### Describe what happened
+
+> Please describe the incident in your own words. Include what you were doing immediately before the incident, what happened, and what happened immediately afterward.
+
+Large text field.
+
+Then:
+
+**What were you doing immediately before the incident?**
+
+**What did you see or hear?**
+
+**What happened immediately afterward?**
+
+**What do you believe may have contributed to the incident?**
+
+Those questions closely follow incident-investigation practices recommended by CCOHS, which emphasize establishing the sequence of events and gathering observations before reaching conclusions. ([CCOHS][1])
+
+---
+
+# 6. People Involved
+
+### Was anyone involved?
+
+Yes / No
+
+If Yes:
+
+**Add Person**
+
+* Name
+* Employee / Client employee / Visitor / Contractor / Other
+* Role in incident
+* Contact details, if known
+
+### Was anyone injured?
+
+Yes / No
+
+If Yes, dynamically show:
+
+* Name of injured person
+* Type of injury
+* Area of body affected
+* First aid provided?
+* Who provided first aid?
+* Medical attention required?
+* Ambulance called?
+* Hospital/clinic visit?
+* Did they leave work?
+* Additional details
+
+Manitoba WCB's worker reporting materials similarly capture the incident date, location, description, injury information, witnesses and signatures. ([Workers Compensation Board of Manitoba][2])
+
+---
+
+# 7. Witnesses
+
+### Did anyone witness what happened?
+
+Yes / No / Unsure
+
+If Yes:
+
+**+ Add Witness**
+
+* Name
+* Phone/email if available
+* Employer/company if applicable
+* What did they witness?
+
+Allow multiple witnesses.
+
+---
+
+# 8. Property / Equipment Damage
+
+If applicable:
+
+### Was anything damaged?
+
+Yes / No
+
+Then:
+
+* Item/property damaged
+* Owner: Client / Employer / Employee / Third Party
+* Description
+* Asset/equipment number
+* Approximate damage severity
+* Is equipment still safe to use?
+* Was equipment removed from service?
+
+---
+
+# 9. Photos & Evidence
+
+This needs to be a major part of the Clockfield implementation.
+
+### Add Evidence
+
+Cleaner can:
+
+**Take Photo**
+**Upload Photo**
+
+Allow perhaps **up to 20 photos**.
+
+For every photo allow a caption:
+
+> Broken glass beside rear entrance.
+
+> Water leaking underneath sink.
+
+> Damage to client's desk.
+
+Also allow:
+
+* Video, potentially later
+* Documents
+* Screenshot
+* Other evidence
+
+The system should preserve:
+
+* Upload timestamp
+* Who uploaded it
+* Report ID
+* Original file
+* Caption
+
+CCOHS specifically recommends photographing the scene and relevant items before evidence changes, while Manitoba guidance identifies photographs, graphics and other evidence as useful parts of the written investigation. ([CCOHS][1])
+
+---
+
+# 10. Immediate Actions Taken
+
+Ask:
+
+### What did you do immediately after the incident?
+
+Options could include:
+
+☐ Stopped work
+☐ Secured the area
+☐ Placed warning signs
+☐ Contacted supervisor
+☐ Contacted client
+☐ Provided first aid
+☐ Called emergency services
+☐ Cleaned spill
+☐ Removed equipment from service
+☐ Nothing required
+☐ Other
+
+Then:
+
+**Explain any actions you took.**
+
+---
+
+# 11. Who Was Notified?
+
+### Did you notify anyone?
+
+Then allow multiple:
+
+* Supervisor
+* Manager
+* Client
+* Security
+* Police
+* Fire department
+* Ambulance
+* Workplace Safety and Health
+* Other
+
+Include approximate time of notification.
+
+---
+
+# 12. Prevention
+
+A very useful question:
+
+### What do you think could prevent this from happening again?
+
+This should be optional for the employee.
+
+It can give management useful information without asking the cleaner to conduct the formal investigation.
+
+---
+
+# 13. Employee Declaration & Signature
+
+At the end:
+
+> **Declaration**
+>
+> I confirm that the information provided in this incident report is true and accurate to the best of my knowledge. I understand that this report may be reviewed by my employer and, where appropriate, the client or other authorized parties.
+
+Checkbox:
+
+**☐ I confirm the above statement.**
+
+Then:
+
+### Employee Signature
+
+Use an actual finger/mouse signature pad.
+
+**Clear** | **Sign**
+
+Clockfield records automatically:
+
+* Employee name
+* Employee ID
+* Signature
+* Date
+* Exact submission time
+* Report ID
+* Authentication session
+* Device/browser information
+* IP address where appropriate
+
+Then:
+
+**Submit Incident Report**
+
+Before submission:
+
+> Once submitted, your statement cannot be edited. Please review your answers carefully.
+
+I strongly recommend this.
+
+The employee's original statement should become **immutable after submission**. Admins should not be able to silently modify what the employee said.
+
+---
+
+# 14. What the employee sees afterward
+
+### Incident Report Submitted
+
+✓ **Thank you. Your incident report has been submitted successfully.**
+
+**Report #: INC-2026-00142**
+
+**Submitted:** September 15, 2026 · 8:47 AM
+
+> No further action is required unless your supervisor contacts you.
+
+They should not see the admin investigation.
+
+---
+
+# 15. The 24-hour expiration
+
+This should be strict.
+
+Possible statuses:
+
+**Pending**
+**Opened**
+**In Progress**
+**Submitted**
+**Expired**
+**Under Admin Review**
+**Admin Signed**
+**Sent to Client**
+**Closed**
+
+If they open it after expiration:
+
+### This Incident Report Link Has Expired
+
+> This incident report was required within 24 hours and is no longer available. Please contact your supervisor if you still need to submit a report.
+
+**Do not allow submission after expiration.**
+
+The admin gets:
+
+**Reissue Link**
+
+Clicking it creates a **new 24-hour period** and invalidates the old token.
+
+I would also have Clockfield automatically send an admin reminder around **18 hours** if it has not been submitted.
+
+---
+
+# 16. Admin gets the report
+
+Immediately after employee submission:
+
+**Clockfield notification**
+
+> Incident Report Submitted
+> Jane Smith submitted INC-2026-00142 for ABC Property Management — Main Street.
+
+And email:
+
+> Jane Smith has completed Incident Report INC-2026-00142. Review is required.
+
+Admin opens the report.
+
+The employee portion should appear exactly as submitted with a badge:
+
+**EMPLOYEE STATEMENT — LOCKED**
+
+---
+
+# 17. Admin Investigation Section
+
+This is where Clockfield becomes much more powerful than merely having a PDF form.
+
+### Admin Review
+
+**Severity**
+
+Low / Medium / High / Critical
+
+**Classification**
+
+Near Miss / First Aid / Medical Treatment / Property Damage / Lost Time / Serious Incident / Other
+
+### Root Cause Review
+
+Based on CCOHS's investigation framework, you could provide:
+
+* Task / Work Procedure
+* Equipment / Materials
+* Environment
+* Personnel / Human Factors
+* Management / Process
+
+CCOHS uses these categories as a framework for looking beyond the immediate event and identifying contributing/root causes. ([CCOHS][1])
+
+Admin then documents:
+
+**Immediate Cause**
+
+**Contributing Factors**
+
+**Root Cause**
+
+---
+
+# 18. Corrective Actions
+
+### Immediate corrective action
+
+Example:
+
+> Area closed and wet-floor signage installed.
+
+### Long-term corrective action
+
+Example:
+
+> Replace leaking supply line and add sink inspection to weekly site checklist.
+
+Then:
+
+**Assigned To**
+
+**Due Date**
+
+**Status**
+
+Pending / In Progress / Completed
+
+This is directly aligned with Manitoba guidance that the written investigation document immediate corrective action and longer-term measures intended to prevent recurrence. ([Workers Compensation Board of Manitoba][3])
+
+---
+
+# 19. Reporting / Compliance Section
+
+I would add an internal admin-only question:
+
+### Does this incident require external reporting?
+
+* WCB
+* Workplace Safety and Health
+* Insurance
+* Police
+* Client
+* Other
+* None
+
+And:
+
+**External Report Reference #**
+
+This is important because **Clockfield's incident report should not be presented as replacing legally required notifications**.
+
+For example, Manitoba requires employers to notify Workplace Safety and Health **immediately and by the fastest means available** for defined serious incidents. The internal Clockfield 24-hour link cannot be used as a reason to delay that notification. ([Province of Manitoba][4])
+
+Clockfield could actually show administrators a warning for certain answers:
+
+> ⚠️ **Potential Serious Incident**
+> This incident may require immediate regulatory reporting. Clockfield's internal report does not replace applicable reporting requirements.
+
+---
+
+# 20. Admin Signature
+
+Once reviewed:
+
+### Management Declaration
+
+> I confirm that I have reviewed the employee's incident report and documented the organization's findings and corrective actions.
+
+**Admin Signature**
+
+Name
+Position
+Date/time
+Signature
+
+Then:
+
+**Finalize Incident Report**
+
+Once finalized, both employee and administrator sections lock.
+
+---
+
+# 21. Client Report
+
+Then Clockfield generates a beautiful professional report.
+
+Header:
+
+**CLOCKFIELD**
+
+# INCIDENT REPORT
+
+**Report #: INC-2026-00142**
+
+Client
+Location
+Incident Date
+Incident Time
+Reported By
+Reviewed By
+Status
+
+Then sections:
+
+**1. Incident Summary**
+
+**2. People Involved**
+
+**3. Description of Incident**
+
+**4. Photos & Evidence**
+
+**5. Immediate Actions Taken**
+
+**6. Witnesses**
+
+**7. Management Findings**
+
+**8. Corrective Actions**
+
+**9. Employee Declaration & Signature**
+
+**10. Management Declaration & Signature**
+
+Footer on every page:
+
+**Incident Report INC-2026-00142 · Generated by Clockfield**
+
+Admin buttons:
+
+**Download PDF**
+**Send to Client**
+**Copy Secure Client Link**
+
+---
+
+## One thing I would add: Internal vs Client version
+
+This is important.
+
+Have two versions:
+
+**Full Internal Report**
+Contains everything.
+
+**Client Report**
+Admin decides what information is appropriate to share.
+
+For example, you may not want someone's personal phone number, private medical information or unrelated internal disciplinary notes going to a client.
+
+Before sending:
+
+### Information shared with client
+
+☑ Incident details
+☑ Description
+☑ Photos
+☑ Damage information
+☑ Immediate actions
+☑ Corrective actions
+☐ Employee personal information
+☐ Medical information
+☐ Internal admin notes
+
+That makes Clockfield much more professional.
+
+---
+
+# Admin Incident Dashboard
+
+I would give the module a dashboard like:
+
+**Incident Reports**
+
+| Report        | Client         | Location | Employee   | Type            | Status       | Due       |
+| ------------- | -------------- | -------- | ---------- | --------------- | ------------ | --------- |
+| INC-2026-0142 | ABC Properties | Main St  | Jane Smith | Property Damage | Admin Review | Submitted |
+| INC-2026-0141 | CO-OP          | Oak Bank | John Doe   | Slip/Fall       | Pending      | 4h 12m    |
+| INC-2026-0140 | XYZ Ltd        | Downtown | Sarah M    | Water Leak      | Expired      | Expired   |
+
+At the top:
+
+**12 Open** | **3 Awaiting Employee** | **4 Admin Review** | **2 Overdue/Expired** | **37 Closed**
+
+Filters:
+
+Client · Location · Employee · Type · Severity · Status · Date
+
+---
+
+## And I would make the form configurable
+
+This is where your idea becomes particularly strong.
+
+Don't hard-code one gigantic form.
+
+Create **Incident Templates**.
+
+For example:
+
+**General Incident**
+**Employee Injury**
+**Property Damage**
+**Chemical Spill**
+**Slip / Trip / Fall**
+**Security Incident**
+**Vehicle Incident**
+**Near Miss**
+
+Admin chooses a template and Clockfield automatically loads the appropriate questions.
+
+Then let administrators add custom questions:
+
+**+ Add Question**
+
+Question types:
+
+Short answer
+Long answer
+Yes/No
+Multiple choice
+Checkbox
+Date
+Time
+Photo
+Signature
+
+That gives cleaning companies freedom to build their own reporting procedures without you having to code a different form for every company.
+
+---
+
+## One technical rule I would insist on
+
+Do **not** allow admin users to edit the cleaner's submitted answers.
+
+If something needs clarification:
+
+**Request Additional Information**
+
+The employee receives another secure link and adds an amendment:
+
+> **Employee Amendment — September 16, 2026, 10:17 AM**
+
+The original remains untouched.
+
+That creates a much stronger audit trail.
+
+---
+
+## Overall Clockfield flow
+
+**ADMIN**
+
+`Incident Reports → New Report → Client → Location → Employee → Incident Type → Required Questions → Generate Link`
+
+↓
+
+**EMPLOYEE**
+
+`Open Link → Employee ID + Password → Incident Form → Photos → Declaration → Signature → Submit`
+
+↓
+
+**CLOCKFIELD**
+
+`Lock employee submission → Notify admin → Store evidence/audit trail`
+
+↓
+
+**ADMIN**
+
+`Review → Investigation → Root Cause → Corrective Action → Signature → Finalize`
+
+↓
+
+**CLIENT**
+
+`Professional PDF / Secure Client Report`
+
+That is the version I would build. It isn't merely an "incident form"; it becomes a complete **incident reporting and investigation workflow inside Clockfield**.
+
+One particularly important Manitoba-specific point: serious incidents may require immediate notification to Workplace Safety and Health, and workplace injuries that require medical attention or time away can also trigger WCB reporting obligations. Clockfield should therefore help administrators capture the necessary information, but clearly state that its internal report does not itself satisfy or postpone external regulatory reporting. ([Province of Manitoba][4])
+
+If you're sending this to your coding agent, the next step should be turning the above into the **full implementation PRD with database schema, API endpoints, exact admin screens, cleaner mobile screens, link-expiration logic, signatures, photo storage, email notifications and PDF layout**, while explicitly telling the agent **not to modify or break the current Clockfield employee login/clock-in system**.
+
+[1]: https://www.ccohs.ca/oshanswers/hsprograms/investig.html?utm_source=chatgpt.com "CCOHS: Incident Investigation"
+[2]: https://www.wcb.mb.ca/sites/default/files/resources/9657%20WCB%20Notice%20of%20Injury%20Web%20Form%202.pdf?utm_source=chatgpt.com "NOTICE OF INJURY TO EMPLOYER"
+[3]: https://www.wcb.mb.ca/safety-swap/reporting-serious-incidents/?utm_source=chatgpt.com "Reporting serious incidents – Workers Compensation Board of Manitoba"
+[4]: https://gov.mb.ca/labour/safety/rep_serious_act.html?utm_source=chatgpt.com "Report a Serious Incident | Workplace Safety and Health | Labour | Labour and Immigration | Province of Manitoba"
