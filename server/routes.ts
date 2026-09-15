@@ -5307,6 +5307,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       res.status(201).json({
         incident: report,
         employeeUrl: `${incidentAppUrl()}/incident/${raw}`,
+        employeePath: `/incident/${raw}`,
         expiresAt: expires,
       });
     } catch (err: any) { res.status(500).json({ message: "Unable to create incident" }); }
@@ -5368,7 +5369,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       await storage.createReportAccessToken({ reportId: report.id, recipientType: "employee", recipientEmail: employee.email || `${employee.id}@invalid.local`, tokenHash: incidentHash(raw), permissions: ["read", "write", "submit", "evidence"], createdAt: incidentNow(), expiresAt: expires, revokedAt: null, lastAccessedAt: null, signedAt: null, createdByUserId: req.user.id });
       if (report.status === "expired") await storage.updateReport(report.id, req.user.companyId, { status: "pending" });
-      res.json({ employeeUrl: `${incidentAppUrl()}/incident/${raw}`, expiresAt: expires });
+      res.json({ employeeUrl: `${incidentAppUrl()}/incident/${raw}`, employeePath: `/incident/${raw}`, expiresAt: expires });
     } catch (err: any) { res.status(500).json({ message: "Unable to reissue incident link" }); }
   });
 
@@ -5433,19 +5434,21 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
   app.post("/api/admin/incidents/:id/send-client", requireRole("admin"), async (req: any, res) => {
     try {
       const report: any = await storage.getReport(req.params.id, req.user.companyId);
-      if (!report || report.reportType !== "incident" || !report.assignedClientId) return res.status(404).json({ message: "Incident or client not found" });
-      if (report.status !== "admin_signed") return res.status(409).json({ message: "Finalize the incident with an admin signature before client sharing" });
-      const client = await storage.getClient(report.assignedClientId);
-      if (!client || client.companyId !== req.user.companyId || !client.contactEmail) return res.status(400).json({ message: "Client has no email address" });
+      if (!report || report.reportType !== "incident") return res.status(404).json({ message: "Incident not found" });
+      if (!["admin_signed", "sent_to_client"].includes(report.status)) return res.status(409).json({ message: "Finalize the incident with an admin signature before client sharing" });
+      const client = report.assignedClientId ? await storage.getClient(report.assignedClientId) : null;
+      if (client && client.companyId !== req.user.companyId) return res.status(400).json({ message: "Assigned client is invalid" });
       const allowlist = Array.isArray(req.body.allowlist) ? req.body.allowlist.filter((v: any) => ["title", "summary", "incidentDate", "incidentTime", "severity", "incidentCategory", "areaAffected", "immediateAction"].includes(v)) : ["title", "summary", "incidentDate", "incidentCategory", "areaAffected", "immediateAction"];
       const now = incidentNow(); const raw = randomBytes(32).toString("base64url");
       await db.update(reportAccessTokens).set({ revokedAt: now }).where(and(eq(reportAccessTokens.reportId, report.id), eq(reportAccessTokens.recipientType, "client"), isNull(reportAccessTokens.revokedAt)));
-      await storage.createReportAccessToken({ reportId: report.id, recipientType: "client", recipientEmail: client.contactEmail, tokenHash: incidentHash(raw), permissions: ["read"], createdAt: now, expiresAt: null, revokedAt: null, lastAccessedAt: null, signedAt: null, createdByUserId: req.user.id });
+      await storage.createReportAccessToken({ reportId: report.id, recipientType: "client", recipientEmail: client?.contactEmail || "manual-delivery@invalid.local", tokenHash: incidentHash(raw), permissions: ["read"], createdAt: now, expiresAt: null, revokedAt: null, lastAccessedAt: null, signedAt: null, createdByUserId: req.user.id });
       await db.insert(incidentInvestigations).values({ reportId: report.id, companyId: req.user.companyId, clientAllowlistJson: JSON.stringify(allowlist), updatedByUserId: req.user.id, updatedAt: now }).onConflictDoUpdate({ target: incidentInvestigations.reportId, set: { clientAllowlistJson: JSON.stringify(allowlist), updatedByUserId: req.user.id, updatedAt: now } });
       await storage.updateReport(report.id, req.user.companyId, { status: "sent_to_client", sentToClient: true, sentAt: now });
       const company = await storage.getCompany(req.user.companyId);
-      void sendIncidentClientEmail({ to: client.contactEmail, recipientName: client.contactName || client.name, companyName: company?.name || "Your company", incidentTitle: report.title, incidentUrl: `${incidentAppUrl()}/incident/client/${raw}` }).catch(() => undefined);
-      res.json({ clientUrl: `${incidentAppUrl()}/incident/client/${raw}`, allowlist });
+      if (client?.contactEmail) {
+        void sendIncidentClientEmail({ to: client.contactEmail, recipientName: client.contactName || client.name, companyName: company?.name || "Your company", incidentTitle: report.title, incidentUrl: `${incidentAppUrl()}/incident/client/${raw}` }).catch(() => undefined);
+      }
+      res.json({ clientUrl: `${incidentAppUrl()}/incident/client/${raw}`, clientPath: `/incident/client/${raw}`, allowlist });
     } catch (err: any) { res.status(500).json({ message: "Unable to send incident to client" }); }
   });
 
@@ -5457,8 +5460,13 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       if (token.revokedAt || incidentExpired(token)) return res.status(410).json({ message: "Incident link expired" });
       if (token.recipientType === "client") {
         const [investigation] = await db.select().from(incidentInvestigations).where(and(eq(incidentInvestigations.reportId, report.id), eq(incidentInvestigations.companyId, report.companyId)));
+        const [snapshot] = await db.select().from(incidentEmployeeSnapshots).where(and(eq(incidentEmployeeSnapshots.reportId, report.id), eq(incidentEmployeeSnapshots.companyId, report.companyId)));
         const allowlist = incidentJson(investigation?.clientAllowlistJson, []);
-        return res.json({ report: incidentPublicReport(report, allowlist), expiresAt: token.expiresAt || null, requiresAuthentication: false });
+        const clientReport = incidentPublicReport({
+          ...report,
+          summary: investigation?.findings || report.summary || snapshot?.statementSnapshot,
+        }, allowlist);
+        return res.json({ report: clientReport, expiresAt: token.expiresAt || null, requiresAuthentication: false });
       }
       if (token.recipientType !== "employee") return res.status(404).json({ message: "Incident link not found" });
       const company = await storage.getCompany(report.companyId);

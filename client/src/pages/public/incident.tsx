@@ -22,7 +22,19 @@ export default function PublicIncident({ clientView = false }: { clientView?: bo
   useEffect(() => { if (!auth || clientView) return; apiRequest("GET", `/api/employee/incidents/${token}/draft`).then(r => r.json()).then(d => { setForm(v => ({ ...v, ...d.incident })); setExistingEvidence(d.evidence ?? []); }).catch(() => undefined); }, [auth, clientView, token]);
   useEffect(() => { if (!auth || clientView || step < 1) return; const timer = window.setTimeout(() => { setSaving(true); apiRequest("PATCH", `/api/employee/incidents/${token}/draft`, { incidentDate: form.incidentDate, incidentTime: form.incidentTime, areaAffected: form.areaAffected, employeeStatement: form.employeeStatement, immediateAction: form.immediateAction, declarationAccepted: form.declarationAccepted, signatureDataUrl: form.signatureDataUrl }).finally(() => setSaving(false)); }, 650); return () => window.clearTimeout(timer); }, [form, auth, clientView, step, token]);
   async function login() { setError(""); try { await apiRequest("POST", `/api/public/incidents/${token}/authenticate`, { employeeId: form.employeeId, password: form.password }); setAuth(true); setStep(1); } catch { setError("Employee ID or password was not accepted."); } }
-  async function uploadPhotos() { for (const photo of photos) { const body = new FormData(); body.append("file", photo.file); body.append("caption", photo.caption); await apiRequest("POST", `/api/employee/incidents/${token}/evidence`, body); } }
+  async function uploadPhotos() {
+    for (const photo of photos) {
+      const body = new FormData();
+      body.append("file", photo.file);
+      body.append("caption", photo.caption);
+      const response = await fetch(`/api/employee/incidents/${token}/evidence`, {
+        method: "POST",
+        body,
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Evidence upload failed");
+    }
+  }
   async function submit() { try { await uploadPhotos(); await apiRequest("POST", `/api/employee/incidents/${token}/submit`, { incidentDate: form.incidentDate, incidentTime: form.incidentTime, areaAffected: form.areaAffected, employeeStatement: form.employeeStatement, immediateAction: form.immediateAction, declarationAccepted: form.declarationAccepted, signatureDataUrl: form.signatureDataUrl }); setPhotos([]); setDone(true); } catch { setError("We could not submit this report. Your draft is still saved."); } }
   function draw(e: React.PointerEvent<HTMLCanvasElement>) { const c = canvas.current; if (!c || !drawing.current) return; const r = c.getBoundingClientRect(); const ctx = c.getContext("2d"); if (!ctx) return; ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.strokeStyle = "#163842"; ctx.lineTo(e.clientX-r.left, e.clientY-r.top); ctx.stroke(); update("signatureDataUrl", c.toDataURL("image/png")); }
   if (error && !meta) return <Shell><State title="Request unavailable" detail={error} /></Shell>;

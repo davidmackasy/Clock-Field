@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import IncidentReportWizard from "@/pages/admin/incident-report-wizard";
+import IncidentLinkGenerator from "@/pages/admin/incident-link-generator";
 
 const tone: Record<string, string> = {
   pending: "bg-slate-100 text-slate-700",
@@ -23,7 +23,7 @@ const tone: Record<string, string> = {
 };
 
 export default function AdminIncidents() {
-  const [wizardOpen, setWizardOpen] = useState(false);
+  const [generatorOpen, setGeneratorOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const { data, isLoading, isError } = useQuery<any>({
@@ -47,7 +47,7 @@ export default function AdminIncidents() {
             <h1 className="mt-1 text-2xl font-semibold tracking-tight">Incident reports</h1>
             <p className="mt-1 text-sm text-muted-foreground">A clear record of what happened, what changed, and what happens next.</p>
           </div>
-          <Button onClick={() => setWizardOpen(true)} className="w-full gap-2 sm:w-auto"><FilePlus2 className="h-4 w-4" />New incident report</Button>
+          <Button onClick={() => setGeneratorOpen(true)} className="w-full gap-2 sm:w-auto"><FilePlus2 className="h-4 w-4" />Generate incident link</Button>
         </div>
       </div>
       <div className="mx-auto max-w-[1440px] space-y-6 px-5 py-6 md:px-8">
@@ -85,7 +85,7 @@ export default function AdminIncidents() {
           </CardContent>
         </Card>
       </div>
-      <IncidentReportWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
+       <IncidentLinkGenerator open={generatorOpen} onClose={() => setGeneratorOpen(false)} />
     </div>
   );
 }
