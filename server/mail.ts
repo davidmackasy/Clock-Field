@@ -589,6 +589,53 @@ ${flagged ? '<p style="padding:12px;background:#fef2f2;border-left:4px solid #dc
   await client.messages.create(domain, { from, to: [opts.to], subject, text, html });
 }
 
+/** A deliberately minimal, escaped notification for immutable incident submissions. */
+export async function sendIncidentSubmissionEmail(opts: {
+  to: string;
+  adminName: string;
+  employeeName: string;
+  incidentTitle: string;
+  submittedAt: string;
+  incidentUrl: string;
+}) {
+  const { client, domain } = getClient();
+  const from = process.env.MAIL_FROM || "Clockfield <noreply@clockfield.ca>";
+  const admin = escapeEmailHtml(opts.adminName);
+  const employee = escapeEmailHtml(opts.employeeName);
+  const title = escapeEmailHtml(opts.incidentTitle);
+  const at = escapeEmailHtml(opts.submittedAt);
+  const url = escapeEmailHtml(opts.incidentUrl);
+  const subject = `Incident report submitted: ${opts.incidentTitle}`;
+  const text = `Hi ${opts.adminName},\n\n${opts.employeeName} submitted the incident report "${opts.incidentTitle}" on ${opts.submittedAt}.\n\nReview it securely in ClockField:\n${opts.incidentUrl}`;
+  const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#1f2937;padding:24px">
+    <h2>Incident report submitted</h2><p>Hi ${admin},</p>
+    <p><strong>${employee}</strong> submitted <strong>${title}</strong> on ${at}.</p>
+    <p><a href="${url}">Review in ClockField</a></p></body></html>`;
+  await client.messages.create(domain, { from, to: [opts.to], subject, text, html });
+}
+
+export async function sendIncidentClientEmail(opts: {
+  to: string;
+  recipientName: string;
+  companyName: string;
+  incidentTitle: string;
+  incidentUrl: string;
+}) {
+  const { client, domain } = getClient();
+  const from = process.env.MAIL_FROM || "Clockfield <noreply@clockfield.ca>";
+  const name = escapeEmailHtml(opts.recipientName || "there");
+  const company = escapeEmailHtml(opts.companyName);
+  const title = escapeEmailHtml(opts.incidentTitle);
+  const url = escapeEmailHtml(opts.incidentUrl);
+  const subject = `Incident report from ${opts.companyName}`;
+  const text = `Hi ${opts.recipientName || "there"},\n\n${opts.companyName} has shared an incident report with you: ${opts.incidentTitle}.\n\nView the client-safe report:\n${opts.incidentUrl}`;
+  const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#1f2937;padding:24px">
+    <h2>Incident report shared with you</h2><p>Hi ${name},</p>
+    <p>${company} has shared the client-safe incident report <strong>${title}</strong>.</p>
+    <p><a href="${url}">View incident report</a></p></body></html>`;
+  await client.messages.create(domain, { from, to: [opts.to], subject, text, html });
+}
+
 export async function sendBroadcastEmails(recipients: { email: string; name: string }[], subject: string, body: string) {
   const { client, domain } = getClient();
   const from = process.env.MAIL_FROM || "Clockfield <noreply@clockfield.ca>";

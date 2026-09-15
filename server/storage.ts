@@ -10,6 +10,8 @@ import {
   payRuns, payStubs, payStubEarnings, payStubDeductions, payStubAuditLog,
   passwordResetTokens,
   reports, reportSignatures, reportActivityLog, reportAccessTokens,
+  incidentEmployeeSnapshots, incidentEvidence, incidentTemplates, incidentAmendments, incidentInvestigations,
+  type IncidentEmployeeSnapshot, type IncidentEvidence, type IncidentTemplate, type IncidentAmendment, type IncidentInvestigation,
   fieldNotesSessions, fieldNotesAssets, fieldNotesTranscriptChunks, fieldNotesEntries, fieldNotesEntryTags, fieldNotesTodos,
   attendanceAdjustments,
   fitForDutyVerifications, fitForDutyReviews,
@@ -352,6 +354,15 @@ export interface IStorage {
   getReportAccessTokenByHash(tokenHash: string): Promise<ReportAccessToken | undefined>;
   updateReportAccessToken(id: string, data: Partial<ReportAccessToken>): Promise<ReportAccessToken | undefined>;
   revokeReportAccessTokensByReport(reportId: string): Promise<void>;
+
+  // Assigned incident workflow storage (employee snapshot is immutable by API contract)
+  createIncidentEmployeeSnapshot(data: Omit<IncidentEmployeeSnapshot, "id">): Promise<IncidentEmployeeSnapshot>;
+  getIncidentEmployeeSnapshot(reportId: string, companyId: string): Promise<IncidentEmployeeSnapshot | undefined>;
+  createIncidentEvidence(data: Omit<IncidentEvidence, "id">): Promise<IncidentEvidence>;
+  getIncidentEvidence(reportId: string, companyId: string): Promise<IncidentEvidence[]>;
+  createIncidentTemplate(data: Omit<IncidentTemplate, "id">): Promise<IncidentTemplate>;
+  createIncidentAmendment(data: Omit<IncidentAmendment, "id">): Promise<IncidentAmendment>;
+  createIncidentInvestigation(data: Omit<IncidentInvestigation, "id">): Promise<IncidentInvestigation>;
 
   // Publications
   createPublication(data: InsertPublication): Promise<Publication>;
@@ -1519,6 +1530,43 @@ export class DatabaseStorage implements IStorage {
         eq(reportAccessTokens.reportId, reportId),
         isNull(reportAccessTokens.revokedAt),
       ));
+  }
+
+  async createIncidentEmployeeSnapshot(data: Omit<IncidentEmployeeSnapshot, "id">): Promise<IncidentEmployeeSnapshot> {
+    const [row] = await db.insert(incidentEmployeeSnapshots).values(data).returning();
+    return row;
+  }
+
+  async getIncidentEmployeeSnapshot(reportId: string, companyId: string): Promise<IncidentEmployeeSnapshot | undefined> {
+    const [row] = await db.select().from(incidentEmployeeSnapshots)
+      .where(and(eq(incidentEmployeeSnapshots.reportId, reportId), eq(incidentEmployeeSnapshots.companyId, companyId)));
+    return row;
+  }
+
+  async createIncidentEvidence(data: Omit<IncidentEvidence, "id">): Promise<IncidentEvidence> {
+    const [row] = await db.insert(incidentEvidence).values(data).returning();
+    return row;
+  }
+
+  async getIncidentEvidence(reportId: string, companyId: string): Promise<IncidentEvidence[]> {
+    return db.select().from(incidentEvidence)
+      .where(and(eq(incidentEvidence.reportId, reportId), eq(incidentEvidence.companyId, companyId)))
+      .orderBy(asc(incidentEvidence.uploadedAt));
+  }
+
+  async createIncidentTemplate(data: Omit<IncidentTemplate, "id">): Promise<IncidentTemplate> {
+    const [row] = await db.insert(incidentTemplates).values(data).returning();
+    return row;
+  }
+
+  async createIncidentAmendment(data: Omit<IncidentAmendment, "id">): Promise<IncidentAmendment> {
+    const [row] = await db.insert(incidentAmendments).values(data).returning();
+    return row;
+  }
+
+  async createIncidentInvestigation(data: Omit<IncidentInvestigation, "id">): Promise<IncidentInvestigation> {
+    const [row] = await db.insert(incidentInvestigations).values(data).returning();
+    return row;
   }
 
   // ── Field Notes ─────────────────────────────────────────────────────────────

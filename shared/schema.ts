@@ -654,6 +654,10 @@ export const reports = pgTable("reports", {
   equipmentInvolved: text("equipment_involved"),    // JSON: {item,damageType,estimatedValue,reportedBy}[]
   areaSecured: boolean("area_secured").default(false),
   attachmentsChecklist: text("attachments_checklist"),// JSON: object
+  // Incident workflow configuration (kept on the existing report row)
+  incidentMinPhotos: integer("incident_min_photos").notNull().default(0),
+  incidentQuestionsJson: text("incident_questions_json"),
+  incidentDeclarationText: text("incident_declaration_text"),
   // Timestamps
   sentAt: text("sent_at"),
   finalizedAt: text("finalized_at"),
@@ -712,6 +716,82 @@ export type InsertReportSignature = z.infer<typeof insertReportSignatureSchema>;
 export type ReportActivityLog = typeof reportActivityLog.$inferSelect;
 export type ReportAccessToken = typeof reportAccessTokens.$inferSelect;
 export type InsertReportAccessToken = z.infer<typeof insertReportAccessTokenSchema>;
+
+// ── Incident workflow extensions ────────────────────────────────────────────
+// These tables deliberately keep employee-provided content separate from the
+// editable report row.  Once submitted, the snapshot is immutable.
+export const incidentEmployeeSnapshots = pgTable("incident_employee_snapshots", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reportId: varchar("report_id").notNull().unique(),
+  companyId: varchar("company_id").notNull(),
+  employeeId: varchar("employee_id").notNull(),
+  employeeIdSnapshot: text("employee_id_snapshot").notNull(),
+  employeeNameSnapshot: text("employee_name_snapshot").notNull(),
+  positionSnapshot: text("position_snapshot"),
+  statementSnapshot: text("statement_snapshot").notNull(),
+  answersJson: text("answers_json").notNull().default("{}"),
+  declarationTextSnapshot: text("declaration_text_snapshot").notNull(),
+  signatureDataUrl: text("signature_data_url").notNull(),
+  signedAt: text("signed_at").notNull(),
+  submittedAt: text("submitted_at").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+export const incidentEvidence = pgTable("incident_evidence", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reportId: varchar("report_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  storageName: text("storage_name").notNull().unique(),
+  originalName: text("original_name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  fileSize: integer("file_size").notNull(),
+  caption: text("caption"),
+  uploadedByUserId: varchar("uploaded_by_user_id").notNull(),
+  uploadedAt: text("uploaded_at").notNull(),
+});
+export const incidentTemplates = pgTable("incident_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  name: text("name").notNull(),
+  version: integer("version").notNull().default(1),
+  questionsJson: text("questions_json").notNull().default("[]"),
+  active: boolean("active").notNull().default(true),
+  createdByUserId: varchar("created_by_user_id").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+export const incidentAmendments = pgTable("incident_amendments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reportId: varchar("report_id").notNull(),
+  companyId: varchar("company_id").notNull(),
+  requestedByUserId: varchar("requested_by_user_id").notNull(),
+  requestedByRole: text("requested_by_role").notNull(),
+  reason: text("reason").notNull(),
+  contentJson: text("content_json").notNull(),
+  status: text("status").notNull().default("requested"),
+  submittedAt: text("submitted_at"),
+  createdAt: text("created_at").notNull(),
+});
+export const incidentInvestigations = pgTable("incident_investigations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reportId: varchar("report_id").notNull().unique(),
+  companyId: varchar("company_id").notNull(),
+  findings: text("findings"),
+  correctiveAction: text("corrective_action"),
+  finalDecision: text("final_decision"),
+  nextSteps: text("next_steps"),
+  clientAllowlistJson: text("client_allowlist_json").notNull().default("[]"),
+  updatedByUserId: varchar("updated_by_user_id").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+export const insertIncidentEmployeeSnapshotSchema = createInsertSchema(incidentEmployeeSnapshots).omit({ id: true });
+export const insertIncidentEvidenceSchema = createInsertSchema(incidentEvidence).omit({ id: true });
+export const insertIncidentTemplateSchema = createInsertSchema(incidentTemplates).omit({ id: true });
+export const insertIncidentAmendmentSchema = createInsertSchema(incidentAmendments).omit({ id: true });
+export const insertIncidentInvestigationSchema = createInsertSchema(incidentInvestigations).omit({ id: true });
+export type IncidentEmployeeSnapshot = typeof incidentEmployeeSnapshots.$inferSelect;
+export type IncidentEvidence = typeof incidentEvidence.$inferSelect;
+export type IncidentTemplate = typeof incidentTemplates.$inferSelect;
+export type IncidentAmendment = typeof incidentAmendments.$inferSelect;
+export type IncidentInvestigation = typeof incidentInvestigations.$inferSelect;
 
 export const loginSchema = z.object({
   email: z.string().email(),

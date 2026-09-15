@@ -13,6 +13,7 @@ import {
   DollarSign, Building2, Settings,
   LogOut, MoreHorizontal, Clock, ChevronRight, Users2, BookOpen,
   CreditCard, Bell, ShieldAlert, Newspaper, FileInput, GraduationCap, MessageSquare,
+  Siren,
 } from "lucide-react";
 
 const primaryTabs = [
@@ -26,6 +27,7 @@ const navMoreItems = [
   { label: "Payroll",      href: "/admin/payroll",      icon: DollarSign },
   { label: "Clients",      href: "/admin/clients",      icon: Building2 },
   { label: "Messages",     href: "/admin/messages",     icon: MessageSquare },
+  { label: "Incidents",    href: "/admin/incidents",    icon: Siren },
   { label: "Team",          href: "/admin/management",   icon: Users2 },
   { label: "Work Log",     href: "/admin/work-log",     icon: BookOpen },
   { label: "Forms",        href: "/admin/quote-forms",  icon: FileInput },
@@ -67,6 +69,7 @@ const pageTitles: Record<string, string> = {
   "/admin/settings":           "Settings",
   "/admin/subscription":       "Subscription",
   "/admin/messages":           "Messages",
+  "/admin/incidents":          "Incidents",
   "/admin/platform-messages":  "Notifications",
 };
 

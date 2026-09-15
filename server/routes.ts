@@ -5,7 +5,7 @@ import { db, pool } from "./db";
 import { setupAuth, hashPassword, comparePasswords, requireAuth, requireRole } from "./auth";
 import OpenAI from "openai";
 import { generateCourseDraft, improveText, generateQuizFromCourse, generateModuleContent, isAIAvailable, detectCourseType, type ImproveAction, type ToneOption, type AIQuizQuestion } from "./training-ai";
-import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail, sendAdminRequestReplyEmail, sendTrialAccountEmail, sendProposalEmail, sendHiringPackageEmail, sendTrainingAssignmentEmail, sendTrainingReminderEmail, sendBookingQuoteEmail, sendQuoteAcceptedAdminEmail, sendQuoteDeclinedAdminEmail, sendFitForDutySubmissionEmail } from "./mail";
+import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail, sendAdminRequestReplyEmail, sendTrialAccountEmail, sendProposalEmail, sendHiringPackageEmail, sendTrainingAssignmentEmail, sendTrainingReminderEmail, sendBookingQuoteEmail, sendQuoteAcceptedAdminEmail, sendQuoteDeclinedAdminEmail, sendFitForDutySubmissionEmail, sendIncidentSubmissionEmail, sendIncidentClientEmail } from "./mail";
 import { createHash } from "crypto";
 import passport from "passport";
 import { randomBytes } from "crypto";
@@ -13,7 +13,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { isNotNull, eq, and, isNull, inArray, desc, asc, sql } from "drizzle-orm";
-import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments, supplies, supplyUpdates, inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses, trainingPublicLearners, trainingCourses, trainingModules, trainingModuleAssets, trainingAssignments, trainingQuizzes, trainingQuizQuestions, trainingLessonBlocks, trainingModuleAudio } from "@shared/schema";
+import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, platformMessages, incidentEmployeeSnapshots, incidentEvidence, incidentTemplates, incidentAmendments, incidentInvestigations, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments, supplies, supplyUpdates, inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses, trainingPublicLearners, trainingCourses, trainingModules, trainingModuleAssets, trainingAssignments, trainingQuizzes, trainingQuizQuestions, trainingLessonBlocks, trainingModuleAudio } from "@shared/schema";
 import { getPlan } from "./plans";
 import { generateReviewOgImage } from "./og-image";
 
@@ -41,6 +41,8 @@ const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 const FIT_FOR_DUTY_PHOTOS_DIR = path.join(process.cwd(), "private_fit_for_duty_photos");
 if (!fs.existsSync(FIT_FOR_DUTY_PHOTOS_DIR)) fs.mkdirSync(FIT_FOR_DUTY_PHOTOS_DIR, { recursive: true });
+const INCIDENT_EVIDENCE_DIR = path.join(process.cwd(), "private_incident_evidence");
+if (!fs.existsSync(INCIDENT_EVIDENCE_DIR)) fs.mkdirSync(INCIDENT_EVIDENCE_DIR, { recursive: true });
 
 /**
  * Convert a UTC datetime string to a local ISO datetime string (no TZ suffix)
@@ -5166,6 +5168,421 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     });
   }
 
+  // ─── Assigned Incident Reports ─────────────────────────────────────────────
+  // Incident links are opaque bearer values. Only their SHA-256 digest is
+  // persisted; the value is never written to activity metadata or logs.
+  const incidentUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+    fileFilter: (_req, file, cb) => cb(null, ["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.mimetype)),
+  });
+  const incidentHash = (raw: string) => createHash("sha256").update(raw).digest("hex");
+  const incidentNow = () => new Date().toISOString();
+  const incidentExpired = (r: any) => !!r.expiresAt && new Date(r.expiresAt).getTime() <= Date.now();
+  function incidentAppUrl() {
+    const configured = process.env.APP_URL || process.env.APP_BASE_URL;
+    if (!configured) return "https://app.clockfield.com";
+    try {
+      const parsed = new URL(configured);
+      if (!["http:", "https:"].includes(parsed.protocol) || !parsed.hostname) throw new Error("invalid app url");
+      return parsed.toString().replace(/\/$/, "");
+    } catch {
+      return "https://app.clockfield.com";
+    }
+  }
+  const incidentToken = async (raw: string) => storage.getReportAccessTokenByHash(incidentHash(raw));
+  async function incidentForToken(raw: string) {
+    const token: any = await incidentToken(raw);
+    if (!token || token.recipientType !== "employee" || token.revokedAt) return { token: null, report: null };
+    // reportAccessTokens predates tenant_id. Always derive tenant from report.
+    const [row] = await db.select().from(reports).where(eq(reports.id, token.reportId)).limit(1);
+    return { token, report: row?.reportType === "incident" ? row : null };
+  }
+  function incidentJson(value: any, fallback: any) {
+    if (value === undefined || value === null || value === "") return fallback;
+    try { return typeof value === "string" ? JSON.parse(value) : value; } catch { return fallback; }
+  }
+  const safeIncidentFields = ["title", "summary", "incidentDate", "incidentTime", "severity", "incidentCategory", "areaAffected", "immediateAction", "workStopped", "customerInformed", "witnesses", "itemAffected", "itemDescription", "damageType", "employeeStatement", "incidentTypes", "peopleInvolved", "contributingFactors", "equipmentInvolved", "areaSecured"];
+  function incidentPublicReport(row: any, allowlist?: string[]) {
+    const allowed = new Set(allowlist || ["title", "summary", "incidentDate", "incidentTime", "severity", "incidentCategory", "areaAffected", "immediateAction"]);
+    const out: any = { status: row.status };
+    for (const key of safeIncidentFields) if (allowed.has(key)) out[key] = row[key];
+    return out;
+  }
+  function incidentEvidenceMeta(row: any) {
+    return { id: row.id, reportId: row.reportId, originalName: row.originalName, mimeType: row.mimeType, fileSize: row.fileSize, caption: row.caption, uploadedByUserId: row.uploadedByUserId, uploadedAt: row.uploadedAt };
+  }
+  function incidentFileMatchesMime(buffer: Buffer, mime: string) {
+    if (mime === "image/jpeg") return buffer.length > 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+    if (mime === "image/png") return buffer.length > 8 && buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    if (mime === "image/webp") return buffer.length > 12 && buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP";
+    if (mime === "application/pdf") return buffer.subarray(0, 5).toString("ascii") === "%PDF-";
+    return false;
+  }
+
+  app.get("/api/admin/incidents/templates", requireRole("admin"), async (req: any, res) => {
+    try {
+      const rows = await db.select().from(incidentTemplates).where(eq(incidentTemplates.companyId, req.user.companyId)).orderBy(desc(incidentTemplates.createdAt));
+      res.json(rows);
+    } catch { res.status(500).json({ message: "Unable to load incident templates" }); }
+  });
+  app.post("/api/admin/incidents/templates", requireRole("admin"), async (req: any, res) => {
+    try {
+      if (!String(req.body.name || "").trim() || !Array.isArray(req.body.questions)) return res.status(400).json({ message: "name and questions are required" });
+      const now = incidentNow();
+      const [template] = await db.insert(incidentTemplates).values({ companyId: req.user.companyId, name: String(req.body.name).trim().slice(0, 200), version: Number(req.body.version || 1), questionsJson: JSON.stringify(req.body.questions), active: req.body.active !== false, createdByUserId: req.user.id, createdAt: now }).returning();
+      res.status(201).json(template);
+    } catch { res.status(500).json({ message: "Unable to create incident template" }); }
+  });
+  app.patch("/api/admin/incidents/templates/:templateId", requireRole("admin"), async (req: any, res) => {
+    try {
+      const update: any = {};
+      if (req.body.name !== undefined) update.name = String(req.body.name).trim().slice(0, 200);
+      if (req.body.questions !== undefined) { if (!Array.isArray(req.body.questions)) return res.status(400).json({ message: "questions must be an array" }); update.questionsJson = JSON.stringify(req.body.questions); }
+      if (req.body.active !== undefined) update.active = !!req.body.active;
+      const [template] = await db.update(incidentTemplates).set(update).where(and(eq(incidentTemplates.id, req.params.templateId), eq(incidentTemplates.companyId, req.user.companyId))).returning();
+      if (!template) return res.status(404).json({ message: "Template not found" });
+      res.json(template);
+    } catch { res.status(500).json({ message: "Unable to update incident template" }); }
+  });
+
+  app.get("/api/admin/incidents/dashboard", requireRole("admin"), async (req: any, res) => {
+    try {
+      const rows: any[] = await db.select().from(reports).where(and(eq(reports.companyId, req.user.companyId), eq(reports.reportType, "incident"))).orderBy(desc(reports.createdAt));
+      const ids = rows.map(r => r.id);
+      const tokens: any[] = ids.length ? await db.select().from(reportAccessTokens).where(and(inArray(reportAccessTokens.reportId, ids), eq(reportAccessTokens.recipientType, "employee"), isNull(reportAccessTokens.revokedAt))) : [];
+      const tokenByReport = new Map(tokens.map(t => [t.reportId, t]));
+      const incidents = rows.map(r => {
+        const token = tokenByReport.get(r.id);
+        const status = token && incidentExpired(token) && !["submitted", "in_review", "admin_signed", "sent_to_client", "closed"].includes(r.status) ? "expired" : r.status;
+        return { id: r.id, title: r.title, status, assignedEmployeeId: r.assignedEmployeeId, incidentDate: r.incidentDate, createdAt: r.createdAt, updatedAt: r.updatedAt };
+      });
+      const counts: Record<string, number> = {};
+      for (const r of incidents) counts[r.status] = (counts[r.status] || 0) + 1;
+      res.json({ counts, incidents });
+    } catch (err: any) { res.status(500).json({ message: "Unable to load incident dashboard" }); }
+  });
+
+  app.post("/api/admin/incidents", requireRole("admin"), async (req: any, res) => {
+    try {
+      const { user } = req;
+      if (!req.body.assignedEmployeeId) return res.status(400).json({ message: "assignedEmployeeId is required" });
+      const employee = await storage.getUser(req.body.assignedEmployeeId);
+      if (!employee || employee.companyId !== user.companyId || employee.role !== "employee" || !employee.isActive) return res.status(400).json({ message: "Assigned employee is invalid" });
+      if (req.body.assignedClientId) {
+        const client = await storage.getClient(req.body.assignedClientId);
+        if (!client || client.companyId !== user.companyId) return res.status(400).json({ message: "Assigned client is invalid" });
+      }
+      if (req.body.assignedLocationId) {
+        const [location] = await db.select().from(locations).where(and(eq(locations.id, String(req.body.assignedLocationId)), eq(locations.companyId, user.companyId)));
+        if (!location) return res.status(400).json({ message: "Assigned location is invalid" });
+      }
+      let configuredQuestions = Array.isArray(req.body.questions) ? req.body.questions : [];
+      if (req.body.templateId) {
+        const [template] = await db.select().from(incidentTemplates).where(and(eq(incidentTemplates.id, String(req.body.templateId)), eq(incidentTemplates.companyId, user.companyId), eq(incidentTemplates.active, true)));
+        if (!template) return res.status(400).json({ message: "Incident template is invalid" });
+        configuredQuestions = incidentJson(template.questionsJson, []);
+      }
+      const now = incidentNow();
+      const allowedCreate = ["title", "summary", "incidentDate", "incidentTime", "severity", "riskLevel", "incidentCategory", "areaAffected", "clientPropertyAffected", "companyEquipmentAffected", "immediateAction", "workStopped", "customerInformed", "witnesses", "itemAffected", "itemDescription", "damageType", "assignedClientId", "assignedLocationId", "incidentTypes", "peopleInvolved", "narrativeSummary", "rootCause", "contributingFactors", "correctiveActionsStructured", "clientNotificationDetail", "witnessList", "equipmentInvolved", "areaSecured", "attachmentsChecklist"];
+      const createData: any = {};
+      for (const key of allowedCreate) if (req.body[key] !== undefined) createData[key] = typeof req.body[key] === "object" ? JSON.stringify(req.body[key]) : req.body[key];
+      createData.title = String(req.body.title || "Incident report").trim().slice(0, 255);
+      const report: any = await storage.createReport({
+        ...createData, companyId: user.companyId, reportType: "incident", status: "pending",
+        createdByUserId: user.id, createdByRole: "admin", assignedEmployeeId: employee.id,
+        incidentMinPhotos: Math.max(0, Math.min(20, Number(req.body.minPhotos || req.body.incidentMinPhotos || 0))),
+        incidentQuestionsJson: JSON.stringify(configuredQuestions),
+        incidentDeclarationText: String(req.body.declarationText || "I declare that the information provided is true and complete."),
+        createdAt: now, updatedAt: now,
+      });
+      const raw = randomBytes(32).toString("base64url");
+      const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      await storage.createReportAccessToken({
+        reportId: report.id, recipientType: "employee", recipientEmail: employee.email || `${employee.id}@invalid.local`,
+        tokenHash: incidentHash(raw), permissions: ["read", "write", "submit", "evidence"],
+        createdAt: now, expiresAt: expires, revokedAt: null, lastAccessedAt: null, signedAt: null, createdByUserId: user.id,
+      });
+      await logReportActivity(report.id, "created", user.id, "admin", { workflow: "incident", expiresAt: expires });
+      res.status(201).json({
+        incident: report,
+        employeeUrl: `${incidentAppUrl()}/incident/${raw}`,
+        expiresAt: expires,
+      });
+    } catch (err: any) { res.status(500).json({ message: "Unable to create incident" }); }
+  });
+
+  app.patch("/api/admin/incidents/:id", requireRole("admin"), async (req: any, res) => {
+    try {
+      const report: any = await storage.getReport(req.params.id, req.user.companyId);
+      if (!report || report.reportType !== "incident") return res.status(404).json({ message: "Incident not found" });
+      if (["submitted", "in_review", "admin_signed", "sent_to_client", "closed"].includes(report.status)) return res.status(403).json({ message: "Submitted incident content is immutable" });
+      const allowed = ["title", "summary", "incidentDate", "incidentTime", "severity", "riskLevel", "incidentCategory", "areaAffected", "immediateAction", "workStopped", "customerInformed", "incidentTypes", "peopleInvolved", "narrativeSummary", "rootCause", "contributingFactors", "correctiveActionsStructured", "clientNotificationDetail", "witnessList", "equipmentInvolved", "areaSecured", "attachmentsChecklist"];
+      const update: any = {};
+      for (const key of allowed) if (req.body[key] !== undefined) update[key] = typeof req.body[key] === "object" ? JSON.stringify(req.body[key]) : req.body[key];
+      if (req.body.assignedLocationId !== undefined) {
+        const [location] = await db.select().from(locations).where(and(eq(locations.id, String(req.body.assignedLocationId)), eq(locations.companyId, req.user.companyId)));
+        if (!location) return res.status(400).json({ message: "Assigned location is invalid" });
+        update.assignedLocationId = location.id;
+      }
+      if (req.body.assignedClientId !== undefined) {
+        const client = await storage.getClient(String(req.body.assignedClientId));
+        if (!client || client.companyId !== req.user.companyId) return res.status(400).json({ message: "Assigned client is invalid" });
+        update.assignedClientId = client.id;
+      }
+      update.updatedAt = incidentNow();
+      res.json(await storage.updateReport(report.id, req.user.companyId, update));
+    } catch { res.status(500).json({ message: "Unable to update incident" }); }
+  });
+  // Kept as a compatibility alias for older admin drafts; it has the same
+  // pre-submission restrictions and never accepts employee statement fields.
+  app.patch("/api/admin/incidents/:id/draft", requireRole("admin"), async (req: any, res) => {
+    req.url = `/api/admin/incidents/${req.params.id}`;
+    res.status(410).json({ message: "Use PATCH /api/admin/incidents/:id for drafts" });
+  });
+
+  app.get("/api/admin/incidents/:id", requireRole("admin"), async (req: any, res) => {
+    try {
+      const report: any = await storage.getReport(req.params.id, req.user.companyId);
+      if (!report || report.reportType !== "incident") return res.status(404).json({ message: "Incident not found" });
+      const [snapshot, evidence, amendments, investigation, activity] = await Promise.all([
+        db.select().from(incidentEmployeeSnapshots).where(and(eq(incidentEmployeeSnapshots.reportId, report.id), eq(incidentEmployeeSnapshots.companyId, req.user.companyId))).then(r => r[0]),
+        db.select().from(incidentEvidence).where(and(eq(incidentEvidence.reportId, report.id), eq(incidentEvidence.companyId, req.user.companyId))).orderBy(asc(incidentEvidence.uploadedAt)),
+        db.select().from(incidentAmendments).where(and(eq(incidentAmendments.reportId, report.id), eq(incidentAmendments.companyId, req.user.companyId))).orderBy(desc(incidentAmendments.createdAt)),
+        db.select().from(incidentInvestigations).where(and(eq(incidentInvestigations.reportId, report.id), eq(incidentInvestigations.companyId, req.user.companyId))).then(r => r[0]),
+        storage.getReportActivity(report.id),
+      ]);
+      res.json({ incident: report, snapshot: snapshot || null, evidence: evidence.map(incidentEvidenceMeta), amendments, investigation, activity });
+    } catch (err: any) { res.status(500).json({ message: "Unable to load incident" }); }
+  });
+
+  app.post("/api/admin/incidents/:id/reissue", requireRole("admin"), async (req: any, res) => {
+    try {
+      const report: any = await storage.getReport(req.params.id, req.user.companyId);
+      if (!report || report.reportType !== "incident") return res.status(404).json({ message: "Incident not found" });
+      if (["submitted", "in_review", "admin_signed", "sent_to_client", "closed"].includes(report.status)) return res.status(409).json({ message: "A submitted incident cannot be reissued" });
+      await db.update(reportAccessTokens).set({ revokedAt: incidentNow() }).where(and(eq(reportAccessTokens.reportId, report.id), eq(reportAccessTokens.recipientType, "employee"), isNull(reportAccessTokens.revokedAt)));
+      const employee = report.assignedEmployeeId ? await storage.getUser(report.assignedEmployeeId) : null;
+      if (!employee) return res.status(409).json({ message: "Incident has no assigned employee" });
+      const raw = randomBytes(32).toString("base64url");
+      const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      await storage.createReportAccessToken({ reportId: report.id, recipientType: "employee", recipientEmail: employee.email || `${employee.id}@invalid.local`, tokenHash: incidentHash(raw), permissions: ["read", "write", "submit", "evidence"], createdAt: incidentNow(), expiresAt: expires, revokedAt: null, lastAccessedAt: null, signedAt: null, createdByUserId: req.user.id });
+      if (report.status === "expired") await storage.updateReport(report.id, req.user.companyId, { status: "pending" });
+      res.json({ employeeUrl: `${incidentAppUrl()}/incident/${raw}`, expiresAt: expires });
+    } catch (err: any) { res.status(500).json({ message: "Unable to reissue incident link" }); }
+  });
+
+  app.patch("/api/admin/incidents/:id/investigation", requireRole("admin"), async (req: any, res) => {
+    try {
+      const report: any = await storage.getReport(req.params.id, req.user.companyId);
+      if (!report || report.reportType !== "incident") return res.status(404).json({ message: "Incident not found" });
+      const allowed = ["findings", "correctiveAction", "finalDecision", "nextSteps", "clientAllowlistJson"];
+      const data: any = {}; for (const k of allowed) if (req.body[k] !== undefined) data[k] = k === "clientAllowlistJson" ? JSON.stringify(Array.isArray(req.body[k]) ? req.body[k] : incidentJson(req.body[k], [])) : req.body[k];
+      data.companyId = req.user.companyId; data.reportId = report.id; data.updatedByUserId = req.user.id; data.updatedAt = incidentNow();
+      const [saved] = await db.insert(incidentInvestigations).values(data).onConflictDoUpdate({ target: incidentInvestigations.reportId, set: data }).returning();
+      if (report.status === "submitted") await storage.updateReport(report.id, req.user.companyId, { status: "in_review" });
+      res.json(saved);
+    } catch (err: any) { res.status(500).json({ message: "Unable to save investigation" }); }
+  });
+
+  app.post("/api/admin/incidents/:id/finalize", requireRole("admin"), async (req: any, res) => {
+    try {
+      const report: any = await storage.getReport(req.params.id, req.user.companyId);
+      if (!report || report.reportType !== "incident") return res.status(404).json({ message: "Incident not found" });
+      if (!["submitted", "in_review"].includes(report.status)) return res.status(409).json({ message: "Incident is not ready to finalize" });
+      const signerName = String(req.body.signerName || "").trim();
+      const signatureDataUrl = String(req.body.signatureDataUrl || "");
+      if (req.body.declarationAccepted !== true || !signerName || !signatureDataUrl.startsWith("data:image/png;base64,") || signatureDataUrl.length > 1_500_000) {
+        return res.status(400).json({ message: "Admin declaration, name and drawn signature are required" });
+      }
+      const existingSignature = await storage.getReportSignatureByUser(report.id, req.user.id);
+      if (existingSignature) return res.status(409).json({ message: "Incident already has an admin signature" });
+      const now = incidentNow();
+      await storage.createReportSignature({ reportId: report.id, signerUserId: req.user.id, signerRole: "admin", signerName, signatureType: "drawn", signedAt: now, acknowledgementText: String(req.body.acknowledgementText || "I confirm I reviewed this incident and the investigation record."), signatureDataUrl, publicAccessTokenId: null });
+      const updated = await storage.updateReport(report.id, req.user.companyId, { status: "admin_signed", finalizedAt: now });
+      await logReportActivity(report.id, "finalized", req.user.id, "admin");
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: "Unable to finalize incident" }); }
+  });
+
+  function incidentHtml(report: any, snapshot: any, investigation: any, client = false) {
+    const allow = incidentJson(investigation?.clientAllowlistJson, ["title", "summary", "incidentDate", "incidentCategory", "areaAffected", "immediateAction"]);
+    const data = client ? incidentPublicReport(report, allow) : { ...incidentPublicReport(report, safeIncidentFields), findings: investigation?.findings, correctiveAction: investigation?.correctiveAction, finalDecision: investigation?.finalDecision, nextSteps: investigation?.nextSteps, employeeStatement: snapshot?.statementSnapshot };
+    const rows = Object.entries(data).filter(([, v]) => v !== null && v !== undefined && v !== "").map(([k, v]) => `<tr><th>${escHtml(k)}</th><td>${escHtml(typeof v === "string" ? v : JSON.stringify(v))}</td></tr>`).join("");
+    return `<!doctype html><html><head><meta charset="utf-8"><title>Incident report</title><style>body{font-family:Arial;padding:32px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{width:28%;background:#f5f5f5}</style></head><body><h1>Incident report</h1><table>${rows}</table></body></html>`;
+  }
+  app.get("/api/admin/incidents/:id/pdf", requireRole("admin"), async (req: any, res) => {
+    try {
+      const report: any = await storage.getReport(req.params.id, req.user.companyId);
+      if (!report || report.reportType !== "incident") return res.status(404).send("Incident not found");
+      const [snapshot] = await db.select().from(incidentEmployeeSnapshots).where(eq(incidentEmployeeSnapshots.reportId, report.id));
+      const [investigation] = await db.select().from(incidentInvestigations).where(eq(incidentInvestigations.reportId, report.id));
+      res.type("html").send(incidentHtml(report, snapshot, investigation, req.query.version === "client"));
+    } catch { res.status(500).send("Unable to render incident"); }
+  });
+  app.get("/api/admin/incidents/:id/evidence/:evidenceId", requireRole("admin"), async (req: any, res) => {
+    try {
+      const report: any = await storage.getReport(req.params.id, req.user.companyId);
+      if (!report || report.reportType !== "incident") return res.status(404).send("Incident not found");
+      const [evidence] = await db.select().from(incidentEvidence).where(and(eq(incidentEvidence.id, req.params.evidenceId), eq(incidentEvidence.reportId, report.id), eq(incidentEvidence.companyId, req.user.companyId)));
+      if (!evidence) return res.status(404).send("Evidence not found");
+      res.set({ "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store", "Content-Disposition": "inline; filename=\"evidence\"" }).type(evidence.mimeType).sendFile(path.join(INCIDENT_EVIDENCE_DIR, evidence.storageName));
+    } catch { res.status(404).send("Evidence not found"); }
+  });
+
+  app.post("/api/admin/incidents/:id/send-client", requireRole("admin"), async (req: any, res) => {
+    try {
+      const report: any = await storage.getReport(req.params.id, req.user.companyId);
+      if (!report || report.reportType !== "incident" || !report.assignedClientId) return res.status(404).json({ message: "Incident or client not found" });
+      if (report.status !== "admin_signed") return res.status(409).json({ message: "Finalize the incident with an admin signature before client sharing" });
+      const client = await storage.getClient(report.assignedClientId);
+      if (!client || client.companyId !== req.user.companyId || !client.contactEmail) return res.status(400).json({ message: "Client has no email address" });
+      const allowlist = Array.isArray(req.body.allowlist) ? req.body.allowlist.filter((v: any) => ["title", "summary", "incidentDate", "incidentTime", "severity", "incidentCategory", "areaAffected", "immediateAction"].includes(v)) : ["title", "summary", "incidentDate", "incidentCategory", "areaAffected", "immediateAction"];
+      const now = incidentNow(); const raw = randomBytes(32).toString("base64url");
+      await db.update(reportAccessTokens).set({ revokedAt: now }).where(and(eq(reportAccessTokens.reportId, report.id), eq(reportAccessTokens.recipientType, "client"), isNull(reportAccessTokens.revokedAt)));
+      await storage.createReportAccessToken({ reportId: report.id, recipientType: "client", recipientEmail: client.contactEmail, tokenHash: incidentHash(raw), permissions: ["read"], createdAt: now, expiresAt: null, revokedAt: null, lastAccessedAt: null, signedAt: null, createdByUserId: req.user.id });
+      await db.insert(incidentInvestigations).values({ reportId: report.id, companyId: req.user.companyId, clientAllowlistJson: JSON.stringify(allowlist), updatedByUserId: req.user.id, updatedAt: now }).onConflictDoUpdate({ target: incidentInvestigations.reportId, set: { clientAllowlistJson: JSON.stringify(allowlist), updatedByUserId: req.user.id, updatedAt: now } });
+      await storage.updateReport(report.id, req.user.companyId, { status: "sent_to_client", sentToClient: true, sentAt: now });
+      const company = await storage.getCompany(req.user.companyId);
+      void sendIncidentClientEmail({ to: client.contactEmail, recipientName: client.contactName || client.name, companyName: company?.name || "Your company", incidentTitle: report.title, incidentUrl: `${incidentAppUrl()}/incident/client/${raw}` }).catch(() => undefined);
+      res.json({ clientUrl: `${incidentAppUrl()}/incident/client/${raw}`, allowlist });
+    } catch (err: any) { res.status(500).json({ message: "Unable to send incident to client" }); }
+  });
+
+  app.get("/api/public/incidents/:token", async (req: any, res) => {
+    try {
+      const token: any = await incidentToken(req.params.token);
+      const [report]: any[] = token ? await db.select().from(reports).where(eq(reports.id, token.reportId)).limit(1) : [];
+      if (!token || !report) return res.status(404).json({ message: "Incident link not found" });
+      if (token.revokedAt || incidentExpired(token)) return res.status(410).json({ message: "Incident link expired" });
+      if (token.recipientType === "client") {
+        const [investigation] = await db.select().from(incidentInvestigations).where(and(eq(incidentInvestigations.reportId, report.id), eq(incidentInvestigations.companyId, report.companyId)));
+        const allowlist = incidentJson(investigation?.clientAllowlistJson, []);
+        return res.json({ report: incidentPublicReport(report, allowlist), expiresAt: token.expiresAt || null, requiresAuthentication: false });
+      }
+      if (token.recipientType !== "employee") return res.status(404).json({ message: "Incident link not found" });
+      const company = await storage.getCompany(report.companyId);
+      res.json({ title: report.title, companyName: company?.name || null, incidentDate: report.incidentDate, category: report.incidentCategory, status: report.status, expiresAt: token.expiresAt, requiresAuthentication: true });
+    } catch { res.status(500).json({ message: "Unable to load incident link" }); }
+  });
+
+  app.post("/api/public/incidents/:token/authenticate", async (req: any, res) => {
+    try {
+      const { token, report }: any = await incidentForToken(req.params.token);
+      if (!token || !report || token.revokedAt || incidentExpired(token)) return res.status(410).json({ message: "Incident link expired" });
+      const employee: any = await storage.getUser(report.assignedEmployeeId);
+      if (!employee || employee.companyId !== report.companyId || employee.role !== "employee" || !employee.isActive) return res.status(403).json({ message: "Employee assignment is invalid" });
+      const suppliedId = String(req.body.employeeId || "").trim();
+      if (suppliedId !== employee.employeeId && suppliedId !== employee.id || !req.body.password || !(await comparePasswords(String(req.body.password), employee.password))) return res.status(401).json({ message: "Invalid employee credentials" });
+      req.session.incidentAuth = { tokenId: token.id, reportId: report.id, employeeId: employee.id, expiresAt: token.expiresAt };
+      await storage.updateReportAccessToken(token.id, { lastAccessedAt: incidentNow() });
+      if (report.status === "pending") await storage.updateReport(report.id, report.companyId, { status: "opened" });
+      req.session.save(() => res.json({ ok: true, expiresAt: token.expiresAt }));
+    } catch { res.status(401).json({ message: "Invalid employee credentials" }); }
+  });
+
+  async function employeeIncident(req: any, res: any) {
+    const { token, report } = await incidentForToken(req.params.token);
+    const auth = req.session?.incidentAuth;
+    if (!token || !report || !auth || auth.tokenId !== token.id || auth.reportId !== report.id || auth.employeeId !== report.assignedEmployeeId) { res.status(403).json({ message: "Incident authentication required" }); return null; }
+    if (report.status === "expired" || incidentExpired(token)) { if (report.status !== "expired") await storage.updateReport(report.id, report.companyId, { status: "expired" }); res.status(410).json({ message: "Incident link expired" }); return null; }
+    return { token, report };
+  }
+  app.get("/api/employee/incidents/:token/draft", async (req: any, res) => {
+    try {
+      const found = await employeeIncident(req, res); if (!found) return;
+      const evidence = await db.select().from(incidentEvidence).where(eq(incidentEvidence.reportId, found.report.id)).orderBy(asc(incidentEvidence.uploadedAt));
+      res.json({ incident: found.report, evidence: evidence.map(incidentEvidenceMeta) });
+    } catch { res.status(500).json({ message: "Unable to load incident draft" }); }
+  });
+  app.patch("/api/employee/incidents/:token/draft", async (req: any, res) => {
+    try {
+      const found = await employeeIncident(req, res); if (!found) return;
+      if (["submitted", "in_review", "admin_signed", "sent_to_client", "closed"].includes(found.report.status)) return res.status(409).json({ message: "Submitted incident cannot be edited" });
+      const employeeDraftFields = ["incidentDate", "incidentTime", "areaAffected", "employeeStatement", "immediateAction", "incidentTypes", "peopleInvolved", "witnesses", "equipmentInvolved", "workStopped", "customerInformed", "areaSecured"];
+      const update: any = {}; for (const key of employeeDraftFields) if (req.body[key] !== undefined) update[key] = typeof req.body[key] === "object" ? JSON.stringify(req.body[key]) : req.body[key];
+      update.status = found.report.status === "pending" ? "opened" : found.report.status; update.updatedAt = incidentNow();
+      const updated = await storage.updateReport(found.report.id, found.report.companyId, update);
+      res.json(updated);
+    } catch { res.status(500).json({ message: "Unable to save incident draft" }); }
+  });
+  app.post("/api/employee/incidents/:token/evidence", async (req: any, res) => {
+    incidentUpload.single("file")(req, res, async (uploadErr: any) => {
+      try {
+        if (uploadErr) return res.status(400).json({ message: "Evidence must be an image or PDF under 10MB" });
+        const found = await employeeIncident(req, res); if (!found) return;
+        if (["submitted", "in_review", "admin_signed", "sent_to_client", "closed"].includes(found.report.status)) return res.status(409).json({ message: "Evidence cannot be changed after submission" });
+        const count = await db.select({ id: incidentEvidence.id }).from(incidentEvidence).where(eq(incidentEvidence.reportId, found.report.id));
+        if (count.length >= 20) return res.status(400).json({ message: "Maximum 20 evidence files allowed" });
+        const file = req.file as Express.Multer.File; if (!file) return res.status(400).json({ message: "No file uploaded" });
+        if (!incidentFileMatchesMime(file.buffer, file.mimetype)) return res.status(400).json({ message: "File contents do not match its MIME type" });
+        const storageName = `${randomBytes(24).toString("hex")}.${file.mimetype === "application/pdf" ? "pdf" : file.mimetype.split("/")[1]}`;
+        await fs.promises.writeFile(path.join(INCIDENT_EVIDENCE_DIR, storageName), file.buffer, { flag: "wx" });
+        const [saved] = await db.insert(incidentEvidence).values({ reportId: found.report.id, companyId: found.report.companyId, storageName, originalName: path.basename(file.originalname).slice(0, 255), mimeType: file.mimetype, fileSize: file.size, caption: String(req.body.caption || "").slice(0, 500) || null, uploadedByUserId: found.report.assignedEmployeeId!, uploadedAt: incidentNow() }).returning();
+        res.status(201).json(incidentEvidenceMeta(saved));
+      } catch { res.status(500).json({ message: "Unable to save evidence" }); }
+    });
+  });
+  app.get("/api/employee/incidents/:token/evidence/:evidenceId", async (req: any, res) => {
+    try {
+      const found = await employeeIncident(req, res); if (!found) return;
+      const [evidence] = await db.select().from(incidentEvidence).where(and(eq(incidentEvidence.id, req.params.evidenceId), eq(incidentEvidence.reportId, found.report.id), eq(incidentEvidence.companyId, found.report.companyId)));
+      if (!evidence) return res.status(404).send("Evidence not found");
+      res.set({ "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store", "Content-Disposition": "inline; filename=\"evidence\"" }).type(evidence.mimeType).sendFile(path.join(INCIDENT_EVIDENCE_DIR, evidence.storageName));
+    } catch { res.status(404).send("Evidence not found"); }
+  });
+  app.post("/api/employee/incidents/:token/submit", async (req: any, res) => {
+    try {
+      const found = await employeeIncident(req, res); if (!found) return;
+      if (found.report.status === "submitted" || found.report.status === "in_review") return res.status(409).json({ message: "Incident already submitted" });
+      const statement = String(req.body.employeeStatement || req.body.statement || found.report.employeeStatement || "").trim();
+      const declarationAccepted = req.body.declarationAccepted === true;
+      const signature = String(req.body.signatureDataUrl || "");
+      const answers = incidentJson(req.body.answers, incidentJson(found.report.incidentQuestionsJson, {}));
+      const configuredQuestions: any[] = incidentJson(found.report.incidentQuestionsJson, []);
+      const missingQuestion = Array.isArray(configuredQuestions) && configuredQuestions.find((q: any, i: number) => {
+        if (!q?.required) return false;
+        const key = q.id || q.key || String(i);
+        return answers?.[key] === undefined || answers?.[key] === null || String(answers[key]).trim() === "";
+      });
+      const [evidence] = await db.select({ count: sql<number>`count(*)` }).from(incidentEvidence).where(and(eq(incidentEvidence.reportId, found.report.id), inArray(incidentEvidence.mimeType, ["image/jpeg", "image/png", "image/webp"])));
+      if (!statement || missingQuestion || !declarationAccepted || !signature.startsWith("data:image/png;base64,") || signature.length > 1_500_000) return res.status(400).json({ message: "All required sections, declaration acceptance and drawn signature are required" });
+      if (Number(evidence?.count || 0) < Number(found.report.incidentMinPhotos || 0)) return res.status(400).json({ message: `At least ${found.report.incidentMinPhotos} evidence photo(s) are required` });
+      const employee: any = await storage.getUser(found.report.assignedEmployeeId!);
+      const now = incidentNow();
+      const updated = await db.transaction(async tx => {
+        await tx.insert(incidentEmployeeSnapshots).values({ reportId: found.report.id, companyId: found.report.companyId, employeeId: employee.id, employeeIdSnapshot: employee.employeeId || employee.id, employeeNameSnapshot: `${employee.firstName} ${employee.lastName}`.trim(), positionSnapshot: employee.position, statementSnapshot: statement, answersJson: JSON.stringify(answers), declarationTextSnapshot: found.report.incidentDeclarationText || "I declare that the information provided is true and complete.", signatureDataUrl: signature, signedAt: now, submittedAt: now, createdAt: now });
+        const finalFields: any = { employeeStatement: statement, status: "submitted", updatedAt: now };
+        for (const key of ["incidentDate", "incidentTime", "areaAffected", "immediateAction"]) if (req.body[key] !== undefined) finalFields[key] = String(req.body[key]);
+        const [saved] = await tx.update(reports).set(finalFields).where(and(eq(reports.id, found.report.id), eq(reports.companyId, found.report.companyId))).returning();
+        return saved;
+      });
+      await logReportActivity(found.report.id, "submitted", employee.id, "employee");
+      const admins = await storage.getAdminsByCompany(found.report.companyId);
+      if (admins.length) await db.insert(platformMessages).values({ companyId: found.report.companyId, senderUserId: employee.id, senderRole: "employee", subject: "Incident report submitted", body: `${employee.firstName} ${employee.lastName} submitted an incident report for review.`, messageType: "incident_submission", isRead: false, isBroadcast: false, createdAt: now });
+      // Email delivery is intentionally fire-and-forget; submission never depends on Mailgun.
+      for (const admin of admins) if (admin.email) void sendIncidentSubmissionEmail({ to: admin.email, adminName: `${admin.firstName} ${admin.lastName}`.trim(), employeeName: `${employee.firstName} ${employee.lastName}`.trim(), incidentTitle: found.report.title, submittedAt: now, incidentUrl: `${incidentAppUrl()}/admin/incidents/${found.report.id}` }).catch(() => undefined);
+      res.json(updated);
+    } catch (err: any) { if (String(err?.code) === "23505") return res.status(409).json({ message: "Incident already submitted" }); res.status(500).json({ message: "Unable to submit incident" }); }
+  });
+  app.post("/api/employee/incidents/:token/amendments", async (req: any, res) => {
+    try {
+      const found = await employeeIncident(req, res); if (!found) return;
+      if (!["submitted", "in_review", "admin_signed", "sent_to_client"].includes(found.report.status)) return res.status(409).json({ message: "Amendments are available after submission" });
+      if (!String(req.body.reason || "").trim() || !req.body.content) return res.status(400).json({ message: "reason and additive content are required" });
+      const [saved] = await db.insert(incidentAmendments).values({ reportId: found.report.id, companyId: found.report.companyId, requestedByUserId: found.report.assignedEmployeeId!, requestedByRole: "employee", reason: String(req.body.reason).slice(0, 1000), contentJson: JSON.stringify(req.body.content), createdAt: incidentNow() }).returning();
+      res.status(201).json(saved);
+    } catch { res.status(500).json({ message: "Unable to request amendment" }); }
+  });
+  app.post("/api/employee/incidents/:token/amendments/:amendmentId/submit", async (req: any, res) => {
+    try {
+      const found = await employeeIncident(req, res); if (!found) return;
+      const [saved] = await db.update(incidentAmendments).set({ status: "submitted", submittedAt: incidentNow() }).where(and(eq(incidentAmendments.id, req.params.amendmentId), eq(incidentAmendments.reportId, found.report.id), eq(incidentAmendments.requestedByUserId, found.report.assignedEmployeeId!))).returning();
+      if (!saved) return res.status(404).json({ message: "Amendment not found" });
+      res.json(saved);
+    } catch { res.status(500).json({ message: "Unable to submit amendment" }); }
+  });
+
   // AI Incident Report Refinement
   app.post("/api/reports/refine-incident", requireAuth, async (req: any, res) => {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -5309,6 +5726,7 @@ Return a JSON object with these exact fields:
   app.post("/api/reports", requireAuth, async (req: any, res) => {
     try {
       const { user } = req;
+      if (req.body?.reportType === "incident") { res.status(400).json({ message: "Use the assigned incident creation endpoint." }); return; }
       // Routing rule: clients and employees can only send to admin
       if (user.role === "client" || user.role === "employee") {
         const body = req.body;
@@ -5340,6 +5758,9 @@ Return a JSON object with these exact fields:
       const { user } = req;
       const report = await storage.getReport(req.params.id, user.companyId);
       if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+      if (report.reportType === "incident") {
+        res.status(403).json({ message: "Use the assigned incident workflow endpoints." }); return;
+      }
       if (report.status === "finalized" && user.role !== "admin") {
         res.status(403).json({ message: "Cannot edit a finalized report" }); return;
       }
@@ -5366,6 +5787,7 @@ Return a JSON object with these exact fields:
       const { user } = req;
       const report = await storage.getReport(req.params.id, user.companyId);
       if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+      if (report.reportType === "incident") { res.status(403).json({ message: "Use the incident workflow endpoints." }); return; }
 
       const {
         sendToEmployee = false,
@@ -5494,6 +5916,7 @@ Return a JSON object with these exact fields:
       const { user } = req;
       const report = await storage.getReport(req.params.id, user.companyId);
       if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+      if (report.reportType === "incident") { res.status(403).json({ message: "Use the incident finalize endpoint." }); return; }
       const existing = await storage.getReportSignatureByUser(req.params.id, user.id);
       if (existing) { res.status(400).json({ message: "Already signed" }); return; }
       const { signerName, acknowledgementText, signatureType, signatureDataUrl } = req.body;
@@ -5525,6 +5948,7 @@ Return a JSON object with these exact fields:
       const { user } = req;
       const report = await storage.getReport(req.params.id, user.companyId);
       if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+      if (report.reportType === "incident") { res.status(403).json({ message: "Use the incident finalize endpoint." }); return; }
       const updated = await storage.updateReport(req.params.id, user.companyId, {
         status: "finalized",
         finalizedAt: new Date().toISOString(),
@@ -5539,6 +5963,8 @@ Return a JSON object with these exact fields:
   app.post("/api/reports/:id/archive", requireRole("admin"), async (req: any, res) => {
     try {
       const { user } = req;
+      const report = await storage.getReport(req.params.id, user.companyId);
+      if (report?.reportType === "incident") { res.status(403).json({ message: "Use the incident workflow endpoints." }); return; }
       const updated = await storage.updateReport(req.params.id, user.companyId, {
         status: "archived",
         archivedAt: new Date().toISOString(),
@@ -5552,6 +5978,8 @@ Return a JSON object with these exact fields:
   app.post("/api/reports/:id/reopen", requireRole("admin"), async (req: any, res) => {
     try {
       const { user } = req;
+      const report = await storage.getReport(req.params.id, user.companyId);
+      if (report?.reportType === "incident") { res.status(403).json({ message: "Use the incident workflow endpoints." }); return; }
       const updated = await storage.updateReport(req.params.id, user.companyId, { status: "in_review" });
       await logReportActivity(req.params.id, "reopened", user.id, user.role);
       res.json(updated);
@@ -5564,6 +5992,7 @@ Return a JSON object with these exact fields:
       const { user } = req;
       const report = await storage.getReport(req.params.id, user.companyId);
       if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+      if (report.reportType === "incident") { res.status(403).json({ message: "Incident reports cannot be deleted." }); return; }
       await storage.deleteReport(req.params.id, user.companyId);
       res.json({ message: "Deleted" });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
@@ -5586,6 +6015,7 @@ Return a JSON object with these exact fields:
       const { user } = req;
       const report = await storage.getReport(req.params.id, user.companyId);
       if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+      if (report.reportType === "incident") { res.status(403).json({ message: "Use the incident evidence endpoint." }); return; }
       const { fileUrl, fileType, fileName } = req.body;
       if (!fileUrl) { res.status(400).json({ message: "fileUrl required" }); return; }
       const existing: any[] = report.attachments ? JSON.parse(report.attachments) : [];
@@ -5604,6 +6034,7 @@ Return a JSON object with these exact fields:
       const { user } = req;
       const report = await storage.getReport(req.params.id, user.companyId);
       if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+      if (report.reportType === "incident") { res.status(403).json({ message: "Use the incident submit endpoint." }); return; }
       if (report.createdByUserId !== user.id) { res.status(403).json({ message: "Access denied" }); return; }
       const updated = await storage.updateReport(req.params.id, user.companyId, { status: "submitted" });
       await logReportActivity(req.params.id, "submitted", user.id, user.role);

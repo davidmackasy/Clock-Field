@@ -266,14 +266,29 @@ export default function IncidentReportWizard({ open, onClose }: { open: boolean;
       if (newStatus) (payload as any).status = newStatus;
 
       if (!reportId) {
-        const res = await apiRequest("POST", "/api/reports", { ...payload, status: "draft" });
+        const res = await apiRequest("POST", "/api/admin/incidents", payload);
         const data = await res.json();
-        setReportId(data.id);
-        qc.invalidateQueries({ queryKey: ["/api/reports"] });
-        return data.id;
+        const id = data.incident?.id ?? data.id;
+        if (data.employeeUrl) {
+          try {
+            await navigator.clipboard.writeText(data.employeeUrl);
+            toast({
+              title: "Secure employee link copied",
+              description: `The link expires ${new Date(data.expiresAt).toLocaleString()}.`,
+            });
+          } catch {
+            toast({
+              title: "Incident request created",
+              description: `Secure link: ${data.employeeUrl}`,
+            });
+          }
+        }
+        setReportId(id);
+        qc.invalidateQueries({ queryKey: ["/api/admin/incidents/dashboard"] });
+        return id;
       } else {
-        await apiRequest("PATCH", `/api/reports/${reportId}`, payload);
-        qc.invalidateQueries({ queryKey: ["/api/reports"] });
+        await apiRequest("PATCH", `/api/admin/incidents/${reportId}`, payload);
+        qc.invalidateQueries({ queryKey: ["/api/admin/incidents/dashboard"] });
         return reportId;
       }
     } catch (e: any) {
@@ -299,7 +314,7 @@ export default function IncidentReportWizard({ open, onClose }: { open: boolean;
     const id = await save(status);
     if (id) {
       toast({ title: status === "submitted" ? "Report submitted" : "Draft saved", description: "Incident report has been saved." });
-      qc.invalidateQueries({ queryKey: ["/api/reports"] });
+      qc.invalidateQueries({ queryKey: ["/api/admin/incidents/dashboard"] });
       onClose();
     }
   }

@@ -27,6 +27,7 @@ import {
   Settings, LogOut, Clock, Users2, BookOpen,
   CreditCard, Bell, ShieldAlert, ChevronRight, Newspaper,
   FileInput, GraduationCap, MessageSquare, TrendingUp, ShieldCheck,
+  Siren,
 } from "lucide-react";
 
 const preTeamItems = [
@@ -39,6 +40,7 @@ const postTeamItems = [
   { title: "Fit for Duty", url: "/admin/fit-for-duty", icon: ShieldCheck },
   { title: "Payroll", url: "/admin/payroll", icon: DollarSign },
   { title: "Clients", url: "/admin/clients", icon: Building2 },
+  { title: "Incidents", url: "/admin/incidents", icon: Siren },
   { title: "Messages", url: "/admin/messages", icon: MessageSquare },
   { title: "Work Log", url: "/admin/work-log", icon: BookOpen },
   { title: "Forms", url: "/admin/quote-forms", icon: FileInput },

@@ -106,6 +106,53 @@ export async function runStartupMigrations() {
       ADD COLUMN IF NOT EXISTS last_reminder_email_sent_at text;
     `);
 
+    // 6. Incident Reports: immutable employee snapshots, private evidence,
+    // templates/questions, additive amendments and admin investigation data.
+    // All DDL is idempotent because deployments may be restarted repeatedly.
+    await client.query(`
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS incident_min_photos integer NOT NULL DEFAULT 0;
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS incident_questions_json text;
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS incident_declaration_text text;
+      CREATE TABLE IF NOT EXISTS incident_employee_snapshots (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(), report_id varchar NOT NULL UNIQUE,
+        company_id varchar NOT NULL, employee_id varchar NOT NULL,
+        employee_id_snapshot text NOT NULL, employee_name_snapshot text NOT NULL,
+        position_snapshot text, statement_snapshot text NOT NULL,
+        answers_json text NOT NULL DEFAULT '{}',
+        declaration_text_snapshot text NOT NULL, signature_data_url text NOT NULL,
+        signed_at text NOT NULL, submitted_at text NOT NULL, created_at text NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS incident_evidence (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(), report_id varchar NOT NULL,
+        company_id varchar NOT NULL, storage_name text NOT NULL UNIQUE,
+        original_name text NOT NULL, mime_type text NOT NULL, file_size integer NOT NULL,
+        caption text, uploaded_by_user_id varchar NOT NULL, uploaded_at text NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS incident_templates (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(), company_id varchar NOT NULL,
+        name text NOT NULL, version integer NOT NULL DEFAULT 1,
+        questions_json text NOT NULL DEFAULT '[]', active boolean NOT NULL DEFAULT true,
+        created_by_user_id varchar NOT NULL, created_at text NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS incident_amendments (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(), report_id varchar NOT NULL,
+        company_id varchar NOT NULL, requested_by_user_id varchar NOT NULL,
+        requested_by_role text NOT NULL, reason text NOT NULL, content_json text NOT NULL,
+        status text NOT NULL DEFAULT 'requested', submitted_at text, created_at text NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS incident_investigations (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(), report_id varchar NOT NULL UNIQUE,
+        company_id varchar NOT NULL, findings text, corrective_action text,
+        final_decision text, next_steps text, client_allowlist_json text NOT NULL DEFAULT '[]',
+        updated_by_user_id varchar NOT NULL, updated_at text NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_incident_snapshots_company ON incident_employee_snapshots(company_id);
+      CREATE INDEX IF NOT EXISTS idx_incident_evidence_report ON incident_evidence(report_id, company_id);
+      CREATE INDEX IF NOT EXISTS idx_incident_amendments_report ON incident_amendments(report_id, company_id);
+      CREATE INDEX IF NOT EXISTS idx_incident_templates_company ON incident_templates(company_id, active);
+      CREATE INDEX IF NOT EXISTS idx_incident_investigations_company ON incident_investigations(company_id);
+    `);
+
     log("Startup migrations complete.", "migrations");
   } catch (err: any) {
     log(`Migration error (non-fatal): ${err.message}`, "migrations");
