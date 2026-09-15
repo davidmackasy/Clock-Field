@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, and, desc, sql, inArray, or, isNull, gte, asc } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, or, isNull, gte, asc, ne } from "drizzle-orm";
 import {
   companies, users, clients, locations, recurringSchedules, shifts, timeEntries, clientRequests, payrollDeductions,
   requestMessages, requestAttachments,
@@ -1431,7 +1431,10 @@ export class DatabaseStorage implements IStorage {
 
   async getReportsByCompany(companyId: string): Promise<Report[]> {
     return db.select().from(reports)
-      .where(eq(reports.companyId, companyId))
+      .where(and(
+        eq(reports.companyId, companyId),
+        or(ne(reports.reportType, "incident"), isNull(reports.incidentDeclarationText)),
+      ))
       .orderBy(desc(reports.createdAt));
   }
 
@@ -1441,6 +1444,7 @@ export class DatabaseStorage implements IStorage {
         eq(reports.companyId, companyId),
         eq(reports.assignedEmployeeId, employeeId),
         eq(reports.sentToEmployee, true),
+        or(ne(reports.reportType, "incident"), isNull(reports.incidentDeclarationText)),
       ))
       .orderBy(desc(reports.createdAt));
   }
@@ -1451,13 +1455,18 @@ export class DatabaseStorage implements IStorage {
         eq(reports.companyId, companyId),
         eq(reports.assignedClientId, clientId),
         eq(reports.sentToClient, true),
+        or(ne(reports.reportType, "incident"), isNull(reports.incidentDeclarationText)),
       ))
       .orderBy(desc(reports.createdAt));
   }
 
   async getReportsCreatedBy(userId: string, companyId: string): Promise<Report[]> {
     return db.select().from(reports)
-      .where(and(eq(reports.companyId, companyId), eq(reports.createdByUserId, userId)))
+      .where(and(
+        eq(reports.companyId, companyId),
+        eq(reports.createdByUserId, userId),
+        or(ne(reports.reportType, "incident"), isNull(reports.incidentDeclarationText)),
+      ))
       .orderBy(desc(reports.createdAt));
   }
 

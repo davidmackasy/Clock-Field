@@ -1,0 +1,266 @@
+# CRITICAL — DO NOT CHANGE ANYTHING ELSE IN CLOCKFIELD
+
+This task is strictly limited to the **Incident Report feature only**.
+
+Do **not** redesign, refactor, replace, remove, rename, move, or modify any other existing feature, page, route, component, database logic, authentication flow, or user experience in Clockfield unless it is absolutely necessary for this Incident Report feature to function.
+
+The goal is to **add this feature without affecting anything else**.
+
+## DO NOT CHANGE
+
+Do not change or break:
+
+* Existing admin dashboard
+* Existing employee dashboard
+* Existing employee login
+* Employee ID/password authentication
+* Clock-in / clock-out
+* Fit for Duty questionnaire
+* Face photo capture
+* Employee accounts
+* Admin accounts
+* Client management
+* Location management
+* Scheduling
+* Timesheets
+* Existing reports
+* Existing links
+* Existing notifications
+* Existing email functionality
+* Existing permissions
+* Existing navigation behavior
+* Existing database records
+* Existing API behavior
+* Existing UI/UX on unrelated pages
+* Existing mobile experience
+* Existing Clockfield branding
+
+Do not perform unrelated cleanup or refactoring.
+
+Do not "improve" other parts of the application while implementing this feature.
+
+Do not rename existing routes or components simply to make the new feature easier to build.
+
+Do not modify shared components in a way that could visually or functionally affect existing pages.
+
+If a shared component must be used, preserve its current behavior for all existing features.
+
+---
+
+# BUILD THIS AS AN ADDITIVE FEATURE
+
+The Incident Report system should be added alongside the existing Clockfield functionality.
+
+The only required additions are:
+
+### Admin
+
+`Incident Reports`
+
+### Admin Create Page
+
+`Create Incident Report`
+
+### Secure Employee Form
+
+`/incident/{secure-token}`
+
+### Admin Review Page
+
+Completed employee submission
+
+### Final Report
+
+Professional client-ready incident report
+
+Everything else in Clockfield must continue functioning exactly as it does now.
+
+---
+
+# REUSE — DO NOT REBUILD
+
+Reuse existing data and systems where required:
+
+* Existing employees
+* Existing employee credentials
+* Existing clients
+* Existing locations
+* Existing admin accounts
+* Existing storage
+* Existing email infrastructure
+* Existing Clockfield design system
+
+For example, when an incident is assigned to an employee, reference that employee's existing record.
+
+Do **not** create another duplicate employee account or authentication system.
+
+---
+
+# EMPLOYEE LOGIN WARNING
+
+The employee Incident Report link may use the existing employee credentials for verification, but this must NOT alter the normal employee login or clock-in flow.
+
+Normal employee login continues exactly as before.
+
+Normal flow:
+
+Employee login → existing Clockfield experience.
+
+Incident flow:
+
+Secure incident URL → employee authentication → incident form.
+
+These are separate entry points.
+
+Do not automatically redirect regular employee logins into Incident Reports.
+
+Do not attach the Incident Report form to normal clock-in.
+
+Do not modify Fit for Duty.
+
+---
+
+# DATABASE SAFETY
+
+Do not alter or delete existing production data.
+
+Prefer new dedicated tables for this feature, such as:
+
+* incidents
+* incident_access_tokens
+* incident_responses
+* incident_evidence
+* incident_signatures
+* incident_audit_logs
+
+If a schema migration is required:
+
+* Migration must be additive.
+* Do not drop existing columns.
+* Do not rename existing columns.
+* Do not delete tables.
+* Do not change existing column meanings.
+* Do not migrate unrelated records.
+
+Use foreign keys to existing employee, client, location, and admin records where necessary.
+
+---
+
+# API SAFETY
+
+Create dedicated Incident Report endpoints.
+
+Do not modify unrelated API responses or request formats.
+
+Do not change existing employee authentication API behavior.
+
+Do not change clock-in endpoints.
+
+Do not change Fit for Duty endpoints.
+
+Do not change client/location APIs unless strictly required.
+
+If existing endpoints are used to retrieve employee/client/location data, use them without changing their current behavior.
+
+---
+
+# ROUTING SAFETY
+
+Add new routes.
+
+Do not replace existing routes.
+
+Suggested new routes:
+
+`/admin/incidents`
+
+`/admin/incidents/new`
+
+`/admin/incidents/{id}`
+
+`/incident/{secure-token}`
+
+`/incident-report/{client-token}`
+
+All existing routes must continue working exactly as before.
+
+---
+
+# UI SAFETY
+
+Match the current Clockfield design.
+
+However, do not redesign existing pages.
+
+Only design the new Incident Report screens.
+
+Do not change:
+
+* Existing sidebar styling
+* Existing dashboard cards
+* Existing forms
+* Existing employee screens
+* Existing modal behavior
+* Existing responsive layouts
+
+Adding one new **Incident Reports** navigation option is acceptable.
+
+Do not reorganize the rest of the navigation.
+
+---
+
+# DEVELOPMENT APPROACH
+
+Before modifying any existing shared file, determine whether the Incident Report feature can be implemented through a new component, route, service, table, or API instead.
+
+Prefer isolated new code.
+
+Example structure:
+
+`/features/incidents/`
+
+or the equivalent architecture already used by Clockfield.
+
+Keep Incident Report logic isolated wherever possible.
+
+---
+
+# REGRESSION REQUIREMENT
+
+After implementation, verify that these still work exactly as before:
+
+1. Admin login.
+2. Employee login.
+3. Employee ID/password authentication.
+4. Employee clock-in.
+5. Employee clock-out.
+6. Fit for Duty questionnaire.
+7. Fit for Duty submission.
+8. Face-photo flow if currently enabled.
+9. Admin dashboard.
+10. Client list.
+11. Client locations.
+12. Existing employee management.
+13. Existing reports.
+14. Existing email notifications.
+15. Mobile employee experience.
+
+If any existing functionality behaves differently after this implementation, fix the regression before considering the Incident Report feature complete.
+
+---
+
+# FINAL RULE
+
+**DO NOT TOUCH ANYTHING YOU DO NOT NEED TO TOUCH.**
+
+Implement only the Incident Report workflow requested.
+
+The Incident Report feature should feel like it has always belonged inside Clockfield, but the rest of Clockfield must remain unchanged.
+
+The correct result is:
+
+**Existing Clockfield + Incident Reports**
+
+NOT:
+
+**A redesigned or restructured version of Clockfield.**

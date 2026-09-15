@@ -5696,6 +5696,10 @@ Return a JSON object with these exact fields:
       const { user } = req;
       const report = await storage.getReport(req.params.id, user.companyId);
       if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+      if (report.reportType === "incident" && report.incidentDeclarationText) {
+        res.status(404).json({ message: "Report not found" });
+        return;
+      }
       // Permission check for non-admin
       if (user.role === "employee") {
         const isCreator = report.createdByUserId === user.id;
@@ -5726,7 +5730,6 @@ Return a JSON object with these exact fields:
   app.post("/api/reports", requireAuth, async (req: any, res) => {
     try {
       const { user } = req;
-      if (req.body?.reportType === "incident") { res.status(400).json({ message: "Use the assigned incident creation endpoint." }); return; }
       // Routing rule: clients and employees can only send to admin
       if (user.role === "client" || user.role === "employee") {
         const body = req.body;
@@ -5758,7 +5761,7 @@ Return a JSON object with these exact fields:
       const { user } = req;
       const report = await storage.getReport(req.params.id, user.companyId);
       if (!report) { res.status(404).json({ message: "Report not found" }); return; }
-      if (report.reportType === "incident") {
+      if (report.reportType === "incident" && report.incidentDeclarationText) {
         res.status(403).json({ message: "Use the assigned incident workflow endpoints." }); return;
       }
       if (report.status === "finalized" && user.role !== "admin") {
@@ -5787,7 +5790,7 @@ Return a JSON object with these exact fields:
       const { user } = req;
       const report = await storage.getReport(req.params.id, user.companyId);
       if (!report) { res.status(404).json({ message: "Report not found" }); return; }
-      if (report.reportType === "incident") { res.status(403).json({ message: "Use the incident workflow endpoints." }); return; }
+      if (report.reportType === "incident" && report.incidentDeclarationText) { res.status(403).json({ message: "Use the incident workflow endpoints." }); return; }
 
       const {
         sendToEmployee = false,
@@ -5916,7 +5919,7 @@ Return a JSON object with these exact fields:
       const { user } = req;
       const report = await storage.getReport(req.params.id, user.companyId);
       if (!report) { res.status(404).json({ message: "Report not found" }); return; }
-      if (report.reportType === "incident") { res.status(403).json({ message: "Use the incident finalize endpoint." }); return; }
+      if (report.reportType === "incident" && report.incidentDeclarationText) { res.status(403).json({ message: "Use the incident finalize endpoint." }); return; }
       const existing = await storage.getReportSignatureByUser(req.params.id, user.id);
       if (existing) { res.status(400).json({ message: "Already signed" }); return; }
       const { signerName, acknowledgementText, signatureType, signatureDataUrl } = req.body;
@@ -5948,7 +5951,7 @@ Return a JSON object with these exact fields:
       const { user } = req;
       const report = await storage.getReport(req.params.id, user.companyId);
       if (!report) { res.status(404).json({ message: "Report not found" }); return; }
-      if (report.reportType === "incident") { res.status(403).json({ message: "Use the incident finalize endpoint." }); return; }
+      if (report.reportType === "incident" && report.incidentDeclarationText) { res.status(403).json({ message: "Use the incident finalize endpoint." }); return; }
       const updated = await storage.updateReport(req.params.id, user.companyId, {
         status: "finalized",
         finalizedAt: new Date().toISOString(),
@@ -5992,7 +5995,7 @@ Return a JSON object with these exact fields:
       const { user } = req;
       const report = await storage.getReport(req.params.id, user.companyId);
       if (!report) { res.status(404).json({ message: "Report not found" }); return; }
-      if (report.reportType === "incident") { res.status(403).json({ message: "Incident reports cannot be deleted." }); return; }
+      if (report.reportType === "incident" && report.incidentDeclarationText) { res.status(403).json({ message: "Incident reports cannot be deleted." }); return; }
       await storage.deleteReport(req.params.id, user.companyId);
       res.json({ message: "Deleted" });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
@@ -6015,7 +6018,7 @@ Return a JSON object with these exact fields:
       const { user } = req;
       const report = await storage.getReport(req.params.id, user.companyId);
       if (!report) { res.status(404).json({ message: "Report not found" }); return; }
-      if (report.reportType === "incident") { res.status(403).json({ message: "Use the incident evidence endpoint." }); return; }
+      if (report.reportType === "incident" && report.incidentDeclarationText) { res.status(403).json({ message: "Use the incident evidence endpoint." }); return; }
       const { fileUrl, fileType, fileName } = req.body;
       if (!fileUrl) { res.status(400).json({ message: "fileUrl required" }); return; }
       const existing: any[] = report.attachments ? JSON.parse(report.attachments) : [];
@@ -6034,7 +6037,7 @@ Return a JSON object with these exact fields:
       const { user } = req;
       const report = await storage.getReport(req.params.id, user.companyId);
       if (!report) { res.status(404).json({ message: "Report not found" }); return; }
-      if (report.reportType === "incident") { res.status(403).json({ message: "Use the incident submit endpoint." }); return; }
+      if (report.reportType === "incident" && report.incidentDeclarationText) { res.status(403).json({ message: "Use the incident submit endpoint." }); return; }
       if (report.createdByUserId !== user.id) { res.status(403).json({ message: "Access denied" }); return; }
       const updated = await storage.updateReport(req.params.id, user.companyId, { status: "submitted" });
       await logReportActivity(req.params.id, "submitted", user.id, user.role);
