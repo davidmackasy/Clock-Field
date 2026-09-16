@@ -14,6 +14,7 @@ import {
   ChevronDown, Check, Paperclip,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { companyDateKey, formatCompanyTime, formatCompanyLongDate } from "@/lib/timezone";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 type Category = "all" | "clients" | "team" | "assigned" | "unread" | "archived";
@@ -81,15 +82,14 @@ const QUICK_REPLIES = [
 ];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
-function formatTime(iso: string): string {
+function formatTime(iso: string, tz: string): string {
   const d = new Date(iso);
-  const now = new Date();
-  if (d.toDateString() === now.toDateString())
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+  if (companyDateKey(d, tz) === companyDateKey(new Date(), tz)) return formatCompanyTime(d, tz);
+  return formatCompanyLongDate(d, tz);
 }
-function formatFullTime(iso: string): string {
-  return new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+function formatFullTime(iso: string, tz: string): string {
+  const d = new Date(iso);
+  return `${formatCompanyLongDate(d, tz)} ${formatCompanyTime(d, tz)}`;
 }
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -140,6 +140,8 @@ function ActionBtn({ icon: Icon, label, onClick, primary, testId }: any) {
 export default function AdminMessages() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { data: timezoneData } = useQuery<{ timezone: string }>({ queryKey: ["/api/settings/timezone"], staleTime: Infinity });
+  const timezone = timezoneData?.timezone || "UTC";
 
   // Conversation list state
   const [category, setCategory]       = useState<Category>("all");
@@ -761,7 +763,7 @@ export default function AdminMessages() {
               const unread     = isUnread(req);
               const tag        = tagLabel(req.requestType);
               const preview    = req.description || req.title || "No message preview";
-              const time       = formatTime(req.updatedAt || req.createdAt);
+              const time       = formatTime(req.updatedAt || req.createdAt, timezone);
 
               return (
                 <button
@@ -913,7 +915,7 @@ export default function AdminMessages() {
                     {tagLabel(selectedReq.requestType || "Request")}
                   </span>
                   <span className="text-[11.5px] text-[#9ca3af] shrink-0">
-                    {formatFullTime(selectedReq.createdAt)}
+                    {formatFullTime(selectedReq.createdAt, timezone)}
                   </span>
                 </div>
                 <div className="px-4 py-3 space-y-2">
@@ -993,7 +995,7 @@ export default function AdminMessages() {
                             </div>
                           )}
                           <p className={cn("text-[10.5px] mt-1.5 text-right", isAdmin ? "text-white/50" : "text-[#9ca3af]")}>
-                            {formatTime(msg.createdAt)}
+                            {formatTime(msg.createdAt, timezone)}
                           </p>
                         </div>
                       </div>

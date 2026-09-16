@@ -17,15 +17,16 @@ import {
   FileText, Plus, Trash2, Printer, CheckCircle2, XCircle,
   Lock, Eye, AlertTriangle, RefreshCw, ChevronDown, ChevronUp, AlertCircle,
 } from "lucide-react";
+import { formatCompanyInstant, formatLocalDate } from "@/lib/timezone";
 
 function fmt(n: number | string) { return parseFloat(n as string || "0").toFixed(2); }
 function fmtDate(s: string) {
   if (!s) return "—";
-  return new Date(s + "T00:00:00").toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" });
+  return formatLocalDate(s);
 }
-function fmtDatetime(s: string) {
+function fmtDatetime(s: string, timezone = "UTC") {
   if (!s) return "—";
-  return new Date(s).toLocaleString("en-CA", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatCompanyInstant(s, timezone, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -172,6 +173,8 @@ function printPayStub(stub: any, payRun: any) {
 // ─── Pay Stub Editor ──────────────────────────────────────────────────────────
 function PayStubEditor({ stub: initialStub, payRun, onClose }: { stub: any; payRun: any; onClose: () => void }) {
   const { toast } = useToast();
+  const { data: timezoneData } = useQuery<{ timezone: string }>({ queryKey: ["/api/settings/timezone"], staleTime: Infinity });
+  const timezone = timezoneData?.timezone || "UTC";
   const [voidReason, setVoidReason] = useState("");
   const [showVoidDialog, setShowVoidDialog] = useState(false);
   const [showConfirmPaidDialog, setShowConfirmPaidDialog] = useState(false);
@@ -296,7 +299,7 @@ function PayStubEditor({ stub: initialStub, payRun, onClose }: { stub: any; payR
         {stub.status === "voided" && (
           <div className="flex items-center gap-2 text-sm text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
             <XCircle className="w-4 h-4 shrink-0" />
-            <span>This pay stub has been <strong>voided</strong> on {fmtDatetime(stub.voidedAt)}.</span>
+           <span>This pay stub has been <strong>voided</strong> on {fmtDatetime(stub.voidedAt, timezone)}.</span>
           </div>
         )}
 

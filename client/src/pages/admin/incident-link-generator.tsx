@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatCompanyInstant } from "@/lib/timezone";
 
 export default function IncidentLinkGenerator({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { toast } = useToast();
@@ -21,6 +22,8 @@ export default function IncidentLinkGenerator({ open, onClose }: { open: boolean
   const { data: employees = [] } = useQuery<any[]>({ queryKey: ["/api/employees"], enabled: open });
   const { data: clients = [] } = useQuery<any[]>({ queryKey: ["/api/clients"], enabled: open });
   const { data: locations = [] } = useQuery<any[]>({ queryKey: ["/api/locations"], enabled: open });
+  const { data: timezoneData } = useQuery<{ timezone: string }>({ queryKey: ["/api/settings/timezone"], staleTime: Infinity });
+  const timezone = timezoneData?.timezone || "UTC";
 
   function close() {
     setEmployeeId("");
@@ -87,7 +90,7 @@ export default function IncidentLinkGenerator({ open, onClose }: { open: boolean
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Expires {new Date(result.expiresAt).toLocaleString()}. The employee must verify their existing ClockField credentials.
+                Expires {formatCompanyInstant(result.expiresAt, timezone, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}. The employee must verify their existing ClockField credentials.
               </p>
             </div>
             <DialogFooter>

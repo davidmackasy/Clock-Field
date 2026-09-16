@@ -27,6 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
+import { formatCompanyLongDate, formatCompanyTime, formatLocalDate, formatLocalWallTime } from "@/lib/timezone";
 
 type Employee = {
   id: string;
@@ -138,6 +139,11 @@ function categoryLabel(value: string) {
 
 export default function AdminEmployees() {
   const { toast } = useToast();
+  const { data: timezoneData } = useQuery<{ timezone: string }>({
+    queryKey: ["/api/settings/timezone"],
+    staleTime: Infinity,
+  });
+  const timezone = timezoneData?.timezone || "UTC";
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -758,7 +764,7 @@ export default function AdminEmployees() {
                                       </p>
                                     </div>
                                     <div className="text-right">
-                                      <p className="text-xs font-mono">{s.scheduledStartTime} - {s.scheduledEndTime}</p>
+                                      <p className="text-xs font-mono">{formatLocalWallTime(`2000-01-01T${s.scheduledStartTime}`)} - {formatLocalWallTime(`2000-01-01T${s.scheduledEndTime}`)}</p>
                                       <Badge variant="outline" className="text-[10px] h-4 mt-1">
                                         {s.status}
                                       </Badge>
@@ -788,12 +794,12 @@ export default function AdminEmployees() {
                               .map((s) => (
                                 <div key={s.id} className="flex items-center justify-between p-3 border rounded-lg bg-card">
                                   <div>
-                                    <p className="text-sm font-medium">{format(new Date(s.shiftDate), "EEE, MMM d")}</p>
+                                    <p className="text-sm font-medium">{formatLocalDate(s.shiftDate, true, true)}</p>
                                     {s.shiftLabel && <p className="text-xs text-muted-foreground">{s.shiftLabel}</p>}
                                   </div>
                                   <div className="text-right">
                                     <p className="text-xs font-mono">
-                                      {format(new Date(s.scheduledStartAt), "h:mm a")} - {format(new Date(s.scheduledEndAt), "h:mm a")}
+                                      {formatLocalWallTime(s.scheduledStartAt)} - {formatLocalWallTime(s.scheduledEndAt)}
                                     </p>
                                   </div>
                                 </div>
@@ -855,9 +861,9 @@ export default function AdminEmployees() {
                                     <Clock className="w-4 h-4 text-primary animate-pulse" />
                                   )}
                                   <div>
-                                    <p className="text-sm font-medium">{format(new Date(entry.clockInAt), "MMM d, yyyy")}</p>
+                                    <p className="text-sm font-medium">{formatCompanyLongDate(entry.clockInAt, timezone)}</p>
                                     <p className="text-xs text-muted-foreground">
-                                      {format(new Date(entry.clockInAt), "h:mm a")} - {entry.clockOutAt ? format(new Date(entry.clockOutAt), "h:mm a") : "Active"}
+                                      {formatCompanyTime(entry.clockInAt, timezone)} – {entry.clockOutAt ? formatCompanyTime(entry.clockOutAt, timezone) : "Active"}
                                     </p>
                                   </div>
                                 </div>
@@ -1150,6 +1156,7 @@ export default function AdminEmployees() {
           employee={attendanceModalEmployee}
           entries={allTimeEntries || []}
           shifts={allShifts || []}
+          timezone={timezone}
           onClose={() => setAttendanceModalEmployee(null)}
         />
       )}

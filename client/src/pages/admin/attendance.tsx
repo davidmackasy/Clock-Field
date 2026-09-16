@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { EmployeeAttendanceModal } from "@/components/employee-attendance-modal";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { companyDateKey, formatCompanyDate, formatCompanyLongDate, formatCompanyTime, formatLocalWallTime, localToday, shiftDateKey } from "@/lib/timezone";
 
 /**
  * Convert a UTC epoch (ms) to a "fake-UTC" epoch by expressing the moment in
@@ -64,11 +65,13 @@ function ManualClockOutModal({
   entry,
   emp,
   shift,
+  timezone,
   onClose,
 }: {
   entry: any;
   emp: any;
   shift: any;
+  timezone: string;
   onClose: () => void;
 }) {
   const { toast } = useToast();
@@ -127,17 +130,17 @@ function ManualClockOutModal({
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Date</span>
-              <span className="font-medium">{format(clockInDate, "MMM d, yyyy")}</span>
+              <span className="font-medium">{formatCompanyLongDate(clockInDate, timezone)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Clocked in at</span>
-              <span className="font-medium">{format(clockInDate, "HH:mm")}</span>
+              <span className="font-medium">{formatCompanyTime(clockInDate, timezone)}</span>
             </div>
             {shift && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Scheduled shift</span>
                 <span className="font-medium">
-                  {format(new Date(shift.scheduledStartAt), "HH:mm")} – {format(new Date(shift.scheduledEndAt), "HH:mm")}
+                  {formatLocalWallTime(shift.scheduledStartAt)} – {formatLocalWallTime(shift.scheduledEndAt)}
                 </span>
               </div>
             )}
@@ -206,7 +209,7 @@ const ADJUSTMENT_REASONS = [
   "Other approved reason",
 ];
 
-function AdjustHoursModal({ entry, emp, shift, onClose }: { entry: any; emp: any; shift: any; onClose: () => void }) {
+function AdjustHoursModal({ entry, emp, shift, timezone, onClose }: { entry: any; emp: any; shift: any; timezone: string; onClose: () => void }) {
   const { toast } = useToast();
   const { data: adjustments, isLoading: loadingAdj } = useQuery<any[]>({
     queryKey: ["/api/time-entries", entry.id, "adjustments"],
@@ -286,20 +289,20 @@ function AdjustHoursModal({ entry, emp, shift, onClose }: { entry: any; emp: any
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Date</span>
-              <span className="font-medium">{format(clockIn, "MMM d, yyyy")}</span>
+              <span className="font-medium">{formatCompanyLongDate(clockIn, timezone)}</span>
             </div>
             {shift && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Scheduled</span>
                 <span className="font-medium">
-                  {format(new Date(shift.scheduledStartAt), "HH:mm")} – {format(new Date(shift.scheduledEndAt), "HH:mm")}
+                  {formatLocalWallTime(shift.scheduledStartAt)} – {formatLocalWallTime(shift.scheduledEndAt)}
                 </span>
               </div>
             )}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Actual time</span>
               <span className="font-medium">
-                {format(clockIn, "HH:mm")} – {clockOut ? format(clockOut, "HH:mm") : "In progress"}
+                {formatCompanyTime(clockIn, timezone)} – {clockOut ? formatCompanyTime(clockOut, timezone) : "In progress"}
               </span>
             </div>
             <div className="flex justify-between border-t pt-1.5 mt-1.5">
@@ -578,24 +581,28 @@ export default function AdminAttendance() {
         }
 
         const clockIn = new Date(entry.clockInAt);
-        const now = new Date();
+        const entryDate = companyDateKey(clockIn, tz);
+        const today = localToday(tz);
         if (dateRange === "today") {
-          if (format(clockIn, "yyyy-MM-dd") !== format(now, "yyyy-MM-dd")) return false;
+          if (entryDate !== today) return false;
         } else if (dateRange === "this_week") {
-          if (clockIn < startOfWeek(now)) return false;
+          const todayDate = new Date(`${today}T12:00:00Z`);
+          const day = todayDate.getUTCDay();
+          const weekStart = shiftDateKey(today, day === 0 ? -6 : 1 - day);
+          if (entryDate < weekStart) return false;
         } else if (dateRange === "last_2_weeks") {
-          if (clockIn < subDays(now, 14)) return false;
+          if (entryDate < shiftDateKey(today, -14)) return false;
         } else if (dateRange === "this_month") {
-          if (clockIn < startOfMonth(now)) return false;
+          if (entryDate < `${today.slice(0, 8)}01`) return false;
         } else if (dateRange === "custom") {
-          if (customRange.from && clockIn < startOfDay(customRange.from)) return false;
-          if (customRange.to && clockIn > endOfDay(customRange.to)) return false;
+          if (customRange.from && entryDate < format(customRange.from, "yyyy-MM-dd")) return false;
+          if (customRange.to && entryDate > format(customRange.to, "yyyy-MM-dd")) return false;
         }
 
         return true;
       })
       .sort((a, b) => new Date(b.clockInAt).getTime() - new Date(a.clockInAt).getTime());
-  }, [entries, empMap, search, employeeFilter, statusFilter, dateRange, customRange]);
+  }, [entries, empMap, search, employeeFilter, statusFilter, dateRange, customRange, tz]);
 
   const summary = useMemo(() => {
     const withHours = filtered.filter(e => e.clockInAt && e.clockOutAt);
@@ -662,7 +669,7 @@ export default function AdminAttendance() {
                       {emp ? `${emp.firstName} ${emp.lastName}` : "Unknown"}
                     </span>
                     <span className="text-xs text-muted-foreground hidden sm:inline">
-                      Scheduled end: {format(new Date(entry._shift.scheduledEndAt), "h:mm a")}
+                      Scheduled end: {formatLocalWallTime(entry._shift.scheduledEndAt)}
                     </span>
                     <span className="text-xs font-medium text-orange-600 dark:text-orange-400">
                       Overdue by {overdueLabel}
@@ -901,12 +908,12 @@ export default function AdminAttendance() {
                             {emp ? `${emp.firstName} ${emp.lastName}` : "Unknown"}
                           </button>
                         </TableCell>
-                        <TableCell className="text-sm">{format(clockIn, "MM/dd/yyyy")}</TableCell>
+                        <TableCell className="text-sm">{formatCompanyDate(clockIn, tz)}</TableCell>
                         <TableCell className="text-sm">
-                          {shift ? `${format(new Date(shift.scheduledStartAt), "HH:mm")} - ${format(new Date(shift.scheduledEndAt), "HH:mm")}` : "Unscheduled"}
+                          {shift ? `${formatLocalWallTime(shift.scheduledStartAt)} – ${formatLocalWallTime(shift.scheduledEndAt)}` : "Unscheduled"}
                         </TableCell>
                         <TableCell className="text-sm">
-                          {format(clockIn, "HH:mm")} - {clockOut ? format(clockOut, "HH:mm") : "In progress"}
+                          {formatCompanyTime(clockIn, tz)} – {clockOut ? formatCompanyTime(clockOut, tz) : "In progress"}
                         </TableCell>
                         <TableCell className={cn("text-sm font-medium",
                           variance.includes("late") ? "text-destructive" : variance.includes("early") ? "text-orange-500" : "text-green-600"
@@ -968,6 +975,7 @@ export default function AdminAttendance() {
           employee={selectedEmployee}
           entries={entries || []}
           shifts={shifts || []}
+          timezone={tz}
           onClose={() => setSelectedEmployee(null)}
         />
       )}
@@ -977,6 +985,7 @@ export default function AdminAttendance() {
           entry={manualClockOutEntry}
           emp={empMap.get(manualClockOutEntry.employeeId)}
           shift={manualClockOutEntry.shiftId ? shiftMap.get(manualClockOutEntry.shiftId) : null}
+          timezone={tz}
           onClose={() => setManualClockOutEntry(null)}
         />
       )}
@@ -986,6 +995,7 @@ export default function AdminAttendance() {
           entry={adjustingEntry}
           emp={empMap.get(adjustingEntry.employeeId)}
           shift={adjustingEntry.shiftId ? shiftMap.get(adjustingEntry.shiftId) : null}
+          timezone={tz}
           onClose={() => setAdjustingEntry(null)}
         />
       )}

@@ -9,6 +9,7 @@ import {
   MessageSquare, Plus, ChevronLeft, Send, X, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { companyDateKey, formatCompanyTime, formatCompanyLongDate } from "@/lib/timezone";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 const MESSAGE_TAGS = [
@@ -35,14 +36,14 @@ const STATUS_COLORS: Record<string, string> = {
 function tagLabel(v: string) {
   return TAG_LABEL[v] || v.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
-function formatTime(iso: string) {
-  const d = new Date(iso), now = new Date();
-  if (d.toDateString() === now.toDateString())
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+function formatTime(iso: string, tz: string) {
+  const d = new Date(iso);
+  if (companyDateKey(d, tz) === companyDateKey(new Date(), tz)) return formatCompanyTime(d, tz);
+  return formatCompanyLongDate(d, tz);
 }
-function formatFullTime(iso: string) {
-  return new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+function formatFullTime(iso: string, tz: string) {
+  const d = new Date(iso);
+  return `${formatCompanyLongDate(d, tz)} ${formatCompanyTime(d, tz)}`;
 }
 function getComposeTag(): string | null {
   if (typeof window === "undefined") return null;
@@ -52,6 +53,8 @@ function getComposeTag(): string | null {
 // ─── Main Component ────────────────────────────────────────────────────────────
 export default function ClientMessages() {
   const { toast } = useToast();
+  const { data: timezoneData } = useQuery<{ timezone: string }>({ queryKey: ["/api/settings/timezone"], staleTime: Infinity });
+  const timezone = timezoneData?.timezone || "UTC";
   const initialTag = getComposeTag();
 
   const [mobileView, setMobileView] = useState<"list" | "thread">("list");
@@ -218,7 +221,7 @@ export default function ClientMessages() {
                       </div>
                       {req.description && <p className="text-[12.5px] text-[#6b7280] line-clamp-1">{req.description}</p>}
                     </div>
-                    <span className="text-[11.5px] text-[#9ca3af] shrink-0 mt-0.5">{formatTime(req.updatedAt || req.createdAt)}</span>
+                     <span className="text-[11.5px] text-[#9ca3af] shrink-0 mt-0.5">{formatTime(req.updatedAt || req.createdAt, timezone)}</span>
                   </div>
                 </button>
               );
@@ -254,7 +257,7 @@ export default function ClientMessages() {
           <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[#f3f4f6] bg-[#fafafa]">
             <FileText className="w-4 h-4 text-primary shrink-0" />
             <span className="text-[13px] font-semibold text-[#111827] flex-1 truncate">{tagLabel(selectedReq.requestType)}</span>
-            <span className="text-[11.5px] text-[#9ca3af] shrink-0">{formatFullTime(selectedReq.createdAt)}</span>
+             <span className="text-[11.5px] text-[#9ca3af] shrink-0">{formatFullTime(selectedReq.createdAt, timezone)}</span>
           </div>
           <div className="px-4 py-3">
             {selectedReq.description && <p className="text-[13px] text-[#374151] whitespace-pre-wrap leading-relaxed">{selectedReq.description}</p>}
@@ -297,7 +300,7 @@ export default function ClientMessages() {
                     </div>
                   )}
                   <p className={cn("text-[10.5px] mt-1.5 text-right", isMe ? "text-white/50" : "text-[#9ca3af]")}>
-                    {formatTime(msg.createdAt)}
+                     {formatTime(msg.createdAt, timezone)}
                   </p>
                 </div>
               </div>

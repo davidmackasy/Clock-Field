@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import JobsTab from "@/pages/admin/jobs-tab";
 import BookingRequestsTab from "@/pages/admin/booking-requests-tab";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { format, startOfWeek, endOfWeek, addDays, subDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, addWeeks, subWeeks } from "date-fns";
 import { cn } from "@/lib/utils";
-import { localToday } from "@/lib/timezone";
+import { localToday, formatLocalWallTime } from "@/lib/timezone";
 
 type ViewMode = "day" | "week" | "month";
 
@@ -35,7 +35,8 @@ export default function AdminSchedule() {
   });
   const tz = tzData?.timezone || "UTC";
 
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toLocaleDateString("en-CA", { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }));
+  const [selectedDate, setSelectedDate] = useState(() => localToday("UTC"));
+  const initializedCompanyDate = useRef(false);
   const [viewMode, setViewMode] = useState<ViewMode>("day");
   const [open, setOpen] = useState(false);
   const [sectionTab, setSectionTab] = useState<"schedule" | "jobs" | "bookings">("schedule");
@@ -52,6 +53,14 @@ export default function AdminSchedule() {
     isContinuous: true,
     endDate: "",
   });
+
+  useEffect(() => {
+    if (!tzData?.timezone || initializedCompanyDate.current) return;
+    initializedCompanyDate.current = true;
+    const companyToday = localToday(tzData.timezone);
+    setSelectedDate(companyToday);
+    setForm(current => ({ ...current, shiftDate: companyToday }));
+  }, [tzData?.timezone]);
 
   const { data: shifts, isLoading: shiftsLoading } = useQuery<any[]>({ 
     queryKey: viewMode === "day" ? ["/api/shifts/date", selectedDate] : ["/api/shifts"] 
@@ -204,7 +213,7 @@ export default function AdminSchedule() {
                       <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          {format(new Date(shift.scheduledStartAt), "h:mm a")} - {format(new Date(shift.scheduledEndAt), "h:mm a")}
+                          {formatLocalWallTime(shift.scheduledStartAt)} - {formatLocalWallTime(shift.scheduledEndAt)}
                         </span>
                         {shift.expectedHours && <span>{parseFloat(shift.expectedHours).toFixed(1)}h</span>}
                         {client && <span className="truncate">{client.name}</span>}
@@ -254,7 +263,7 @@ export default function AdminSchedule() {
                       onClick={() => { setSelectedDate(dateStr); setViewMode("day"); }}
                     >
                       <p className="font-bold truncate">{emp?.firstName} {emp?.lastName}</p>
-                      <p className="text-muted-foreground">{format(new Date(s.scheduledStartAt), "h:mm a")}</p>
+                      <p className="text-muted-foreground">{formatLocalWallTime(s.scheduledStartAt)}</p>
                     </div>
                   );
                 })}
@@ -606,7 +615,7 @@ export default function AdminSchedule() {
                       </Badge>
                     </div>
                     <div className="text-xs text-muted-foreground space-y-1">
-                      <p className="flex items-center gap-1.5"><Clock className="w-3 h-3" /> {rs.scheduledStartTime} - {rs.scheduledEndTime} ({rs.repeatFrequency})</p>
+                      <p className="flex items-center gap-1.5"><Clock className="w-3 h-3" /> {formatLocalWallTime(`2000-01-01T${rs.scheduledStartTime}`)} - {formatLocalWallTime(`2000-01-01T${rs.scheduledEndTime}`)} ({rs.repeatFrequency})</p>
                       <p className="flex items-center gap-1.5"><CalendarIcon className="w-3 h-3" /> Starts {format(new Date(rs.startDate + "T12:00:00"), "MMM do")}</p>
                     </div>
                     <div className="flex items-center gap-2 pt-2 border-t">

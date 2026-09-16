@@ -1,0 +1,220 @@
+Please fix the ClockField timezone and attendance time display issue, but be extremely careful because this is a live production app with existing employee attendance records.
+
+DO NOT modify, shift, migrate, recalculate, or overwrite any existing attendance clock-in/clock-out timestamps, worked hours, payroll totals, historical records, or previously completed shifts.
+
+We need to fix the timezone handling going forward and how timestamps are displayed, without damaging existing data.
+
+Current problem
+
+The company/admin timezone is already configured for Winnipeg, Manitoba, but attendance is displaying the wrong local clock time.
+
+For example, an employee clocked in around 5:00 PM, but Attendance is showing something like:
+
+15:02
+
+15:02 is 3:02 PM, so this is not only a 12/24-hour formatting issue; the displayed local time appears to be offset incorrectly.
+
+Please inspect the entire timestamp flow and find the root cause.
+
+Required timezone architecture
+
+Use the standard model:
+
+Store absolute timestamps in UTC → convert to the company's configured timezone only when displaying them.
+
+For Winnipeg, use the IANA timezone:
+
+America/Winnipeg
+
+Do NOT use hard-coded values such as:
+
+UTC-6
+
+UTC-5
+
+CST
+
+or manually add/subtract hours.
+
+America/Winnipeg must be used because daylight-saving changes must be handled automatically.
+
+Company timezone
+
+If the admin has selected Winnipeg/Manitoba in Settings, make sure the backend stores an actual timezone identifier such as:
+
+America/Winnipeg
+
+Then all company-facing times should use that timezone:
+
+Attendance clock-in
+Attendance clock-out
+Scheduled time
+Actual time
+Fit for Duty submission time
+Incidents
+Work logs
+Admin notifications
+Payroll time displays
+
+Do not separately hard-code Winnipeg into those pages. They should all consume the company's existing timezone setting.
+
+Clock-in storage
+
+When an employee clocks in, store the actual timestamp as an absolute UTC timestamp.
+
+Example concept:
+
+clock_in_at = UTC instant
+
+Do not convert the employee's local time to Winnipeg and then save it as UTC again. That can cause double-timezone conversion.
+
+Also check whether the browser/device is currently converting the timestamp before it reaches the server. We should not have:
+
+browser conversion → server conversion → database conversion → frontend conversion
+
+happening multiple times.
+
+There should be one source of truth.
+
+Display
+
+When showing the timestamp in the admin interface:
+
+UTC timestamp → company timezone (America/Winnipeg) → formatted time
+
+Since the rest of the UI is user-friendly, display it as:
+
+5:02 PM – 10:07 PM
+
+instead of:
+
+17:02 – 22:07
+
+unless the admin has explicitly selected 24-hour time.
+
+The screenshot currently uses times such as 15:02 - 20:07. Please switch the normal ClockField UI to readable AM/PM formatting:
+
+3:02 PM – 8:07 PM
+
+But formatting alone is NOT enough. First verify that those are actually the correct local times.
+
+Critical historical-data rule
+
+Do not run a migration that adds/subtracts hours from all existing timestamps.
+
+Do not assume every old record is wrong.
+
+Existing records may have been created under different versions of the code, and changing them globally could corrupt:
+
+employee hours
+payroll
+completed shifts
+attendance history
+client records
+
+First determine how the current timestamps are stored.
+
+For one known employee record, compare:
+
+raw database clock_in_at
+raw database clock_out_at
+database column type
+API response value
+company timezone
+browser-rendered value
+
+Then identify exactly where the unwanted offset is being introduced.
+
+Do not recalculate durations
+
+Worked time must continue to be calculated using the underlying timestamps:
+
+clock_out_at - clock_in_at
+
+Timezone formatting should never change the actual duration.
+
+For example:
+
+5:00 PM → 10:00 PM = 5 hours
+
+Whether that timestamp is viewed in Winnipeg or another timezone, the stored duration remains 5 hours.
+
+Therefore this fix must not change:
+
+Total Hours Worked
+Avg Hours / Shift
+Payroll calculations
+Existing duration values
+Daylight Saving Time
+
+Do not implement manual daylight-saving rules.
+
+Use the IANA timezone database through the application's date/time library or native timezone support.
+
+America/Winnipeg
+
+should automatically handle whether Winnipeg is UTC-5 or UTC-6 depending on the date.
+
+Employee devices
+
+Do not trust the employee's phone timezone as the company timezone.
+
+An employee could have their device configured incorrectly or could travel.
+
+Their device should create the current timestamp, but the server/database should store the absolute instant and the admin should view it according to the company's configured timezone.
+
+Testing required
+
+Before considering this fixed, test:
+
+Test 1
+
+Company timezone:
+
+America/Winnipeg
+
+Employee clocks in at a known current local time.
+
+Confirm that exact Winnipeg time appears in Attendance.
+
+Test 2
+
+Clock employee out later.
+
+Confirm clock-in, clock-out, and duration are correct.
+
+Test 3
+
+Refresh the admin page.
+
+Time must remain identical.
+
+Test 4
+
+Log into the admin account from another computer/device configured to another timezone.
+
+Attendance must still display the company's Winnipeg time, not the viewing device's timezone.
+
+Test 5
+
+Verify historical attendance totals before and after this code change.
+
+Total worked hours and payroll-related numbers must remain unchanged.
+
+Very important
+
+This is a targeted timezone fix only.
+
+Do not redesign Attendance.
+
+Do not change clock-in/clock-out behavior.
+
+Do not alter existing employee records.
+
+Do not modify payroll calculations.
+
+Do not touch existing worked-hour totals.
+
+Do not bulk-update historical timestamps.
+
+Inspect the current implementation, fix the incorrect conversion at its source, and use the company timezone consistently throughout ClockField.

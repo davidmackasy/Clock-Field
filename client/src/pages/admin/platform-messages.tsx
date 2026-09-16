@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Bell, Megaphone, CreditCard, Tag, AlertTriangle, Headphones, CheckCheck, Sparkles, ChevronLeft, Mail } from "lucide-react";
 import type { PlatformMessage } from "@shared/schema";
+import { formatCompanyInstant } from "@/lib/timezone";
 
 const typeConfig: Record<string, { label: string; icon: any; color: string; iconBg: string }> = {
   announcement: { label: "Announcement", icon: Megaphone, color: "bg-blue-100 text-blue-800", iconBg: "bg-blue-100 text-blue-700" },
@@ -18,14 +19,15 @@ const typeConfig: Record<string, { label: string; icon: any; color: string; icon
   welcome:       { label: "Welcome",      icon: Sparkles,   color: "bg-indigo-100 text-indigo-800", iconBg: "bg-indigo-100 text-indigo-700" },
 };
 
-function formatDate(dateStr: string) {
-  const d = new Date(dateStr);
-  return d.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+function formatDate(dateStr: string, timezone: string) {
+  return formatCompanyInstant(dateStr, timezone, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
 }
 
 export default function AdminPlatformMessages() {
   const { toast } = useToast();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { data: timezoneData } = useQuery<{ timezone: string }>({ queryKey: ["/api/settings/timezone"], staleTime: Infinity });
+  const timezone = timezoneData?.timezone || "UTC";
 
   const { data: messages = [], isLoading } = useQuery<PlatformMessage[]>({
     queryKey: ["/api/admin/platform-messages"],
@@ -85,7 +87,7 @@ export default function AdminPlatformMessages() {
                   <Mail className="w-3 h-3" />
                   <span>ClockField Team</span>
                   <span className="mx-1">·</span>
-                  <span>{formatDate(selectedMsg.createdAt)}</span>
+                   <span>{formatDate(selectedMsg.createdAt, timezone)}</span>
                 </div>
               </div>
             </div>
@@ -174,7 +176,7 @@ export default function AdminPlatformMessages() {
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{preview}</p>
-                      <p className="text-xs text-muted-foreground mt-1.5">{formatDate(msg.createdAt)}</p>
+                       <p className="text-xs text-muted-foreground mt-1.5">{formatDate(msg.createdAt, timezone)}</p>
                     </div>
                   </div>
                 </CardContent>

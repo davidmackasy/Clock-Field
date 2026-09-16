@@ -7,16 +7,21 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { useQuery } from "@tanstack/react-query";
+import { companyDateKey, formatCompanyDate, formatCompanyTime, formatLocalWallTime } from "@/lib/timezone";
 
 export interface EmployeeAttendanceModalProps {
   employee: any;
   entries: any[];
   shifts: any[];
+  timezone?: string;
   onClose: () => void;
 }
 
-export function EmployeeAttendanceModal({ employee, entries, shifts, onClose }: EmployeeAttendanceModalProps) {
+export function EmployeeAttendanceModal({ employee, entries, shifts, timezone, onClose }: EmployeeAttendanceModalProps) {
   if (!employee) return null;
+  const { data: timezoneData } = useQuery<{ timezone: string }>({ queryKey: ["/api/settings/timezone"], staleTime: Infinity });
+  const tz = timezone || timezoneData?.timezone || "UTC";
 
   const empEntries = entries.filter(e => e.employeeId === employee.id);
   const totalShifts = empEntries.length;
@@ -32,7 +37,7 @@ export function EmployeeAttendanceModal({ employee, entries, shifts, onClose }: 
 
   const getDayStatus = (date: Date) => {
     const dateStr = format(date, "yyyy-MM-dd");
-    const dayEntries = empEntries.filter(e => format(new Date(e.clockInAt), "yyyy-MM-dd") === dateStr);
+    const dayEntries = empEntries.filter(e => companyDateKey(e.clockInAt, tz) === dateStr);
 
     if (dayEntries.length === 0) {
       const dayShifts = shifts.filter((s: any) => s.employeeId === employee.id && s.shiftDate === dateStr);
@@ -167,8 +172,9 @@ export function EmployeeAttendanceModal({ employee, entries, shifts, onClose }: 
 
                         let variance = "-";
                         if (shift) {
-                          const scheduledStart = new Date(shift.scheduledStartAt);
-                          const diff = Math.round((clockIn.getTime() - scheduledStart.getTime()) / 60000);
+                          const localClock = new Date(`${companyDateKey(clockIn, tz)}T${formatCompanyInstantParts(clockIn, tz)}Z`);
+                          const scheduledStart = new Date(`${shift.scheduledStartAt}Z`);
+                          const diff = Math.round((localClock.getTime() - scheduledStart.getTime()) / 60000);
                           if (diff > 0) variance = `+${diff} min late`;
                           else if (diff < 0) variance = `${diff} min early`;
                           else variance = "On time";
@@ -176,14 +182,14 @@ export function EmployeeAttendanceModal({ employee, entries, shifts, onClose }: 
 
                         return (
                           <TableRow key={entry.id}>
-                            <TableCell className="text-xs">{format(clockIn, "MM/dd/yy")}</TableCell>
+                            <TableCell className="text-xs">{formatCompanyDate(clockIn, tz, true)}</TableCell>
                             <TableCell className="text-xs">
                               {shift
-                                ? `${format(new Date(shift.scheduledStartAt), "HH:mm")} - ${format(new Date(shift.scheduledEndAt), "HH:mm")}`
+                                ? `${formatLocalWallTime(shift.scheduledStartAt)} – ${formatLocalWallTime(shift.scheduledEndAt)}`
                                 : "Unscheduled"}
                             </TableCell>
                             <TableCell className="text-xs">
-                              {format(clockIn, "HH:mm")} - {clockOut ? format(clockOut, "HH:mm") : "In progress"}
+                              {formatCompanyTime(clockIn, tz)} – {clockOut ? formatCompanyTime(clockOut, tz) : "In progress"}
                             </TableCell>
                             <TableCell className={cn("text-xs font-medium",
                               variance.includes("late") ? "text-destructive" : variance.includes("early") ? "text-orange-500" : "text-green-600"
@@ -202,4 +208,14 @@ export function EmployeeAttendanceModal({ employee, entries, shifts, onClose }: 
       </DialogContent>
     </Dialog>
   );
+}
+
+function formatCompanyInstantParts(value: string | Date, tz: string): string {
+  return new Date(value).toLocaleTimeString("sv-SE", {
+    timeZone: tz,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
 }

@@ -19,7 +19,7 @@ import {
   ChevronRight, Clock, AlertTriangle, ArrowLeft
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { formatCompanyLongDate } from "@/lib/timezone";
 
 const REPORT_TYPES = [
   { value: "incident", label: "Incident Report" },
@@ -165,6 +165,8 @@ function ReportViewDialog({ reportId: rptId, open, onClose }: any) {
   const { user } = useAuth();
   const [sigForm, setSigForm] = useState({ name: "", ack: false });
   const [sigCapture, setSigCapture] = useState<SigCapture>({ signatureType: "typed", signatureDataUrl: null });
+  const { data: timezoneData } = useQuery<{ timezone: string }>({ queryKey: ["/api/settings/timezone"], staleTime: Infinity });
+  const timezone = timezoneData?.timezone || "UTC";
 
   const { data: report, isLoading } = useQuery<any>({
     queryKey: ["/api/reports", rptId],
@@ -262,7 +264,7 @@ function ReportViewDialog({ reportId: rptId, open, onClose }: any) {
                       <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
                         <CheckCircle2 className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
                         <span className="text-sm font-medium">{sig.signerName}</span>
-                        <span className="text-xs text-muted-foreground capitalize ml-auto">{sig.signerRole} · {sig.signedAt ? format(new Date(sig.signedAt), "MMM d") : ""}</span>
+                        <span className="text-xs text-muted-foreground capitalize ml-auto">{sig.signerRole} · {sig.signedAt ? formatCompanyLongDate(sig.signedAt, timezone) : ""}</span>
                       </div>
                       {sig.signatureType === "drawn" && sig.signatureDataUrl ? (
                         <div className="mx-3 mb-2 rounded bg-white border border-green-100 p-2">
@@ -333,6 +335,8 @@ export default function EmployeeReports() {
   const [tab, setTab] = useState("all");
 
   const { data: reports = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/reports"] });
+  const { data: timezoneData } = useQuery<{ timezone: string }>({ queryKey: ["/api/settings/timezone"], staleTime: Infinity });
+  const timezone = timezoneData?.timezone || "UTC";
 
   const received = reports.filter(r => r.sentToEmployee && r.createdByRole === "admin");
   const submitted = reports.filter(r => r.createdByRole === "employee");
@@ -420,7 +424,7 @@ export default function EmployeeReports() {
                     )}
                   </div>
                   <p className="font-medium text-sm leading-snug truncate">{r.title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{r.reportType?.replace(/_/g, " ")} · {r.createdAt ? format(new Date(r.createdAt), "MMM d, yyyy") : "—"}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{r.reportType?.replace(/_/g, " ")} · {r.createdAt ? formatCompanyLongDate(r.createdAt, timezone) : "—"}</p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" />
               </div>

@@ -13,6 +13,7 @@ import { DollarSign, Clock, Users, TrendingDown, ChevronRight, Calendar } from "
 import PayRunsTab from "./pay-runs-tab";
 import PayStubsTab from "./pay-stubs-tab";
 import AdminTimesheets from "./timesheets";
+import { formatLocalDate } from "@/lib/timezone";
 
 // ── Period helpers ────────────────────────────────────────────────────────────
 
@@ -158,7 +159,7 @@ function computePayroll(
 }
 
 function formatD(dateStr: string) {
-  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" });
+  return formatLocalDate(dateStr);
 }
 
 function fmt(n: number) { return n.toFixed(2); }

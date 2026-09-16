@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { formatCompanyInstant } from "@/lib/timezone";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface PersonEntry { name: string; role: string; contact: string; injured: boolean }
@@ -186,6 +187,8 @@ export default function IncidentReportWizard({ open, onClose }: { open: boolean;
   const { data: employees = [] } = useQuery<any[]>({ queryKey: ["/api/employees"] });
   const { data: clients = [] } = useQuery<any[]>({ queryKey: ["/api/clients"] });
   const { data: locations = [] } = useQuery<any[]>({ queryKey: ["/api/locations"] });
+  const { data: timezoneData } = useQuery<{ timezone: string }>({ queryKey: ["/api/settings/timezone"], staleTime: Infinity });
+  const timezone = timezoneData?.timezone || "UTC";
 
   const [state, setState] = useState<WizardState>({
     position: "", supervisorNotified: false, supervisorName: "",
@@ -274,7 +277,7 @@ export default function IncidentReportWizard({ open, onClose }: { open: boolean;
             await navigator.clipboard.writeText(data.employeeUrl);
             toast({
               title: "Secure employee link copied",
-              description: `The link expires ${new Date(data.expiresAt).toLocaleString()}.`,
+              description: `The link expires ${formatCompanyInstant(data.expiresAt, timezone, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}.`,
             });
           } catch {
             toast({
@@ -441,8 +444,8 @@ export default function IncidentReportWizard({ open, onClose }: { open: boolean;
           <div className="space-y-4">
             <StepHeader icon={FileText} title="Report Information" desc="Auto-filled details about this report and who prepared it." />
             <div className="grid grid-cols-2 gap-3 rounded-lg bg-muted/30 p-4">
-              <div><SL>Date of Report</SL><p className="text-sm font-medium mt-1">{format(now, "MMMM d, yyyy")}</p></div>
-              <div><SL>Time of Report</SL><p className="text-sm font-medium mt-1">{format(now, "h:mm a")}</p></div>
+              <div><SL>Date of Report</SL><p className="text-sm font-medium mt-1">{formatCompanyInstant(now, timezone, { year: "numeric", month: "long", day: "numeric" })}</p></div>
+              <div><SL>Time of Report</SL><p className="text-sm font-medium mt-1">{formatCompanyInstant(now, timezone, { hour: "numeric", minute: "2-digit", hour12: true })}</p></div>
               <div><SL>Prepared By</SL><p className="text-sm font-medium mt-1">{user?.firstName} {user?.lastName}</p></div>
               <div><SL>Role</SL><p className="text-sm font-medium mt-1 capitalize">{user?.role}</p></div>
             </div>

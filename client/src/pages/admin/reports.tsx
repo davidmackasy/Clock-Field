@@ -23,7 +23,7 @@ import {
   Info
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { formatCompanyInstant, formatCompanyLongDate } from "@/lib/timezone";
 
 const INCIDENT_CATEGORIES = [
   { value: "broke_client_property", label: "Broke client property", title: "Damage to client property" },
@@ -819,6 +819,8 @@ function ReportDetailDialog({ reportId: rptId, open, onClose, employees, clients
   });
   const [sigForm, setSigForm] = useState({ name: "", ack: false });
   const [sigCapture, setSigCapture] = useState<SigCapture>({ signatureType: "typed", signatureDataUrl: null });
+  const { data: timezoneData } = useQuery<{ timezone: string }>({ queryKey: ["/api/settings/timezone"], staleTime: Infinity });
+  const timezone = timezoneData?.timezone || "UTC";
   const [adminEdits, setAdminEdits] = useState<Record<string, any>>({});
   const [saving, setSaving] = useState(false);
 
@@ -921,7 +923,7 @@ function ReportDetailDialog({ reportId: rptId, open, onClose, employees, clients
                       {rpt.severity && <span className={cn("text-[10px] font-semibold", getSeverityInfo(rpt.severity).color)}>⬤ {rpt.severity.toUpperCase()}</span>}
                     </div>
                     <DialogTitle className="text-base leading-tight">{rpt.title}</DialogTitle>
-                    <p className="text-xs text-muted-foreground">{reportId(rpt.id)} · Created {rpt.createdAt ? format(new Date(rpt.createdAt), "MMM d, yyyy") : "—"}</p>
+                    <p className="text-xs text-muted-foreground">{reportId(rpt.id)} · Created {rpt.createdAt ? formatCompanyLongDate(rpt.createdAt, timezone) : "—"}</p>
                   </div>
                 </div>
 
@@ -1192,7 +1194,7 @@ function ReportDetailDialog({ reportId: rptId, open, onClose, employees, clients
                             <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
                               <CheckCircle2 className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
                               <p className="text-sm font-medium">{sig.signerName}</p>
-                              <span className="text-xs text-muted-foreground capitalize ml-auto">{sig.signerRole} · {sig.signedAt ? format(new Date(sig.signedAt), "MMM d, yyyy") : ""}</span>
+                              <span className="text-xs text-muted-foreground capitalize ml-auto">{sig.signerRole} · {sig.signedAt ? formatCompanyLongDate(sig.signedAt, timezone) : ""}</span>
                             </div>
                             {/* Signature graphic */}
                             {sig.signatureType === "drawn" && sig.signatureDataUrl ? (
@@ -1259,7 +1261,7 @@ function ReportDetailDialog({ reportId: rptId, open, onClose, employees, clients
                         <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 flex-shrink-0" />
                         <span className="font-medium capitalize text-foreground">{a.action.replace(/_/g, " ")}</span>
                         <span>by {a.actionByRole}</span>
-                        <span>{a.createdAt ? format(new Date(a.createdAt), "MMM d, h:mm a") : ""}</span>
+                        <span>{a.createdAt ? formatCompanyInstant(a.createdAt, timezone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true }) : ""}</span>
                       </div>
                     )) : <p className="text-sm text-muted-foreground">No activity yet.</p>}
                   </div>
@@ -1282,12 +1284,14 @@ function ReportDetailDialog({ reportId: rptId, open, onClose, employees, clients
 
 // ─── Print Layout ─────────────────────────────────────────────────────────────
 function PrintLayout({ report: rpt, employees, clients, locations, company }: any) {
+  const { data: timezoneData } = useQuery<{ timezone: string }>({ queryKey: ["/api/settings/timezone"], staleTime: Infinity });
+  const timezone = timezoneData?.timezone || "UTC";
   if (!rpt) return null;
   const assignedEmployee = rpt.assignedEmployeeId ? employees.find((e: any) => e.id === rpt.assignedEmployeeId) : null;
   const assignedClient = rpt.assignedClientId ? clients.find((c: any) => c.id === rpt.assignedClientId) : null;
   const assignedLocation = rpt.assignedLocationId ? locations.find((l: any) => l.id === rpt.assignedLocationId) : null;
   const typeInfo = getTypeInfo(rpt.reportType);
-  const preparedDate = rpt.createdAt ? format(new Date(rpt.createdAt), "MMMM d, yyyy") : format(new Date(), "MMMM d, yyyy");
+  const preparedDate = rpt.createdAt ? formatCompanyLongDate(rpt.createdAt, timezone) : formatCompanyLongDate(new Date(), timezone);
 
   // For incident category, find the human-readable label
   const incidentCatLabel = rpt.incidentCategory
@@ -1523,7 +1527,7 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
                         </div>
                         {/* Metadata */}
                         <p style={{ fontSize: "9px", color: "#374151", margin: "0 0 1px 0" }}><span style={{ color: "#4b5563" }}>Name: </span>{sig.signerName}</p>
-                        <p style={{ fontSize: "9px", color: "#374151", margin: "0 0 1px 0" }}><span style={{ color: "#4b5563" }}>Date: </span>{sig.signedAt ? format(new Date(sig.signedAt), "MMMM d, yyyy") : "—"}</p>
+                        <p style={{ fontSize: "9px", color: "#374151", margin: "0 0 1px 0" }}><span style={{ color: "#4b5563" }}>Date: </span>{sig.signedAt ? formatCompanyLongDate(sig.signedAt, timezone) : "—"}</p>
                         <p style={{ fontSize: "9px", color: "#374151", margin: "0 0 6px 0" }}><span style={{ color: "#4b5563" }}>Status: </span>Acknowledged</p>
                         <p style={{ fontSize: "8px", color: "#6b7280" }}>Signed electronically via Clockfield</p>
                       </div>
@@ -1548,7 +1552,7 @@ function PrintLayout({ report: rpt, employees, clients, locations, company }: an
         <div className="print-footer" style={{ borderTop: "1px solid #e5e7eb", marginTop: "8px", paddingTop: "12px", display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#6b7280" }}>
           <span>{company?.name || "Company"} · Confidential</span>
           <span>Prepared using Clockfield</span>
-          <span>Generated {format(new Date(), "MMMM d, yyyy")} · {reportId(rpt.id)}</span>
+          <span>Generated {formatCompanyLongDate(new Date(), timezone)} · {reportId(rpt.id)}</span>
         </div>
       </div>
     </div>
@@ -1567,6 +1571,8 @@ export default function AdminReports() {
   const [typeFilter, setTypeFilter] = useState("all");
 
   const { data: reports = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/reports"] });
+  const { data: timezoneData } = useQuery<{ timezone: string }>({ queryKey: ["/api/settings/timezone"], staleTime: Infinity });
+  const timezone = timezoneData?.timezone || "UTC";
   const { data: employees = [] } = useQuery<any[]>({ queryKey: ["/api/employees"] });
   const { data: clients = [] } = useQuery<any[]>({ queryKey: ["/api/clients"] });
   const { data: locations = [] } = useQuery<any[]>({ queryKey: ["/api/locations"] });
@@ -1751,7 +1757,7 @@ export default function AdminReports() {
                       </div>
                     </td>
                     <td className="py-3 px-4 text-xs text-muted-foreground hidden lg:table-cell">
-                      {r.createdAt ? format(new Date(r.createdAt), "MMM d, yyyy") : "—"}
+                      {r.createdAt ? formatCompanyLongDate(r.createdAt, timezone) : "—"}
                     </td>
                     <td className="py-3 px-4">
                       <ChevronRight className="w-4 h-4 text-muted-foreground" />

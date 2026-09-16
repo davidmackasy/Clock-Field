@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatCompanyInstant } from "@/lib/timezone";
 import {
   MapPin, User, Calendar, ChevronRight, CheckCircle, Search, Eye, X,
   ChevronLeft, ChevronRight as ChevronRightIcon, Link, Copy, ExternalLink,
@@ -18,12 +19,14 @@ import {
   AlertTriangle, Zap, Maximize2,
 } from "lucide-react";
 
-function fmt(iso: string) {
-  return new Date(iso).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+function fmt(iso: string, timezone: string) {
+  return formatCompanyInstant(iso, timezone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
 }
 
 function fmtDate(d: string) {
-  return new Date(d + "T12:00:00").toLocaleDateString("en-CA", { month: "long", day: "numeric", year: "numeric" });
+  const [year, month, day] = d.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "long", day: "numeric", year: "numeric" })
+    .format(new Date(Date.UTC(year, month - 1, day)));
 }
 
 const MAX_PHOTO_DIM = 1800;
@@ -480,6 +483,8 @@ function ReviewPopup({ subId, onClose }: { subId: string; onClose: () => void })
   const [linkCopied, setLinkCopied] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+  const { data: timezoneData } = useQuery<{ timezone: string }>({ queryKey: ["/api/settings/timezone"], staleTime: Infinity });
+  const timezone = timezoneData?.timezone || "UTC";
 
   const { data: review, isLoading } = useQuery<any>({
     queryKey: ["/api/work-submissions", subId, "review"],
@@ -607,7 +612,7 @@ function ReviewPopup({ subId, onClose }: { subId: string; onClose: () => void })
                 <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />Service: {fmtDate(review.workDate)}</span>
                 {review.employeeName && <span className="flex items-center gap-1"><User className="w-3 h-3" />{review.employeeName}</span>}
                 {review.locationName && <span className="flex items-center gap-1 col-span-2"><MapPin className="w-3 h-3" />{review.locationName}</span>}
-                <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3" />Submitted {fmt(review.submittedAt)}</span>
+                <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3" />Submitted {fmt(review.submittedAt, timezone)}</span>
               </div>
             </div>
 
@@ -721,6 +726,8 @@ export default function AdminWorkLog() {
   const [paPhotos, setPaPhotos] = useState<Array<{ preview: string; dataUrl: string }>>([]);
   const [paCompressing, setPaCompressing] = useState(false);
   const paFileRef = useRef<HTMLInputElement>(null);
+  const { data: timezoneData } = useQuery<{ timezone: string }>({ queryKey: ["/api/settings/timezone"], staleTime: Infinity });
+  const timezone = timezoneData?.timezone || "UTC";
 
   async function handleSaveEdits() {
     if (!editRef.current) return;
@@ -963,7 +970,7 @@ export default function AdminWorkLog() {
                     {loc && <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1"><MapPin className="w-3 h-3" />{loc.name}</p>}
                     {emp && <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1"><User className="w-3 h-3" />{emp.firstName} {emp.lastName}</p>}
                     {alert.message && <p className="text-xs text-red-600/80 dark:text-red-400/80 line-clamp-2">{alert.message}</p>}
-                    <p className="text-[10px] text-red-400">Created {fmt(alert.createdAt)}</p>
+                    <p className="text-[10px] text-red-400">Created {fmt(alert.createdAt, timezone)}</p>
                     {alert.photos && alert.photos.length > 0 && (
                       <div className="flex gap-1.5 mt-1.5 flex-wrap">
                         {alert.photos.map((p: any, pi: number) => (
@@ -1059,7 +1066,7 @@ export default function AdminWorkLog() {
                       <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{sub.workDate}</span>
                         {sub.locationName && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{sub.locationName}</span>}
-                        {sub.submittedAt && <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3" />Submitted {fmt(sub.submittedAt)}</span>}
+                        {sub.submittedAt && <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3" />Submitted {fmt(sub.submittedAt, timezone)}</span>}
                       </div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
@@ -1221,7 +1228,7 @@ export default function AdminWorkLog() {
                     <span className="flex items-center gap-1"><User className="w-3 h-3" />{empMap[detailSub.employeeId] || detailSub.employeeId}</span>
                     <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{detailSub.workDate}</span>
                     {detailSub.locationName && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{detailSub.locationName}</span>}
-                    {detailSub.submittedAt && <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3" />Submitted {fmt(detailSub.submittedAt)}</span>}
+                    {detailSub.submittedAt && <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3" />Submitted {fmt(detailSub.submittedAt, timezone)}</span>}
                   </div>
                 </DialogDescription>
               </DialogHeader>
