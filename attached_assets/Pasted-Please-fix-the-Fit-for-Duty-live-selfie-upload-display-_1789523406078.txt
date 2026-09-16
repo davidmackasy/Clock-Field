@@ -1,0 +1,153 @@
+Please fix the Fit for Duty live selfie upload/display issue properly end-to-end.
+
+Right now, employees can complete the questionnaire and take a live selfie, but on the Admin → Fit for Duty page the actual photo is not displaying. We only see a broken image/alt text such as “Live attendance verification for Ahmed Mohamed.”
+
+Do not change or break the existing employee login, questionnaire, clock-in, clock-out, Fit for Duty answers, or admin workflow. This task is specifically to make the captured selfie reliably reach and display in the admin submission.
+
+Required working flow
+
+Employee takes selfie → selfie file uploads successfully → upload completes → permanent storage reference is saved to that Fit for Duty submission → employee clocks in → admin opens submission → actual selfie displays.
+
+Please inspect the entire current implementation rather than only changing the <img> component.
+
+1. Employee capture
+
+When the employee taps Use Photo, convert the camera capture into a real uploadable image file/blob.
+
+Validate:
+
+file exists
+file size is greater than 0
+supported type such as JPEG/WebP/PNG
+capture belongs to the current employee's Fit for Duty submission
+
+Do not save a temporary browser blob: URL, local device path, base64 preview URL, or camera preview URL as the permanent image reference.
+
+Those references may work on the employee's device but will not work later in the admin dashboard.
+
+2. Upload to permanent storage
+
+Upload the selfie to the application's existing permanent storage system before finalizing the Fit for Duty submission.
+
+Use a structured storage path similar to:
+
+fit-for-duty/{company_id}/{employee_id}/{submission_id}/selfie.jpg
+
+Generate a unique filename/path per submission so photos do not overwrite each other.
+
+3. Do not finalize before upload succeeds
+
+This is important.
+
+Do not create a Fit for Duty record containing an invalid image URL while the upload is still running.
+
+The sequence should be:
+
+Capture → Upload → verify upload success → save storage key/path → save questionnaire → clock employee in.
+
+If the image upload temporarily fails, show:
+
+“Photo upload failed. Please try taking your photo again.”
+
+Allow the employee to retry without losing their questionnaire answers.
+
+4. Database
+
+Store a permanent storage reference, preferably:
+
+face_photo_path
+
+and:
+
+face_photo_captured_at
+
+face_photo_uploaded_at
+
+Avoid treating an expiring signed URL as the permanent database value.
+
+Store the actual storage object path/key and generate a view URL when the admin requests the submission.
+
+5. Admin photo retrieval
+
+When Admin → Fit for Duty loads a submission, retrieve the selfie using its saved permanent storage path.
+
+If the storage bucket is private, generate an authenticated/signed URL server-side for authorized admins.
+
+Do not assume that a raw private-storage URL can be placed directly inside:
+
+<img src="...">
+
+because that can produce exactly the broken-image behavior we are seeing now.
+
+6. Authentication / permissions
+
+Make sure the admin account is allowed to read selfies belonging to its own company/tenant.
+
+Verify storage policies so:
+
+employee can upload their own current selfie
+authorized company admin can view it
+employees cannot browse other employees' selfies
+clients cannot access Fit for Duty photos
+another company cannot access these images
+7. Admin UI
+
+The existing Live Photo section can stay.
+
+Show the actual selfie with a sensible size and aspect ratio.
+
+If the photo genuinely does not exist, display:
+
+Photo unavailable
+
+Do not show a broken browser image icon.
+
+Also add an image loading state so the page does not briefly show a broken image while the signed URL is being obtained.
+
+8. Do not silently accept missing photos
+
+Because the live photo is required for this workflow, a newly submitted Fit for Duty check should not have:
+
+face_photo_path = null
+
+if the employee successfully completed the photo step.
+
+Validate this server-side.
+
+9. Check existing broken submissions
+
+Please inspect the existing records visible in the screenshot, including the submissions for Ahmed Mohamed and Gift Delvin, and determine whether:
+
+a photo was uploaded but the admin URL is wrong,
+the storage object exists but permissions prevent access,
+an expired signed URL was stored,
+a temporary/blob URL was stored,
+or the image was never uploaded at all.
+
+Fix the root cause.
+
+Do not simply hide the broken image.
+
+10. Test end-to-end
+
+Please test this with a brand-new employee submission:
+
+Employee logs in → completes questionnaire → opens front camera → takes selfie → uses photo → submits → employee is successfully clocked in → admin opens Fit for Duty → exact captured selfie is visible.
+
+Then refresh the admin page, log out and back in, and confirm the selfie still displays.
+
+That final refresh/login test is important because it confirms we are using permanent storage rather than a temporary browser URL.
+
+Also test from a different admin device/browser.
+
+Critical constraint
+
+Do not refactor or modify unrelated working functionality.
+
+Keep:
+
+Existing employee authentication → existing Fit for Duty questionnaire → live selfie → existing clock-in
+
+exactly as currently designed.
+
+We are fixing the selfie persistence and admin delivery
