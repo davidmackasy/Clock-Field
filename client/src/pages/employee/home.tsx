@@ -33,6 +33,8 @@ export default function EmployeeHome() {
   const [facePhotoCapturedAt, setFacePhotoCapturedAt] = useState<string | null>(null);
   const [facePhotoAccepted, setFacePhotoAccepted] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState("");
   const faceVideoRef = useRef<HTMLVideoElement>(null);
   const faceStreamRef = useRef<MediaStream | null>(null);
@@ -123,6 +125,8 @@ export default function EmployeeHome() {
     faceStreamRef.current = null;
     if (faceVideoRef.current) faceVideoRef.current.srcObject = null;
     setCameraActive(false);
+    setCameraStarting(false);
+    setCameraReady(false);
   };
 
   const startFaceCamera = async () => {
@@ -131,33 +135,116 @@ export default function EmployeeHome() {
     setFacePhotoCapturedAt(null);
     setFacePhotoAccepted(false);
     setCameraError("");
+    setCameraStarting(true);
+    setCameraActive(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-      faceStreamRef.current = stream;
-      setCameraActive(true);
-      requestAnimationFrame(() => {
-        if (faceVideoRef.current) {
-          faceVideoRef.current.srcObject = stream;
-          void faceVideoRef.current.play();
+      if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+        throw new Error("CAMERA_UNAVAILABLE");
+      }
+
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "user" },
+            width: { ideal: 720 },
+            height: { ideal: 1280 },
+          },
+          audio: false,
+        });
+      } catch (initialError) {
+        if (initialError instanceof DOMException && ["NotAllowedError", "SecurityError"].includes(initialError.name)) {
+          throw initialError;
         }
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
+
+      faceStreamRef.current = stream;
+      const video = await new Promise<HTMLVideoElement>((resolve, reject) => {
+        let attempts = 0;
+        const findVideo = () => {
+          if (faceVideoRef.current) return resolve(faceVideoRef.current);
+          if (++attempts >= 30) return reject(new Error("VIDEO_NOT_MOUNTED"));
+          requestAnimationFrame(findVideo);
+        };
+        findVideo();
       });
-    } catch {
-      setCameraError("Camera access is required. Please allow camera access and try again.");
+
+      video.muted = true;
+      video.playsInline = true;
+      video.srcObject = stream;
+
+      if (video.readyState < HTMLMediaElement.HAVE_METADATA) {
+        await new Promise<void>((resolve, reject) => {
+          const timeout = window.setTimeout(() => reject(new Error("CAMERA_START_TIMEOUT")), 10000);
+          video.onloadedmetadata = () => {
+            window.clearTimeout(timeout);
+            resolve();
+          };
+          video.onerror = () => {
+            window.clearTimeout(timeout);
+            reject(new Error("CAMERA_PREVIEW_FAILED"));
+          };
+        });
+      }
+
+      await video.play();
+
+      if (!stream.active || !stream.getVideoTracks().some(track => track.readyState === "live") || video.videoWidth <= 0 || video.videoHeight <= 0 || video.paused) {
+        throw new Error("CAMERA_NOT_READY");
+      }
+
+      setCameraStarting(false);
+      setCameraReady(true);
+    } catch (error) {
+      stopFaceCamera();
+      if (error instanceof DOMException && ["NotAllowedError", "SecurityError"].includes(error.name)) {
+        setCameraError("Camera access is blocked. Please enable camera permission for ClockField in your browser settings and try again.");
+      } else if (error instanceof Error && error.message === "CAMERA_UNAVAILABLE") {
+        setCameraError("Camera access requires a supported browser and a secure HTTPS connection.");
+      } else {
+        setCameraError("The camera preview could not start. Check that another app is not using the camera, then try again.");
+      }
     }
   };
 
-  const captureFacePhoto = () => {
+  const captureFacePhoto = async () => {
     const video = faceVideoRef.current;
-    if (!video || !video.videoWidth || !video.videoHeight) return;
+    const stream = faceStreamRef.current;
+    if (!cameraReady || !video || video.paused || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight || !stream?.active) {
+      setCameraError("The camera is not ready yet. Wait for the live preview, then try again.");
+      return;
+    }
     const maxWidth = 720;
     const scale = Math.min(1, maxWidth / video.videoWidth);
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(video.videoWidth * scale);
     canvas.height = Math.round(video.videoHeight * scale);
-    canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
-    setFacePhotoData(canvas.toDataURL("image/jpeg", 0.82));
-    setFacePhotoCapturedAt(new Date().toISOString());
-    stopFaceCamera();
+    const context = canvas.getContext("2d");
+    if (!context) {
+      setCameraError("The photo could not be captured. Please try again.");
+      return;
+    }
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.82));
+    if (!blob) {
+      setCameraError("The photo could not be captured. Please try again.");
+      return;
+    }
+    try {
+      const photoData = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("PHOTO_READ_FAILED"));
+        reader.onerror = () => reject(reader.error || new Error("PHOTO_READ_FAILED"));
+        reader.readAsDataURL(blob);
+      });
+      setFacePhotoData(photoData);
+      setFacePhotoCapturedAt(new Date().toISOString());
+      setCameraError("");
+      stopFaceCamera();
+    } catch {
+      setCameraError("The photo could not be prepared. Please capture it again.");
+    }
   };
 
   useEffect(() => () => stopFaceCamera(), []);
@@ -235,10 +322,10 @@ export default function EmployeeHome() {
           </div>
           {!fitAnswers.some(answer => answer === undefined) && <div className="space-y-3 rounded-lg border p-4">
             <div><p className="font-semibold">Quick Photo Verification</p><p className="text-sm text-muted-foreground">Please take a quick live photo to confirm your attendance for this shift.</p></div>
-            {!cameraActive && !facePhotoData && <Button type="button" variant="outline" className="w-full h-12" onClick={startFaceCamera}>Take Photo</Button>}
-            {cameraActive && <div className="space-y-3"><video ref={faceVideoRef} autoPlay playsInline muted className="aspect-[4/3] w-full rounded-lg bg-black object-cover [transform:scaleX(-1)]" /><Button type="button" className="w-full" onClick={captureFacePhoto}>Capture Photo</Button></div>}
+            {!cameraActive && !facePhotoData && <div className="space-y-2 text-center"><p className="text-sm font-medium">Camera Access Required</p><p className="text-sm text-muted-foreground">ClockField needs access to your camera to take your attendance verification photo.</p><Button type="button" variant="outline" className="w-full h-12" onClick={startFaceCamera}>{cameraError ? "Try Again" : "Enable Camera"}</Button></div>}
+            {cameraActive && <div className="space-y-3"><div className="relative overflow-hidden rounded-lg bg-muted aspect-[4/3]"><video ref={faceVideoRef} autoPlay playsInline muted className={cameraReady ? "h-full w-full object-cover [transform:scaleX(-1)]" : "h-full w-full opacity-0"} />{!cameraReady && <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">{cameraStarting ? "Starting camera…" : "Preparing camera…"}</div>}</div><Button type="button" className="w-full" onClick={captureFacePhoto} disabled={!cameraReady}>Capture Photo</Button></div>}
             {facePhotoData && <div className="space-y-3"><img src={facePhotoData} alt="Captured live attendance verification" className="aspect-[4/3] w-full rounded-lg object-cover [transform:scaleX(-1)]" /><div className="grid grid-cols-2 gap-2"><Button type="button" variant="outline" onClick={startFaceCamera}>Retake</Button><Button type="button" onClick={() => setFacePhotoAccepted(true)} disabled={facePhotoAccepted}>{facePhotoAccepted ? "Photo Selected" : "Use Photo"}</Button></div></div>}
-            {cameraError && <p className="text-sm text-destructive">{cameraError}</p>}
+            {cameraError && <p role="alert" className="text-sm text-destructive">{cameraError}</p>}
           </div>}
           {facePhotoAccepted && <label className="flex items-start gap-3 text-sm mt-3 cursor-pointer">
               <Checkbox checked={fitConfirmed} onCheckedChange={v => setFitConfirmed(v === true)} className="mt-0.5" />

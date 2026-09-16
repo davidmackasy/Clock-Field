@@ -1,0 +1,199 @@
+Please fix the Quick Photo Verification live camera preview on mobile, especially iPhone/Safari.
+
+Right now the camera section appears, but the preview is completely black. The employee cannot see themselves before taking the selfie.
+
+Do not change the questionnaire, employee login, clock-in logic, admin Fit for Duty page, or anything else. This is specifically a camera-preview fix.
+
+Expected behavior
+
+When the employee reaches Quick Photo Verification:
+
+Request camera permission.
+Open the device's front-facing camera.
+Show the live camera feed immediately inside the preview.
+Employee taps Capture Photo.
+Freeze/capture the current frame.
+Show the captured selfie.
+Allow Retake Photo or Use Photo.
+Continue with the existing Confirm & Clock In flow.
+Mobile Safari / iPhone requirements
+
+Please make sure the live preview uses:
+
+<video
+  autoplay
+  muted
+  playsinline
+></video>
+
+playsinline is especially important on iPhone Safari.
+
+After getUserMedia() succeeds, explicitly attach the stream:
+
+const stream = await navigator.mediaDevices.getUserMedia({
+  video: {
+    facingMode: { ideal: "user" }
+  },
+  audio: false
+});
+
+video.srcObject = stream;
+await video.play();
+
+Do not assume setting srcObject alone will always start the preview on iOS.
+
+Camera constraints
+
+Use the selfie/front camera:
+
+facingMode: { ideal: "user" }
+
+Do not require a specific resolution that some phones cannot support.
+
+Prefer flexible constraints such as:
+
+video: {
+  facingMode: { ideal: "user" },
+  width: { ideal: 720 },
+  height: { ideal: 1280 }
+}
+
+If those constraints fail, retry with:
+
+video: true
+
+so the camera still works.
+
+Permission handling
+
+If camera permission has not been granted, show:
+
+Camera Access Required
+
+“ClockField needs access to your camera to take your attendance verification photo.”
+
+Button:
+
+Enable Camera
+
+If permission is denied, do not just leave a black box.
+
+Show:
+
+Camera access is blocked. Please enable camera permission for ClockField in your browser settings and try again.
+
+Add a Try Again button.
+
+Important iPhone behavior
+
+Camera startup should happen from a real user interaction when necessary.
+
+If Safari blocks automatic camera startup, show:
+
+Start Camera
+
+and start getUserMedia() when the employee taps it.
+
+After the stream is active, change the button to:
+
+Capture Photo
+
+Preview readiness
+
+Do not enable Capture Photo until the video is actually ready.
+
+Wait for something like:
+
+video.onloadedmetadata
+
+or:
+
+video.readyState >= 2
+
+before allowing capture.
+
+While starting:
+
+Starting camera…
+
+Do not display a permanent black rectangle.
+
+Capturing the selfie
+
+When capturing, draw the live video frame into a canvas using the video's actual dimensions:
+
+canvas.width = video.videoWidth;
+canvas.height = video.videoHeight;
+
+Then convert it to a real Blob/File for upload.
+
+Do not capture before video.videoWidth and video.videoHeight are available.
+
+Camera lifecycle
+
+When the employee:
+
+captures the image,
+closes the questionnaire,
+navigates away,
+logs out,
+or the component unmounts,
+
+stop the camera:
+
+stream.getTracks().forEach(track => track.stop());
+
+If they tap Retake, start the camera again properly.
+
+HTTPS
+
+Verify the production site is using HTTPS for this page.
+
+Browser camera APIs must run in a secure context.
+
+Do not use a black placeholder as success
+
+The camera is not considered ready simply because the preview container rendered.
+
+The application must verify that:
+
+getUserMedia() succeeded
+a video track is active
+video.srcObject contains the stream
+video.videoWidth > 0
+video.videoHeight > 0
+the video is actually playing
+
+If any of these fail, show an error/retry state instead of the black preview.
+
+Please test these cases
+
+iPhone Safari
+
+Open Fit for Duty → camera permission → live selfie visible → capture → retake → use photo → clock in.
+
+iPhone with camera permission previously denied
+
+Must show a useful error, not a black box.
+
+Android Chrome
+
+Same full flow.
+
+Desktop Chrome/Safari
+
+Webcam preview and capture should work.
+
+Also test closing and reopening the Fit for Duty modal so the camera doesn't remain locked by a previous stream.
+
+Critical
+
+Do not modify any existing working functionality.
+
+Keep:
+
+Employee authentication → Fit for Duty questions → Quick Photo Verification → Confirm & Clock In
+
+exactly as it is.
+
+Only fix the live camera initialization, preview, capture, and error handling.
