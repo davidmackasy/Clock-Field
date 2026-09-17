@@ -1,0 +1,90 @@
+FIX — LIVE PHOTO CAPTURE SHOWING BLACK/BLANK INSTEAD OF CAMERA FEED (FIT FOR DUTY DECLARATION)
+
+On the employee Fit for Duty declaration flow, the "Live Photo"
+step that should activate the device camera and capture a selfie is
+instead producing a solid black/dark image with no visible camera
+feed. The submission still goes through and gets stored (see the
+review screen — Ahmed Mohamed's submission saved with a photo
+attached), but the photo itself is unusable for actually verifying
+who the employee is.
+
+==================================================
+1. REPRODUCE FIRST
+==================================================
+
+Go through the actual employee-facing Fit for Duty declaration flow
+(not the admin review screen) on both:
+- Mobile browser (most likely where this is submitted from)
+- Desktop browser, if supported
+
+At the Live Photo step, confirm:
+- Does the camera permission prompt appear at all?
+- Does a live video preview render before capture, or does it go
+  straight to black?
+- Check browser console for errors (getUserMedia failures, permission
+  denied, camera in use by another process, insecure context, etc.)
+
+==================================================
+2. LIKELY ROOT CAUSES TO CHECK, IN ORDER
+==================================================
+
+- Camera permission was never actually requested/granted (silently
+  failing rather than prompting the user) — check the
+  navigator.mediaDevices.getUserMedia() call actually fires and its
+  promise is being awaited/handled, not swallowed by a try/catch
+  with no fallback UI.
+- Page/app is not served over HTTPS (or is in a non-secure context)
+  — getUserMedia requires a secure context or it fails silently in
+  some browsers.
+- The <video> element bound to the camera stream isn't getting its
+  srcObject set correctly, or is rendering before the stream is
+  ready (race condition similar to the video-playback issue on
+  Pixifield — capture the stream, THEN show the preview, don't show
+  a blank video element while waiting).
+- If this is a webview embedded in a native wrapper (common for
+  "take a live photo" flows), check that camera permissions are
+  actually declared/granted at the OS/app level, not just the
+  browser level.
+- Captured frame is being drawn from a canvas before the video
+  element has a loaded frame (capturing before "loadedmetadata" or
+  before the stream has painted at least one frame), which would
+  explain why a photo still gets saved — just as solid black.
+
+==================================================
+3. FIX
+==================================================
+
+- Ensure the camera stream is actually requested, permission-handled
+  explicitly (with a clear error state if denied, not just a black
+  box), and the live preview only renders once the stream is
+  confirmed active.
+- If capturing to a still frame via canvas, wait for the video
+  element to have a valid frame (loadedmetadata / readyState check)
+  before allowing capture, so a black frame can't be submitted.
+- If permission is denied or camera is unavailable, show a clear
+  message to the employee (e.g. "Camera access is required to
+  submit this declaration") instead of silently allowing a
+  black-photo submission to go through.
+
+==================================================
+4. DO NOT
+==================================================
+
+- Do not change the declaration questions, confirmation logic, or
+  admin review screen (Clear for Work / Keep Blocked).
+- Do not change anything unrelated to the Live Photo capture step.
+
+==================================================
+5. VERIFY
+==================================================
+
+- Submit a fresh Fit for Duty declaration end to end on mobile and
+  confirm the live camera preview actually shows the employee before
+  capture, and the saved photo is a real image, not black.
+- Confirm a denied-permission case shows a clear error instead of
+  silently submitting a black photo.
+- Confirm existing submissions/admin review screen still display
+  and function correctly (no regression).
+
+Report back what the root cause was (permission handling, secure
+context, race condition, etc.) before marking this done.

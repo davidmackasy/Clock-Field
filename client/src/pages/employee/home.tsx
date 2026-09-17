@@ -13,6 +13,62 @@ import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation as useWouterLocation } from "wouter";
 import { Clock, Play, Square, Calendar, ShieldAlert, ChevronRight, Zap, X as XIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon, GraduationCap, Briefcase } from "lucide-react";
 
+async function waitForPaintedVideoFrame(video: HTMLVideoElement, timeoutMs = 5000): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const timeout = window.setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        reject(new Error("CAMERA_FRAME_TIMEOUT"));
+      }
+    }, timeoutMs);
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeout);
+      resolve();
+    };
+
+    const frameVideo = video as HTMLVideoElement & {
+      requestVideoFrameCallback?: (callback: (now: number, metadata: { presentedFrames?: number }) => void) => number;
+    };
+    if (frameVideo.requestVideoFrameCallback) {
+      frameVideo.requestVideoFrameCallback((_now, metadata) => {
+        if ((metadata.presentedFrames ?? 1) > 0) finish();
+        else window.setTimeout(finish, 100);
+      });
+      return;
+    }
+
+    const waitAfterPlaying = () => window.setTimeout(finish, 250);
+    if (!video.paused && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) waitAfterPlaying();
+    else video.addEventListener("playing", waitAfterPlaying, { once: true });
+  });
+}
+
+function isBlankCameraFrame(context: CanvasRenderingContext2D, width: number, height: number): boolean {
+  const sampleWidth = Math.min(width, 64);
+  const sampleHeight = Math.min(height, 64);
+  const sampleCanvas = document.createElement("canvas");
+  sampleCanvas.width = sampleWidth;
+  sampleCanvas.height = sampleHeight;
+  const sampleContext = sampleCanvas.getContext("2d", { willReadFrequently: true });
+  if (!sampleContext) return false;
+  sampleContext.drawImage(context.canvas, 0, 0, sampleWidth, sampleHeight);
+  const pixels = sampleContext.getImageData(0, 0, sampleWidth, sampleHeight).data;
+  let total = 0;
+  let min = 255;
+  let max = 0;
+  for (let i = 0; i < pixels.length; i += 4) {
+    const luminance = (pixels[i] * 0.2126) + (pixels[i + 1] * 0.7152) + (pixels[i + 2] * 0.0722);
+    total += luminance;
+    min = Math.min(min, luminance);
+    max = Math.max(max, luminance);
+  }
+  const average = total / (pixels.length / 4);
+  return average < 12 && max - min < 18;
+}
+
 export default function EmployeeHome() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -189,6 +245,7 @@ export default function EmployeeHome() {
       }
 
       await video.play();
+      await waitForPaintedVideoFrame(video);
 
       if (!stream.active || !stream.getVideoTracks().some(track => track.readyState === "live") || video.videoWidth <= 0 || video.videoHeight <= 0 || video.paused) {
         throw new Error("CAMERA_NOT_READY");
@@ -215,6 +272,12 @@ export default function EmployeeHome() {
       setCameraError("The camera is not ready yet. Wait for the live preview, then try again.");
       return;
     }
+    try {
+      await waitForPaintedVideoFrame(video);
+    } catch {
+      setCameraError("The live camera frame is not ready. Keep the camera pointed at your face and try again.");
+      return;
+    }
     const maxWidth = 720;
     const scale = Math.min(1, maxWidth / video.videoWidth);
     const canvas = document.createElement("canvas");
@@ -226,6 +289,10 @@ export default function EmployeeHome() {
       return;
     }
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    if (isBlankCameraFrame(context, canvas.width, canvas.height)) {
+      setCameraError("The captured frame is too dark or blank. Make sure the camera is uncovered and your face is visible, then try again.");
+      return;
+    }
     const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.82));
     if (!blob) {
       setCameraError("The photo could not be captured. Please try again.");
