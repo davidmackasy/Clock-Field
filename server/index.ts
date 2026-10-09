@@ -4,8 +4,11 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import path from "path";
 import fs from "fs";
+import { uploadsDirectory } from "./file-storage";
+import { readPersistentFile } from "./persistent-files";
 
 const app = express();
+if (process.env.TRUST_PROXY === "1") app.set("trust proxy", 1);
 const httpServer = createServer(app);
 
 declare module "http" {
@@ -25,9 +28,18 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
-const uploadsDir = path.join(process.cwd(), "uploads");
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-app.use("/uploads", express.static(uploadsDir));
+app.use("/uploads", async (req, res, next) => {
+  if (!process.env.SUPABASE_URL) return next();
+  const filename = req.path.slice(1);
+  if (!filename || path.basename(filename) !== filename) return res.sendStatus(404);
+  try {
+    const data = await readPersistentFile(path.join(uploadsDirectory, filename));
+    if (!data) return res.sendStatus(404);
+    res.set("X-Content-Type-Options", "nosniff").type(path.extname(filename)).send(data);
+  } catch (error) { next(error); }
+});
+app.use("/uploads", express.static(uploadsDirectory));
+app.get("/healthz", (_req, res) => res.json({ status: "ok" }));
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -55,7 +67,7 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
+      if (capturedJsonResponse && process.env.NODE_ENV !== "production") {
         // Redact endpoints whose responses contain large/sensitive payloads
         // (employee document file data, training module assets, etc.) to keep
         // PII out of server logs and prevent log bloat.
@@ -116,7 +128,7 @@ app.use((req, res, next) => {
     {
       port,
       host: "0.0.0.0",
-      reusePort: true,
+      reusePort: process.platform === "linux",
     },
     () => {
       log(`serving on port ${port}`);

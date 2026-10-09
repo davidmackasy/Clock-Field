@@ -1,0 +1,12 @@
+.git
+.migration-backups
+node_modules
+dist
+.env*
+.dev.vars*
+uploads
+private_fit_for_duty_photos
+private_incident_evidence
+*.jpg
+*.zip
+screenshots

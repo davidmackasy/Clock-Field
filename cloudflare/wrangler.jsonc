@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "clockfield",
+  "main": "worker.js",
+  "account_id": "f8e963c4de07dc7d399bc2126d0b18a9",
+  "compatibility_date": "2026-10-09",
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  "containers": [{ "class_name": "ClockFieldContainer", "image": "../Dockerfile", "max_instances": 1, "instance_type": "basic" }],
+  "durable_objects": { "bindings": [{ "name": "CLOCKFIELD", "class_name": "ClockFieldContainer" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ClockFieldContainer"] }]
+}

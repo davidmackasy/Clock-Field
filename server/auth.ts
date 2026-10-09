@@ -24,6 +24,9 @@ export async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
+  if (process.env.NODE_ENV === "production" && !process.env.SESSION_SECRET) {
+    throw new Error("SESSION_SECRET is required in production");
+  }
   const PgSession = connectPgSimple(session);
 
   app.use(
@@ -38,7 +41,7 @@ export function setupAuth(app: Express) {
       cookie: {
         maxAge: 30 * 24 * 60 * 60 * 1000,
         httpOnly: true,
-        secure: false,
+        secure: process.env.NODE_ENV === "production" && process.env.TRUST_PROXY === "1",
         sameSite: "lax",
       },
     })

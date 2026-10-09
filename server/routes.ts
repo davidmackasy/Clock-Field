@@ -16,6 +16,8 @@ import { isNotNull, eq, and, isNull, inArray, desc, asc, sql } from "drizzle-orm
 import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, platformMessages, incidentEmployeeSnapshots, incidentEvidence, incidentTemplates, incidentAmendments, incidentInvestigations, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments, supplies, supplyUpdates, inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses, trainingPublicLearners, trainingCourses, trainingModules, trainingModuleAssets, trainingAssignments, trainingQuizzes, trainingQuizQuestions, trainingLessonBlocks, trainingModuleAudio } from "@shared/schema";
 import { getPlan } from "./plans";
 import { generateReviewOgImage } from "./og-image";
+import { dataDirectory, uploadsDirectory, fitForDutyPhotosDirectory, incidentEvidenceDirectory } from "./file-storage";
+import { readPersistentFile, writePersistentFile, removePersistentFile } from "./persistent-files";
 
 function escHtml(str: string): string {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -37,12 +39,9 @@ const FIT_FOR_DUTY_QUESTIONS = [
 ];
 const FIT_FOR_DUTY_DECLARATION = "I confirm that the answers I provided are true and accurate and that I am fit to safely perform my assigned duties.";
 
-const UPLOADS_DIR = path.join(process.cwd(), "uploads");
-if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-const FIT_FOR_DUTY_PHOTOS_DIR = path.join(process.cwd(), "private_fit_for_duty_photos");
-if (!fs.existsSync(FIT_FOR_DUTY_PHOTOS_DIR)) fs.mkdirSync(FIT_FOR_DUTY_PHOTOS_DIR, { recursive: true });
-const INCIDENT_EVIDENCE_DIR = path.join(process.cwd(), "private_incident_evidence");
-if (!fs.existsSync(INCIDENT_EVIDENCE_DIR)) fs.mkdirSync(INCIDENT_EVIDENCE_DIR, { recursive: true });
+const UPLOADS_DIR = uploadsDirectory;
+const FIT_FOR_DUTY_PHOTOS_DIR = fitForDutyPhotosDirectory;
+const INCIDENT_EVIDENCE_DIR = incidentEvidenceDirectory;
 
 /**
  * Convert a UTC datetime string to a local ISO datetime string (no TZ suffix)
@@ -179,12 +178,9 @@ async function migrateUploadsToBase64(): Promise<void> {
       const converted: string[] = [];
 
       for (const url of uploadUrls) {
-        const filePath = path.join(process.cwd(), url);
-        if (!fs.existsSync(filePath)) {
-          console.log(`[img-migration] File not found on disk, skipping: ${filePath}`);
-          continue;
-        }
-        const buf = fs.readFileSync(filePath);
+        const filePath = path.join(dataDirectory, url);
+        const buf = await readPersistentFile(filePath);
+        if (!buf) continue;
         const ext = path.extname(filePath).toLowerCase();
         const mime = ext === ".png" ? "image/png" : "image/jpeg";
         converted.push(`data:${mime};base64,${buf.toString("base64")}`);
@@ -238,14 +234,9 @@ async function migrateLogoToBase64(): Promise<void> {
     if (toMigrate.length === 0) return;
     console.log(`[logo-migration] Migrating ${toMigrate.length} company logo(s) from disk to base64 in DB...`);
     for (const row of toMigrate) {
-      const filePath = path.join(process.cwd(), row.companyLogoUrl!);
-      if (!fs.existsSync(filePath)) {
-        // File is gone (e.g. new deployment) — clear the broken URL
-        await db.update(companies).set({ companyLogoUrl: null }).where(eq(companies.id, row.id));
-        console.log(`[logo-migration] Cleared missing logo for company ${row.id}`);
-        continue;
-      }
-      const buf = fs.readFileSync(filePath);
+      const filePath = path.join(dataDirectory, row.companyLogoUrl!);
+      const buf = await readPersistentFile(filePath);
+      if (!buf) continue;
       const ext = path.extname(filePath).toLowerCase();
       const mime = mimeMap[ext] || "image/jpeg";
       const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
@@ -266,21 +257,21 @@ export async function registerRoutes(
 
   // ── File Upload ────────────────────────────────────────────────────────────
   app.post("/api/upload", requireAuth, (req, res) => {
-    upload.array("photos", 3)(req, res, (err: any) => {
-      if (err) {
-        if (err.code === "LIMIT_FILE_SIZE") return res.status(400).json({ message: "Each photo must be under 10MB" });
-        if (err.code === "LIMIT_FILE_COUNT") return res.status(400).json({ message: "Maximum 3 photos allowed" });
-        return res.status(400).json({ message: err.message || "Upload failed" });
-      }
+    upload.array("photos", 3)(req, res, async (err: any) => {
+      if (err) return res.status(400).json({ message: err.message || "Upload failed" });
       const files = req.files as Express.Multer.File[];
-      if (!files || files.length === 0) return res.status(400).json({ message: "No files uploaded" });
-      const urls = files.map(f => {
-        const ext = f.mimetype === "image/png" ? ".png" : ".jpg";
-        const newName = f.filename + ext;
-        fs.renameSync(f.path, path.join(UPLOADS_DIR, newName));
-        return `/uploads/${newName}`;
-      });
-      res.json({ urls });
+      if (!files?.length) return res.status(400).json({ message: "No files uploaded" });
+      try {
+        const urls: string[] = [];
+        for (const file of files) {
+          const ext = file.mimetype === "image/png" ? ".png" : ".jpg";
+          const name = file.filename + ext;
+          await writePersistentFile(path.join(UPLOADS_DIR, name), await fs.promises.readFile(file.path), file.mimetype);
+          urls.push(`/uploads/${name}`);
+        }
+        res.json({ urls });
+      } catch { res.status(500).json({ message: "Unable to save uploaded photos" }); }
+      finally { await Promise.all(files.map(file => fs.promises.unlink(file.path).catch(() => {}))); }
     });
   });
 
@@ -1605,7 +1596,7 @@ Welcome again, and thank you for choosing ClockField.
       const status = answers[0] === true && answers.slice(1).every((a: boolean) => a === false) ? "cleared" : "flagged";
       const photoFileName = `${user.companyId}-${user.id}-${Date.now()}-${randomBytes(12).toString("hex")}.jpg`;
       const photoFilePath = path.join(FIT_FOR_DUTY_PHOTOS_DIR, photoFileName);
-      fs.writeFileSync(photoFilePath, photoBuffer);
+      await writePersistentFile(photoFilePath, photoBuffer, "image/jpeg");
       const original = { answers, confirmationAccepted: true, submittedAt: acceptedAt, facePhotoCapturedAt: photoCapturedAt.toISOString() };
       let row;
       try {
@@ -1619,7 +1610,7 @@ Welcome again, and thank you for choosing ClockField.
           originalSubmission: JSON.stringify(original),
         });
       } catch (error) {
-        try { fs.unlinkSync(photoFilePath); } catch {}
+        try { await removePersistentFile(photoFilePath); } catch {}
         throw error;
       }
       res.status(201).json({ id: row.id, status: row.status });
@@ -1649,10 +1640,11 @@ Welcome again, and thank you for choosing ClockField.
       }
       const fileName = path.basename(row.facePhotoPath);
       const filePath = path.join(FIT_FOR_DUTY_PHOTOS_DIR, fileName);
-      if (!fs.existsSync(filePath)) return res.status(404).json({ message: "Photo not found" });
+      const photo = await readPersistentFile(filePath);
+      if (!photo) return res.status(404).json({ message: "Photo not found" });
       res.setHeader("Content-Type", "image/jpeg");
       res.setHeader("Cache-Control", "private, no-store");
-      res.sendFile(filePath);
+      res.send(photo);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
@@ -5481,7 +5473,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       if (!report || report.reportType !== "incident") return res.status(404).send("Incident not found");
       const [evidence] = await db.select().from(incidentEvidence).where(and(eq(incidentEvidence.id, req.params.evidenceId), eq(incidentEvidence.reportId, report.id), eq(incidentEvidence.companyId, req.user.companyId)));
       if (!evidence) return res.status(404).send("Evidence not found");
-      res.set({ "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store", "Content-Disposition": "inline; filename=\"evidence\"" }).type(evidence.mimeType).sendFile(path.join(INCIDENT_EVIDENCE_DIR, evidence.storageName));
+      res.set({ "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store", "Content-Disposition": "inline; filename=\"evidence\"" }).type(evidence.mimeType).send(await readPersistentFile(path.join(INCIDENT_EVIDENCE_DIR, evidence.storageName)) || (() => { throw new Error("Evidence not found"); })());
     } catch { res.status(404).send("Evidence not found"); }
   });
 
@@ -5551,7 +5543,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       if (!report) return res.status(404).send("Evidence not found");
       const [evidence] = await db.select().from(incidentEvidence).where(and(eq(incidentEvidence.id, req.params.evidenceId), eq(incidentEvidence.reportId, report.id), eq(incidentEvidence.companyId, report.companyId)));
       if (!evidence) return res.status(404).send("Evidence not found");
-      res.set({ "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store", "Content-Disposition": "inline; filename=\"evidence\"" }).type(evidence.mimeType).sendFile(path.join(INCIDENT_EVIDENCE_DIR, evidence.storageName));
+      res.set({ "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store", "Content-Disposition": "inline; filename=\"evidence\"" }).type(evidence.mimeType).send(await readPersistentFile(path.join(INCIDENT_EVIDENCE_DIR, evidence.storageName)) || (() => { throw new Error("Evidence not found"); })());
     } catch { res.status(404).send("Evidence not found"); }
   });
   app.post(["/api/public/incidents/:token/acknowledge", "/api/client/incidents/:token/acknowledge"], async (req: any, res) => {
@@ -5632,7 +5624,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
         const file = req.file as Express.Multer.File; if (!file) return res.status(400).json({ message: "No file uploaded" });
         if (!incidentFileMatchesMime(file.buffer, file.mimetype)) return res.status(400).json({ message: "File contents do not match its MIME type" });
         const storageName = `${randomBytes(24).toString("hex")}.${file.mimetype === "application/pdf" ? "pdf" : file.mimetype.split("/")[1]}`;
-        await fs.promises.writeFile(path.join(INCIDENT_EVIDENCE_DIR, storageName), file.buffer, { flag: "wx" });
+        await writePersistentFile(path.join(INCIDENT_EVIDENCE_DIR, storageName), file.buffer, file.mimetype);
         const [saved] = await db.insert(incidentEvidence).values({ reportId: found.report.id, companyId: found.report.companyId, storageName, originalName: path.basename(file.originalname).slice(0, 255), mimeType: file.mimetype, fileSize: file.size, evidenceType: String(req.body.evidenceType || (file.mimetype.startsWith("image/") ? "photo" : "document")).slice(0, 80), caption: String(req.body.caption || "").slice(0, 500) || null, uploadedByUserId: found.report.assignedEmployeeId!, uploadedAt: incidentNow() }).returning();
         res.status(201).json(incidentEvidenceMeta(saved));
       } catch { res.status(500).json({ message: "Unable to save evidence" }); }
@@ -5643,7 +5635,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       const found = await employeeIncident(req, res); if (!found) return;
       const [evidence] = await db.select().from(incidentEvidence).where(and(eq(incidentEvidence.id, req.params.evidenceId), eq(incidentEvidence.reportId, found.report.id), eq(incidentEvidence.companyId, found.report.companyId)));
       if (!evidence) return res.status(404).send("Evidence not found");
-      res.set({ "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store", "Content-Disposition": "inline; filename=\"evidence\"" }).type(evidence.mimeType).sendFile(path.join(INCIDENT_EVIDENCE_DIR, evidence.storageName));
+      res.set({ "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store", "Content-Disposition": "inline; filename=\"evidence\"" }).type(evidence.mimeType).send(await readPersistentFile(path.join(INCIDENT_EVIDENCE_DIR, evidence.storageName)) || (() => { throw new Error("Evidence not found"); })());
     } catch { res.status(404).send("Evidence not found"); }
   });
   app.post("/api/employee/incidents/:token/submit", async (req: any, res) => {
@@ -13878,4 +13870,3 @@ Return this exact JSON structure:
 }
 
 type TrainingQuizLike = Awaited<ReturnType<typeof storage.createTrainingQuiz>>;
-
