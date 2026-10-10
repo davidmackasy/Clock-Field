@@ -18,13 +18,19 @@ function objectPath(filePath: string) {
   return parts.map(encodeURIComponent).join("/");
 }
 
+function storageHeaders(key: string): Record<string, string> {
+  // New Supabase secret keys authenticate through apikey; they are not JWTs.
+  // Legacy service-role JWTs also require their Bearer authorization header.
+  return key.startsWith("sb_secret_") ? { apikey: key } : { apikey: key, Authorization: `Bearer ${key}` };
+}
+
 export async function readPersistentFile(filePath: string): Promise<Buffer | null> {
   const remote = remoteConfiguration();
   if (!remote) {
     try { return await fs.readFile(filePath); } catch (error: any) { if (error.code === "ENOENT") return null; throw error; }
   }
   const response = await fetch(`${remote.url}/storage/v1/object/authenticated/${remote.bucket}/${objectPath(filePath)}`, {
-    headers: { apikey: remote.key, Authorization: `Bearer ${remote.key}` }, signal: AbortSignal.timeout(30000),
+    headers: storageHeaders(remote.key), signal: AbortSignal.timeout(30000),
   });
   if (response.status === 404) return null;
   // Some Supabase Storage versions wrap a missing object in HTTP 400.
@@ -42,7 +48,7 @@ export async function writePersistentFile(filePath: string, data: Buffer, mimeTy
   const remote = remoteConfiguration();
   if (!remote) { await fs.writeFile(filePath, data, { flag: "wx" }); return; }
   const response = await fetch(`${remote.url}/storage/v1/object/${remote.bucket}/${objectPath(filePath)}`, {
-    method: "POST", headers: { apikey: remote.key, Authorization: `Bearer ${remote.key}`, "Content-Type": mimeType, "x-upsert": "false" },
+    method: "POST", headers: { ...storageHeaders(remote.key), "Content-Type": mimeType, "x-upsert": "false" },
     body: new Uint8Array(data), signal: AbortSignal.timeout(60000),
   });
   if (!response.ok) throw new Error(`Storage write failed (${response.status})`);
@@ -52,7 +58,7 @@ export async function removePersistentFile(filePath: string) {
   const remote = remoteConfiguration();
   if (!remote) { await fs.unlink(filePath); return; }
   const response = await fetch(`${remote.url}/storage/v1/object/${remote.bucket}`, {
-    method: "DELETE", headers: { apikey: remote.key, Authorization: `Bearer ${remote.key}`, "Content-Type": "application/json" },
+    method: "DELETE", headers: { ...storageHeaders(remote.key), "Content-Type": "application/json" },
     body: JSON.stringify({ prefixes: [decodeURIComponent(objectPath(filePath))] }), signal: AbortSignal.timeout(30000),
   });
   if (!response.ok) throw new Error(`Storage deletion failed (${response.status})`);
