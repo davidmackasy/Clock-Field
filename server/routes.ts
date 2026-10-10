@@ -4388,7 +4388,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
   });
 
   // Read-only integration check for platform administrators. It creates no charges.
-  app.get("/api/billing/integration-status", requireSuperAdmin, async (req, res) => {
+  app.get(["/api/billing/integration-status", "/admin/billing/integration-status"], requireSuperAdmin, async (req, res) => {
     const respond = (status: number, result: object) => {
       if (req.accepts(["html", "json"]) === "html") {
         const details = JSON.stringify(result, null, 2).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
