@@ -4536,19 +4536,16 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
   app.post("/api/billing/webhook", async (req, res) => {
     const stripeKey = process.env.STRIPE_SECRET_KEY;
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-    if (!stripeKey) return res.status(503).json({ message: "Stripe not configured" });
+    if (!stripeKey || !webhookSecret) return res.status(503).json({ message: "Stripe webhook not configured" });
 
     try {
       const Stripe = (await import("stripe")).default;
       const stripe = new Stripe(stripeKey, { apiVersion: "2025-02-24.acacia" });
-
-      let event;
-      if (webhookSecret) {
-        const sig = req.headers["stripe-signature"] as string;
-        event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-      } else {
-        event = req.body;
+      const sig = req.headers["stripe-signature"];
+      if (typeof sig !== "string" || !Buffer.isBuffer(req.rawBody)) {
+        return res.status(400).json({ message: "Missing Stripe webhook signature or payload" });
       }
+      const event = stripe.webhooks.constructEvent(req.rawBody, sig, webhookSecret);
 
       const data = event.data?.object as any;
       const companyId = data?.metadata?.companyId;
