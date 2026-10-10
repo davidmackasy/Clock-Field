@@ -27,7 +27,8 @@ export class ClockFieldContainer extends Container {
     const configurationHash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
     await this.ctx.blockConcurrencyWhile(async () => {
       if (await this.ctx.storage.get("configurationHash") !== configurationHash) {
-        await this.stop();
+        // stop() only sends a signal; destroy() waits for teardown before restart.
+        await this.destroy();
         await this.ctx.storage.put("configurationHash", configurationHash);
       }
     });
