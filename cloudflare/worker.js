@@ -15,7 +15,7 @@ export class ClockFieldContainer extends Container {
       SUPABASE_STORAGE_BUCKET: "clockfield-migration",
       APP_URL: this.env.APP_URL || new URL(request.url).origin,
       APP_BASE_URL: this.env.APP_URL || new URL(request.url).origin,
-      APP_DEPLOYMENT_REVISION: this.env.CF_VERSION_METADATA?.id || "local",
+      APP_DEPLOYMENT_REVISION: request.headers.get("X-ClockField-Deployment-Revision") || this.env.CF_VERSION_METADATA?.id || "local",
     };
     for (const name of secretNames) if (this.env[name]) envVars[name] = this.env[name];
     if (!envVars.DATABASE_URL || !envVars.SESSION_SECRET || !envVars.SUPABASE_STORAGE_KEY) {
@@ -41,6 +41,9 @@ export class ClockFieldContainer extends Container {
 
 export default {
   fetch(request, env) {
-    return getContainer(env.CLOCKFIELD, "primary").fetch(request);
+    const headers = new Headers(request.headers);
+    // Resolve version metadata in the Worker and overwrite any client-provided value.
+    headers.set("X-ClockField-Deployment-Revision", env.CF_VERSION_METADATA?.id || "revision-forwarding-v1");
+    return getContainer(env.CLOCKFIELD, "primary").fetch(new Request(request, { headers }));
   },
 };
