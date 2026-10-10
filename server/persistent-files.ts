@@ -38,7 +38,8 @@ export async function readPersistentFile(filePath: string): Promise<Buffer | nul
   if (response.status === 400) {
     const error = await response.json().catch(() => null) as { code?: string; error?: string; message?: string; statusCode?: string | number } | null;
     if (error?.code === "NoSuchKey" || error?.code === "not_found" || error?.error === "NoSuchKey" ||
-        error?.error === "not_found" || String(error?.statusCode) === "404") return null;
+        error?.error === "not_found" || String(error?.statusCode) === "404" ||
+        (error?.message === "Object not found" && !["AccessDenied", "InvalidJWT", "Unauthorized"].includes(error.code || error.error || ""))) return null;
   }
   if (!response.ok) throw new Error(`Storage read failed (${response.status})`);
   return Buffer.from(await response.arrayBuffer());
