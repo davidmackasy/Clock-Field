@@ -31,7 +31,7 @@ export async function readPersistentFile(filePath: string): Promise<Buffer | nul
   // Do not mistake denied access or other storage failures for a missing file.
   if (response.status === 400) {
     const error = await response.json().catch(() => null) as { code?: string; error?: string; message?: string; statusCode?: string | number } | null;
-    if (error?.code === "NoSuchKey" || error?.error === "NoSuchKey" ||
+    if (error?.code === "NoSuchKey" || error?.code === "not_found" || error?.error === "NoSuchKey" ||
         error?.error === "not_found" || String(error?.statusCode) === "404") return null;
   }
   if (!response.ok) throw new Error(`Storage read failed (${response.status})`);
