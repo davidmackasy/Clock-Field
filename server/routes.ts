@@ -4533,7 +4533,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
   });
 
   // Stripe Webhook
-  app.post("/api/billing/webhook", async (req, res) => {
+  app.post(["/api/billing/webhook", "/api/stripe/webhook"], async (req, res) => {
     const stripeKey = process.env.STRIPE_SECRET_KEY;
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
     if (!stripeKey || !webhookSecret) return res.status(503).json({ message: "Stripe webhook not configured" });
