@@ -8,7 +8,13 @@
   "vars": {
     "APP_URL": "https://clockfield.com",
     "MAILGUN_DOMAIN": "mg.clockfield.com",
-    "MAIL_FROM": "ClockField <noreply@mg.clockfield.com>"
+    "MAIL_FROM": "ClockField <noreply@mg.clockfield.com>",
+    "STRIPE_PRICE_STARTER_MONTHLY": "price_1TBqDbISmnawGz43RJldyW17",
+    "STRIPE_PRICE_GROWTH_MONTHLY": "price_1TBqEJISmnawGz43hsGHK2hs",
+    "STRIPE_PRICE_PRO_MONTHLY": "price_1TBqF2ISmnawGz43jVrBW9wO",
+    "STRIPE_PRICE_STARTER_YEARLY": "price_1TBqHAISmnawGz43OwIbtBGC",
+    "STRIPE_PRICE_GROWTH_YEARLY": "price_1TBqIDISmnawGz43M1ndt047",
+    "STRIPE_PRICE_PRO_YEARLY": "price_1TBqJwISmnawGz43yyD4EkFO"
   },
   "observability": { "enabled": true },
   "containers": [{ "class_name": "ClockFieldContainer", "image": "../Dockerfile", "max_instances": 1, "instance_type": "basic" }],
