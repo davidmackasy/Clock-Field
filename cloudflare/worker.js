@@ -20,6 +20,16 @@ export class ClockFieldContainer extends Container {
     if (!envVars.DATABASE_URL || !envVars.SESSION_SECRET || !envVars.SUPABASE_STORAGE_KEY) {
       return new Response("ClockField deployment configuration is incomplete", { status: 503 });
     }
+    // Running containers retain their startup environment across Worker deployments.
+    // Restart when runtime configuration changes so newly saved secrets take effect.
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(envVars)));
+    const configurationHash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+    await this.ctx.blockConcurrencyWhile(async () => {
+      if (await this.ctx.storage.get("configurationHash") !== configurationHash) {
+        await this.stop();
+        await this.ctx.storage.put("configurationHash", configurationHash);
+      }
+    });
     await this.startAndWaitForPorts({ startOptions: { envVars }, cancellationOptions: { portReadyTimeoutMS: 90000 } });
     const headers = new Headers(request.headers);
     headers.set("X-Forwarded-Proto", "https");
