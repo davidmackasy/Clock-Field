@@ -1600,6 +1600,12 @@ Welcome again, and thank you for choosing ClockField.
       const original = { answers, confirmationAccepted: true, submittedAt: acceptedAt, facePhotoCapturedAt: photoCapturedAt.toISOString() };
       let row;
       try {
+        // Use the same private-storage read as the admin photo endpoint before
+        // accepting the submission or allowing its subsequent clock-in.
+        const savedPhoto = await readPersistentFile(photoFilePath);
+        if (!savedPhoto || !savedPhoto.equals(photoBuffer)) {
+          throw new Error("Your photo could not be saved. Please try submitting again.");
+        }
         row = await storage.createFitForDutyVerification({
           companyId: user.companyId, employeeId: user.id, shiftId: shift?.id || null,
           locationId: shift?.locationId || null, clockInId: null,
