@@ -1,3 +1,4 @@
+import { localToday, formatCompanyInstant, formatCompanyTime, formatCompanyLongDate, formatLocalDate } from "@/lib/timezone";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -26,20 +27,20 @@ function fmtMins(mins: number): string {
   return `${h}:${m.toString().padStart(2, "0")}`;
 }
 function fmtDate(iso: string): string {
-  return new Date(iso + "T12:00:00").toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" });
+  return formatLocalDate(iso);
 }
-function fmtDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+function fmtDateTime(iso: string, timezone: string): string {
+  return formatCompanyInstant(iso, timezone, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
-function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-CA", { hour: "2-digit", minute: "2-digit" });
+function fmtTime(iso: string, timezone: string): string {
+  return formatCompanyTime(iso, timezone);
 }
 
 function getPayPeriodBounds(cycleStartDate: string | null, periodType: string, referenceDate: string) {
   const periodDays = periodType === "weekly" ? 7 : 14;
   const anchor = cycleStartDate || referenceDate;
-  const startDate = new Date(anchor + "T12:00:00");
-  const ref = new Date(referenceDate + "T12:00:00");
+  const startDate = new Date(anchor + "T12:00:00Z");
+  const ref = new Date(referenceDate + "T12:00:00Z");
   const msPerDay = 24 * 60 * 60 * 1000;
   const diffDays = Math.round((ref.getTime() - startDate.getTime()) / msPerDay);
   const periodIndex = Math.floor(diffDays / periodDays);
@@ -50,18 +51,18 @@ function getPayPeriodBounds(cycleStartDate: string | null, periodType: string, r
 }
 
 function shiftPeriod(current: string, periodDays: number, direction: 1 | -1): string {
-  const d = new Date(current + "T12:00:00");
-  d.setDate(d.getDate() + direction * periodDays);
+  const d = new Date(current + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + direction * periodDays);
   return d.toISOString().split("T")[0];
 }
 
-function printTimesheet(ts: any, employee: any, companyName: string) {
+function printTimesheet(ts: any, employee: any, companyName: string, timezone: string) {
   const entries: any[] = ts.entries || [];
   const rows = entries.map((e: any) => `
     <tr>
-      <td>${new Date(e.clockInAt).toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric" })}</td>
-      <td>${fmtTime(e.clockInAt)}</td>
-      <td>${e.clockOutAt ? fmtTime(e.clockOutAt) : "—"}</td>
+      <td>${formatCompanyLongDate(e.clockInAt, timezone)}</td>
+      <td>${fmtTime(e.clockInAt, timezone)}</td>
+      <td>${e.clockOutAt ? fmtTime(e.clockOutAt, timezone) : "—"}</td>
       <td>${fmtMins(e.workedMinutes || 0)}</td>
       <td>${(e.flags || []).join(", ").replace(/_/g, " ") || "—"}</td>
     </tr>`).join("");
@@ -89,8 +90,8 @@ function printTimesheet(ts: any, employee: any, companyName: string) {
     Employee: ${employee?.firstName || ""} ${employee?.lastName || ""} ${employee?.employeeId ? `(${employee.employeeId})` : ""}<br/>
     Pay Period: ${fmtDate(ts.payPeriodStart)} – ${fmtDate(ts.payPeriodEnd)}<br/>
     Status: <span class="status">${STATUS_LABELS[ts.status] || ts.status}</span>
-    ${ts.approvedAt ? `&nbsp;· Approved ${fmtDateTime(ts.approvedAt)}` : ""}
-    ${ts.submittedAt ? `&nbsp;· Submitted ${fmtDateTime(ts.submittedAt)}` : ""}
+    ${ts.approvedAt ? `&nbsp;· Approved ${fmtDateTime(ts.approvedAt, timezone)}` : ""}
+    ${ts.submittedAt ? `&nbsp;· Submitted ${fmtDateTime(ts.submittedAt, timezone)}` : ""}
   </div>
   <div class="summary">
     <div class="stat"><div class="stat-label">Total Hours</div><div class="stat-value">${fmtMins(ts.totalWorkedMinutes)}</div></div>
@@ -115,7 +116,8 @@ export default function AdminTimesheets() {
   const { data: company } = useQuery<any>({ queryKey: ["/api/company"] });
   const { data: employees } = useQuery<any[]>({ queryKey: ["/api/employees"] });
 
-  const today = new Date().toISOString().split("T")[0];
+  const timezone = company?.timezone || "UTC";
+  const today = localToday(timezone);
   const periodDays = company?.defaultPayPeriodType === "weekly" ? 7 : 14;
   const currentBounds = company
     ? getPayPeriodBounds(company.payrollCycleStartDate, company.defaultPayPeriodType, today)
@@ -141,7 +143,7 @@ export default function AdminTimesheets() {
 
   const periodEnd = periodStart
     ? (() => {
-        const ps = new Date(periodStart + "T12:00:00");
+        const ps = new Date(periodStart + "T12:00:00Z");
         const pe = new Date(ps.getTime() + (periodDays - 1) * 24 * 60 * 60 * 1000);
         return pe.toISOString().split("T")[0];
       })()
@@ -331,7 +333,7 @@ export default function AdminTimesheets() {
                           {ts.overtimeMinutes > 0 && <span className="text-amber-600 font-medium">OT: {fmtMins(ts.overtimeMinutes)}</span>}
                           <span>{ts.totalShifts} shifts</span>
                           {ts.lateCount > 0 && <span className="flex items-center gap-0.5 text-orange-500"><AlertTriangle className="w-3 h-3" />{ts.lateCount} late</span>}
-                          {ts.submittedAt && <span>Submitted {fmtDateTime(ts.submittedAt)}</span>}
+                          {ts.submittedAt && <span>Submitted {fmtDateTime(ts.submittedAt, timezone)}</span>}
                         </div>
                       </div>
                     </div>
@@ -372,10 +374,10 @@ export default function AdminTimesheets() {
                   </Badge>
                 </div>
                 {detail.submittedAt && (
-                  <p className="text-xs text-muted-foreground">Submitted {fmtDateTime(detail.submittedAt)}</p>
+                  <p className="text-xs text-muted-foreground">Submitted {fmtDateTime(detail.submittedAt, timezone)}</p>
                 )}
                 {detail.approvedAt && (
-                  <p className="text-xs text-green-600">Approved {fmtDateTime(detail.approvedAt)}</p>
+                  <p className="text-xs text-green-600">Approved {fmtDateTime(detail.approvedAt, timezone)}</p>
                 )}
               </DialogHeader>
 
@@ -410,10 +412,10 @@ export default function AdminTimesheets() {
                     {detail.entries.map((e: any) => (
                       <div key={e.id} className="grid grid-cols-[1fr_80px_80px_60px_100px] gap-2 text-xs px-2 py-1.5 rounded hover:bg-muted/40">
                         <span className="text-foreground font-medium">
-                          {new Date(e.clockInAt).toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric" })}
+                          {formatCompanyLongDate(e.clockInAt, timezone)}
                         </span>
-                        <span className="text-muted-foreground">{fmtTime(e.clockInAt)}</span>
-                        <span className="text-muted-foreground">{e.clockOutAt ? fmtTime(e.clockOutAt) : "—"}</span>
+                        <span className="text-muted-foreground">{fmtTime(e.clockInAt, timezone)}</span>
+                        <span className="text-muted-foreground">{e.clockOutAt ? fmtTime(e.clockOutAt, timezone) : "—"}</span>
                         <span className="font-medium">{fmtMins(e.workedMinutes || 0)}</span>
                         <span className="text-muted-foreground truncate">
                           {(e.flags || []).length ? (e.flags as string[]).map(f => f.replace(/_/g, " ")).join(", ") : "—"}
@@ -429,7 +431,7 @@ export default function AdminTimesheets() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => printTimesheet(detail, detailEmp, (company as any)?.name || "Company")}
+                  onClick={() => printTimesheet(detail, detailEmp, (company as any)?.name || "Company", timezone)}
                   data-testid="button-print-timesheet"
                 >
                   <Printer className="w-4 h-4 mr-1.5" />

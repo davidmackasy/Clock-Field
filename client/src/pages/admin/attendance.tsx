@@ -17,9 +17,10 @@ import { ClipboardList, Search, CalendarIcon, Filter, User, Clock, BarChart2, Us
 import { format, subDays, startOfWeek, startOfMonth, startOfDay, endOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { EmployeeAttendanceModal } from "@/components/employee-attendance-modal";
+import { AttendanceTimesheetDownload } from "@/components/attendance-timesheet-download";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { companyDateKey, formatCompanyDate, formatCompanyLongDate, formatCompanyTime, formatLocalWallTime, localToday, shiftDateKey } from "@/lib/timezone";
+import { companyWallTime, companyWallTimeToIso, companyDateKey, formatCompanyDate, formatCompanyLongDate, formatCompanyTime, formatLocalWallTime, localToday, shiftDateKey } from "@/lib/timezone";
 
 /**
  * Convert a UTC epoch (ms) to a "fake-UTC" epoch by expressing the moment in
@@ -79,11 +80,10 @@ function ManualClockOutModal({
   // Pre-fill with scheduled end time or current time
   const defaultClockOut = useMemo(() => {
     if (shift?.scheduledEndAt) {
-      const d = new Date(shift.scheduledEndAt);
-      return format(d, "yyyy-MM-dd'T'HH:mm");
+      return shift.scheduledEndAt.slice(0, 16);
     }
-    return format(new Date(), "yyyy-MM-dd'T'HH:mm");
-  }, [shift]);
+    return companyWallTime(new Date(), timezone).slice(0, 16);
+  }, [shift, timezone]);
 
   const [clockOutValue, setClockOutValue] = useState(defaultClockOut);
   const [reason, setReason] = useState("");
@@ -91,7 +91,7 @@ function ManualClockOutModal({
   const mutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/time-entries/${entry.id}/admin-clock-out`, {
-        clockOutAt: new Date(clockOutValue).toISOString(),
+        clockOutAt: companyWallTimeToIso(clockOutValue, timezone),
         reason: reason.trim() || undefined,
       });
       if (!res.ok) {
@@ -111,7 +111,7 @@ function ManualClockOutModal({
   });
 
   const clockInDate = new Date(entry.clockInAt);
-  const clockOutDate = clockOutValue ? new Date(clockOutValue) : null;
+  const clockOutDate = (() => { try { return clockOutValue ? new Date(companyWallTimeToIso(clockOutValue, timezone)) : null; } catch { return null; } })();
   const isValidTime = clockOutDate && clockOutDate > clockInDate;
 
   return (
@@ -119,6 +119,7 @@ function ManualClockOutModal({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Manual Clock-Out</DialogTitle>
+          <p className="text-sm text-muted-foreground">Enter the time in {timezone}.</p>
         </DialogHeader>
 
         <div className="space-y-4 py-1">
@@ -638,6 +639,7 @@ export default function AdminAttendance() {
       </div>
 
       {/* ── Forgotten Clock-Outs Assist ── only shown when >5 min past scheduled end */}
+      {!isLoading && tzData && <AttendanceTimesheetDownload entries={entries || []} employees={employees || []} timezone={tz} />}
       {!isLoading && overdueEntries.length > 0 && (
         <div
           className="rounded-lg border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30 px-4 py-3 space-y-2"

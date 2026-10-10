@@ -187,6 +187,7 @@ export interface IStorage {
   getTimeEntriesByCompany(companyId: string): Promise<TimeEntry[]>;
   getTimeEntriesByEmployee(employeeId: string): Promise<TimeEntry[]>;
   updateTimeEntry(id: string, data: Partial<InsertTimeEntry>): Promise<TimeEntry | undefined>;
+  closeActiveTimeEntry(id: string, data: Partial<InsertTimeEntry>): Promise<TimeEntry | undefined>;
 
   createAttendanceAdjustment(data: InsertAttendanceAdjustment): Promise<AttendanceAdjustment>;
   getAttendanceAdjustmentsByEntry(timeEntryId: string): Promise<AttendanceAdjustment[]>;
@@ -834,6 +835,11 @@ export class DatabaseStorage implements IStorage {
 
   async updateTimeEntry(id: string, data: Partial<InsertTimeEntry>): Promise<TimeEntry | undefined> {
     const [entry] = await db.update(timeEntries).set(data).where(eq(timeEntries.id, id)).returning();
+    return entry;
+  }
+
+  async closeActiveTimeEntry(id: string, data: Partial<InsertTimeEntry>): Promise<TimeEntry | undefined> {
+    const [entry] = await db.update(timeEntries).set(data).where(and(eq(timeEntries.id, id), eq(timeEntries.status, "active"))).returning();
     return entry;
   }
 

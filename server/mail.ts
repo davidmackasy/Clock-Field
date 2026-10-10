@@ -3,11 +3,21 @@ import Mailgun from "mailgun.js";
 
 const mailgun = new Mailgun(FormData);
 
-function getClient() {
+export async function sendClockOutEmail(opts: { to: string; cleanerName: string; companyName: string; clockIn: string; clockOut: string; workedMinutes: number; timezone: string; attendanceUrl: string }) {
+  const { client, domain } = getClient(10000);
+  await client.messages.create(domain, {
+    from: process.env.MAIL_FROM || "ClockField <noreply@mg.clockfield.com>",
+    to: [opts.to],
+    subject: `ClockField: ${opts.cleanerName} clocked out`,
+    text: `${opts.cleanerName} has clocked out of ${opts.companyName}.\n\nClock-in: ${opts.clockIn}\nClock-out: ${opts.clockOut}\nTimezone: ${opts.timezone}\nHours worked: ${Math.floor(opts.workedMinutes / 60)}h ${opts.workedMinutes % 60}m\n\nView attendance: ${opts.attendanceUrl}`,
+  });
+}
+
+function getClient(timeout?: number) {
   const apiKey = process.env.MAILGUN_API_KEY;
   const domain = process.env.MAILGUN_DOMAIN;
   if (!apiKey || !domain) throw new Error("Mailgun not configured");
-  const client = mailgun.client({ username: "api", key: apiKey });
+  const client = mailgun.client({ username: "api", key: apiKey, ...(timeout ? { timeout } : {}) });
   return { client, domain };
 }
 

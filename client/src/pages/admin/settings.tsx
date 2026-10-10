@@ -691,7 +691,7 @@ export default function AdminSettings() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">Employee Clocked Out</p>
-                <p className="text-xs text-muted-foreground">Email when any employee clocks out</p>
+                <p className="text-xs text-muted-foreground">Email active company admins when a cleaner clocks out</p>
               </div>
               <Switch
                 data-testid="switch-alert-clocked-out"
@@ -699,7 +699,7 @@ export default function AdminSettings() {
                 onCheckedChange={v => setForm((p: any) => ({ ...p, alertEmployeeClockedOut: v }))}
               />
             </div>
-            <p className="text-xs text-muted-foreground border-t pt-3">Alert emails are sent to the primary admin email on file. Alerts are de-duplicated per event.</p>
+            <p className="text-xs text-muted-foreground border-t pt-3">Clock-out emails go to active company admins. Other attendance alerts use the primary admin email on file. Alerts are de-duplicated per event.</p>
           </CardContent>
         </Card>
 

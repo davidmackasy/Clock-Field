@@ -89,6 +89,24 @@ export function shiftDateKey(dateKey: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
+export function companyWallTime(value: string | Date, timezone: string): string {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: safeTimeZone(timezone), year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).format(new Date(value)).replace(" ", "T");
+}
+
+/** Convert a company-local datetime input to an instant, rejecting DST gaps. */
+export function companyWallTimeToIso(value: string, timezone: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(value)) throw new Error("Enter a valid clock-out date and time");
+  const wall = value.length === 16 ? value + ":00" : value;
+  const target = Date.parse(wall + "Z");
+  let instant = target;
+  for (let i = 0; i < 4; i++) {
+    const formatted = companyWallTime(new Date(instant), timezone);
+    if (formatted === wall) return new Date(instant).toISOString();
+    instant += target - Date.parse(formatted + "Z");
+  }
+  throw new Error("That local time does not exist because of daylight saving time. Choose another time.");
+}
+
 /**
  * Returns an array of 7 date strings (YYYY-MM-DD) for Mon–Sun of the
  * current week, computed in the given IANA timezone.

@@ -18,6 +18,8 @@ import { getPlan } from "./plans";
 import { generateReviewOgImage } from "./og-image";
 import { dataDirectory, uploadsDirectory, fitForDutyPhotosDirectory, incidentEvidenceDirectory } from "./file-storage";
 import { readPersistentFile, writePersistentFile, removePersistentFile } from "./persistent-files";
+import { notifyAdminsOfClockOut } from "./clock-out-notification";
+import { dateInZone } from "../shared/time-report";
 
 function escHtml(str: string): string {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -1478,7 +1480,7 @@ Welcome again, and thank you for choosing ClockField.
       let entries: any[];
       if (user.role === "admin") {
         if (employeeId && typeof employeeId === "string") {
-          entries = await storage.getTimeEntriesByEmployee(employeeId);
+          entries = (await storage.getTimeEntriesByEmployee(employeeId)).filter(e => e.companyId === user.companyId);
         } else {
           entries = await storage.getTimeEntriesByCompany(user.companyId);
         }
@@ -1883,12 +1885,16 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
           await storage.updateShift(entry.shiftId, { status: "completed" });
         }
       }
-      const updated = await storage.updateTimeEntry(entry.id, {
+      const updated = await storage.closeActiveTimeEntry(entry.id, {
         clockOutAt: now,
         workedMinutes,
         status: "completed",
         flags: flags.length ? flags : null,
       });
+      if (!updated) return res.status(409).json({ message: "Already clocked out" });
+      // A delivery failure must never undo a successful clock-out.
+      try { await notifyAdminsOfClockOut(storage, user, updated); }
+      catch (error: any) { console.error("[clock-out-email] Notification failed", error.message); }
       res.json(updated);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -1936,7 +1942,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       }
 
       const now = new Date().toISOString();
-      const updated = await storage.updateTimeEntry(entry.id, {
+      const updated = await storage.closeActiveTimeEntry(entry.id, {
         clockOutAt: clockOutTime,
         workedMinutes,
         status: "completed",
@@ -1946,6 +1952,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
         manualClockOutAt: now,
         manualClockOutReason: reason || "Admin clocked out employee after forgotten clock-out",
       });
+      if (!updated) return res.status(409).json({ message: "Already clocked out" });
       res.json(updated);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -2859,8 +2866,8 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
   function getPayPeriodBounds(cycleStartDate: string | null, periodType: string, referenceDate: string) {
     const periodDays = periodType === "weekly" ? 7 : 14;
     const anchor = cycleStartDate || referenceDate;
-    const startDate = new Date(anchor + "T12:00:00");
-    const ref = new Date(referenceDate + "T12:00:00");
+    const startDate = new Date(anchor + "T12:00:00Z");
+    const ref = new Date(referenceDate + "T12:00:00Z");
     const msPerDay = 24 * 60 * 60 * 1000;
     const diffDays = Math.round((ref.getTime() - startDate.getTime()) / msPerDay);
     const periodIndex = Math.floor(diffDays / periodDays);
@@ -2877,8 +2884,8 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     const now = new Date().toISOString();
     const allEntries = await storage.getTimeEntriesByEmployee(employeeId);
     const periodEntries = allEntries.filter(e => {
-      const d = e.clockInAt.slice(0, 10);
-      return d >= periodStart && d <= periodEnd && e.status !== "active";
+      const d = dateInZone(e.clockInAt, company.timezone || "UTC");
+      return e.companyId === companyId && d >= periodStart && d <= periodEnd && e.status !== "active";
     });
     const completedPeriodEntries = periodEntries.filter(e => e.clockInAt && e.clockOutAt);
     const totalWorkedMinutes = completedPeriodEntries.reduce((sum, e) => {
@@ -2893,7 +2900,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     const periodShifts = allShifts.filter(s => s.shiftDate >= periodStart && s.shiftDate <= periodEnd);
     const missedShiftCount = periodShifts.filter(s => s.status === "missed" || s.status === "no_show").length;
     const msPerDay = 24 * 60 * 60 * 1000;
-    const periodDays = Math.round((new Date(periodEnd + "T12:00:00").getTime() - new Date(periodStart + "T12:00:00").getTime()) / msPerDay) + 1;
+    const periodDays = Math.round((new Date(periodEnd + "T12:00:00Z").getTime() - new Date(periodStart + "T12:00:00Z").getTime()) / msPerDay) + 1;
     const periodWeeks = periodDays / 7;
     const otEnabled = company.overtimeEnabled;
     const otThresholdMins = (company.overtimeThresholdWeekly || 40) * 60 * periodWeeks;
@@ -2930,13 +2937,13 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       if (existing && ["submitted", "approved"].includes(existing.status)) {
         const allEntries = await storage.getTimeEntriesByEmployee(user.id);
         const entries = allEntries
-          .filter(e => { const d = e.clockInAt.slice(0, 10); return d >= periodStart && d <= periodEnd; })
+          .filter(e => { const d = dateInZone(e.clockInAt, company.timezone || "UTC"); return e.companyId === user.companyId && d >= periodStart && d <= periodEnd; })
           .sort((a, b) => a.clockInAt.localeCompare(b.clockInAt));
         return res.json({ ...existing, entries });
       }
       const allEntries = await storage.getTimeEntriesByEmployee(user.id);
       const periodEntries = allEntries
-        .filter(e => { const d = e.clockInAt.slice(0, 10); return d >= periodStart && d <= periodEnd; })
+        .filter(e => { const d = dateInZone(e.clockInAt, company.timezone || "UTC"); return e.companyId === user.companyId && d >= periodStart && d <= periodEnd; })
         .sort((a, b) => a.clockInAt.localeCompare(b.clockInAt));
       const completedEntries = periodEntries.filter(e => e.clockInAt && e.clockOutAt);
       const totalWorkedMinutes = completedEntries.reduce((sum, e) => {
@@ -2954,7 +2961,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       const missedShiftCount = periodShifts.filter(s => s.status === "missed" || s.status === "no_show").length;
       const msPerDay = 24 * 60 * 60 * 1000;
       const periodDays = Math.round(
-        (new Date(periodEnd + "T12:00:00").getTime() - new Date(periodStart + "T12:00:00").getTime()) / msPerDay
+        (new Date(periodEnd + "T12:00:00Z").getTime() - new Date(periodStart + "T12:00:00Z").getTime()) / msPerDay
       ) + 1;
       const periodWeeks = periodDays / 7;
       const otThresholdMins = (company.overtimeThresholdWeekly || 40) * 60 * periodWeeks;
@@ -2985,7 +2992,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
-  app.get("/api/timesheets", requireAuth, async (req, res) => {
+  app.get("/api/timesheets", requireRole("admin", "employee"), async (req, res) => {
     try {
       const user = req.user as any;
       let list = user.role === "admin"
@@ -2996,22 +3003,28 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
-  app.post("/api/timesheets/generate", requireAuth, async (req, res) => {
+  app.post("/api/timesheets/generate", requireRole("admin", "employee"), async (req, res) => {
     try {
       const user = req.user as any;
       const company = await storage.getCompany(user.companyId);
       if (!company) return res.status(404).json({ message: "Company not found" });
-      const today = new Date().toISOString().split("T")[0];
+      const today = todayInTz(company.timezone || "UTC");
       let { employeeId, periodStart, periodEnd } = req.body;
       if (!periodStart || !periodEnd) {
         const p = getPayPeriodBounds(company.payrollCycleStartDate, company.defaultPayPeriodType, today);
         periodStart = p.start; periodEnd = p.end;
       }
+      const validDate = (value: unknown) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+        !Number.isNaN(Date.parse(value + "T12:00:00Z")) && new Date(value + "T12:00:00Z").toISOString().slice(0, 10) === value;
+      if (!validDate(periodStart) || !validDate(periodEnd) || periodStart > periodEnd) return res.status(400).json({ message: "Choose a valid start and end date" });
       if (user.role === "employee") {
         const ts = await buildTimesheetForEmployee(user.companyId, user.id, periodStart, periodEnd, company.defaultPayPeriodType, company);
         return res.json([ts]);
       }
+      if (user.role !== "admin") return res.status(403).json({ message: "Forbidden" });
       if (employeeId) {
+        const employee = await storage.getUser(employeeId);
+        if (!employee || employee.companyId !== user.companyId || employee.role !== "employee") return res.status(404).json({ message: "Cleaner not found" });
         const ts = await buildTimesheetForEmployee(user.companyId, employeeId, periodStart, periodEnd, company.defaultPayPeriodType, company);
         return res.json([ts]);
       }
@@ -3024,16 +3037,17 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
-  app.get("/api/timesheets/:id", requireAuth, async (req, res) => {
+  app.get("/api/timesheets/:id", requireRole("admin", "employee"), async (req, res) => {
     try {
       const user = req.user as any;
       const ts = await storage.getTimesheet(req.params.id);
       if (!ts) return res.status(404).json({ message: "Not found" });
       if (ts.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
       if (user.role === "employee" && ts.employeeId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      const company = await storage.getCompany(user.companyId);
       const allEntries = await storage.getTimeEntriesByEmployee(ts.employeeId);
       const entries = allEntries
-        .filter(e => { const d = e.clockInAt.slice(0, 10); return d >= ts.payPeriodStart && d <= ts.payPeriodEnd; })
+        .filter(e => { const d = dateInZone(e.clockInAt, company?.timezone || "UTC"); return e.companyId === user.companyId && d >= ts.payPeriodStart && d <= ts.payPeriodEnd; })
         .sort((a, b) => a.clockInAt.localeCompare(b.clockInAt));
       res.json({ ...ts, entries });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
