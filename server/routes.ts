@@ -19,7 +19,7 @@ import { generateReviewOgImage } from "./og-image";
 import { dataDirectory, uploadsDirectory, fitForDutyPhotosDirectory, incidentEvidenceDirectory } from "./file-storage";
 import { readPersistentFile, writePersistentFile, removePersistentFile } from "./persistent-files";
 import { notifyAdminsOfClockOut } from "./clock-out-notification";
-import { dateInZone } from "../shared/time-report";
+import { dateInZone, timesheetCsv } from "../shared/time-report";
 
 function escHtml(str: string): string {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -1472,6 +1472,26 @@ Welcome again, and thank you for choosing ClockField.
   });
 
   // ── Time Entries ──────────────────────────────────────────────────────────
+  app.get("/api/admin/attendance/timesheet.csv", requireRole("admin"), async (req, res) => {
+    try {
+      const admin = req.user as any;
+      const { employeeId, start, end } = req.query;
+      const validDate = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+        !Number.isNaN(Date.parse(value + "T12:00:00Z")) && new Date(value + "T12:00:00Z").toISOString().slice(0, 10) === value;
+      if (typeof employeeId !== "string" || !validDate(start) || !validDate(end) || start > end) return res.status(400).json({ message: "Select a cleaner and valid date range" });
+      const employee = await storage.getUser(employeeId);
+      if (!employee || employee.role !== "employee" || employee.companyId !== admin.companyId) return res.status(404).json({ message: "Cleaner not found" });
+      const [company, entries, adjustments] = await Promise.all([storage.getCompany(admin.companyId), storage.getTimeEntriesByEmployee(employeeId), storage.getAttendanceAdjustmentsByCompany(admin.companyId)]);
+      const totals = new Map<string, number>();
+      for (const adjustment of adjustments) totals.set(adjustment.timeEntryId, (totals.get(adjustment.timeEntryId) || 0) + adjustment.adjustmentMinutes);
+      const rows = entries.filter(e => e.companyId === admin.companyId).map(e => ({ ...e, totalAdjustmentMinutes: totals.get(e.id) || 0 }));
+      const safeId = (employee.employeeId || employee.id).replace(/[^a-zA-Z0-9_-]/g, "_");
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="timesheet-${safeId}-${start}-${end}.csv"`);
+      res.setHeader("Cache-Control", "private, no-store");
+      res.send(timesheetCsv(rows, employee, start, end, company?.timezone || "UTC"));
+    } catch (error: any) { res.status(500).json({ message: "Could not download the timesheet" }); }
+  });
   app.get("/api/time-entries", requireAuth, async (req, res) => {
     try {
       const user = req.user as any;
