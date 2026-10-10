@@ -4388,20 +4388,28 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
   });
 
   // Read-only integration check for platform administrators. It creates no charges.
-  app.get("/api/billing/integration-status", requireSuperAdmin, async (_req, res) => {
+  app.get("/api/billing/integration-status", requireSuperAdmin, async (req, res) => {
+    const respond = (status: number, result: object) => {
+      if (req.accepts(["html", "json"]) === "html") {
+        const details = JSON.stringify(result, null, 2).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        res.status(status).type("html").send(`<!doctype html><meta charset="utf-8"><title>ClockField Stripe verification</title><h1>Stripe integration verification</h1><pre>${details}</pre>`);
+      } else {
+        res.status(status).json(result);
+      }
+    };
     const stripeKey = process.env.STRIPE_SECRET_KEY;
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-    if (!stripeKey || !webhookSecret) return res.status(503).json({ configured: false });
+    if (!stripeKey || !webhookSecret) return respond(503, { configured: false });
     const names = ["STARTER_MONTHLY", "STARTER_YEARLY", "GROWTH_MONTHLY", "GROWTH_YEARLY", "PRO_MONTHLY", "PRO_YEARLY"];
     const priceIds = names.map(name => process.env[`STRIPE_PRICE_${name}`]);
-    if (priceIds.some(id => !id)) return res.status(503).json({ configured: false, message: "Plan prices missing" });
+    if (priceIds.some(id => !id)) return respond(503, { configured: false, message: "Plan prices missing" });
     try {
       const Stripe = (await import("stripe")).default;
       const stripe = new Stripe(stripeKey, { apiVersion: "2025-02-24.acacia" });
       const prices = await Promise.all(priceIds.map(id => stripe.prices.retrieve(id!)));
-      res.json({ configured: true, activePrices: prices.filter(price => price.active).length, liveMode: prices.every(price => price.livemode) });
+      respond(200, { configured: true, activePrices: prices.filter(price => price.active).length, liveMode: prices.every(price => price.livemode) });
     } catch {
-      res.status(502).json({ configured: false, message: "Stripe credential or price verification failed" });
+      respond(502, { configured: false, message: "Stripe credential or price verification failed" });
     }
   });
 
