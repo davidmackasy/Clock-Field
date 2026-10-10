@@ -27,6 +27,13 @@ export async function readPersistentFile(filePath: string): Promise<Buffer | nul
     headers: { apikey: remote.key, Authorization: `Bearer ${remote.key}` }, signal: AbortSignal.timeout(30000),
   });
   if (response.status === 404) return null;
+  // Some Supabase Storage versions wrap a missing object in HTTP 400.
+  // Do not mistake denied access or other storage failures for a missing file.
+  if (response.status === 400) {
+    const error = await response.json().catch(() => null) as { code?: string; error?: string; message?: string; statusCode?: string | number } | null;
+    if (error?.code === "NoSuchKey" || error?.error === "NoSuchKey" ||
+        (String(error?.statusCode) === "404" && error?.message === "Object not found")) return null;
+  }
   if (!response.ok) throw new Error(`Storage read failed (${response.status})`);
   return Buffer.from(await response.arrayBuffer());
 }
