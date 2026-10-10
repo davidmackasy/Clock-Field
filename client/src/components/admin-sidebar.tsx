@@ -80,6 +80,7 @@ export function AdminSidebar() {
   const teamPaths = ["/admin/employees", "/admin/management", "/admin/admins"];
   const isTeamActive = teamPaths.some(p => location === p || location.startsWith(p + "/") || location.startsWith(p + "?"));
   const [teamOpen, setTeamOpen] = useState(false);
+  const [attendanceOpen, setAttendanceOpen] = useState(false);
 
   const getIsActive = (url: string) =>
     url === "/admin/work-log" ? isWorkLogActive
@@ -160,6 +161,7 @@ export function AdminSidebar() {
 
               {/* Post-Team items */}
               {postTeamItems.map((item) => {
+                if (item.url === "/admin/attendance") return <Collapsible key={item.url} open={attendanceOpen || location.startsWith("/admin/attendance")} onOpenChange={setAttendanceOpen} onMouseEnter={() => setAttendanceOpen(true)} onMouseLeave={() => setAttendanceOpen(false)} onFocusCapture={() => setAttendanceOpen(true)}><SidebarMenuItem><SidebarMenuButton asChild isActive={location.startsWith("/admin/attendance")}><Link href="/admin/attendance" data-testid="nav-attendance"><ClipboardList className="w-4 h-4"/><span>Attendance</span><ChevronRight className="ml-auto w-3.5 h-3.5"/></Link></SidebarMenuButton><CollapsibleContent><SidebarMenuSub><SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={location === "/admin/attendance"}><Link href="/admin/attendance">Overview</Link></SidebarMenuSubButton></SidebarMenuSubItem><SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={location === "/admin/attendance/timesheets"}><Link href="/admin/attendance/timesheets" data-testid="nav-attendance-timesheets">Timesheets</Link></SidebarMenuSubButton></SidebarMenuSubItem></SidebarMenuSub></CollapsibleContent></SidebarMenuItem></Collapsible>;
                 const isMessages = item.url === "/admin/messages";
                 return (
                   <SidebarMenuItem key={item.url}>

@@ -3,6 +3,13 @@ import Mailgun from "mailgun.js";
 
 const mailgun = new Mailgun(FormData);
 
+export async function sendPayrollHoursEmail(to: string, snapshot: any, workbook: Buffer) {
+  const { client, domain } = getClient(15000);
+  const hours = (minutes: number) => `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  const details = snapshot.employees.filter((employee: any) => employee.rawMinutes || employee.payableMinutes || employee.pendingEntries).map((employee: any) => `${employee.name} (${employee.employeeNumber}): ${hours(employee.payableMinutes)} payable; ${hours(employee.rawMinutes)} recorded${employee.pendingEntries ? `; ${employee.pendingEntries} unfinished shift(s) need review` : ""}`).join("\n");
+  await client.messages.create(domain, { from: process.env.MAIL_FROM || "ClockField <noreply@mg.clockfield.com>", to: [to], subject: `Payroll hours: ${snapshot.period.start}–${snapshot.period.end} | payday ${snapshot.period.payday}`, text: `${snapshot.company.name}\nPeriod: ${snapshot.period.start} through ${snapshot.period.end}\nPayday: ${snapshot.period.payday}\nTimezone: ${snapshot.company.timezone}\n\n${details || "No completed attendance records in this period."}\n\nThese are hours for payroll review, including saved adjustments. This summary does not mark wages as paid.\n\nOpen timesheets: ${process.env.APP_URL || "https://clockfield.com"}/admin/attendance/timesheets?start=${snapshot.period.start}`, attachment: [{ filename: `timesheets-${snapshot.period.start}-${snapshot.period.end}.xlsx`, data: workbook }] });
+}
+
 export async function sendClockOutEmail(opts: { to: string; cleanerName: string; companyName: string; clockIn: string; clockOut: string; workedMinutes: number; timezone: string; attendanceUrl: string }) {
   const { client, domain } = getClient(10000);
   await client.messages.create(domain, {

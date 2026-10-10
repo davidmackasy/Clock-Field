@@ -844,8 +844,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createAttendanceAdjustment(data: InsertAttendanceAdjustment): Promise<AttendanceAdjustment> {
-    const [row] = await db.insert(attendanceAdjustments).values(data as any).returning();
-    return row;
+    return db.transaction(async tx=>{
+      const locked=await tx.execute(sql`SELECT id FROM time_entries WHERE id=${data.timeEntryId} AND company_id=${data.companyId} FOR UPDATE`);
+      if(!locked.rows.length)throw new Error("Attendance entry not found");
+      const [row]=await tx.insert(attendanceAdjustments).values(data as any).returning();
+      return row;
+    });
   }
 
   async getAttendanceAdjustmentsByEntry(timeEntryId: string): Promise<AttendanceAdjustment[]> {
@@ -870,11 +874,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async voidAttendanceAdjustment(id: string, voidedByUserId: string): Promise<AttendanceAdjustment | undefined> {
-    const [row] = await db.update(attendanceAdjustments)
+    return db.transaction(async tx=>{
+      const [adjustment]=await tx.select().from(attendanceAdjustments).where(eq(attendanceAdjustments.id,id));
+      if(!adjustment)return undefined;
+      await tx.execute(sql`SELECT id FROM time_entries WHERE id=${adjustment.timeEntryId} FOR UPDATE`);
+      const [row] = await tx.update(attendanceAdjustments)
       .set({ isVoided: true, voidedByUserId, voidedAt: new Date().toISOString() })
-      .where(eq(attendanceAdjustments.id, id))
+      .where(and(eq(attendanceAdjustments.id, id),eq(attendanceAdjustments.isVoided,false)))
       .returning();
-    return row;
+      return row;
+    });
   }
 
   async createClientRequest(data: InsertClientRequest): Promise<ClientRequest> {

@@ -11,6 +11,7 @@ ENV NODE_ENV=production PORT=8080 DATA_DIR=/tmp/clockfield TRUST_PROXY=1 DATABAS
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY config/supabase-ca.crt ./config/supabase-ca.crt
+COPY config/timesheet-template ./config/timesheet-template
 RUN mkdir -p /tmp/clockfield && chown -R node:node /tmp/clockfield
 USER node
 EXPOSE 8080

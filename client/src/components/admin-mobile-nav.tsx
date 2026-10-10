@@ -24,6 +24,7 @@ const primaryTabs = [
 ];
 
 const navMoreItems = [
+  { label: "Timesheets", href: "/admin/attendance/timesheets", icon: ClipboardList },
   { label: "Payroll",      href: "/admin/payroll",      icon: DollarSign },
   { label: "Clients",      href: "/admin/clients",      icon: Building2 },
   { label: "Messages",     href: "/admin/messages",     icon: MessageSquare },
@@ -99,6 +100,7 @@ export function AdminMobileNav() {
   const initials = user ? `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}`.toUpperCase() : "A";
 
   const getPageTitle = () => {
+    if (location === "/admin/attendance/timesheets") return "Timesheets";
     for (const [path, title] of Object.entries(pageTitles)) {
       if (location === path || location.startsWith(path + "/") || location.startsWith(path + "?")) return title;
     }

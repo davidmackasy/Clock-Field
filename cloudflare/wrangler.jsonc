@@ -18,6 +18,7 @@
     "STRIPE_PRICE_PRO_YEARLY": "price_1TBqJwISmnawGz43yyD4EkFO"
   },
   "observability": { "enabled": true },
+  "triggers": { "crons": ["0 * * * *"] },
   "containers": [{ "class_name": "ClockFieldContainer", "image": "../Dockerfile", "max_instances": 1, "instance_type": "basic" }],
   "durable_objects": { "bindings": [{ "name": "CLOCKFIELD", "class_name": "ClockFieldContainer" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ClockFieldContainer"] }]

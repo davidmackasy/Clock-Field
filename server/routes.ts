@@ -20,6 +20,7 @@ import { dataDirectory, uploadsDirectory, fitForDutyPhotosDirectory, incidentEvi
 import { readPersistentFile, writePersistentFile, removePersistentFile } from "./persistent-files";
 import { notifyAdminsOfClockOut } from "./clock-out-notification";
 import { dateInZone, timesheetCsv } from "../shared/time-report";
+import { registerPayrollTimesheetRoutes } from "./payroll-timesheets";
 
 function escHtml(str: string): string {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -256,6 +257,7 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   setupAuth(app);
+  registerPayrollTimesheetRoutes(app);
 
   // ── File Upload ────────────────────────────────────────────────────────────
   app.post("/api/upload", requireAuth, (req, res) => {
@@ -1537,6 +1539,8 @@ Welcome again, and thank you for choosing ClockField.
 
   app.get("/api/time-entries/:id/adjustments", requireRole("admin"), async (req, res) => {
     try {
+      const entry=await storage.getTimeEntry(String(req.params.id));
+      if(!entry || entry.companyId !== (req.user as any).companyId)return res.status(404).json({message:"Not found"});
       const adjustments = await storage.getAttendanceAdjustmentsByEntry(req.params.id);
       res.json(adjustments);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
@@ -1578,6 +1582,7 @@ Welcome again, and thank you for choosing ClockField.
       if (!adj || adj.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       if (adj.isVoided) return res.status(400).json({ message: "Already voided" });
       const voided = await storage.voidAttendanceAdjustment(req.params.id, user.id);
+      if(!voided)return res.status(409).json({message:"Adjustment was already voided"});
       res.json(voided);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });

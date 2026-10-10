@@ -17,7 +17,7 @@ import { ClipboardList, Search, CalendarIcon, Filter, User, Clock, BarChart2, Us
 import { format, subDays, startOfWeek, startOfMonth, startOfDay, endOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { EmployeeAttendanceModal } from "@/components/employee-attendance-modal";
-import { AttendanceTimesheetDownload } from "@/components/attendance-timesheet-download";
+import { Link } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { companyWallTime, companyWallTimeToIso, companyDateKey, formatCompanyDate, formatCompanyLongDate, formatCompanyTime, formatLocalWallTime, localToday, shiftDateKey } from "@/lib/timezone";
@@ -514,6 +514,7 @@ export default function AdminAttendance() {
   const { data: shifts } = useQuery<any[]>({ queryKey: ["/api/shifts"] });
 
   const [search, setSearch] = useState("");
+  const [showDetails, setShowDetails] = useState(false);
   const [dateRange, setDateRange] = useState<string>(
     initDate ? "custom" : (initParams.get("dateRange") || "this_week")
   );
@@ -639,7 +640,7 @@ export default function AdminAttendance() {
       </div>
 
       {/* ── Forgotten Clock-Outs Assist ── only shown when >5 min past scheduled end */}
-      {!isLoading && tzData && <AttendanceTimesheetDownload entries={entries || []} employees={employees || []} timezone={tz} />}
+      <div className="flex gap-2"><Button asChild><Link href="/admin/attendance/timesheets">Open timesheets</Link></Button><Button variant="outline" onClick={() => setShowDetails(value => !value)}>{showDetails ? "Hide attendance details" : "Show attendance details"}</Button></div>
       {!isLoading && overdueEntries.length > 0 && (
         <div
           className="rounded-lg border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30 px-4 py-3 space-y-2"
@@ -793,7 +794,7 @@ export default function AdminAttendance() {
               Showing totals for: <span className="font-medium text-foreground">{selectedEmployeeName}</span>
             </p>
           )}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className={showDetails ? "grid grid-cols-2 md:grid-cols-4 gap-3" : "grid grid-cols-2 gap-3"}>
             <Card>
               <CardContent className="p-4 flex items-center gap-3">
                 <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -819,6 +820,7 @@ export default function AdminAttendance() {
                 </div>
               </CardContent>
             </Card>
+            {showDetails && <>
             <Card>
               <CardContent className="p-4 flex items-center gap-3">
                 <div className="w-9 h-9 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0">
@@ -841,6 +843,7 @@ export default function AdminAttendance() {
                 </div>
               </CardContent>
             </Card>
+            </>}
           </div>
         </div>
       )}
@@ -870,11 +873,11 @@ export default function AdminAttendance() {
                   <TableRow>
                     <TableHead>Employee</TableHead>
                     <TableHead>Date</TableHead>
-                    <TableHead>Scheduled Time</TableHead>
+                    {showDetails && <TableHead>Scheduled Time</TableHead>}
                     <TableHead>Actual Time</TableHead>
-                    <TableHead>Variance</TableHead>
+                    {showDetails && <TableHead>Variance</TableHead>}
                     <TableHead>Status</TableHead>
-                    <TableHead>Flags</TableHead>
+                    {showDetails && <TableHead>Flags</TableHead>}
                     <TableHead className="w-8"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -911,17 +914,17 @@ export default function AdminAttendance() {
                           </button>
                         </TableCell>
                         <TableCell className="text-sm">{formatCompanyDate(clockIn, tz)}</TableCell>
-                        <TableCell className="text-sm">
+                        {showDetails && <TableCell className="text-sm">
                           {shift ? `${formatLocalWallTime(shift.scheduledStartAt)} – ${formatLocalWallTime(shift.scheduledEndAt)}` : "Unscheduled"}
-                        </TableCell>
+                        </TableCell>}
                         <TableCell className="text-sm">
                           {formatCompanyTime(clockIn, tz)} – {clockOut ? formatCompanyTime(clockOut, tz) : "In progress"}
                         </TableCell>
-                        <TableCell className={cn("text-sm font-medium",
+                        {showDetails && <TableCell className={cn("text-sm font-medium",
                           variance.includes("late") ? "text-destructive" : variance.includes("early") ? "text-orange-500" : "text-green-600"
                         )}>
                           {variance}
-                        </TableCell>
+                        </TableCell>}
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <Badge variant={entry.status === "active" ? "default" : "secondary"} className="text-[10px] h-4">
@@ -934,7 +937,7 @@ export default function AdminAttendance() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell>
+                        {showDetails && <TableCell>
                           <div className="flex gap-1 flex-wrap">
                             {(entry.flags || []).map((flag: string, i: number) => (
                               <Badge key={i} variant={(flagColors[flag] as any) || "secondary"} className="text-[10px] h-4">
@@ -947,7 +950,7 @@ export default function AdminAttendance() {
                               </Badge>
                             )}
                           </div>
-                        </TableCell>
+                        </TableCell>}
                         <TableCell>
                           {entry.status === "completed" && (
                             <Button

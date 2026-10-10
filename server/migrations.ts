@@ -10,6 +10,18 @@ export async function runStartupMigrations() {
   const client = await pool.connect();
   try {
     log("Running startup migrations...", "migrations");
+    await client.query(`
+      ALTER TABLE companies ADD COLUMN IF NOT EXISTS payroll_payday_delay_days integer NOT NULL DEFAULT 5;
+      ALTER TABLE companies ADD COLUMN IF NOT EXISTS payroll_summary_enabled boolean NOT NULL DEFAULT false;
+      ALTER TABLE companies ADD COLUMN IF NOT EXISTS payroll_summary_days json NOT NULL DEFAULT '[2,4]';
+      ALTER TABLE companies ADD COLUMN IF NOT EXISTS payroll_summary_hour integer NOT NULL DEFAULT 9;
+      CREATE TABLE IF NOT EXISTS payroll_summary_deliveries (
+        company_id varchar NOT NULL, period_start text NOT NULL, summary_date text NOT NULL,
+        recipient_id varchar NOT NULL, status text NOT NULL, claimed_at timestamptz NOT NULL DEFAULT now(),
+        sent_at timestamptz, attempts integer NOT NULL DEFAULT 1, last_error text,
+        PRIMARY KEY(company_id, period_start, summary_date, recipient_id)
+      );
+    `);
 
     // 1. Ensure internal_bypass column exists (no-op if already there)
     await client.query(`

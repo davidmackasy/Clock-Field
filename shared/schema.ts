@@ -16,6 +16,10 @@ export const companies = pgTable("companies", {
   overtimeThresholdWeekly: integer("overtime_threshold_weekly").default(40),
   defaultPayPeriodType: text("default_pay_period_type").notNull().default("biweekly"),
   payrollCycleStartDate: text("payroll_cycle_start_date"),
+  payrollPaydayDelayDays: integer("payroll_payday_delay_days").notNull().default(5),
+  payrollSummaryEnabled: boolean("payroll_summary_enabled").notNull().default(false),
+  payrollSummaryDays: json("payroll_summary_days").$type<number[]>().notNull().default([2, 4]),
+  payrollSummaryHour: integer("payroll_summary_hour").notNull().default(9),
   employeeIdCounter: integer("employee_id_counter").notNull().default(1000),
   // Payroll deductions
   deductionsEnabled: boolean("deductions_enabled").notNull().default(false),

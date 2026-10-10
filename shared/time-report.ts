@@ -1,5 +1,6 @@
 export function dateInZone(value: string | Date, timezone: string) {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
+  const parts=new Intl.DateTimeFormat("en-US",{timeZone:timezone,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date(value));
+  return ["year","month","day"].map(type=>parts.find(part=>part.type===type)!.value).join("-");
 }
 
 export function csvCell(value: unknown): string {
