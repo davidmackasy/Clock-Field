@@ -126,6 +126,7 @@ export default function AdminSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/company"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/timezone"] });
       toast({ title: "Settings saved" });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
