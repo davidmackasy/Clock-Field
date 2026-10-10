@@ -4387,6 +4387,24 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  // Read-only integration check for platform administrators. It creates no charges.
+  app.get("/api/billing/integration-status", requireSuperAdmin, async (_req, res) => {
+    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!stripeKey || !webhookSecret) return res.status(503).json({ configured: false });
+    const names = ["STARTER_MONTHLY", "STARTER_YEARLY", "GROWTH_MONTHLY", "GROWTH_YEARLY", "PRO_MONTHLY", "PRO_YEARLY"];
+    const priceIds = names.map(name => process.env[`STRIPE_PRICE_${name}`]);
+    if (priceIds.some(id => !id)) return res.status(503).json({ configured: false, message: "Plan prices missing" });
+    try {
+      const Stripe = (await import("stripe")).default;
+      const stripe = new Stripe(stripeKey, { apiVersion: "2025-02-24.acacia" });
+      const prices = await Promise.all(priceIds.map(id => stripe.prices.retrieve(id!)));
+      res.json({ configured: true, activePrices: prices.filter(price => price.active).length, liveMode: prices.every(price => price.livemode) });
+    } catch {
+      res.status(502).json({ configured: false, message: "Stripe credential or price verification failed" });
+    }
+  });
+
   // Stripe Checkout (Phase 2 - creates checkout session)
   app.post("/api/billing/checkout", requireRole("admin"), async (req, res) => {
     try {
