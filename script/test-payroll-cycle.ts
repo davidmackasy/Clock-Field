@@ -14,3 +14,6 @@ const snapshot={company:{name:"Test Company",timezone:"America/Winnipeg",company
 await fs.writeFile('/private/tmp/clockfield-timesheet-template/test-generated.xlsx',await createTimesheetWorkbook(snapshot));
 await fs.writeFile('/private/tmp/clockfield-timesheet-template/test-all.xlsx',await createTimesheetWorkbook({...snapshot,employees:[...snapshot.employees,{...snapshot.employees[0],id:"fixture-2",employeeNumber:"EMP-TEST-2",name:"Second Employee"}]}));
 console.log("PASS: biweekly periods, Friday paydays, Tuesday/Thursday summary dates, DST calendar boundaries, and single/all-employee workbook exports.");
+
+const fourRows=rows.map((row,day)=>day<4?{...row,id:`four-${day}`,startTime:"17:00",endTime:day===2?"22:05":"22:15",rawMinutes:day===2?305:315,payableMinutes:day===2?305:315}:row);
+await fs.writeFile("/private/tmp/clockfield-timesheet-template/test-four-days.xlsx",await createTimesheetWorkbook({...snapshot,employees:[{...snapshot.employees[0],rows:fourRows,rawMinutes:1250,payableMinutes:1250}]}));

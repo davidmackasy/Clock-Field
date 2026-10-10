@@ -7,7 +7,7 @@ const escape = (value: unknown) => String(value ?? "").replace(/&/g,"&amp;").rep
 const excelDate = (value: string) => (Date.parse(value + "T00:00:00Z") - Date.UTC(1899,11,30))/86400000;
 const timeValue = (value: string) => value ? (Number(value.slice(0,2))*60+Number(value.slice(3)))/1440 : null;
 function cell(xml: string, address: string, value: unknown, formula?: string, styleOverride?: string) {
-  const pattern = new RegExp(`<x:c\\b(?=[^>]*\\br="${address}")[^>]*(?:\\/>|>[\\s\\S]*?<\\/x:c>)`);
+  const pattern = new RegExp(`<x:c\\b(?=[^>]*\\br="${address}")[^>]*?(?:\\/>|>[\\s\\S]*?<\\/x:c>)`);
   const existing = xml.match(pattern)?.[0] || ""; const style = styleOverride || existing.match(/\bs="(\d+)"/)?.[1] || "1";
   const type = typeof value === "number" ? "n" : "str";
   const next = `<x:c r="${address}" s="${style}" t="${type}">${formula ? `<x:f>${escape(formula.replace(/^=/,""))}</x:f>` : ""}<x:v>${escape(value)}</x:v></x:c>`;
@@ -48,7 +48,7 @@ export async function createTimesheetWorkbook(snapshot: any): Promise<Buffer> {
       const start=timeValue(first?.startTime||"");const end=timeValue(last?.endTime||"");
       const dayOffset=last?.endDate ? Math.round((Date.parse(last.endDate+"T12:00:00Z")-Date.parse(date+"T12:00:00Z"))/86400000):0;
       const values=[excelDate(date),employee.employeeNumber,first?.clockInAt ? (Date.parse(first.clockInAt)-Date.UTC(1899,11,30))/86400000:null,last?.clockOutAt ? (Date.parse(last.clockOutAt)-Date.UTC(1899,11,30))/86400000:null,raw,payable-raw,start??0,end===null?0:end+dayOffset,rows.map((row:any)=>row.id).join(", ")];
-      const styles=Array.from({length:9},(_,column)=>Number(sourceTemplate.match(new RegExp(`<x:c\b(?=[^>]*r="${String.fromCharCode(65+column)}2")[^>]*s="(\d+)"`))?.[1] || 9));
+      const styles=Array.from({length:9},(_,column)=>Number(sourceTemplate.match(new RegExp(`<x:c\\b(?=[^>]*r="${String.fromCharCode(65+column)}2")[^>]*s="(\\d+)"`))?.[1] || 9));
       sourceData+=`<x:row r="${sourceRow}">${values.map((value:any,column:number)=>`<x:c r="${String.fromCharCode(65+column)}${sourceRow}" s="${styles[column]}" t="${typeof value==="number"?"n":"str"}"><x:v>${escape(value)}</x:v></x:c>`).join("")}</x:row>`;
       const row=day+7;
       const weekday=new Intl.DateTimeFormat("en-US",{timeZone:"UTC",weekday:"long"}).format(new Date(date+"T12:00:00Z"));
