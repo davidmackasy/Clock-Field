@@ -4557,6 +4557,16 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       const findBySubscription = (subId: string) =>
         allCompanies.find(c => c.stripeSubscriptionId === subId);
 
+      const billingPeriod = (sub: any) => {
+        const item = sub.items?.data?.[0];
+        const start = sub.current_period_start ?? item?.current_period_start;
+        const end = sub.current_period_end ?? item?.current_period_end;
+        return {
+          currentPeriodStart: typeof start === "number" ? new Date(start * 1000).toISOString() : undefined,
+          currentPeriodEnd: typeof end === "number" ? new Date(end * 1000).toISOString() : undefined,
+        };
+      };
+
       switch (event.type) {
         case "checkout.session.completed": {
           if (companyId && data.subscription) {
@@ -4570,8 +4580,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
               billingCycle: data.metadata?.billingCycle || "monthly",
               subscriptionStatus: subStatus,
               accountStatus: "active",
-              currentPeriodStart: new Date(sub.current_period_start * 1000).toISOString(),
-              currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString(),
+              ...billingPeriod(sub),
               cancelAtPeriodEnd: sub.cancel_at_period_end,
               activatedAt: new Date().toISOString(),
             });
@@ -4592,8 +4601,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
               stripePriceId: sub.items.data[0]?.price?.id,
               subscriptionStatus: subStatus,
               accountStatus: "active",
-              currentPeriodStart: new Date(sub.current_period_start * 1000).toISOString(),
-              currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString(),
+              ...billingPeriod(sub),
               cancelAtPeriodEnd: sub.cancel_at_period_end,
               activatedAt: new Date().toISOString(),
             });
@@ -4607,8 +4615,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
             await storage.updateCompany(company.id, {
               subscriptionStatus: sub.status,
               stripePriceId: sub.items.data[0]?.price?.id,
-              currentPeriodStart: new Date(sub.current_period_start * 1000).toISOString(),
-              currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString(),
+              ...billingPeriod(sub),
               cancelAtPeriodEnd: sub.cancel_at_period_end,
             });
           }
@@ -4626,16 +4633,18 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
           break;
         }
         case "invoice.payment_failed": {
+          const subscription = data.subscription ?? data.parent?.subscription_details?.subscription;
           const company = findByCustomer(data.customer)
-            || (data.subscription ? findBySubscription(data.subscription) : undefined);
+            || (subscription ? findBySubscription(subscription) : undefined);
           if (company) {
             await storage.updateCompany(company.id, { subscriptionStatus: "past_due" });
           }
           break;
         }
         case "invoice.paid": {
+          const subscription = data.subscription ?? data.parent?.subscription_details?.subscription;
           const company = findByCustomer(data.customer)
-            || (data.subscription ? findBySubscription(data.subscription) : undefined);
+            || (subscription ? findBySubscription(subscription) : undefined);
           if (company) {
             await storage.updateCompany(company.id, {
               subscriptionStatus: "active",
