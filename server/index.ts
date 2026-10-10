@@ -39,7 +39,7 @@ app.use("/uploads", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 app.use("/uploads", express.static(uploadsDirectory));
-app.get("/healthz", (_req, res) => res.json({ status: "ok" }));
+app.get("/healthz", (_req, res) => res.json({ status: "ok", revision: process.env.APP_DEPLOYMENT_REVISION }));
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {

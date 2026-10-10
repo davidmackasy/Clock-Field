@@ -15,13 +15,14 @@ export class ClockFieldContainer extends Container {
       SUPABASE_STORAGE_BUCKET: "clockfield-migration",
       APP_URL: this.env.APP_URL || new URL(request.url).origin,
       APP_BASE_URL: this.env.APP_URL || new URL(request.url).origin,
+      APP_DEPLOYMENT_REVISION: this.env.CF_VERSION_METADATA?.id || "local",
     };
     for (const name of secretNames) if (this.env[name]) envVars[name] = this.env[name];
     if (!envVars.DATABASE_URL || !envVars.SESSION_SECRET || !envVars.SUPABASE_STORAGE_KEY) {
       return new Response("ClockField deployment configuration is incomplete", { status: 503 });
     }
     // Running containers retain their startup environment across Worker deployments.
-    // Restart when runtime configuration changes so newly saved secrets take effect.
+    // Restart for configuration or version changes so secrets and app updates take effect.
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(envVars)));
     const configurationHash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
     await this.ctx.blockConcurrencyWhile(async () => {
