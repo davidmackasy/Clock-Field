@@ -155,7 +155,7 @@ export default function PayRunsTab({ onSelectPayRun,initialPeriod }: Props) {
               <div className="flex items-center gap-3 min-w-0">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-sm truncate" data-testid={`text-run-name-${run.id}`}>{run.name}</span>
+                    <span className="font-medium text-sm truncate" data-testid={`text-run-name-${run.id}`}>{run.name}{run.payDate<run.periodEnd&&<span className="ml-2 text-xs text-amber-700">Review pay date</span>}</span>
                     <Badge variant="outline" className={`text-[10px] px-1.5 h-4 ${STATUS_COLORS[run.status] || ""}`}>
                       {STATUS_LABELS[run.status] || run.status}
                     </Badge>

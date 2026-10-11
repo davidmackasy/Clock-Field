@@ -4442,32 +4442,11 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
-  app.patch("/api/payroll/pay-runs/:id", requireAuth, requireRole("admin"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      const run = await storage.getPayRun(req.params.id);
-      if (!run || run.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      let input;try{input=payRunInput(req.body,run);}catch(error:any){return res.status(400).json({message:error.message});}
-      const stubs=(await storage.getPayStubsByPayRun(run.id)).filter(stub=>stub.status!=="voided");
-      if(stubs.length&&(input.periodStart!==run.periodStart||input.periodEnd!==run.periodEnd||input.payDate!==run.payDate))return res.status(409).json({message:"Dates are locked once pay stubs have been generated"});
-      if(["paid","closed"].includes(input.status)&&(!stubs.length||stubs.some(stub=>!stub.confirmedPaidAt)))return res.status(409).json({message:"Confirm each pay stub as paid before marking the run paid or closed"});
-      if(run.status==="closed"&&input.status!=="closed")return res.status(409).json({message:"A closed pay run is locked"});
-      const updated = await storage.updatePayRun(req.params.id, { ...input, updatedAt: new Date().toISOString() });
-      res.json(updated);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
+  app.patch("/api/payroll/pay-runs/:id",requireRole("admin"),async(req,res)=>{let client:any;try{const user=req.user as any;client=await pool.connect();await client.query("BEGIN");const {rows:[raw]}=await client.query("SELECT * FROM pay_runs WHERE id=$1 AND company_id=$2 FOR UPDATE",[String(req.params.id),user.companyId]);if(!raw)throw Object.assign(new Error("Pay run not found"),{status:404});const run:any=Object.fromEntries(Object.entries(raw).map(([key,value])=>[key.replace(/_([a-z])/g,(_,char)=>char.toUpperCase()),value]));let input;try{input=payRunInput(req.body,run);}catch(error:any){throw Object.assign(error,{status:400});}const stubs=(await client.query("SELECT id,status,confirmed_paid_at FROM pay_stubs WHERE pay_run_id=$1 AND status<>'voided'",[run.id])).rows;const periodChanged=input.periodStart!==run.periodStart||input.periodEnd!==run.periodEnd,paydayChanged=input.payDate!==run.payDate;if(stubs.length&&periodChanged)throw Object.assign(new Error("Period dates are locked once pay stubs exist"),{status:409});if(stubs.length&&paydayChanged&&stubs.some((stub:any)=>!["draft","reviewed"].includes(stub.status)))throw Object.assign(new Error("The payday is locked after a pay stub is finalized or published"),{status:409});if(["paid","closed"].includes(input.status)&&(!stubs.length||stubs.some((stub:any)=>!stub.confirmed_paid_at)))throw Object.assign(new Error("Confirm each pay stub as paid before closing or marking the run paid"),{status:409});if(run.status==="closed"&&input.status!=="closed")throw Object.assign(new Error("A closed pay run is locked"),{status:409});const now=new Date().toISOString();if(paydayChanged&&stubs.length){const updated=await client.query("UPDATE pay_stubs SET pay_date=$2,updated_by=$3,updated_at=$4 WHERE pay_run_id=$1 AND status IN ('draft','reviewed') RETURNING id",[run.id,input.payDate,user.id,now]);if(updated.rows.length!==stubs.length)throw Object.assign(new Error("A pay stub changed during editing. Refresh and review again."),{status:409});for(const stub of stubs)await insertPayrollRow(client,"pay_stub_audit_log",{payStubId:stub.id,action:"pay_date_updated",actorId:user.id,actorRole:"admin",metadataJson:JSON.stringify({payDate:input.payDate}),createdAt:now});}const {rows:[updated]}=await client.query("UPDATE pay_runs SET name=$2,period_start=$3,period_end=$4,pay_date=$5,status=$6,notes=$7,updated_at=$8 WHERE id=$1 RETURNING *",[run.id,input.name,input.periodStart,input.periodEnd,input.payDate,input.status,input.notes,now]);await client.query("COMMIT");res.json(Object.fromEntries(Object.entries(updated).map(([key,value])=>[key.replace(/_([a-z])/g,(_,char)=>char.toUpperCase()),value])));}catch(error:any){if(client){try{await client.query("ROLLBACK");}catch{}}res.status(error.status||500).json({message:error.status?error.message:"Could not update the pay run"});}finally{client?.release();}});
 
-  app.delete("/api/payroll/pay-runs/:id", requireAuth, requireRole("admin"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      const run = await storage.getPayRun(req.params.id);
-      if (!run || run.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      if (run.status !== "draft") return res.status(400).json({ message: "Only draft pay runs can be deleted" });
-      if((await storage.getPayStubsByPayRun(run.id)).length)return res.status(409).json({message:"A pay run with generated pay stubs cannot be deleted"});
-      await storage.deletePayRun(req.params.id);
-      res.json({ ok: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
+
+  app.delete("/api/payroll/pay-runs/:id",requireRole("admin"),async(req,res)=>{let client:any;try{client=await pool.connect();await client.query("BEGIN");const {rows:[run]}=await client.query("SELECT * FROM pay_runs WHERE id=$1 AND company_id=$2 FOR UPDATE",[String(req.params.id),(req.user as any).companyId]);if(!run)throw Object.assign(new Error("Pay run not found"),{status:404});if(run.status!=="draft")throw Object.assign(new Error("Only empty draft runs can be deleted"),{status:409});const children=await client.query("SELECT id FROM pay_stubs WHERE pay_run_id=$1 LIMIT 1",[run.id]);if(children.rows.length)throw Object.assign(new Error("A run with generated pay stubs cannot be deleted"),{status:409});await client.query("DELETE FROM pay_runs WHERE id=$1",[run.id]);await client.query("COMMIT");res.json({deleted:true});}catch(error:any){if(client){try{await client.query("ROLLBACK");}catch{}}res.status(error.status||500).json({message:error.status?error.message:"Could not delete the pay run"});}finally{client?.release();}});
+
 
   // ────────────────────────────────────────────────────────────────────────────
   // PAY STUBS — ADMIN
@@ -4500,6 +4479,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       transaction=await pool.connect();await transaction.query("BEGIN");
       const locked=await transaction.query("SELECT id FROM pay_runs WHERE id=$1 AND company_id=$2 FOR UPDATE",[payRunId,user.companyId]);if(!locked.rows.length)return res.status(404).json({message:"Pay run not found"});
       payRun=await storage.getPayRun(payRunId);if(!payRun||!["draft","under_review"].includes(payRun.status))return res.status(409).json({message:"Generate pay stubs only in a draft or under-review pay run"});
+      try{payRunInput({},payRun);}catch(error:any){return res.status(400).json({message:`Review pay run dates before generating: ${error.message}`});}
       // Check for existing stub in this pay run for this employee
       const existingStubs = await storage.getPayStubsByPayRun(payRunId);
       const duplicate = existingStubs.find(s => s.employeeId === employeeId && s.status !== "voided");
