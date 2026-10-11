@@ -15,7 +15,7 @@ export async function payrollSnapshot(companyId: string, start: string, employee
   ]);
   if (!company) throw new Error("Company not found");
   const payroll = payrollPeriod(company.payrollCycleStartDate || start, start, company.payrollPaydayDelayDays, company.payrollSummaryDays);
-  const period = {...payroll, start, end: end || dateShift(start,13)};
+  const period = {...payroll, start, end: end || dateShift(start,13), payday: start === payroll.start && (end || dateShift(start,13)) === payroll.end ? payroll.payday : null};
   const dayCount=Math.round((Date.parse(period.end)-Date.parse(start))/86400000)+1;
   if(dayCount<1||dayCount>366)throw new Error("Invalid date range");
   const shiftLocations=new Map(shifts.map(shift=>[shift.id,shift.locationId]));

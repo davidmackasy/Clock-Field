@@ -72,7 +72,7 @@ export async function createTimesheetWorkbook(snapshot: any): Promise<Buffer> {
       xml=cell(xml,`E${row}`,rows.length?payable/60:"",formula);sourceRow++;
     }
     xml=cell(xml,`E${22+extra}`,employee.payableMinutes/60,`SUM(E7:E${20+extra})`);
-    xml=cell(xml,`F${24+extra}`,`Payday: ${snapshot.period.payday}`);xml=cell(xml,`F${25+extra}`,`${snapshot.company.timezone}${employee.pendingEntries ? `; unfinished shifts: ${employee.pendingEntries}` : ""}`);
+    xml=cell(xml,`F${24+extra}`,snapshot.period.payday ? `Payday: ${snapshot.period.payday}` : "");xml=cell(xml,`F${25+extra}`,`${snapshot.company.timezone}${employee.pendingEntries ? `; unfinished shifts: ${employee.pendingEntries}` : ""}`);
     if(!logo)xml=xml.replace(/<x:drawing\b[^>]*\/>/,"");
     parts.set(`xl/worksheets/sheet${index+1}.xml`,Buffer.from(xml));
     if(logo&&drawingRelationships)parts.set(`xl/worksheets/_rels/sheet${index+1}.xml.rels`,drawingRelationships);
