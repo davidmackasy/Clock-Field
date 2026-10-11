@@ -221,7 +221,7 @@ function PayrollHistoryModal({
             <Card>
               <CardContent className="p-3">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Hours</p>
-                <p className="text-lg font-bold">{currentSummary.hours.toFixed(1)}h</p>
+                <p className="text-lg font-bold">{currentSummary.hours.toFixed(2)}h</p>
               </CardContent>
             </Card>
           </div>
@@ -272,8 +272,8 @@ function PayrollHistoryModal({
                           <span>{formatD(p.start)} – {formatD(p.end)}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-right text-sm">{p.hours.toFixed(1)}h</TableCell>
-                      <TableCell className="text-right text-sm">{p.overtimeHours.toFixed(1)}h</TableCell>
+                      <TableCell className="text-right text-sm">{p.hours.toFixed(2)}h</TableCell>
+                      <TableCell className="text-right text-sm">{p.overtimeHours.toFixed(2)}h</TableCell>
                       <TableCell className="text-right text-sm">${fmt(p.grossPay)}</TableCell>
                       {showDeductions && <TableCell className="text-right text-sm text-red-500">{p.federalTax > 0 ? `−$${fmt(p.federalTax)}` : "—"}</TableCell>}
                       {showDeductions && <TableCell className="text-right text-sm text-red-500">{p.provincialTax > 0 ? `−$${fmt(p.provincialTax)}` : "—"}</TableCell>}
@@ -483,7 +483,7 @@ function PayrollEstimatorContent({initialPeriod,onPeriodChange}:{initialPeriod?:
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Hours</p>
-              <p className="text-xl font-bold" data-testid="stat-total-hours">{totalHours.toFixed(1)}h</p>
+              <p className="text-xl font-bold" data-testid="stat-total-hours">{totalHours.toFixed(2)}h</p>
             </div>
           </CardContent>
         </Card>
@@ -547,8 +547,8 @@ function PayrollEstimatorContent({initialPeriod,onPeriodChange}:{initialPeriod?:
                         </button>
                       </TableCell>
                       <TableCell className="text-right text-sm">${p.hourlyRate || "0.00"}/hr</TableCell>
-                      <TableCell className="text-right text-sm">{p.hours.toFixed(1)}h</TableCell>
-                      <TableCell className="text-right text-sm">{p.overtimeHours.toFixed(1)}h</TableCell>
+                      <TableCell className="text-right text-sm">{p.hours.toFixed(2)}h</TableCell>
+                      <TableCell className="text-right text-sm">{p.overtimeHours.toFixed(2)}h</TableCell>
                       <TableCell className="text-right text-sm">${fmt(p.regularPay)}</TableCell>
                       <TableCell className="text-right text-sm">${fmt(p.otPay)}</TableCell>
                       <TableCell className="text-right text-sm font-semibold">${fmt(p.grossPay)}</TableCell>
