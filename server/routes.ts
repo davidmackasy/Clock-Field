@@ -20,6 +20,7 @@ import { dataDirectory, uploadsDirectory, fitForDutyPhotosDirectory, incidentEvi
 import { readPersistentFile, writePersistentFile, removePersistentFile } from "./persistent-files";
 import { notifyAdminsOfClockOut } from "./clock-out-notification";
 import { dateInZone, timesheetCsv } from "../shared/time-report";
+import { registerPublicTimesheetRoutes } from "./public-timesheet";
 import { registerPayrollTimesheetRoutes } from "./payroll-timesheets";
 
 function escHtml(str: string): string {
@@ -258,6 +259,7 @@ export async function registerRoutes(
 ): Promise<Server> {
   setupAuth(app);
   registerPayrollTimesheetRoutes(app);
+  registerPublicTimesheetRoutes(app);
 
   // ── File Upload ────────────────────────────────────────────────────────────
   app.post("/api/upload", requireAuth, (req, res) => {

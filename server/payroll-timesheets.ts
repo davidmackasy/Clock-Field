@@ -1,3 +1,4 @@
+import { timesheetLocation } from "./timesheet-location";
 import type { Express } from "express";
 import { storage } from "./storage";
 import { pool } from "./db";
@@ -9,17 +10,15 @@ import { sendPayrollHoursEmail } from "./mail";
 import { createTimesheetWorkbook } from "./timesheet-workbook";
 
 export async function payrollSnapshot(companyId: string, start: string, employeeId = "all", end?: string) {
-  const [company, employees, allEntries, adjustments, locations, shifts] = await Promise.all([
+  const [company, employees, allEntries, adjustments, locations, shifts, schedules, clients] = await Promise.all([
     storage.getCompany(companyId), storage.getEmployeesByCompany(companyId), storage.getTimeEntriesByCompany(companyId),
-    storage.getAttendanceAdjustmentsByCompany(companyId), storage.getLocationsByCompany(companyId), storage.getShiftsByCompany(companyId),
+    storage.getAttendanceAdjustmentsByCompany(companyId), storage.getLocationsByCompany(companyId), storage.getShiftsByCompany(companyId), storage.getRecurringSchedulesByCompany(companyId), storage.getClientsByCompany(companyId),
   ]);
   if (!company) throw new Error("Company not found");
   const payroll = payrollPeriod(company.payrollCycleStartDate || start, start, company.payrollPaydayDelayDays, company.payrollSummaryDays);
   const period = {...payroll, start, end: end || dateShift(start,13), payday: start === payroll.start && (end || dateShift(start,13)) === payroll.end ? payroll.payday : null};
   const dayCount=Math.round((Date.parse(period.end)-Date.parse(start))/86400000)+1;
   if(dayCount<1||dayCount>366)throw new Error("Invalid date range");
-  const shiftLocations=new Map(shifts.map(shift=>[shift.id,shift.locationId]));
-  const locationNames = new Map(locations.map(location => [location.id, location.name]));
   const totals = new Map<string, number>();
   for (const adjustment of adjustments.sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
     totals.set(adjustment.timeEntryId, (totals.get(adjustment.timeEntryId) || 0) + adjustment.adjustmentMinutes);
@@ -41,7 +40,7 @@ export async function payrollSnapshot(companyId: string, start: string, employee
         if (!daily.length) rows.push({ date, day: dayName, id: null, startTime: "", endTime: "", rawMinutes: 0, payableMinutes: 0, location: "" });
         for (const entry of daily) {
           const minutes = entryMinutes(entry);
-          rows.push({ date, day: dayName, id: entry.id, clockInAt: entry.clockInAt, clockOutAt: entry.clockOutAt, endDate: dateInZone(entry.clockOutAt!,company.timezone), startTime: time(entry.clockInAt), endTime: time(entry.clockOutAt!), actualStartTime: time(entry.clockInAt), actualEndTime: time(entry.clockOutAt!), rawMinutes: minutes.raw, payableMinutes: minutes.payable, location: locationNames.get(entry.locationId || shiftLocations.get(entry.shiftId!) || "") || "Not recorded", adjustmentMinutes: minutes.adjustment });
+          rows.push({ date, day: dayName, id: entry.id, clockInAt: entry.clockInAt, clockOutAt: entry.clockOutAt, endDate: dateInZone(entry.clockOutAt!,company.timezone), startTime: time(entry.clockInAt), endTime: time(entry.clockOutAt!), actualStartTime: time(entry.clockInAt), actualEndTime: time(entry.clockOutAt!), rawMinutes: minutes.raw, payableMinutes: minutes.payable, location: timesheetLocation(entry,date,time(entry.clockInAt),time(entry.clockOutAt!),locations,shifts,schedules,clients), adjustmentMinutes: minutes.adjustment });
         }
       }
       const pendingEntries=enriched.filter(entry=>entry.employeeId===employee.id && !entry.clockOutAt && dateInZone(entry.clockInAt,company.timezone)>=period.start && dateInZone(entry.clockInAt,company.timezone)<=period.end).length;

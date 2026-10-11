@@ -190,6 +190,11 @@ export async function runStartupMigrations() {
       CREATE INDEX IF NOT EXISTS idx_incident_investigations_company ON incident_investigations(company_id);
     `);
 
+    await client.query(`CREATE TABLE IF NOT EXISTS timesheet_public_links (
+      token_hash text PRIMARY KEY, company_id text NOT NULL, employee_id text NOT NULL,
+      period_start text NOT NULL, period_end text NOT NULL, snapshot jsonb NOT NULL,
+      created_by text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), revoked_at timestamptz
+    )`);
     log("Startup migrations complete.", "migrations");
   } catch (err: any) {
     log(`Migration error (non-fatal): ${err.message}`, "migrations");
