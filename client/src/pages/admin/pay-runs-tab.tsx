@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Calendar, ChevronRight } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {dateShift,payrollPeriod} from "@shared/payroll-cycle";
+import {localToday} from "@/lib/timezone";
 import { formatLocalDate } from "@/lib/timezone";
 
 function fmtDate(s: string) {
@@ -52,11 +54,13 @@ const defaultForm: PayRunFormData = {
 };
 
 interface Props {
+  initialPeriod?:{start:string;end:string}|null;
   onSelectPayRun?: (run: any) => void;
 }
 
-export default function PayRunsTab({ onSelectPayRun }: Props) {
+export default function PayRunsTab({ onSelectPayRun,initialPeriod }: Props) {
   const { toast } = useToast();
+  const {data:company}=useQuery<any>({queryKey:["/api/company"]});
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<PayRunFormData>(defaultForm);
@@ -84,8 +88,8 @@ export default function PayRunsTab({ onSelectPayRun }: Props) {
 
   function openCreate() {
     setEditing(null);
-    const today = new Date().toISOString().split("T")[0];
-    setForm({ ...defaultForm, periodStart: today, periodEnd: today, payDate: today });
+    const current=payrollPeriod(company?.payrollCycleStartDate||"2026-09-21",localToday(company?.timezone||"America/Winnipeg"));const start=initialPeriod?.start||dateShift(current.start,-14),end=initialPeriod?.end||dateShift(current.start,-1);
+    setForm({ ...defaultForm,name:`Payroll ${start} – ${end}`,periodStart:start,periodEnd:end,payDate:dateShift(end,5) });
     setShowForm(true);
   }
 
@@ -163,7 +167,7 @@ export default function PayRunsTab({ onSelectPayRun }: Props) {
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 {onSelectPayRun && (
-                  <Button variant="ghost" size="sm" className="text-xs gap-1 hidden sm:flex" onClick={() => onSelectPayRun(run)} data-testid={`button-view-stubs-${run.id}`}>
+                  <Button variant="ghost" size="sm" className="text-xs gap-1 flex" onClick={() => onSelectPayRun(run)} data-testid={`button-view-stubs-${run.id}`}>
                     Pay Stubs<ChevronRight className="w-3 h-3" />
                   </Button>
                 )}
@@ -208,7 +212,7 @@ export default function PayRunsTab({ onSelectPayRun }: Props) {
             </div>
             <div className="space-y-1">
               <Label htmlFor="pr-status">Status</Label>
-              <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
+              <Select disabled={!editing} value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
                 <SelectTrigger id="pr-status" data-testid="select-run-status"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="draft">Draft</SelectItem>

@@ -206,6 +206,14 @@ export async function runStartupMigrations() {
       );
       CREATE TABLE IF NOT EXISTS attendance_alert_activation(company_id text PRIMARY KEY, enabled_at timestamptz NOT NULL DEFAULT now());
       INSERT INTO attendance_alert_activation(company_id) SELECT id FROM companies ON CONFLICT DO NOTHING;`);
+    await client.query(`ALTER TABLE timesheets ADD COLUMN IF NOT EXISTS admin_generated boolean NOT NULL DEFAULT false;
+      ALTER TABLE timesheets ADD COLUMN IF NOT EXISTS generated_by varchar;
+      ALTER TABLE timesheets ADD COLUMN IF NOT EXISTS worksheet_snapshot json;
+      UPDATE timesheets SET admin_generated=true WHERE approved_by_user_id IS NOT NULL AND admin_generated=false;`);
+    await client.query(`ALTER TABLE pay_stubs ADD COLUMN IF NOT EXISTS company_address_snapshot json;
+      ALTER TABLE pay_stubs ADD COLUMN IF NOT EXISTS regular_minutes_snapshot integer;
+      ALTER TABLE pay_stubs ADD COLUMN IF NOT EXISTS overtime_minutes_snapshot integer;
+      ALTER TABLE pay_stubs ADD COLUMN IF NOT EXISTS total_minutes_snapshot integer;`);
     log("Startup migrations complete.", "migrations");
   } catch (err: any) {
     log(`Migration error (non-fatal): ${err.message}`, "migrations");

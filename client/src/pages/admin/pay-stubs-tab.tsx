@@ -1,4 +1,6 @@
-import { useState, useMemo } from "react";
+import {htmlEscape} from "@shared/html-escape";
+import {payStubHoursLabel} from "@shared/payroll-math";
+import { useState, useMemo,useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -56,6 +58,7 @@ function buildCompanyAddressLines(stub: any): string {
 }
 
 function printPayStub(stub: any, payRun: any) {
+  stub={...stub,companyNameSnapshot:htmlEscape(stub.companyNameSnapshot),employeeNameSnapshot:htmlEscape(stub.employeeNameSnapshot),employeeIdSnapshot:htmlEscape(stub.employeeIdSnapshot),employeePositionSnapshot:htmlEscape(stub.employeePositionSnapshot),displayPaystubId:htmlEscape(stub.displayPaystubId),earnings:(stub.earnings||[]).map((line:any)=>({...line,description:htmlEscape(line.description)})),deductions:(stub.deductions||[]).map((line:any)=>({...line,description:htmlEscape(line.description)})),companyAddress:Object.fromEntries(Object.entries(stub.companyAddress||{}).map(([key,value])=>[key,htmlEscape(value)]))};
   const ytdLabel = `YTD ${stub.ytdYear || new Date().getFullYear()}`;
   const ytdE = stub.ytdEarningsByType || {};
   const ytdD = stub.ytdDeductionsByType || {};
@@ -206,6 +209,8 @@ function PayStubEditor({ stub: initialStub, payRun, onClose }: { stub: any; payR
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const [showPublish,setShowPublish]=useState(false);
+  const publishMutation=useMutation({mutationFn:()=>apiRequest("POST",`/api/payroll/pay-stubs/${stub.id}/publish`),onSuccess:()=>{queryClient.invalidateQueries({queryKey:["/api/payroll/pay-stubs"]});queryClient.invalidateQueries({queryKey:["/api/payroll/pay-stubs",stub.id]});setShowPublish(false);toast({title:"Pay stub published to cleaner"});},onError:(error:any)=>toast({title:"Could not publish",description:error.message,variant:"destructive"})});
   const confirmPaidMutation = useMutation({
     mutationFn: () => apiRequest("POST", `/api/payroll/pay-stubs/${stub.id}/confirm-paid`),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/payroll/pay-stubs", stub.id] }); queryClient.invalidateQueries({ queryKey: ["/api/payroll/pay-stubs"] }); setShowConfirmPaidDialog(false); toast({ title: "Marked as paid — now visible to employee" }); },
@@ -272,7 +277,8 @@ function PayStubEditor({ stub: initialStub, payRun, onClose }: { stub: any; payR
               </Button>
             </>
           )}
-          {stub.status !== "voided" && stub.status !== "confirmed_paid" && stub.status !== "published" && (
+          {stub.status==="finalized"&&!stub.employeeVisibleAt&&<Button size="sm" variant="outline" onClick={()=>setShowPublish(true)}>Publish to Cleaner</Button>}
+          {(["finalized","published"].includes(stub.status))&&!stub.confirmedPaidAt && (
             <Button size="sm" onClick={() => setShowConfirmPaidDialog(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white" data-testid="button-confirm-paid">
               <CheckCircle2 className="w-3.5 h-3.5 mr-1" />Confirm Paid
             </Button>
@@ -280,7 +286,7 @@ function PayStubEditor({ stub: initialStub, payRun, onClose }: { stub: any; payR
           <Button size="sm" variant="outline" onClick={() => printPayStub(stub, payRun)} data-testid="button-print-stub">
             <Printer className="w-3.5 h-3.5 mr-1" />Print / PDF
           </Button>
-          {stub.status !== "voided" && (
+          {stub.status !== "voided"&&!stub.confirmedPaidAt && (
             <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setShowVoidDialog(true)} data-testid="button-void-stub">
               <XCircle className="w-3.5 h-3.5 mr-1" />Void
             </Button>
@@ -320,7 +326,7 @@ function PayStubEditor({ stub: initialStub, payRun, onClose }: { stub: any; payR
               <p className="font-semibold">{fmtDate(stub.periodStart)} – {fmtDate(stub.periodEnd)}</p>
               <p className="text-muted-foreground text-xs">Pay Date: {fmtDate(stub.payDate || payRun?.payDate || "")}</p>
               {stub.timesheetId && <p className="text-muted-foreground text-xs">Source: Approved Timesheet</p>}
-              <p className="text-muted-foreground text-xs">{parseFloat(stub.totalHours || "0").toFixed(2)} total hours</p>
+              <p className="text-muted-foreground text-xs">{payStubHoursLabel(stub)} total hours</p>
             </CardContent>
           </Card>
         </div>
@@ -552,6 +558,7 @@ function PayStubEditor({ stub: initialStub, payRun, onClose }: { stub: any; payR
       </div>
 
       {/* Void dialog */}
+      <Dialog open={showPublish} onOpenChange={setShowPublish}><DialogContent><DialogHeader><DialogTitle>Publish to cleaner</DialogTitle></DialogHeader><p>Make this reviewed pay stub available to {stub.employeeNameSnapshot}. Its payment status stays unchanged.</p><Button disabled={publishMutation.isPending} onClick={()=>publishMutation.mutate()}>Publish pay stub</Button></DialogContent></Dialog>
       <AlertDialog open={showVoidDialog} onOpenChange={setShowVoidDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -577,7 +584,7 @@ function PayStubEditor({ stub: initialStub, payRun, onClose }: { stub: any; payR
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-emerald-600" />Confirm Employee Paid?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will finalize the pay stub (if not already finalized) and make it visible to <strong>{stub.employeeNameSnapshot}</strong> in their portal. They will be able to view and download it.
+              This records payment for the reviewed pay stub and makes it available to <strong>{stub.employeeNameSnapshot}</strong> in their portal. They will be able to view and download it.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -635,7 +642,7 @@ function GenerateStubDialog({ open, onClose, payRuns, employees }: { open: boole
             <Select value={payRunId} onValueChange={v => { setPayRunId(v); clearDuplicate(); }}>
               <SelectTrigger data-testid="select-generate-pay-run"><SelectValue placeholder="Select pay run…" /></SelectTrigger>
               <SelectContent>
-                {payRuns.filter(r => r.status !== "closed").map(r => (
+                {payRuns.filter(r => ["draft","under_review"].includes(r.status)).map(r => (
                   <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                 ))}
               </SelectContent>
@@ -684,12 +691,13 @@ function GenerateStubDialog({ open, onClose, payRuns, employees }: { open: boole
 }
 
 // ─── Main Pay Stubs Tab ───────────────────────────────────────────────────────
-export default function PayStubsTab() {
+export default function PayStubsTab({initialPayRunId=""}:{initialPayRunId?:string}) {
   const [showGenerate, setShowGenerate] = useState(false);
   const [selectedStub, setSelectedStub] = useState<any>(null);
   const [filterEmployee, setFilterEmployee] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [filterPayRun, setFilterPayRun] = useState("all");
+  const [filterPayRun, setFilterPayRun] = useState(initialPayRunId||"all");
+  useEffect(()=>setFilterPayRun(initialPayRunId||"all"),[initialPayRunId]);
 
   const { data: stubs = [], isLoading: stubsLoading } = useQuery<any[]>({ queryKey: ["/api/payroll/pay-stubs"] });
   const { data: payRuns = [] } = useQuery<any[]>({ queryKey: ["/api/payroll/pay-runs"] });

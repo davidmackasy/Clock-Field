@@ -1,3 +1,5 @@
+import {htmlEscape} from "@shared/html-escape";
+import {payStubHoursLabel} from "@shared/payroll-math";
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -30,6 +32,7 @@ function buildCompanyAddressLines(stub: any): string {
 }
 
 function printPayStub(stub: any) {
+  stub={...stub,companyNameSnapshot:htmlEscape(stub.companyNameSnapshot),employeeNameSnapshot:htmlEscape(stub.employeeNameSnapshot),employeeIdSnapshot:htmlEscape(stub.employeeIdSnapshot),employeePositionSnapshot:htmlEscape(stub.employeePositionSnapshot),displayPaystubId:htmlEscape(stub.displayPaystubId),earnings:(stub.earnings||[]).map((line:any)=>({...line,description:htmlEscape(line.description)})),deductions:(stub.deductions||[]).map((line:any)=>({...line,description:htmlEscape(line.description)})),companyAddress:Object.fromEntries(Object.entries(stub.companyAddress||{}).map(([key,value])=>[key,htmlEscape(value)]))};
   const ytdLabel = `YTD ${stub.ytdYear || new Date().getFullYear()}`;
   const ytdE = stub.ytdEarningsByType || {};
   const ytdD = stub.ytdDeductionsByType || {};
@@ -105,20 +108,20 @@ function printPayStub(stub: any) {
     <div class="meta-item"><div class="meta-label">Pay Period</div><div class="meta-val">${fmtDate(stub.periodStart)} – ${fmtDate(stub.periodEnd)}</div></div>
     <div class="meta-item"><div class="meta-label">Pay Date</div><div class="meta-val">${fmtDate(stub.payDate || "")}</div></div>
     <div class="meta-item"><div class="meta-label">Pay Rate</div><div class="meta-val">$${parseFloat(stub.employeeRateSnapshot||"0").toFixed(2)}/hr</div></div>
-    <div class="meta-item"><div class="meta-label">Total Hours</div><div class="meta-val">${parseFloat(stub.totalHours||"0").toFixed(2)}</div></div>
+    <div class="meta-item"><div class="meta-label">Total Hours</div><div class="meta-val">${payStubHoursLabel(stub)}</div></div>
   </div>
   <div class="section-title">Earnings</div>
   <table>
     <thead><tr><th>Description</th><th>Hours</th><th>Rate</th><th>Amount</th><th>${ytdLabel}</th></tr></thead>
     <tbody>${earningsRows || '<tr><td colspan="5" style="text-align:center;color:#999">No earnings</td></tr>'}</tbody>
-    <tfoot><tr class="totals-row"><td colspan="3">Gross Pay</td><td>$${fmt(stub.grossPay)}</td><td>$${(Object.values(ytdE as Record<string,number>).reduce((a:number,b:number)=>a+b,0)||parseFloat(stub.grossPay||"0")).toFixed(2)}</td></tr></tfoot>
+    <tfoot><tr class="totals-row"><td colspan="3">Gross Pay</td><td>$${fmt(stub.grossPay)}</td><td>$${(Object.values(ytdE as Record<string,number>).reduce((a:number,b:number)=>a+b,0)).toFixed(2)}</td></tr></tfoot>
   </table>
   <div class="section-gap"></div>
   <div class="section-title">Deductions</div>
   <table>
     <thead><tr><th>Description</th><th></th><th></th><th>Amount</th><th>${ytdLabel}</th></tr></thead>
     <tbody>${deductionRows || '<tr><td colspan="5" style="text-align:center;color:#999">No deductions</td></tr>'}</tbody>
-    <tfoot><tr class="totals-row"><td colspan="3">Total Deductions</td><td>$${fmt(stub.totalDeductions)}</td><td>$${(Object.values(ytdD as Record<string,number>).reduce((a:number,b:number)=>a+b,0)||parseFloat(stub.totalDeductions||"0")).toFixed(2)}</td></tr></tfoot>
+    <tfoot><tr class="totals-row"><td colspan="3">Total Deductions</td><td>$${fmt(stub.totalDeductions)}</td><td>$${(Object.values(ytdD as Record<string,number>).reduce((a:number,b:number)=>a+b,0)).toFixed(2)}</td></tr></tfoot>
   </table>
   <div class="takehome-row">
     <div class="takehome-label">Take-Home Pay</div>
@@ -180,7 +183,7 @@ function PayStubDetail({ stub: initialStub, onClose }: { stub: any; onClose: () 
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Total Hours</p>
-            <p className="font-medium">{parseFloat(stub.totalHours || "0").toFixed(2)}h</p>
+            <p className="font-medium">{payStubHoursLabel(stub)}</p>
           </div>
         </div>
 
@@ -281,7 +284,7 @@ export default function EmployeePayStubs() {
   const [yearFilter, setYearFilter] = useState("all");
   const [selectedStub, setSelectedStub] = useState<any>(null);
 
-  const { data: stubs = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/employee/pay-stubs"] });
+  const { data: stubs = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/employee/pay-stubs"],refetchInterval:30000 });
 
   const years = useMemo(() => {
     const ys = new Set(stubs.map(s => getYear(s.periodStart)).filter(Boolean));
@@ -366,7 +369,7 @@ export default function EmployeePayStubs() {
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">Pay date: {fmtDate(stub.payDate || "")}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{parseFloat(stub.totalHours || "0").toFixed(1)} hours</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{payStubHoursLabel(stub)}</p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400" data-testid={`text-emp-net-${stub.id}`}>${fmt(stub.netPay)}</p>

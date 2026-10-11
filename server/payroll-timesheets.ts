@@ -1,3 +1,4 @@
+import {weeklyPayrollMinutes,earningAmounts} from "../shared/payroll-math";
 import {processAttendanceAlerts} from "./attendance-alerts";
 import { timesheetLocation } from "./timesheet-location";
 import type { Express } from "express";
@@ -32,6 +33,7 @@ export async function payrollSnapshot(companyId: string, start: string, employee
     company: { id: company.id, name: company.name, timezone: company.timezone, companyLogoUrl: company.companyLogoUrl, payrollCycleStartDate: company.payrollCycleStartDate, payrollPaydayDelayDays: company.payrollPaydayDelayDays, payrollSummaryDays: company.payrollSummaryDays, payrollSummaryHour: company.payrollSummaryHour, payrollSummaryEnabled: company.payrollSummaryEnabled },
     period,
     employees: selected.map(employee => {
+      const breakdown=weeklyPayrollMinutes(enriched,employee.id,period.start,period.end,company.timezone,company.overtimeEnabled,company.overtimeThresholdWeekly??40);
       const entries = timesheetRows(enriched, employee.id, period.start, period.end, company.timezone);
       const rows = [];
       for (let day = 0; day < dayCount; day++) {
@@ -45,7 +47,7 @@ export async function payrollSnapshot(companyId: string, start: string, employee
         }
       }
       const pendingEntries=enriched.filter(entry=>entry.employeeId===employee.id && !entry.clockOutAt && dateInZone(entry.clockInAt,company.timezone)>=period.start && dateInZone(entry.clockInAt,company.timezone)<=period.end).length;
-      return { id: employee.id, name: `${employee.firstName} ${employee.lastName}`, employeeNumber: employee.employeeId || "", hourlyRate: employee.hourlyRate, estimatedGross: employee.hourlyRate == null ? null : Math.round(entries.reduce((sum,entry)=>sum+entryMinutes(entry).payable,0)/60*Number(employee.hourlyRate)*100)/100, rows, pendingEntries, rawMinutes: entries.reduce((sum, entry) => sum + entryMinutes(entry).raw, 0), payableMinutes: entries.reduce((sum, entry) => sum + entryMinutes(entry).payable, 0) };
+      return { id: employee.id, name: `${employee.firstName} ${employee.lastName}`, employeeNumber: employee.employeeId || "", hourlyRate: employee.hourlyRate, estimatedGross: employee.hourlyRate == null ? null : earningAmounts(breakdown.regularMinutes,breakdown.overtimeMinutes,Number(employee.hourlyRate),Number(employee.overtimeRate||0)||Number(employee.hourlyRate)*1.5).grossPay, rows, pendingEntries, rawMinutes: entries.reduce((sum, entry) => sum + entryMinutes(entry).raw, 0), payableMinutes: entries.reduce((sum, entry) => sum + entryMinutes(entry).payable, 0) };
     }),
   };
 }

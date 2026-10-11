@@ -18,6 +18,12 @@ import { getPlan } from "./plans";
 import { generateReviewOgImage } from "./og-image";
 import { dataDirectory, uploadsDirectory, fitForDutyPhotosDirectory, incidentEvidenceDirectory } from "./file-storage";
 import { readPersistentFile, writePersistentFile, removePersistentFile } from "./persistent-files";
+import {registerPayrollStubActions} from "./payroll-stub-actions";
+import {payRunInput,financialLine,refreshPayStubTotals,insertPayrollRow} from "./payroll-documents";
+import {registerGeneratedTimesheets} from "./generated-timesheets";
+import {weeklyPayrollMinutes,earningAmounts,money,lineTotals,configuredDeductionItems} from "../shared/payroll-math";
+import {dateShift as payrollDateShift} from "../shared/payroll-cycle";
+import {validDate as payrollDateValid} from "../shared/payroll-cycle";
 import { queueAttendanceEvent } from "./attendance-alerts";
 import { dateInZone, timesheetCsv } from "../shared/time-report";
 import { registerCompanyGeographyRoutes, normalizeCompanyGeography } from "./company-geography";
@@ -1191,6 +1197,8 @@ Welcome again, and thank you for choosing ClockField.
     try {
       const user = req.user as any;
       if(req.body.country){try{Object.assign(req.body,normalizeCompanyGeography(req.body));}catch(error:any){return res.status(400).json({message:error.message});}}
+      for(const field of ["federalTaxPercent","provincialTaxPercent","cppPercent","eiPercent"]){if(req.body[field]!=null&&(!Number.isFinite(Number(req.body[field]))||Number(req.body[field])<0||Number(req.body[field])>100))return res.status(400).json({message:"Deduction percentages must be between 0 and 100"});}
+      if(req.body.overtimeThresholdWeekly!=null&&(!Number.isFinite(Number(req.body.overtimeThresholdWeekly))||Number(req.body.overtimeThresholdWeekly)<0))return res.status(400).json({message:"Enter a valid non-negative overtime threshold"});
       // Normalize empty companyLogoUrl to null so we don't store blank strings
       if ("companyLogoUrl" in req.body && !req.body.companyLogoUrl) {
         req.body.companyLogoUrl = null;
@@ -2696,90 +2704,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
   });
 
   // ── Payroll History ──────────────────────────────────────────────────────
-  app.get("/api/payroll/employees/:employeeId/history", requireRole("admin"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      const employee = await storage.getUser(req.params.employeeId);
-      if (!employee || employee.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-
-      const company = await storage.getCompany(user.companyId);
-      const allEntries = await storage.getTimeEntriesByEmployee(req.params.employeeId);
-      const completed = allEntries.filter(e => e.status === "completed" && e.clockInTime);
-
-      const rate = parseFloat(employee.hourlyRate as string || "0");
-      const overtimeRate = parseFloat(employee.overtimeRate as string || "0") || rate * 1.5;
-      const overtimeEnabled = company?.overtimeEnabled ?? false;
-
-      const anchorDateStr = company?.payrollCycleStartDate || "2025-01-01";
-      const anchor = new Date(anchorDateStr + "T00:00:00");
-
-      function getPeriodIndex(dateStr: string): number {
-        const d = new Date(dateStr + "T00:00:00");
-        const diffDays = Math.floor((d.getTime() - anchor.getTime()) / (1000 * 60 * 60 * 24));
-        return Math.floor(diffDays / 14);
-      }
-
-      function getPeriodDates(index: number): { start: string; end: string } {
-        const startMs = anchor.getTime() + index * 14 * 24 * 60 * 60 * 1000;
-        const endMs = startMs + 13 * 24 * 60 * 60 * 1000;
-        const fmt = (ms: number) => new Date(ms).toISOString().split("T")[0];
-        return { start: fmt(startMs), end: fmt(endMs) };
-      }
-
-      const periodMap = new Map<number, any[]>();
-      for (const entry of completed) {
-        const dateStr = entry.clockInTime!.toString().substring(0, 10);
-        const idx = getPeriodIndex(dateStr);
-        if (!periodMap.has(idx)) periodMap.set(idx, []);
-        periodMap.get(idx)!.push(entry);
-      }
-
-      const todayIdx = getPeriodIndex(new Date().toISOString().split("T")[0]);
-      const allIdxs = [...new Set([...periodMap.keys(), todayIdx])].sort((a, b) => b - a);
-
-      const periods = allIdxs.map(idx => {
-        const { start, end } = getPeriodDates(idx);
-        const entries = periodMap.get(idx) || [];
-        const totalMinutes = entries.reduce((s: number, e: any) => s + (e.workedMinutes || 0), 0);
-        const hours = totalMinutes / 60;
-        const regularHours = Math.min(hours, overtimeEnabled ? (company?.overtimeThresholdWeekly || 40) * 2 : hours);
-        const overtimeHours = overtimeEnabled ? Math.max(0, hours - regularHours) : 0;
-        const regularPay = regularHours * rate;
-        const otPay = overtimeHours * overtimeRate;
-        const grossPay = regularPay + otPay;
-        const tax = grossPay * 0.05;
-        const netPay = grossPay - tax;
-        return {
-          index: idx,
-          periodStart: start,
-          periodEnd: end,
-          isCurrent: idx === todayIdx,
-          hours: +hours.toFixed(2),
-          regularHours: +regularHours.toFixed(2),
-          overtimeHours: +overtimeHours.toFixed(2),
-          regularPay: +regularPay.toFixed(2),
-          overtimePay: +otPay.toFixed(2),
-          grossPay: +grossPay.toFixed(2),
-          taxAmount: +tax.toFixed(2),
-          netPay: +netPay.toFixed(2),
-          entriesCount: entries.length,
-        };
-      });
-
-      const currentPeriod = periods.find(p => p.isCurrent) || periods[0];
-      res.json({
-        employee: {
-          id: employee.id,
-          firstName: employee.firstName,
-          lastName: employee.lastName,
-          hourlyRate: rate,
-          overtimeRate,
-        },
-        currentPeriod,
-        periods,
-      });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
+  app.get("/api/payroll/employees/:employeeId/history",requireRole("admin"),async(req,res)=>{try{const user=req.user as any,employee=await storage.getUser(String(req.params.employeeId)),company=await storage.getCompany(user.companyId);if(!employee||employee.companyId!==user.companyId||!company)return res.status(404).json({message:"Cleaner not found"});const [entries,adjustments,deductions]=await Promise.all([storage.getTimeEntriesByCompany(user.companyId),storage.getAttendanceAdjustmentsByCompany(user.companyId),storage.getPayrollDeductionsByCompany(user.companyId)]);const deltas=new Map<string,number>();for(const adjustment of adjustments)deltas.set(adjustment.timeEntryId,(deltas.get(adjustment.timeEntryId)||0)+adjustment.adjustmentMinutes);const enriched=entries.map(entry=>({...entry,totalAdjustmentMinutes:deltas.get(entry.id)||0}));const anchor=company.payrollCycleStartDate||"2026-09-21",days=company.defaultPayPeriodType==="weekly"?7:14;const periodIndex=(date:string)=>Math.floor((Date.parse(date)-Date.parse(anchor))/86400000/days);const current=periodIndex(dateInZone(new Date(),company.timezone)),indices=[...new Set([current,...entries.filter(entry=>entry.employeeId===employee.id&&entry.status==="completed").map(entry=>periodIndex(dateInZone(entry.clockInAt,company.timezone)))])].sort((a,b)=>b-a);const rate=Number(employee.hourlyRate||0),overtimeRate=Number(employee.overtimeRate||0)||rate*1.5;const periods=indices.map(index=>{const start=payrollDateShift(anchor,index*days),end=payrollDateShift(start,days-1);const minutes=weeklyPayrollMinutes(enriched,employee.id,start,end,company.timezone,company.overtimeEnabled,company.overtimeThresholdWeekly??40);const amounts=earningAmounts(minutes.regularMinutes,minutes.overtimeMinutes,rate,overtimeRate),items=configuredDeductionItems(amounts.grossPay,company,deductions),totalDeductions=money(items.reduce((sum,item)=>sum+item.amount,0));return {index,periodStart:start,periodEnd:end,isCurrent:index===current,hours:minutes.totalMinutes/60,regularHours:minutes.regularMinutes/60,overtimeHours:minutes.overtimeMinutes/60,regularPay:amounts.regularPay,overtimePay:amounts.otPay,grossPay:amounts.grossPay,totalDeductions,taxAmount:money(items.filter(item=>["tax","provincial_tax"].includes(item.type)).reduce((sum,item)=>sum+item.amount,0)),netPay:money(amounts.grossPay-totalDeductions),entriesCount:minutes.entriesCount};});res.json({employee:{id:employee.id,firstName:employee.firstName,lastName:employee.lastName,hourlyRate:rate,overtimeRate},currentPeriod:periods.find(period=>period.isCurrent),periods});}catch{res.status(500).json({message:"Could not load payroll history"});}});
 
   // ── Payroll Deductions ────────────────────────────────────────────────────
   app.get("/api/payroll-deductions", requireRole("admin"), async (req, res) => {
@@ -2793,6 +2718,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     try {
       const user = req.user as any;
       const { label, type, value } = req.body;
+      if(!["fixed","percent"].includes(type||"percent")||!Number.isFinite(Number(value))||Number(value)<0||((type||"percent")==="percent"&&Number(value)>100))return res.status(400).json({message:"Enter a valid non-negative deduction value"});
       if (!label?.trim()) return res.status(400).json({ message: "Label is required" });
       const deduction = await storage.createPayrollDeduction({
         companyId: user.companyId,
@@ -2807,7 +2733,9 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
 
   app.patch("/api/payroll-deductions/:id", requireRole("admin"), async (req, res) => {
     try {
-      const updated = await storage.updatePayrollDeduction(req.params.id, req.body);
+      const existing=(await storage.getPayrollDeductionsByCompany((req.user as any).companyId)).find(deduction=>deduction.id===req.params.id);if(!existing)return res.status(404).json({message:"Deduction not found"});
+      const value=Number(req.body.value??existing.value),type=req.body.type??existing.type;if(!["fixed","percent"].includes(type)||!Number.isFinite(value)||value<0||(type==="percent"&&value>100))return res.status(400).json({message:"Enter a valid non-negative deduction value"});
+      const updated = await storage.updatePayrollDeduction(req.params.id,{label:req.body.label??existing.label,type,value:value.toFixed(2),isActive:req.body.isActive??existing.isActive});
       if (!updated) return res.status(404).json({ message: "Deduction not found" });
       res.json(updated);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
@@ -2815,6 +2743,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
 
   app.delete("/api/payroll-deductions/:id", requireRole("admin"), async (req, res) => {
     try {
+      if(!(await storage.getPayrollDeductionsByCompany((req.user as any).companyId)).some(deduction=>deduction.id===req.params.id))return res.status(404).json({message:"Deduction not found"});
       await storage.deletePayrollDeduction(req.params.id);
       res.status(204).end();
     } catch (err: any) { res.status(500).json({ message: err.message }); }
@@ -2845,221 +2774,8 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
-  // ── Timesheets ────────────────────────────────────────────────────────────
-  function getPayPeriodBounds(cycleStartDate: string | null, periodType: string, referenceDate: string) {
-    const periodDays = periodType === "weekly" ? 7 : 14;
-    const anchor = cycleStartDate || referenceDate;
-    const startDate = new Date(anchor + "T12:00:00Z");
-    const ref = new Date(referenceDate + "T12:00:00Z");
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const diffDays = Math.round((ref.getTime() - startDate.getTime()) / msPerDay);
-    const periodIndex = Math.floor(diffDays / periodDays);
-    const periodStartMs = startDate.getTime() + periodIndex * periodDays * msPerDay;
-    const ps = new Date(periodStartMs);
-    const pe = new Date(periodStartMs + (periodDays - 1) * msPerDay);
-    return { start: ps.toISOString().split("T")[0], end: pe.toISOString().split("T")[0] };
-  }
-
-  async function buildTimesheetForEmployee(
-    companyId: string, employeeId: string, periodStart: string, periodEnd: string,
-    periodType: string, company: any
-  ) {
-    const now = new Date().toISOString();
-    const allEntries = await storage.getTimeEntriesByEmployee(employeeId);
-    const periodEntries = allEntries.filter(e => {
-      const d = dateInZone(e.clockInAt, company.timezone || "UTC");
-      return e.companyId === companyId && d >= periodStart && d <= periodEnd && e.status !== "active";
-    });
-    const completedPeriodEntries = periodEntries.filter(e => e.clockInAt && e.clockOutAt);
-    const totalWorkedMinutes = completedPeriodEntries.reduce((sum, e) => {
-      if (e.workedMinutes != null) return sum + e.workedMinutes;
-      const diff = (new Date(e.clockOutAt!).getTime() - new Date(e.clockInAt).getTime()) / 60000;
-      return sum + Math.max(0, diff);
-    }, 0);
-    const totalShifts = completedPeriodEntries.length;
-    const lateCount = completedPeriodEntries.filter(e => Array.isArray(e.flags) && e.flags.includes("late_clock_in")).length;
-    const leftEarlyCount = completedPeriodEntries.filter(e => Array.isArray(e.flags) && (e.flags.includes("left_early") || e.flags.includes("early_clock_out"))).length;
-    const allShifts = await storage.getShiftsByEmployee(employeeId);
-    const periodShifts = allShifts.filter(s => s.shiftDate >= periodStart && s.shiftDate <= periodEnd);
-    const missedShiftCount = periodShifts.filter(s => s.status === "missed" || s.status === "no_show").length;
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const periodDays = Math.round((new Date(periodEnd + "T12:00:00Z").getTime() - new Date(periodStart + "T12:00:00Z").getTime()) / msPerDay) + 1;
-    const periodWeeks = periodDays / 7;
-    const otEnabled = company.overtimeEnabled;
-    const otThresholdMins = (company.overtimeThresholdWeekly || 40) * 60 * periodWeeks;
-    const overtimeMinutes = otEnabled ? Math.max(0, totalWorkedMinutes - otThresholdMins) : 0;
-    const regularMinutes = totalWorkedMinutes - overtimeMinutes;
-    const existing = await storage.getTimesheetByEmployeeAndPeriod(employeeId, periodStart);
-    if (existing) {
-      const keepStatus = ["submitted", "approved"].includes(existing.status) ? existing.status : "draft";
-      return await storage.updateTimesheet(existing.id, {
-        totalWorkedMinutes, regularMinutes: Math.round(regularMinutes), overtimeMinutes: Math.round(overtimeMinutes),
-        totalShifts, lateCount, leftEarlyCount, missedShiftCount,
-        payPeriodEnd: periodEnd, payPeriodType: periodType,
-        status: keepStatus, generatedAt: now, updatedAt: now,
-      });
-    }
-    return await storage.createTimesheet({
-      companyId, employeeId, payPeriodStart: periodStart, payPeriodEnd: periodEnd, payPeriodType: periodType,
-      status: "draft", totalWorkedMinutes, regularMinutes: Math.round(regularMinutes),
-      overtimeMinutes: Math.round(overtimeMinutes), totalShifts, lateCount, leftEarlyCount, missedShiftCount,
-      generatedAt: now, createdAt: now, updatedAt: now,
-    });
-  }
-
-  app.get("/api/timesheets/current", requireRole("employee"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      const company = await storage.getCompany(user.companyId);
-      if (!company) return res.status(404).json({ message: "Company not found" });
-      const todayLocal = new Date().toLocaleDateString("en-CA", { timeZone: company.timezone || "UTC" });
-      const { start: periodStart, end: periodEnd } = getPayPeriodBounds(
-        company.payrollCycleStartDate, company.defaultPayPeriodType, todayLocal
-      );
-      const existing = await storage.getTimesheetByEmployeeAndPeriod(user.id, periodStart);
-      if (existing && ["submitted", "approved"].includes(existing.status)) {
-        const allEntries = await storage.getTimeEntriesByEmployee(user.id);
-        const entries = allEntries
-          .filter(e => { const d = dateInZone(e.clockInAt, company.timezone || "UTC"); return e.companyId === user.companyId && d >= periodStart && d <= periodEnd; })
-          .sort((a, b) => a.clockInAt.localeCompare(b.clockInAt));
-        return res.json({ ...existing, entries });
-      }
-      const allEntries = await storage.getTimeEntriesByEmployee(user.id);
-      const periodEntries = allEntries
-        .filter(e => { const d = dateInZone(e.clockInAt, company.timezone || "UTC"); return e.companyId === user.companyId && d >= periodStart && d <= periodEnd; })
-        .sort((a, b) => a.clockInAt.localeCompare(b.clockInAt));
-      const completedEntries = periodEntries.filter(e => e.clockInAt && e.clockOutAt);
-      const totalWorkedMinutes = completedEntries.reduce((sum, e) => {
-        if (e.workedMinutes != null) return sum + e.workedMinutes;
-        const diff = (new Date(e.clockOutAt!).getTime() - new Date(e.clockInAt).getTime()) / 60000;
-        return sum + Math.max(0, diff);
-      }, 0);
-      const totalShifts = completedEntries.length;
-      const lateCount = completedEntries.filter(e => Array.isArray(e.flags) && e.flags.includes("late_clock_in")).length;
-      const leftEarlyCount = completedEntries.filter(e => Array.isArray(e.flags) && (
-        e.flags.includes("early_clock_out") || e.flags.includes("left_early")
-      )).length;
-      const allShifts = await storage.getShiftsByEmployee(user.id);
-      const periodShifts = allShifts.filter(s => s.shiftDate >= periodStart && s.shiftDate <= periodEnd);
-      const missedShiftCount = periodShifts.filter(s => s.status === "missed" || s.status === "no_show").length;
-      const msPerDay = 24 * 60 * 60 * 1000;
-      const periodDays = Math.round(
-        (new Date(periodEnd + "T12:00:00Z").getTime() - new Date(periodStart + "T12:00:00Z").getTime()) / msPerDay
-      ) + 1;
-      const periodWeeks = periodDays / 7;
-      const otThresholdMins = (company.overtimeThresholdWeekly || 40) * 60 * periodWeeks;
-      const overtimeMinutes = company.overtimeEnabled ? Math.max(0, totalWorkedMinutes - otThresholdMins) : 0;
-      const regularMinutes = totalWorkedMinutes - overtimeMinutes;
-      const isPeriodClosed = todayLocal > periodEnd;
-      res.json({
-        id: existing?.id || null,
-        companyId: user.companyId,
-        employeeId: user.id,
-        payPeriodStart: periodStart,
-        payPeriodEnd: periodEnd,
-        payPeriodType: company.defaultPayPeriodType,
-        status: isPeriodClosed ? "draft" : "in_progress",
-        totalWorkedMinutes,
-        regularMinutes: Math.round(regularMinutes),
-        overtimeMinutes: Math.round(overtimeMinutes),
-        totalShifts,
-        lateCount,
-        leftEarlyCount,
-        missedShiftCount,
-        generatedAt: existing?.generatedAt || null,
-        submittedAt: existing?.submittedAt || null,
-        approvedAt: existing?.approvedAt || null,
-        approvedByUserId: existing?.approvedByUserId || null,
-        entries: periodEntries,
-      });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
-
-  app.get("/api/timesheets", requireRole("admin", "employee"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      let list = user.role === "admin"
-        ? await storage.getTimesheetsByCompany(user.companyId)
-        : await storage.getTimesheetsByEmployee(user.id);
-      if (req.query.periodStart) list = list.filter(t => t.payPeriodStart === req.query.periodStart);
-      res.json(list);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
-
-  app.post("/api/timesheets/generate", requireRole("admin", "employee"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      const company = await storage.getCompany(user.companyId);
-      if (!company) return res.status(404).json({ message: "Company not found" });
-      const today = todayInTz(company.timezone || "UTC");
-      let { employeeId, periodStart, periodEnd } = req.body;
-      if (!periodStart || !periodEnd) {
-        const p = getPayPeriodBounds(company.payrollCycleStartDate, company.defaultPayPeriodType, today);
-        periodStart = p.start; periodEnd = p.end;
-      }
-      const validDate = (value: unknown) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-        !Number.isNaN(Date.parse(value + "T12:00:00Z")) && new Date(value + "T12:00:00Z").toISOString().slice(0, 10) === value;
-      if (!validDate(periodStart) || !validDate(periodEnd) || periodStart > periodEnd) return res.status(400).json({ message: "Choose a valid start and end date" });
-      if (user.role === "employee") {
-        const ts = await buildTimesheetForEmployee(user.companyId, user.id, periodStart, periodEnd, company.defaultPayPeriodType, company);
-        return res.json([ts]);
-      }
-      if (user.role !== "admin") return res.status(403).json({ message: "Forbidden" });
-      if (employeeId) {
-        const employee = await storage.getUser(employeeId);
-        if (!employee || employee.companyId !== user.companyId || employee.role !== "employee") return res.status(404).json({ message: "Cleaner not found" });
-        const ts = await buildTimesheetForEmployee(user.companyId, employeeId, periodStart, periodEnd, company.defaultPayPeriodType, company);
-        return res.json([ts]);
-      }
-      const employees = await storage.getEmployeesByCompany(user.companyId);
-      const active = employees.filter(e => e.isActive && e.accountStatus !== "profile_only" && e.loginEnabled);
-      const results = await Promise.all(active.map(emp =>
-        buildTimesheetForEmployee(user.companyId, emp.id, periodStart, periodEnd, company.defaultPayPeriodType, company)
-      ));
-      res.json(results.filter(Boolean));
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
-
-  app.get("/api/timesheets/:id", requireRole("admin", "employee"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      const ts = await storage.getTimesheet(req.params.id);
-      if (!ts) return res.status(404).json({ message: "Not found" });
-      if (ts.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
-      if (user.role === "employee" && ts.employeeId !== user.id) return res.status(403).json({ message: "Forbidden" });
-      const company = await storage.getCompany(user.companyId);
-      const allEntries = await storage.getTimeEntriesByEmployee(ts.employeeId);
-      const entries = allEntries
-        .filter(e => { const d = dateInZone(e.clockInAt, company?.timezone || "UTC"); return e.companyId === user.companyId && d >= ts.payPeriodStart && d <= ts.payPeriodEnd; })
-        .sort((a, b) => a.clockInAt.localeCompare(b.clockInAt));
-      res.json({ ...ts, entries });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
-
-  app.post("/api/timesheets/:id/submit", requireRole("employee"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      const ts = await storage.getTimesheet(req.params.id);
-      if (!ts) return res.status(404).json({ message: "Not found" });
-      if (ts.employeeId !== user.id) return res.status(403).json({ message: "Forbidden" });
-      if (ts.status !== "draft") return res.status(400).json({ message: "Only draft timesheets can be submitted" });
-      const now = new Date().toISOString();
-      const updated = await storage.updateTimesheet(ts.id, { status: "submitted", submittedAt: now, updatedAt: now });
-      res.json(updated);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
-
-  app.post("/api/timesheets/:id/approve", requireRole("admin"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      const ts = await storage.getTimesheet(req.params.id);
-      if (!ts) return res.status(404).json({ message: "Not found" });
-      if (ts.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
-      const now = new Date().toISOString();
-      const updated = await storage.updateTimesheet(ts.id, { status: "approved", approvedAt: now, approvedByUserId: user.id, updatedAt: now });
-      res.json(updated);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
+  registerGeneratedTimesheets(app);
+  registerPayrollStubActions(app);
 
   // ── Work Submissions ──────────────────────────────────────────────────────
   app.get("/api/work-submissions", requireAuth, async (req, res) => {
@@ -4705,8 +4421,9 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     try {
       const user = req.user as any;
       const now = new Date().toISOString();
+      let input;try{input=payRunInput(req.body);}catch(error:any){return res.status(400).json({message:error.message});}
       const run = await storage.createPayRun({
-        ...req.body,
+        ...input,
         companyId: user.companyId,
         createdBy: user.id,
         createdAt: now,
@@ -4730,7 +4447,12 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       const user = req.user as any;
       const run = await storage.getPayRun(req.params.id);
       if (!run || run.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      const updated = await storage.updatePayRun(req.params.id, { ...req.body, updatedAt: new Date().toISOString() });
+      let input;try{input=payRunInput(req.body,run);}catch(error:any){return res.status(400).json({message:error.message});}
+      const stubs=(await storage.getPayStubsByPayRun(run.id)).filter(stub=>stub.status!=="voided");
+      if(stubs.length&&(input.periodStart!==run.periodStart||input.periodEnd!==run.periodEnd||input.payDate!==run.payDate))return res.status(409).json({message:"Dates are locked once pay stubs have been generated"});
+      if(["paid","closed"].includes(input.status)&&(!stubs.length||stubs.some(stub=>!stub.confirmedPaidAt)))return res.status(409).json({message:"Confirm each pay stub as paid before marking the run paid or closed"});
+      if(run.status==="closed"&&input.status!=="closed")return res.status(409).json({message:"A closed pay run is locked"});
+      const updated = await storage.updatePayRun(req.params.id, { ...input, updatedAt: new Date().toISOString() });
       res.json(updated);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -4741,6 +4463,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       const run = await storage.getPayRun(req.params.id);
       if (!run || run.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       if (run.status !== "draft") return res.status(400).json({ message: "Only draft pay runs can be deleted" });
+      if((await storage.getPayStubsByPayRun(run.id)).length)return res.status(409).json({message:"A pay run with generated pay stubs cannot be deleted"});
       await storage.deletePayRun(req.params.id);
       res.json({ ok: true });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
@@ -4759,20 +4482,24 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
 
   // Generate a draft pay stub for a specific employee in a pay run
   app.post("/api/payroll/pay-stubs/generate", requireAuth, requireRole("admin"), async (req, res) => {
+    let transaction:any,committed=false;
     try {
       const user = req.user as any;
       const { payRunId, employeeId } = req.body;
       if (!payRunId || !employeeId) return res.status(400).json({ message: "payRunId and employeeId required" });
 
-      const payRun = await storage.getPayRun(payRunId);
+      let payRun = await storage.getPayRun(payRunId);
       if (!payRun || payRun.companyId !== user.companyId) return res.status(404).json({ message: "Pay run not found" });
 
       const employee = await storage.getUser(employeeId);
-      if (!employee || employee.companyId !== user.companyId) return res.status(404).json({ message: "Employee not found" });
+      if (!employee || employee.companyId !== user.companyId || employee.role!=="employee") return res.status(404).json({ message: "Employee not found" });
 
       const company = await storage.getCompany(user.companyId);
       if (!company) return res.status(404).json({ message: "Company not found" });
 
+      transaction=await pool.connect();await transaction.query("BEGIN");
+      const locked=await transaction.query("SELECT id FROM pay_runs WHERE id=$1 AND company_id=$2 FOR UPDATE",[payRunId,user.companyId]);if(!locked.rows.length)return res.status(404).json({message:"Pay run not found"});
+      payRun=await storage.getPayRun(payRunId);if(!payRun||!["draft","under_review"].includes(payRun.status))return res.status(409).json({message:"Generate pay stubs only in a draft or under-review pay run"});
       // Check for existing stub in this pay run for this employee
       const existingStubs = await storage.getPayStubsByPayRun(payRunId);
       const duplicate = existingStubs.find(s => s.employeeId === employeeId && s.status !== "voided");
@@ -4781,71 +4508,29 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       // Find approved timesheet for this period
       const timesheets = await storage.getTimesheetsByEmployee(employeeId);
       const matchingTimesheet = timesheets.find(t =>
-        t.status === "approved" &&
+        t.companyId===user.companyId && t.adminGenerated && t.status === "approved" &&
         t.payPeriodStart === payRun.periodStart &&
         t.payPeriodEnd === payRun.periodEnd
       );
 
       const rate = parseFloat(employee.hourlyRate || "0");
       const overtimeRate = parseFloat(employee.overtimeRate || "0") || rate * 1.5;
-      const overtimeThresholdHours = (company.overtimeThresholdWeekly || 40);
-
-      let regularMinutes = 0;
-      let overtimeMinutes = 0;
-
-      if (matchingTimesheet) {
-        regularMinutes = matchingTimesheet.regularMinutes;
-        overtimeMinutes = matchingTimesheet.overtimeMinutes;
-      } else {
-        // Fall back to raw time entries in range
-        const allEntries = await storage.getTimeEntriesByCompany(user.companyId);
-        const periodEntries = allEntries.filter(e =>
-          e.employeeId === employeeId &&
-          e.status === "completed" &&
-          e.clockInAt.substring(0, 10) >= payRun.periodStart &&
-          e.clockInAt.substring(0, 10) <= payRun.periodEnd
-        );
-        const totalMins = periodEntries.reduce((s, e) => s + (e.workedMinutes || 0), 0);
-        const totalHours = totalMins / 60;
-        const regHours = Math.min(totalHours, overtimeThresholdHours);
-        const otHours = Math.max(0, totalHours - overtimeThresholdHours);
-        regularMinutes = Math.round(regHours * 60);
-        overtimeMinutes = Math.round(otHours * 60);
-      }
-
-      const regularHours = regularMinutes / 60;
-      const overtimeHours = overtimeMinutes / 60;
-      const totalHours = regularHours + overtimeHours;
-      const regularPay = regularHours * rate;
-      const overtimePay = overtimeHours * overtimeRate;
-      const grossPay = regularPay + overtimePay;
+      if(employee.hourlyRate==null||!Number.isFinite(rate)||rate<0||!Number.isFinite(overtimeRate)||overtimeRate<0)return res.status(400).json({message:"Set valid hourly and overtime rates before generating a pay stub"});
+      let regularMinutes=0,overtimeMinutes=0;
+      if(matchingTimesheet){regularMinutes=matchingTimesheet.regularMinutes;overtimeMinutes=matchingTimesheet.overtimeMinutes;}
+      else{const [allEntries,adjustments]=await Promise.all([storage.getTimeEntriesByCompany(user.companyId),storage.getAttendanceAdjustmentsByCompany(user.companyId)]);const adjustmentMap=new Map<string,number>();for(const adjustment of adjustments)adjustmentMap.set(adjustment.timeEntryId,(adjustmentMap.get(adjustment.timeEntryId)||0)+adjustment.adjustmentMinutes);const minutes=weeklyPayrollMinutes(allEntries.map(entry=>({...entry,totalAdjustmentMinutes:adjustmentMap.get(entry.id)||0})),employeeId,payRun.periodStart,payRun.periodEnd,company.timezone,company.overtimeEnabled,company.overtimeThresholdWeekly??40);regularMinutes=minutes.regularMinutes;overtimeMinutes=minutes.overtimeMinutes;}
+      const regularHours=regularMinutes/60,overtimeHours=overtimeMinutes/60,totalHours=regularHours+overtimeHours;
+      const {regularPay,otPay:overtimePay,grossPay}=earningAmounts(regularMinutes,overtimeMinutes,rate,overtimeRate);
 
       // Calculate deductions from company settings
       const customDeductions = await storage.getPayrollDeductionsByCompany(user.companyId);
 
-      const deductionItems: Array<{ type: string; description: string; amount: number }> = [];
+      let deductionItems;try{deductionItems=configuredDeductionItems(grossPay,company,customDeductions);}catch(error:any){return res.status(400).json({message:error.message});}
 
-      if (company.deductionsEnabled) {
-        if (company.federalTaxMode === "percent" && parseFloat(company.federalTaxPercent || "0") > 0) {
-          deductionItems.push({ type: "tax", description: "Federal Tax", amount: grossPay * parseFloat(company.federalTaxPercent || "0") / 100 });
-        }
-        if (company.provincialTaxMode === "percent" && parseFloat(company.provincialTaxPercent || "0") > 0) {
-          deductionItems.push({ type: "provincial_tax", description: "Provincial Tax", amount: grossPay * parseFloat(company.provincialTaxPercent || "0") / 100 });
-        }
-        if (company.cppMode === "percent" && parseFloat(company.cppPercent || "0") > 0) {
-          deductionItems.push({ type: "cpp", description: "CPP", amount: grossPay * parseFloat(company.cppPercent || "0") / 100 });
-        }
-        if (company.eiMode === "percent" && parseFloat(company.eiPercent || "0") > 0) {
-          deductionItems.push({ type: "ei", description: "EI", amount: grossPay * parseFloat(company.eiPercent || "0") / 100 });
-        }
-        for (const d of customDeductions.filter(d => d.isActive)) {
-          const amt = d.type === "percent" ? grossPay * parseFloat(d.value || "0") / 100 : parseFloat(d.value || "0");
-          deductionItems.push({ type: "other", description: d.label, amount: amt });
-        }
-      }
-
-      const totalDeductions = deductionItems.reduce((s, d) => s + d.amount, 0);
-      const netPay = grossPay - totalDeductions;
+      for(const item of deductionItems)item.amount=money(item.amount);
+      const totalDeductions = money(deductionItems.reduce((s, d) => s + d.amount, 0));
+      const netPay = money(grossPay - totalDeductions);
+      if(!Number.isFinite(netPay)||netPay<0)return res.status(400).json({message:"Deductions exceed gross pay. Review the configured deductions."});
       const now = new Date().toISOString();
 
       // Generate a human-readable display ID: PS-[EMP_CODE_OR_NAME]-[4-digit]
@@ -4854,7 +4539,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       const suffix = String(Math.floor(1000 + Math.random() * 9000));
       const displayPaystubId = `PS-${empSlug}-${suffix}`;
 
-      const stub = await storage.createPayStub({
+      const stub = await insertPayrollRow(transaction,"pay_stubs",{
         companyId: user.companyId,
         payRunId,
         employeeId,
@@ -4867,6 +4552,8 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
         employeePayTypeSnapshot: "hourly",
         employeeRateSnapshot: employee.hourlyRate || null,
         companyNameSnapshot: company.name,
+        companyAddressSnapshot:{address:company.address,city:company.city,province:company.province,postalCode:company.postalCode,country:company.country,companyPhone:company.companyPhone,companyEmail:company.companyEmail},
+        regularMinutesSnapshot:regularMinutes,overtimeMinutesSnapshot:overtimeMinutes,totalMinutesSnapshot:regularMinutes+overtimeMinutes,
         regularHours: regularHours.toFixed(2),
         overtimeHours: overtimeHours.toFixed(2),
         totalHours: totalHours.toFixed(2),
@@ -4884,7 +4571,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
 
       // Create earning lines
       if (regularPay > 0) {
-        await storage.createPayStubEarning({
+        await insertPayrollRow(transaction,"pay_stub_earnings",{
           payStubId: stub.id,
           type: "regular",
           description: "Regular Pay",
@@ -4895,7 +4582,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
         });
       }
       if (overtimePay > 0) {
-        await storage.createPayStubEarning({
+        await insertPayrollRow(transaction,"pay_stub_earnings",{
           payStubId: stub.id,
           type: "overtime",
           description: "Overtime Pay",
@@ -4908,7 +4595,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
 
       // Create deduction lines
       for (let i = 0; i < deductionItems.length; i++) {
-        await storage.createPayStubDeduction({
+        await insertPayrollRow(transaction,"pay_stub_deductions",{
           payStubId: stub.id,
           type: deductionItems[i].type,
           description: deductionItems[i].description,
@@ -4919,7 +4606,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       }
 
       // Audit log
-      await storage.createPayStubAuditLog({
+      await insertPayrollRow(transaction,"pay_stub_audit_log",{
         payStubId: stub.id,
         action: "generated",
         actorId: user.id,
@@ -4928,8 +4615,9 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
         createdAt: now,
       });
 
+      await transaction.query("COMMIT");committed=true;
       res.json(stub);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { if(transaction){try{await transaction.query("ROLLBACK");}catch{}}res.status(500).json({ message: err.message }); } finally {if(transaction){try{if(!committed)await transaction.query("ROLLBACK");}catch{}finally{transaction.release();}}}
   });
 
   app.get("/api/payroll/pay-stubs/:id", requireAuth, requireRole("admin"), async (req, res) => {
@@ -4966,170 +4654,37 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
           ytdDeductionsByType[d.description] = (ytdDeductionsByType[d.description] || 0) + parseFloat(d.amount || "0");
         }
       }
-      const companyAddress = { address: (company as any)?.address, city: (company as any)?.city, province: (company as any)?.province, postalCode: (company as any)?.postalCode, companyPhone: (company as any)?.companyPhone, companyEmail: (company as any)?.companyEmail };
+      const companyAddress = stub.companyAddressSnapshot || { address: (company as any)?.address, city: (company as any)?.city, province: (company as any)?.province, postalCode: (company as any)?.postalCode, companyPhone: (company as any)?.companyPhone, companyEmail: (company as any)?.companyEmail };
       res.json({ ...stub, earnings, deductions, auditLog, ytdYear, ytdEarningsByType, ytdDeductionsByType, companyAddress });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
-  app.patch("/api/payroll/pay-stubs/:id", requireAuth, requireRole("admin"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      const stub = await storage.getPayStub(req.params.id);
-      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      if (!["draft", "reviewed"].includes(stub.status)) return res.status(400).json({ message: "Cannot edit a finalized pay stub" });
-      const { earnings: _e, deductions: _d, ...rest } = req.body;
-      const updated = await storage.updatePayStub(req.params.id, { ...rest, updatedBy: user.id, updatedAt: new Date().toISOString() });
-      await storage.createPayStubAuditLog({
-        payStubId: stub.id,
-        action: "updated",
-        actorId: user.id,
-        actorRole: user.role,
-        metadataJson: JSON.stringify(rest),
-        createdAt: new Date().toISOString(),
-      });
-      res.json(updated);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
+
 
   // Recalculate totals from current earnings/deductions lines
-  app.post("/api/payroll/pay-stubs/:id/recalculate", requireAuth, requireRole("admin"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      const stub = await storage.getPayStub(req.params.id);
-      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      if (!["draft", "reviewed"].includes(stub.status)) return res.status(400).json({ message: "Cannot recalculate a finalized pay stub" });
 
-      const earnings = await storage.getPayStubEarnings(stub.id);
-      const deductions = await storage.getPayStubDeductions(stub.id);
 
-      const grossPay = earnings.reduce((s, e) => s + parseFloat(e.amount || "0"), 0);
-      const totalDeductions = deductions.reduce((s, d) => s + parseFloat(d.amount || "0"), 0);
-      const netPay = grossPay - totalDeductions;
 
-      const updated = await storage.updatePayStub(stub.id, {
-        grossPay: grossPay.toFixed(2),
-        totalDeductions: totalDeductions.toFixed(2),
-        netPay: netPay.toFixed(2),
-        updatedBy: user.id,
-        updatedAt: new Date().toISOString(),
-      });
-      res.json(updated);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
 
-  app.post("/api/payroll/pay-stubs/:id/finalize", requireAuth, requireRole("admin"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      const stub = await storage.getPayStub(req.params.id);
-      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      if (!["draft", "reviewed"].includes(stub.status)) return res.status(400).json({ message: "Pay stub is already finalized" });
-      const now = new Date().toISOString();
-      const updated = await storage.updatePayStub(stub.id, { status: "finalized", finalizedAt: now, updatedBy: user.id, updatedAt: now });
-      await storage.createPayStubAuditLog({ payStubId: stub.id, action: "finalized", actorId: user.id, actorRole: user.role, metadataJson: null, createdAt: now });
-      res.json(updated);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
 
-  app.post("/api/payroll/pay-stubs/:id/confirm-paid", requireAuth, requireRole("admin"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      const stub = await storage.getPayStub(req.params.id);
-      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      if (stub.status === "voided") return res.status(400).json({ message: "Cannot confirm a voided pay stub" });
-      const now = new Date().toISOString();
-      // Auto-finalize if not yet finalized, then confirm paid + publish
-      const updated = await storage.updatePayStub(stub.id, {
-        status: "confirmed_paid",
-        finalizedAt: stub.finalizedAt || now,
-        confirmedPaidAt: now,
-        employeeVisibleAt: now,
-        updatedBy: user.id,
-        updatedAt: now,
-      });
-      await storage.createPayStubAuditLog({ payStubId: stub.id, action: "confirmed_paid", actorId: user.id, actorRole: user.role, metadataJson: null, createdAt: now });
-      res.json(updated);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
 
-  app.post("/api/payroll/pay-stubs/:id/void", requireAuth, requireRole("admin"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      const stub = await storage.getPayStub(req.params.id);
-      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      const now = new Date().toISOString();
-      const updated = await storage.updatePayStub(stub.id, { status: "voided", voidedAt: now, updatedBy: user.id, updatedAt: now });
-      await storage.createPayStubAuditLog({ payStubId: stub.id, action: "voided", actorId: user.id, actorRole: user.role, metadataJson: JSON.stringify({ reason: req.body.reason || "" }), createdAt: now });
-      res.json(updated);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
+
+
+
 
   // Earning line CRUD
-  app.post("/api/payroll/pay-stubs/:id/earnings", requireAuth, requireRole("admin"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      const stub = await storage.getPayStub(req.params.id);
-      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      if (!["draft", "reviewed"].includes(stub.status)) return res.status(400).json({ message: "Cannot edit finalized pay stub" });
-      const earning = await storage.createPayStubEarning({ ...req.body, payStubId: stub.id });
-      res.json(earning);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
 
-  app.patch("/api/payroll/pay-stubs/:id/earnings/:earningId", requireAuth, requireRole("admin"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      const stub = await storage.getPayStub(req.params.id);
-      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      if (!["draft", "reviewed"].includes(stub.status)) return res.status(400).json({ message: "Cannot edit finalized pay stub" });
-      const updated = await storage.updatePayStubEarning(req.params.earningId, req.body);
-      res.json(updated);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
 
-  app.delete("/api/payroll/pay-stubs/:id/earnings/:earningId", requireAuth, requireRole("admin"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      const stub = await storage.getPayStub(req.params.id);
-      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      if (!["draft", "reviewed"].includes(stub.status)) return res.status(400).json({ message: "Cannot edit finalized pay stub" });
-      await storage.deletePayStubEarning(req.params.earningId);
-      res.json({ ok: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
+
+
+
 
   // Deduction line CRUD
-  app.post("/api/payroll/pay-stubs/:id/deductions", requireAuth, requireRole("admin"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      const stub = await storage.getPayStub(req.params.id);
-      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      if (!["draft", "reviewed"].includes(stub.status)) return res.status(400).json({ message: "Cannot edit finalized pay stub" });
-      const deduction = await storage.createPayStubDeduction({ ...req.body, payStubId: stub.id });
-      res.json(deduction);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
 
-  app.patch("/api/payroll/pay-stubs/:id/deductions/:deductionId", requireAuth, requireRole("admin"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      const stub = await storage.getPayStub(req.params.id);
-      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      if (!["draft", "reviewed"].includes(stub.status)) return res.status(400).json({ message: "Cannot edit finalized pay stub" });
-      const updated = await storage.updatePayStubDeduction(req.params.deductionId, req.body);
-      res.json(updated);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
 
-  app.delete("/api/payroll/pay-stubs/:id/deductions/:deductionId", requireAuth, requireRole("admin"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      const stub = await storage.getPayStub(req.params.id);
-      if (!stub || stub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      if (!["draft", "reviewed"].includes(stub.status)) return res.status(400).json({ message: "Cannot edit finalized pay stub" });
-      await storage.deletePayStubDeduction(req.params.deductionId);
-      res.json({ ok: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
+
+
+
 
   app.get("/api/payroll/pay-stubs/:id/audit", requireAuth, requireRole("admin"), async (req, res) => {
     try {
@@ -5149,7 +4704,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       const user = req.user as any;
       if (user.role !== "employee") return res.status(403).json({ message: "Employees only" });
       const stubs = await storage.getPublishedPayStubsByEmployee(user.id, user.companyId);
-      res.json(stubs);
+      res.json(stubs.map(({adminNotes,createdBy,updatedBy,...visible})=>visible));
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
@@ -5169,7 +4724,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       const ytdYear = stub.payDate ? stub.payDate.substring(0, 4) : stub.periodEnd.substring(0, 4);
       const allStubs = await storage.getPayStubsByEmployee(stub.employeeId, user.companyId);
       const ytdStubIds = allStubs
-        .filter(s => ["finalized", "confirmed_paid", "published"].includes(s.status) && (s.payDate || s.periodEnd).substring(0, 4) === ytdYear)
+        .filter(s => s.status === "confirmed_paid" && s.confirmedPaidAt && (s.payDate || s.periodEnd).substring(0,4)===ytdYear && (s.payDate||s.periodEnd)<=(stub.payDate||stub.periodEnd))
         .map(s => s.id);
       const ytdEarningsByType: Record<string, number> = {};
       const ytdDeductionsByType: Record<string, number> = {};
@@ -5177,10 +4732,11 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
         const se = await storage.getPayStubEarnings(sid);
         const sd = await storage.getPayStubDeductions(sid);
         for (const e of se) ytdEarningsByType[e.description] = (ytdEarningsByType[e.description] || 0) + parseFloat(e.amount || "0");
-        for (const d of sd) ytdDeductionsByType[d.description] = (ytdDeductionsByType[d.description] || 0) + parseFloat(d.amount || "0");
+        for (const d of sd.filter(item=>!item.employerPaid)) ytdDeductionsByType[d.description] = (ytdDeductionsByType[d.description] || 0) + parseFloat(d.amount || "0");
       }
-      const companyAddress = { address: (company as any)?.address, city: (company as any)?.city, province: (company as any)?.province, postalCode: (company as any)?.postalCode, companyPhone: (company as any)?.companyPhone, companyEmail: (company as any)?.companyEmail };
-      res.json({ ...stub, earnings, deductions, ytdYear, ytdEarningsByType, ytdDeductionsByType, companyAddress });
+      const companyAddress = stub.companyAddressSnapshot || { address: (company as any)?.address, city: (company as any)?.city, province: (company as any)?.province, postalCode: (company as any)?.postalCode, companyPhone: (company as any)?.companyPhone, companyEmail: (company as any)?.companyEmail };
+      const {adminNotes,createdBy,updatedBy,...visible}=stub;
+      res.json({ ...visible, earnings, deductions, ytdYear, ytdEarningsByType, ytdDeductionsByType, companyAddress });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

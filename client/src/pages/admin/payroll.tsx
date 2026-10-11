@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo,useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,6 +13,9 @@ import { DollarSign, Clock, Users, TrendingDown, ChevronRight, Calendar } from "
 import PayRunsTab from "./pay-runs-tab";
 import PayStubsTab from "./pay-stubs-tab";
 import AdminTimesheets from "./timesheets";
+import {weeklyPayrollMinutes,earningAmounts,money,configuredDeductionItems} from "@shared/payroll-math";
+import {dateInZone} from "@shared/time-report";
+import {dateShift,payrollPeriod} from "@shared/payroll-cycle";
 import { formatLocalDate } from "@/lib/timezone";
 
 // ── Period helpers ────────────────────────────────────────────────────────────
@@ -24,62 +27,9 @@ function toDateStr(d: Date): string {
   return d.toISOString().split("T")[0];
 }
 
-function getMondayOf(d: Date): Date {
-  const day = d.getDay();
-  const diff = (day === 0 ? -6 : 1 - day);
-  const mon = new Date(d);
-  mon.setDate(d.getDate() + diff);
-  mon.setHours(0, 0, 0, 0);
-  return mon;
-}
-
-function getBiweeklyPeriod(offset: number, anchor: string): { start: string; end: string } {
-  const anchorMs = new Date(anchor + "T00:00:00").getTime();
-  const todayMs = new Date(toDateStr(new Date()) + "T00:00:00").getTime();
-  const diffDays = Math.floor((todayMs - anchorMs) / 86400000);
-  const currentIdx = Math.floor(diffDays / 14);
-  const idx = currentIdx + offset;
-  const startMs = anchorMs + idx * 14 * 86400000;
-  const endMs = startMs + 13 * 86400000;
-  return { start: toDateStr(new Date(startMs)), end: toDateStr(new Date(endMs)) };
-}
-
-function getDateRange(filter: PeriodFilter, cycleAnchor: string): { start: string; end: string; label: string } {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  if (filter === "this_week") {
-    const mon = getMondayOf(today);
-    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-    return { start: toDateStr(mon), end: toDateStr(sun), label: "This Week" };
-  }
-  if (filter === "last_week") {
-    const mon = getMondayOf(today); mon.setDate(mon.getDate() - 7);
-    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-    return { start: toDateStr(mon), end: toDateStr(sun), label: "Last Week" };
-  }
-  if (filter === "this_2_weeks") {
-    const { start, end } = getBiweeklyPeriod(0, cycleAnchor);
-    return { start, end, label: "This 2 Weeks" };
-  }
-  if (filter === "last_2_weeks") {
-    const { start, end } = getBiweeklyPeriod(-1, cycleAnchor);
-    return { start, end, label: "Last 2 Weeks" };
-  }
-  if (filter === "this_month") {
-    const start = new Date(today.getFullYear(), today.getMonth(), 1);
-    const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    return { start: toDateStr(start), end: toDateStr(end), label: "This Month" };
-  }
-  const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-  const end = new Date(today.getFullYear(), today.getMonth(), 0);
-  return { start: toDateStr(start), end: toDateStr(end), label: "Last Month" };
-}
-
-function isInRange(clockInAt: string, start: string, end: string): boolean {
-  const date = clockInAt.substring(0, 10);
-  return date >= start && date <= end;
-}
+function getMondayOf(d:Date){const result=new Date(d);result.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7));return result;}
+function getBiweeklyPeriod(offset:number,anchor:string,timezone="America/Winnipeg"){const current=payrollPeriod(anchor,dateInZone(new Date(),timezone));return {start:dateShift(current.start,offset*14),end:dateShift(current.end,offset*14)};}
+function getDateRange(filter:PeriodFilter,anchor:string,timezone="America/Winnipeg"){const today=new Date(dateInZone(new Date(),timezone)+"T12:00:00Z");if(filter==="this_week"||filter==="last_week"){const start=dateShift(toDateStr(getMondayOf(today)),filter==="last_week"?-7:0);return {start,end:dateShift(start,6),label:filter==="this_week"?"This Week":"Last Week"};}if(filter==="this_2_weeks"||filter==="last_2_weeks")return {...getBiweeklyPeriod(filter==="last_2_weeks"?-1:0,anchor,timezone),label:filter==="this_2_weeks"?"Current Pay Period":"Previous Pay Period"};const month=today.getUTCMonth()+(filter==="last_month"?-1:0);return {start:toDateStr(new Date(Date.UTC(today.getUTCFullYear(),month,1,12))),end:toDateStr(new Date(Date.UTC(today.getUTCFullYear(),month+1,0,12))),label:filter==="last_month"?"Last Month":"This Month"};}
 
 type DeductionConfig = {
   enabled: boolean;
@@ -114,23 +64,9 @@ type PayrollStats = {
 function computeDeductions(grossPay: number, config: DeductionConfig): {
   federalTax: number; provincialTax: number; cpp: number; ei: number; otherDeductions: number; totalDeductions: number;
 } {
-  if (!config.enabled) {
-    return { federalTax: 0, provincialTax: 0, cpp: 0, ei: 0, otherDeductions: 0, totalDeductions: 0 };
-  }
-  const federalTax = config.federalTaxMode === "percent" ? grossPay * config.federalTaxPercent / 100 : 0;
-  const provincialTax = config.provincialTaxMode === "percent" ? grossPay * config.provincialTaxPercent / 100 : 0;
-  const cpp = config.cppMode === "percent" ? grossPay * config.cppPercent / 100 : 0;
-  const ei = config.eiMode === "percent" ? grossPay * config.eiPercent / 100 : 0;
-
-  const otherDeductions = config.customDeductions
-    .filter(d => d.isActive)
-    .reduce((sum, d) => {
-      if (d.type === "percent") return sum + grossPay * d.value / 100;
-      return sum + d.value;
-    }, 0);
-
-  const totalDeductions = federalTax + provincialTax + cpp + ei + otherDeductions;
-  return { federalTax, provincialTax, cpp, ei, otherDeductions, totalDeductions };
+  const items=configuredDeductionItems(grossPay,{...config,deductionsEnabled:config.enabled},config.customDeductions);
+  const sum=(type:string)=>money(items.filter(item=>item.type===type).reduce((total,item)=>total+item.amount,0));
+  return {federalTax:sum("tax"),provincialTax:sum("provincial_tax"),cpp:sum("cpp"),ei:sum("ei"),otherDeductions:sum("other"),totalDeductions:money(items.reduce((total,item)=>total+item.amount,0))};
 }
 
 function computePayroll(
@@ -142,20 +78,14 @@ function computePayroll(
   overtimeRate: number,
   overtimeThreshold: number,
   config: DeductionConfig,
+  timezone="America/Winnipeg",
 ): PayrollStats {
-  const empEntries = allEntries.filter(
-    e => e.employeeId === employeeId && e.status === "completed" && isInRange(e.clockInAt, start, end)
-  );
-  const totalMinutes = empEntries.reduce((s: number, e: any) => s + (e.workedMinutes || 0) + (e.totalAdjustmentMinutes || 0), 0);
-  const hours = totalMinutes / 60;
-  const regularHours = Math.min(hours, overtimeThreshold);
-  const overtimeHours = Math.max(0, hours - overtimeThreshold);
-  const regularPay = regularHours * rate;
-  const otPay = overtimeHours * overtimeRate;
-  const grossPay = regularPay + otPay;
+  const minutes=weeklyPayrollMinutes(allEntries,employeeId,start,end,timezone,Number.isFinite(overtimeThreshold),Number.isFinite(overtimeThreshold)?overtimeThreshold:40);
+  const hours=minutes.totalMinutes/60,regularHours=minutes.regularMinutes/60,overtimeHours=minutes.overtimeMinutes/60;
+  const {regularPay,otPay,grossPay}=earningAmounts(minutes.regularMinutes,minutes.overtimeMinutes,rate,overtimeRate);
   const { federalTax, provincialTax, cpp, ei, otherDeductions, totalDeductions } = computeDeductions(grossPay, config);
-  const netPay = grossPay - totalDeductions;
-  return { hours, regularHours, overtimeHours, regularPay, otPay, grossPay, federalTax, provincialTax, cpp, ei, otherDeductions, totalDeductions, netPay, entriesCount: empEntries.length };
+  const netPay = money(grossPay - totalDeductions);
+  return { hours, regularHours, overtimeHours, regularPay, otPay, grossPay, federalTax, provincialTax, cpp, ei, otherDeductions, totalDeductions, netPay, entriesCount: minutes.entriesCount };
 }
 
 function formatD(dateStr: string) {
@@ -174,54 +104,59 @@ function PayrollHistoryModal({
   overtimeThreshold,
   deductionConfig,
   onClose,
+  timezone,
+  customRange,
 }: {
   employee: any;
   allEntries: any[];
-  filter: PeriodFilter;
+  filter: AllPeriodFilter;
+  customRange:{start:string;end:string};
   cycleAnchor: string;
   overtimeThreshold: number;
   deductionConfig: DeductionConfig;
   onClose: () => void;
+  timezone: string;
 }) {
-  const [localFilter, setLocalFilter] = useState<PeriodFilter>(filter);
+  const [localFilter, setLocalFilter] = useState<AllPeriodFilter>(filter);
 
   const rate = parseFloat(employee.hourlyRate || "0");
   const overtimeRate = parseFloat(employee.overtimeRate || "0") || rate * 1.5;
 
-  const currentRange = useMemo(() => getDateRange(localFilter, cycleAnchor), [localFilter, cycleAnchor]);
+  const currentRange = useMemo(() => localFilter==="custom"?{...customRange,label:"Selected dates"}:getDateRange(localFilter, cycleAnchor,timezone), [localFilter, cycleAnchor,timezone,customRange.start,customRange.end]);
 
   const currentSummary = useMemo(
-    () => computePayroll(allEntries, employee.id, currentRange.start, currentRange.end, rate, overtimeRate, overtimeThreshold, deductionConfig),
-    [allEntries, employee.id, currentRange, rate, overtimeRate, overtimeThreshold, deductionConfig]
+    () => computePayroll(allEntries, employee.id, currentRange.start, currentRange.end, rate, overtimeRate, overtimeThreshold, deductionConfig,timezone),
+    [allEntries, employee.id, currentRange, rate, overtimeRate, overtimeThreshold, deductionConfig,timezone]
   );
 
   const historyPeriods = useMemo(() => {
+    if(localFilter==="custom")return [{...computePayroll(allEntries,employee.id,customRange.start,customRange.end,rate,overtimeRate,overtimeThreshold,deductionConfig,timezone),...customRange,isCurrent:true}];
     const periods: Array<ReturnType<typeof computePayroll> & { start: string; end: string; isCurrent: boolean }> = [];
     if (localFilter === "this_2_weeks" || localFilter === "last_2_weeks") {
       for (let i = 0; i >= -5; i--) {
-        const { start, end } = getBiweeklyPeriod(i, cycleAnchor);
+        const { start, end } = getBiweeklyPeriod(i, cycleAnchor,timezone);
         const isCurrent = localFilter === "this_2_weeks" ? i === 0 : i === -1;
-        const stats = computePayroll(allEntries, employee.id, start, end, rate, overtimeRate, overtimeThreshold, deductionConfig);
+        const stats = computePayroll(allEntries, employee.id, start, end, rate, overtimeRate, overtimeThreshold, deductionConfig,timezone);
         periods.push({ start, end, isCurrent, ...stats });
       }
     } else if (localFilter === "this_week" || localFilter === "last_week") {
-      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const today = new Date(dateInZone(new Date(),timezone)+"T12:00:00Z");
       for (let i = 0; i >= -5; i--) {
-        const mon = getMondayOf(today); mon.setDate(mon.getDate() + i * 7);
-        const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+        const mon = getMondayOf(today); mon.setUTCDate(mon.getUTCDate() + i * 7);
+        const sun = new Date(mon); sun.setUTCDate(mon.getUTCDate() + 6);
         const start = toDateStr(mon); const end = toDateStr(sun);
         const isCurrent = localFilter === "this_week" ? i === 0 : i === -1;
-        const stats = computePayroll(allEntries, employee.id, start, end, rate, overtimeRate, overtimeThreshold, deductionConfig);
+        const stats = computePayroll(allEntries, employee.id, start, end, rate, overtimeRate, overtimeThreshold, deductionConfig,timezone);
         periods.push({ start, end, isCurrent, ...stats });
       }
     } else {
-      const today = new Date();
+      const today = new Date(dateInZone(new Date(),timezone)+"T12:00:00Z");
       for (let i = 0; i >= -5; i--) {
-        const mo = new Date(today.getFullYear(), today.getMonth() + i, 1);
-        const me = new Date(today.getFullYear(), today.getMonth() + i + 1, 0);
+        const mo = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + i, 1,12));
+        const me = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + i + 1, 0,12));
         const start = toDateStr(mo); const end = toDateStr(me);
         const isCurrent = localFilter === "this_month" ? i === 0 : i === -1;
-        const stats = computePayroll(allEntries, employee.id, start, end, rate, overtimeRate, overtimeThreshold, deductionConfig);
+        const stats = computePayroll(allEntries, employee.id, start, end, rate, overtimeRate, overtimeThreshold, deductionConfig,timezone);
         periods.push({ start, end, isCurrent, ...stats });
       }
     }
@@ -241,11 +176,12 @@ function PayrollHistoryModal({
 
         <div className="space-y-5 py-2">
           <div className="flex items-center gap-3">
-            <Select value={localFilter} onValueChange={v => setLocalFilter(v as PeriodFilter)}>
+            <Select value={localFilter} onValueChange={v => setLocalFilter(v as AllPeriodFilter)}>
               <SelectTrigger className="w-44" data-testid="select-popup-period">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="custom">Selected dates</SelectItem>
                 <SelectItem value="this_week">This Week</SelectItem>
                 <SelectItem value="last_week">Last Week</SelectItem>
                 <SelectItem value="this_2_weeks">This 2 Weeks</SelectItem>
@@ -356,7 +292,7 @@ function PayrollHistoryModal({
           </div>
 
           <p className="text-[11px] text-muted-foreground text-center">
-            Estimated payroll only. Deductions are estimates and may differ from official CRA calculations, remittances, and actual payroll.
+            Based on configured rates and deductions. Use CRA’s payroll deductions calculator to verify statutory deductions.
           </p>
         </div>
       </DialogContent>
@@ -366,22 +302,23 @@ function PayrollHistoryModal({
 
 // ── Payroll Estimator (inner component) ──────────────────────────────────────
 
-function PayrollEstimatorContent() {
-  const [filter, setFilter] = useState<AllPeriodFilter>("this_2_weeks");
+function PayrollEstimatorContent({initialPeriod,onPeriodChange}:{initialPeriod?:{start:string;end:string}|null;onPeriodChange?:(period:{start:string;end:string})=>void}) {
+  const [filter, setFilter] = useState<AllPeriodFilter>(initialPeriod?"custom":"this_2_weeks");
   const [empFilter, setEmpFilter] = useState<string>("all");
-  const [customStart, setCustomStart] = useState<string>(toDateStr(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
-  const [customEnd, setCustomEnd] = useState<string>(toDateStr(new Date()));
+  const [customStart, setCustomStart] = useState<string>(initialPeriod?.start||"");
+  const [customEnd, setCustomEnd] = useState<string>(initialPeriod?.end||"");
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
 
-  const { data: employees, isLoading: empLoading } = useQuery<any[]>({ queryKey: ["/api/employees"] });
-  const { data: entries, isLoading: entLoading } = useQuery<any[]>({ queryKey: ["/api/time-entries"] });
+  const { data: employees, isLoading: empLoading } = useQuery<any[]>({ queryKey: ["/api/employees"],refetchInterval:30000 });
+  const { data: entries, isLoading: entLoading } = useQuery<any[]>({ queryKey: ["/api/time-entries"],refetchInterval:30000 });
   const { data: company } = useQuery<any>({ queryKey: ["/api/company"] });
   const { data: customDeductions } = useQuery<any[]>({ queryKey: ["/api/payroll-deductions"] });
 
   const isLoading = empLoading || entLoading;
 
   const cycleAnchor = company?.payrollCycleStartDate || "2025-01-01";
-  const overtimeThreshold = company?.overtimeThresholdWeekly || 40;
+  const timezone=company?.timezone||"America/Winnipeg";
+  const overtimeThreshold = company?.overtimeEnabled ? (company.overtimeThresholdWeekly??40) : Infinity;
 
   const deductionConfig: DeductionConfig = useMemo(() => ({
     enabled: company?.deductionsEnabled ?? false,
@@ -404,21 +341,23 @@ function PayrollEstimatorContent() {
 
   const dateRange = useMemo(() => {
     if (filter === "custom") {
-      const start = customStart || toDateStr(new Date());
-      const end = customEnd || toDateStr(new Date());
+      const start = customStart || getDateRange("this_month",cycleAnchor,timezone).start;
+      const end = customEnd || dateInZone(new Date(),timezone);
       return { start, end, label: "Custom" };
     }
-    return getDateRange(filter as PeriodFilter, cycleAnchor);
-  }, [filter, cycleAnchor, customStart, customEnd]);
+    return getDateRange(filter as PeriodFilter, cycleAnchor,timezone);
+  }, [filter, cycleAnchor, customStart, customEnd,timezone]);
+
+  useEffect(()=>{if(company&&dateRange.start<=dateRange.end)onPeriodChange?.({start:dateRange.start,end:dateRange.end});},[dateRange.start,dateRange.end,onPeriodChange,!!company]);
 
   const allPayrollData = useMemo(() => {
     return (employees || []).map(emp => {
       const rate = parseFloat(emp.hourlyRate || "0");
       const overtimeRate = parseFloat(emp.overtimeRate || "0") || rate * 1.5;
-      const stats = computePayroll(entries || [], emp.id, dateRange.start, dateRange.end, rate, overtimeRate, overtimeThreshold, deductionConfig);
-      return { ...emp, ...stats };
+      const stats = computePayroll(entries || [], emp.id, dateRange.start, dateRange.end, rate, overtimeRate, overtimeThreshold, deductionConfig,timezone);
+      return { ...emp, ...stats,missingRate:emp.hourlyRate==null&&stats.hours>0 };
     });
-  }, [employees, entries, dateRange, deductionConfig, overtimeThreshold]);
+  }, [employees, entries, dateRange, deductionConfig, overtimeThreshold,timezone]);
 
   const payrollData = useMemo(() => {
     if (empFilter === "all") return allPayrollData;
@@ -432,18 +371,19 @@ function PayrollEstimatorContent() {
 
   const showDeductions = deductionConfig.enabled;
 
-  const safePeriodForModal: PeriodFilter = filter === "custom" ? "this_2_weeks" : (filter as PeriodFilter);
+  const safePeriodForModal: AllPeriodFilter = filter;
 
   return (
     <div className="space-y-6">
+      {allPayrollData.some(employee=>employee.missingRate)&&<p role="alert" className="border border-amber-300 bg-amber-50 text-amber-900 rounded p-3 text-sm">This estimate is incomplete: set hourly rates for cleaners with recorded hours.</p>}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-lg font-semibold">Payroll Estimator</h2>
-          <p className="text-muted-foreground text-sm mt-1">Estimated payroll based on tracked hours</p>
+          <p className="text-muted-foreground text-sm mt-1">Estimated payroll from actual attendance and configured rates. Overtime follows the configured weekly threshold.</p>
         </div>
         <div className="flex flex-col items-end gap-2">
           <div className="flex items-center gap-2 flex-wrap justify-end">
-            <Select value={filter} onValueChange={v => setFilter(v as AllPeriodFilter)}>
+            <Select value={filter} onValueChange={v => {setFilter(v as AllPeriodFilter);if(v==="custom"){if(!customStart)setCustomStart(getDateRange("this_month",cycleAnchor,timezone).start);if(!customEnd)setCustomEnd(dateInZone(new Date(),timezone));}}}>
               <SelectTrigger className="w-40" data-testid="select-payroll-period">
                 <SelectValue />
               </SelectTrigger>
@@ -639,9 +579,11 @@ function PayrollEstimatorContent() {
           employee={selectedEmployee}
           allEntries={entries}
           filter={safePeriodForModal}
+          customRange={dateRange}
           cycleAnchor={cycleAnchor}
           overtimeThreshold={overtimeThreshold}
           deductionConfig={deductionConfig}
+          timezone={timezone}
           onClose={() => setSelectedEmployee(null)}
         />
       )}
@@ -651,30 +593,31 @@ function PayrollEstimatorContent() {
 
 // ── Main Payroll Page (tabbed) ─────────────────────────────────────────────────
 export default function AdminPayroll() {
+  const [activeTab,setActiveTab]=useState("timesheets");const [selectedRun,setSelectedRun]=useState("");const [selectedPeriod,setSelectedPeriod]=useState<{start:string;end:string}|null>(null);
   return (
     <div className="p-4 md:p-6">
       <div className="mb-5">
         <h1 className="text-2xl font-bold" data-testid="text-payroll-title">Payroll</h1>
-        <p className="text-muted-foreground text-sm mt-1">Estimator, pay runs, and official pay stubs</p>
+        <p className="text-muted-foreground text-sm mt-1">Admin estimates, reviewed pay runs, pay stubs, and generated cleaner timesheets</p>
       </div>
-      <Tabs defaultValue="estimator" className="space-y-5">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
         <TabsList className="w-full sm:w-auto grid grid-cols-4 sm:inline-flex" data-testid="tabs-payroll">
-          <TabsTrigger value="estimator" data-testid="tab-estimator">Estimator</TabsTrigger>
-          <TabsTrigger value="pay-runs" data-testid="tab-pay-runs">Pay Runs</TabsTrigger>
-          <TabsTrigger value="pay-stubs" data-testid="tab-pay-stubs">Pay Stubs</TabsTrigger>
-          <TabsTrigger value="timesheets" data-testid="tab-timesheets">Timesheets</TabsTrigger>
+          <TabsTrigger className="text-xs sm:text-sm px-2" value="estimator" data-testid="tab-estimator">Estimator</TabsTrigger>
+          <TabsTrigger className="text-xs sm:text-sm px-2" value="pay-runs" data-testid="tab-pay-runs">Pay Runs</TabsTrigger>
+          <TabsTrigger className="text-xs sm:text-sm px-2" value="pay-stubs" data-testid="tab-pay-stubs">Pay Stubs</TabsTrigger>
+          <TabsTrigger className="text-xs sm:text-sm px-2" value="timesheets" data-testid="tab-timesheets">Timesheets</TabsTrigger>
         </TabsList>
         <TabsContent value="estimator" className="mt-0">
-          <PayrollEstimatorContent />
+          <PayrollEstimatorContent initialPeriod={selectedPeriod} onPeriodChange={setSelectedPeriod} />
         </TabsContent>
         <TabsContent value="pay-runs" className="mt-0">
-          <PayRunsTab />
+          <PayRunsTab initialPeriod={selectedPeriod} onSelectPayRun={run=>{setSelectedPeriod({start:run.periodStart,end:run.periodEnd});setSelectedRun(run.id);setActiveTab("pay-stubs");}} />
         </TabsContent>
         <TabsContent value="pay-stubs" className="mt-0">
-          <PayStubsTab />
+          <PayStubsTab initialPayRunId={selectedRun} />
         </TabsContent>
         <TabsContent value="timesheets" className="mt-0">
-          <AdminTimesheets />
+          <AdminTimesheets initialPeriod={selectedPeriod} onPeriodChange={setSelectedPeriod} />
         </TabsContent>
       </Tabs>
     </div>

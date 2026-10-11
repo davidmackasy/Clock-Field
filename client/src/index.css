@@ -286,3 +286,15 @@
     inset: -1px;
   }
 }
+
+@media (max-width: 640px) {
+  .saved-timesheet table, .saved-timesheet tbody, .saved-timesheet tfoot { display: block; }
+  .saved-timesheet thead { display: none; }
+  .saved-timesheet tbody tr { display: grid; grid-template-columns: 1fr 1fr; padding: 12px; gap: 10px; }
+  .saved-timesheet tbody td { padding: 0; border: 0; min-width: 0; }
+  .saved-timesheet tbody td::before { content: attr(data-label); display: block; font-size: 11px; color: #64748b; font-weight: 600; }
+  .saved-timesheet tbody td:last-child { grid-column: 1 / -1; }
+  .saved-timesheet tfoot tr { display: grid; grid-template-columns: 1fr auto; padding: 12px; }
+  .saved-timesheet tfoot td { padding: 2px; }
+  .saved-timesheet tfoot td:last-child { grid-column: 2; }
+}
