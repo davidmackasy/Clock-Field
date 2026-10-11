@@ -3,6 +3,8 @@ import Mailgun from "mailgun.js";
 
 const mailgun = new Mailgun(FormData);
 
+export async function sendAttendanceEventEmail(to:string,subject:string,text:string){const {client,domain}=getClient(10000);await client.messages.create(domain,{from:process.env.MAIL_FROM||"ClockField <noreply@mg.clockfield.com>",to:[to],subject,text});}
+
 export async function sendPayrollHoursEmail(to: string, snapshot: any, workbook: Buffer) {
   const { client, domain } = getClient(15000);
   const hours = (minutes: number) => `${Math.floor(minutes / 60)}h ${minutes % 60}m`;

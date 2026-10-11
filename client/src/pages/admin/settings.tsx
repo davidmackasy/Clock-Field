@@ -13,41 +13,6 @@ import { useState, useEffect, useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Trash2, ExternalLink, Upload, Bell } from "lucide-react";
 
-const TIMEZONES = [
-  { group: "Canada", options: [
-    { value: "America/St_Johns",   label: "St. John's (Newfoundland Time)" },
-    { value: "America/Halifax",    label: "Halifax (Atlantic Time)" },
-    { value: "America/Moncton",    label: "Moncton (Atlantic Time)" },
-    { value: "America/Toronto",    label: "Toronto (Eastern Time)" },
-    { value: "America/Winnipeg",   label: "Winnipeg (Central Time)" },
-    { value: "America/Regina",     label: "Regina (Central Standard)" },
-    { value: "America/Edmonton",   label: "Edmonton (Mountain Time)" },
-    { value: "America/Vancouver",  label: "Vancouver (Pacific Time)" },
-    { value: "America/Whitehorse", label: "Whitehorse (Yukon Time)" },
-  ]},
-  { group: "United States", options: [
-    { value: "America/New_York",   label: "New York (Eastern Time)" },
-    { value: "America/Chicago",    label: "Chicago (Central Time)" },
-    { value: "America/Denver",     label: "Denver (Mountain Time)" },
-    { value: "America/Phoenix",    label: "Phoenix (Mountain Standard)" },
-    { value: "America/Los_Angeles",label: "Los Angeles (Pacific Time)" },
-    { value: "America/Anchorage",  label: "Anchorage (Alaska Time)" },
-    { value: "Pacific/Honolulu",   label: "Honolulu (Hawaii Time)" },
-  ]},
-  { group: "United Kingdom", options: [
-    { value: "Europe/London",      label: "London (GMT / BST)" },
-  ]},
-  { group: "Other", options: [
-    { value: "Europe/Dublin",      label: "Dublin (IST)" },
-    { value: "Europe/Paris",       label: "Paris (CET / CEST)" },
-    { value: "Europe/Berlin",      label: "Berlin (CET / CEST)" },
-    { value: "Australia/Sydney",   label: "Sydney (AEST / AEDT)" },
-    { value: "Australia/Melbourne",label: "Melbourne (AEST / AEDT)" },
-    { value: "Pacific/Auckland",   label: "Auckland (NZST / NZDT)" },
-    { value: "UTC",                label: "UTC (Universal Coordinated Time)" },
-  ]},
-];
-
 const PROVINCES = [
   { code: "AB", name: "Alberta" },
   { code: "BC", name: "British Columbia" },
@@ -116,9 +81,13 @@ export default function AdminSettings() {
   }
 
   useEffect(() => {
-    if (company && !form) setForm(company);
+    if (company && !form) setForm({...company,country:company.country||"CA",city:(company.city||"").replace(/,+$/,"").trim()});
   }, [company]);
 
+  const {data:geography}=useQuery<any>({queryKey:["company-geography",form?.country||"CA",form?.province||""],queryFn:async()=>{const response=await apiRequest("GET",`/api/company/geography?${new URLSearchParams({country:form?.country||"CA",province:form?.province||""})}`);return response.json();},enabled:!!form});
+  const {data:emailActivity=[]}=useQuery<any[]>({queryKey:["/api/company/attendance-email-status"],refetchInterval:30000});
+  const selectedCity=geography?.cities?.find((city:any)=>city.name===form?.city);
+  useEffect(()=>{if(selectedCity&&form.timezone!==selectedCity.timezone)setForm((previous:any)=>({...previous,timezone:selectedCity.timezone}));},[selectedCity?.timezone]);
   const updateMut = useMutation({
     mutationFn: async (data: any) => {
       const res = await apiRequest("PATCH", "/api/company", data);
@@ -190,23 +159,16 @@ export default function AdminSettings() {
               <Label>Company Name</Label>
               <Input data-testid="input-company-name" value={form.name || ""} onChange={e => setForm((p: any) => ({ ...p, name: e.target.value }))} />
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2"><Label htmlFor="company-country">Country</Label><select id="company-country" className="w-full h-10 border rounded-md bg-background px-3" value={form.country||"CA"} onChange={event=>setForm((previous:any)=>({...previous,country:event.target.value,province:"",city:""}))}>{(geography?.countries||[{code:"CA",name:"Canada"}]).map((country:any)=><option key={country.code} value={country.code}>{country.name}</option>)}</select></div>
+              <div className="space-y-2"><Label htmlFor="company-province">Province / State</Label><select id="company-province" className="w-full h-10 border rounded-md bg-background px-3" value={form.province||""} onChange={event=>setForm((previous:any)=>({...previous,province:event.target.value,city:""}))}><option value="">Select province / state</option>{geography?.provinces.map((province:any)=><option key={province.code} value={province.code}>{province.name}</option>)}</select></div>
+              <div className="space-y-2"><Label htmlFor="company-city">City</Label><select id="company-city" className="w-full h-10 border rounded-md bg-background px-3" value={form.city||""} onChange={event=>{const city=geography.cities.find((city:any)=>city.name===event.target.value);setForm((previous:any)=>({...previous,city:city?.name||"",timezone:city?.timezone||previous.timezone}));}}><option value="">Select city</option>{geography?.cities.map((city:any)=><option key={city.name} value={city.name}>{city.name}</option>)}</select></div>
+              <div className="space-y-2"><Label htmlFor="company-postal">Postal / ZIP</Label><Input id="company-postal" data-testid="input-company-postal" placeholder="R2J 0H3" value={form.postalCode||""} onChange={event=>setForm((previous:any)=>({...previous,postalCode:event.target.value}))}/></div>
+            </div>
             <div className="space-y-2">
               <Label>Street Address</Label>
               <Input data-testid="input-company-address" placeholder="123 Main Street" value={form.address || ""} onChange={e => setForm((p: any) => ({ ...p, address: e.target.value }))} />
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-2 col-span-1">
-                <Label>City</Label>
-                <Input data-testid="input-company-city" placeholder="Victoria" value={form.city || ""} onChange={e => setForm((p: any) => ({ ...p, city: e.target.value }))} />
-              </div>
-              <div className="space-y-2 col-span-1">
-                <Label>Province / State</Label>
-                <Input data-testid="input-company-province" placeholder="BC" value={form.province || ""} onChange={e => setForm((p: any) => ({ ...p, province: e.target.value }))} />
-              </div>
-              <div className="space-y-2 col-span-1">
-                <Label>Postal / ZIP</Label>
-                <Input data-testid="input-company-postal" placeholder="V8T 5L9" value={form.postalCode || ""} onChange={e => setForm((p: any) => ({ ...p, postalCode: e.target.value }))} />
-              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
@@ -250,24 +212,8 @@ export default function AdminSettings() {
             <div className="space-y-2">
               <Label>Timezone</Label>
               <p className="text-xs text-muted-foreground">Used for schedules, attendance, and payroll calculations</p>
-              <Select
-                value={form.timezone || "America/New_York"}
-                onValueChange={v => setForm((p: any) => ({ ...p, timezone: v }))}
-              >
-                <SelectTrigger data-testid="select-timezone">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="max-h-72">
-                  {TIMEZONES.map(group => (
-                    <div key={group.group}>
-                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group.group}</div>
-                      {group.options.map(tz => (
-                        <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
-                      ))}
-                    </div>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Select value={form.timezone || "America/Winnipeg"} onValueChange={value=>setForm((previous:any)=>({...previous,timezone:value}))} disabled={!selectedCity}><SelectTrigger data-testid="select-timezone"><SelectValue/></SelectTrigger><SelectContent>{selectedCity?<SelectItem value={selectedCity.timezone}>{selectedCity.name} — {selectedCity.timezone}</SelectItem>:<SelectItem value={form.timezone||"America/Winnipeg"}>{form.timezone||"America/Winnipeg"}</SelectItem>}</SelectContent></Select>
+              <p className="text-xs text-muted-foreground">Matched to the selected city. Daylight-saving changes are applied automatically.</p>
             </div>
           </CardContent>
         </Card>
@@ -638,7 +584,7 @@ export default function AdminSettings() {
               Email Alerts
             </CardTitle>
             <CardDescription>
-              Choose which attendance events trigger email notifications to this account's admin.
+              Choose which attendance events email all active company admins and business owners.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -659,7 +605,7 @@ export default function AdminSettings() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">Late Clock-In</p>
-                <p className="text-xs text-muted-foreground">Email when an employee clocks in late</p>
+                <p className="text-xs text-muted-foreground">Email when clock-in is at least five minutes after scheduled start</p>
               </div>
               <Switch
                 data-testid="switch-alert-late-clock-in"
@@ -670,7 +616,7 @@ export default function AdminSettings() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">Missed Shift</p>
-                <p className="text-xs text-muted-foreground">Email when an employee misses a scheduled shift</p>
+                <p className="text-xs text-muted-foreground">Email six hours after scheduled start if no attendance clock-in is found</p>
               </div>
               <Switch
                 data-testid="switch-alert-missed-shift"
@@ -700,7 +646,7 @@ export default function AdminSettings() {
                 onCheckedChange={v => setForm((p: any) => ({ ...p, alertEmployeeClockedOut: v }))}
               />
             </div>
-            <p className="text-xs text-muted-foreground border-t pt-3">Clock-out emails go to active company admins. Other attendance alerts use the primary admin email on file. Alerts are de-duplicated per event.</p>
+            <p className="text-xs text-muted-foreground border-t pt-3">Clock-out emails go to active company admins. All attendance alerts go to active company admins. Failed sends are queued for retry. Alerts are de-duplicated per event.</p><div className="border-t pt-3 mt-3"><p className="text-sm font-semibold">Recent email activity</p>{emailActivity.length?emailActivity.slice(0,6).map((event:any)=><p key={event.id} className="text-xs text-muted-foreground mt-1">{({"clock-in":"Clock-in","clock-out":"Clock-out",late:"Late clock-in",missed:"Missed shift"} as any)[event.kind]} · {event.status==="sent"?"Accepted by email provider":event.status}{event.last_error?" — retry queued":""}</p>):<p className="text-xs text-muted-foreground mt-1">No attendance emails queued since delivery tracking was enabled.</p>}</div>
           </CardContent>
         </Card>
 

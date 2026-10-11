@@ -195,6 +195,17 @@ export async function runStartupMigrations() {
       period_start text NOT NULL, period_end text NOT NULL, snapshot jsonb NOT NULL,
       created_by text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), revoked_at timestamptz
     )`);
+    await client.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS country text NOT NULL DEFAULT 'CA';
+      CREATE TABLE IF NOT EXISTS attendance_email_deliveries (
+        id bigserial PRIMARY KEY, company_id text NOT NULL, recipient_id text NOT NULL, recipient text NOT NULL,
+        event_key text NOT NULL, kind text NOT NULL, subject text NOT NULL, body text NOT NULL,
+        status text NOT NULL DEFAULT 'pending', attempts integer NOT NULL DEFAULT 0,
+        next_attempt_at timestamptz NOT NULL DEFAULT now(), claimed_at timestamptz, sent_at timestamptz,
+        created_at timestamptz NOT NULL DEFAULT now(), last_error text,
+        UNIQUE(event_key,recipient_id)
+      );
+      CREATE TABLE IF NOT EXISTS attendance_alert_activation(company_id text PRIMARY KEY, enabled_at timestamptz NOT NULL DEFAULT now());
+      INSERT INTO attendance_alert_activation(company_id) SELECT id FROM companies ON CONFLICT DO NOTHING;`);
     log("Startup migrations complete.", "migrations");
   } catch (err: any) {
     log(`Migration error (non-fatal): ${err.message}`, "migrations");

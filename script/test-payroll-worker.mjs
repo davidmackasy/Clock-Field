@@ -10,12 +10,8 @@ const stub={getPayrollSchedules:async()=>schedules,fetch:async request=>{request
 const worker=new Function('Container','getContainer',text)(class{},()=>stub);
 const env={SESSION_SECRET:'synthetic-test-key',CF_VERSION_METADATA:{id:'test-version'}};
 try{
- moment='2026-10-20T13:00:00Z';await worker.scheduled({},env,{waitUntil:promise=>jobs.push(promise)});assert.equal(requests.length,0);
- moment='2026-10-20T14:00:00Z';await worker.scheduled({},env,{waitUntil:promise=>jobs.push(promise)});await Promise.all(jobs);assert.equal(requests.length,1);const stamp=requests[0].headers.get('X-ClockField-Timestamp');assert.equal(requests[0].headers.get('X-ClockField-Signature'),createHmac('sha256',env.SESSION_SECRET).update(`payroll-summary:${stamp}`).digest('hex'));
- moment='2026-10-21T14:00:00Z';await worker.scheduled({},env,{waitUntil:promise=>jobs.push(promise)});assert.equal(requests.length,1);
- moment='2026-11-03T14:00:00Z';await worker.scheduled({},env,{waitUntil:promise=>jobs.push(promise)});assert.equal(requests.length,1);
- moment='2026-11-03T15:00:00Z';await worker.scheduled({},env,{waitUntil:promise=>jobs.push(promise)});await Promise.all(jobs);assert.equal(requests.length,2);
- schedules={};await worker.scheduled({},env,{waitUntil:promise=>jobs.push(promise)});assert.equal(requests.length,2);
- schedules=undefined;await worker.scheduled({},env,{waitUntil:promise=>jobs.push(promise)});await Promise.all(jobs);assert.equal(requests.length,3);
- console.log('PASS: cached schedule skips unnecessary app starts, Winnipeg DST scheduling, empty/initial caches and authenticated internal requests.');
+ for(const date of ['2026-10-20T13:00:00Z','2026-10-20T14:00:00Z','2026-10-21T14:00:00Z','2026-11-03T14:00:00Z','2026-11-03T15:00:00Z']){moment=date;await worker.scheduled({},env,{waitUntil:promise=>jobs.push(promise)});await Promise.all(jobs);const request=requests.at(-1),stamp=request.headers.get('X-ClockField-Timestamp');assert.equal(request.headers.get('X-ClockField-Signature'),createHmac('sha256',env.SESSION_SECRET).update(`payroll-summary:${stamp}`).digest('hex'));assert.equal(new URL(request.url).pathname,'/api/internal/payroll-summary');}
+ assert.equal(requests.length,5);
+ const config=await fs.readFile('cloudflare/wrangler.jsonc','utf8');assert.ok(config.includes('*/5 * * * *'));
+ console.log('PASS: five-minute attendance/payroll checks across DST, even on non-payroll days, with authenticated internal requests.');
 }finally{globalThis.Date=RealDate;}

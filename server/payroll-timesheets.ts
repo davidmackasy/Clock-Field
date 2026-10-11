@@ -1,3 +1,4 @@
+import {processAttendanceAlerts} from "./attendance-alerts";
 import { timesheetLocation } from "./timesheet-location";
 import type { Express } from "express";
 import { storage } from "./storage";
@@ -96,7 +97,7 @@ export function registerPayrollTimesheetRoutes(app: Express) {
     if (!process.env.SESSION_SECRET || !/^\d+$/.test(timestamp) || Math.abs(Date.now() - Number(timestamp)) > 5 * 60000 || !/^[a-f0-9]{64}$/.test(signature)) return res.status(401).end();
     const expected = createHmac("sha256", process.env.SESSION_SECRET).update(`payroll-summary:${timestamp}`).digest();
     if (!timingSafeEqual(expected, Buffer.from(signature, "hex"))) return res.status(401).end();
-    try { res.json(await sendDuePayrollSummaries()); } catch { res.status(500).json({ message: "Summary processing failed" }); }
+    try { await processAttendanceAlerts();res.json(await sendDuePayrollSummaries()); } catch { res.status(500).json({ message: "Summary processing failed" }); }
   });
 }
 

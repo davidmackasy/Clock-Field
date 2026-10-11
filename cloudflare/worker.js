@@ -64,23 +64,10 @@ export class ClockFieldContainer extends Container {
 export default {
   async scheduled(event, env, ctx) {
     const container=getContainer(env.CLOCKFIELD,"primary");
-    const schedules=await container.getPayrollSchedules();
-    if(schedules) {
-      const due=Object.values(schedules).some(schedule=>{
-        if(!schedule.enabled || !schedule.anchor)return false;
-        const parts=new Intl.DateTimeFormat("en-US",{timeZone:schedule.timezone,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
-        const today=["year","month","day"].map(type=>parts.find(part=>part.type===type).value).join("-");
-        const hour=Number(new Intl.DateTimeFormat("en-GB",{timeZone:schedule.timezone,hour:"2-digit",hourCycle:"h23"}).format(new Date()));
-        const elapsed=Math.round((Date.parse(today+"T12:00:00Z")-Date.parse(schedule.anchor+"T12:00:00Z"))/86400000);
-        const daySinceClose=((elapsed%14)+14)%14+1;
-        return hour>=schedule.hour && schedule.days.includes(daySinceClose);
-      });
-      if(!due)return;
-    }
     const timestamp = String(Date.now());
     const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(env.SESSION_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
     const signature = Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`payroll-summary:${timestamp}`))), byte => byte.toString(16).padStart(2, "0")).join("");
-    ctx.waitUntil(container.fetch(new Request("https://clockfield.com/api/internal/payroll-summary", { method: "POST", headers: { "X-ClockField-Timestamp": timestamp, "X-ClockField-Signature": signature, "X-ClockField-Deployment-Revision": env.CF_VERSION_METADATA?.id || "payroll-cron-v1" } })).then(response => { if (!response.ok) throw new Error(`Payroll summary job failed (${response.status})`); }));
+    ctx.waitUntil(container.fetch(new Request("https://clockfield.com/api/internal/payroll-summary", { method: "POST", headers: { "X-ClockField-Timestamp": timestamp, "X-ClockField-Signature": signature, "X-ClockField-Deployment-Revision": env.CF_VERSION_METADATA?.id || "payroll-cron-v1" } })).then(response => { if (!response.ok) throw new Error(`Attendance and payroll check failed (${response.status})`); }));
   },
   fetch(request, env) {
     const headers = new Headers(request.headers);

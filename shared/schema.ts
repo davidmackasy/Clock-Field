@@ -62,6 +62,7 @@ export const companies = pgTable("companies", {
   trialStatus: text("trial_status"),
   // Company contact / address (for pay stubs)
   address: text("address"),
+  country: text("country").notNull().default("CA"),
   city: text("city"),
   province: text("province"),
   postalCode: text("postal_code"),

@@ -18,8 +18,9 @@ import { getPlan } from "./plans";
 import { generateReviewOgImage } from "./og-image";
 import { dataDirectory, uploadsDirectory, fitForDutyPhotosDirectory, incidentEvidenceDirectory } from "./file-storage";
 import { readPersistentFile, writePersistentFile, removePersistentFile } from "./persistent-files";
-import { notifyAdminsOfClockOut } from "./clock-out-notification";
+import { queueAttendanceEvent } from "./attendance-alerts";
 import { dateInZone, timesheetCsv } from "../shared/time-report";
+import { registerCompanyGeographyRoutes, normalizeCompanyGeography } from "./company-geography";
 import { registerPublicTimesheetRoutes } from "./public-timesheet";
 import { registerPayrollTimesheetRoutes } from "./payroll-timesheets";
 
@@ -260,6 +261,7 @@ export async function registerRoutes(
   setupAuth(app);
   registerPayrollTimesheetRoutes(app);
   registerPublicTimesheetRoutes(app);
+  registerCompanyGeographyRoutes(app);
 
   // ── File Upload ────────────────────────────────────────────────────────────
   app.post("/api/upload", requireAuth, (req, res) => {
@@ -1188,6 +1190,7 @@ Welcome again, and thank you for choosing ClockField.
   app.patch("/api/company", requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
+      if(req.body.country){try{Object.assign(req.body,normalizeCompanyGeography(req.body));}catch(error:any){return res.status(400).json({message:error.message});}}
       // Normalize empty companyLogoUrl to null so we don't store blank strings
       if ("companyLogoUrl" in req.body && !req.body.companyLogoUrl) {
         req.body.companyLogoUrl = null;
@@ -1832,55 +1835,8 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
           console.error("[fit-for-duty-email] Notification failed:", emailErr.message);
         }
       })();
-      // Send late clock-in email alert if enabled
-      if (flags.includes("late_clock_in") && shift) {
-        try {
-          const alertCompany = await storage.getCompany(user.companyId);
-          if (alertCompany?.alertLateClockIn) {
-            const admins = await storage.getAdminsByCompany(user.companyId);
-            const primaryAdmin = admins[0];
-            if (primaryAdmin?.email) {
-              // Use company timezone as source of truth; fall back to Winnipeg
-              const alertTz = alertCompany.timezone || "America/Winnipeg";
-
-              // scheduledStartAt is stored as a local time string "YYYY-MM-DDTHH:mm:ss"
-              // — format it directly without any timezone re-conversion
-              const scheduledStart = shift.scheduledStartAt
-                ? formatLocalTimeStr(shift.scheduledStartAt)
-                : "N/A";
-
-              // clockInAt (now) is a UTC ISO string — convert to company local time
-              const actualClockIn = formatUtcInTz(now, alertTz);
-
-              // Minutes late: convert both sides to local time strings, then diff.
-              // Appending "Z" to both treats them as UTC so Date arithmetic is consistent.
-              const clockInLocalStr = utcToLocalIso(now, alertTz);
-              const minutesLate = Math.max(0, Math.round(
-                (new Date(clockInLocalStr + "Z").getTime() - new Date(shift.scheduledStartAt + "Z").getTime()) / 60000
-              ));
-
-              // Deep-link to the exact employee + local business date
-              const businessDate = todayInTz(alertTz);
-              const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
-              const attendanceUrl = `${appUrl}/admin/attendance?employeeId=${user.id}&date=${businessDate}`;
-
-              const location = shift.locationId ? await storage.getLocation(shift.locationId) : null;
-              await sendAttendanceLateClockInEmail({
-                to: primaryAdmin.email,
-                adminName: `${primaryAdmin.firstName} ${primaryAdmin.lastName}`,
-                employeeName: `${user.firstName} ${user.lastName}`,
-                locationName: location?.name,
-                scheduledStart,
-                actualClockIn,
-                minutesLate,
-                attendanceUrl,
-              }).catch(e => console.error("[late-alert] Email failed:", e.message));
-            }
-          }
-        } catch (alertErr: any) {
-          console.error("[late-alert] Error checking alert settings:", alertErr.message);
-        }
-      }
+      try { await queueAttendanceEvent(user,entry,"clock-in"); }
+      catch(error:any){console.error("[attendance-email] Could not queue clock-in notification",error.message);}
       res.status(201).json(entry);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -1920,7 +1876,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       });
       if (!updated) return res.status(409).json({ message: "Already clocked out" });
       // A delivery failure must never undo a successful clock-out.
-      try { await notifyAdminsOfClockOut(storage, user, updated); }
+      try { await queueAttendanceEvent(user, updated, "clock-out"); }
       catch (error: any) { console.error("[clock-out-email] Notification failed", error.message); }
       res.json(updated);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
@@ -4142,6 +4098,8 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       res.json({ days, funnel });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
+
+  app.get("/api/company/attendance-email-status",requireRole("admin"),async(req,res)=>{try{const {rows}=await pool.query("SELECT id,kind,status,created_at,sent_at,last_error FROM attendance_email_deliveries WHERE company_id=$1 ORDER BY id DESC LIMIT 20",[(req.user as any).companyId]);res.json(rows);}catch{res.status(503).json({message:"Email activity temporarily unavailable"});}});
 
   // Company alert settings update
   app.patch("/api/company/alert-settings", requireRole("admin"), async (req, res) => {

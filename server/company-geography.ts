@@ -1,0 +1,8 @@
+import {Country,State,City} from 'country-state-city';
+import tzlookup from 'tz-lookup';
+import type {Express} from 'express';
+import {requireRole} from './auth';
+const normalized=(value:string)=>value.trim().replace(/,+$/,'').trim().toLowerCase();
+export function cityTimezone(city:any){return tzlookup(Number(city.latitude),Number(city.longitude));}
+export function normalizeCompanyGeography(input:any){const country=input.country||'CA';const province=input.province;const state=State.getStatesOfCountry(country).find(state=>state.isoCode===province||normalized(state.name)===normalized(province||''));if(!Country.getCountryByCode(country)||!state)throw Error('Select a country and its province/state');const city=City.getCitiesOfState(country,state.isoCode).find(city=>normalized(city.name)===normalized(input.city||''));if(!city)throw Error('Select a city in the selected province/state');const timezone=cityTimezone(city);if(input.timezone&&input.timezone!==timezone)throw Error(`The selected city uses ${timezone}. Select the matching timezone.`);return {country,province:state.isoCode,city:city.name,timezone};}
+export function registerCompanyGeographyRoutes(app:Express){app.get('/api/company/geography',requireRole('admin'),(req,res)=>{const country=String(req.query.country||'CA'),province=String(req.query.province||'');res.json({countries:Country.getAllCountries().map(country=>({code:country.isoCode,name:country.name})),provinces:State.getStatesOfCountry(country).map(state=>({code:state.isoCode,name:state.name})),cities:City.getCitiesOfState(country,province).map(city=>({name:city.name,timezone:cityTimezone(city)}))});});}
