@@ -111,13 +111,13 @@ function AdminLayout() {
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
-      <div className="flex h-screen w-full">
+      <div className="flex h-screen w-full overflow-hidden">
         <AdminSidebar />
         <div className="flex flex-col flex-1 min-w-0">
           <header className="hidden md:flex lg:hidden items-center p-2 border-b">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
           </header>
-          <main className="flex-1 flex flex-col min-h-0 pt-14 pb-16 md:pt-0 md:pb-0">
+          <main className="flex-1 flex flex-col min-h-0 overflow-y-auto overflow-x-hidden pt-14 pb-16 md:pt-0 md:pb-0">
             <Switch>
               <Route path="/admin" component={AdminDashboard} />
               <Route path="/admin/employees" component={AdminEmployees} />

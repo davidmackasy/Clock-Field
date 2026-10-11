@@ -8,19 +8,21 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { sendPayrollHoursEmail } from "./mail";
 import { createTimesheetWorkbook } from "./timesheet-workbook";
 
-export async function payrollSnapshot(companyId: string, start: string, employeeId = "all") {
-  const [company, employees, allEntries, adjustments, locations] = await Promise.all([
+export async function payrollSnapshot(companyId: string, start: string, employeeId = "all", end?: string) {
+  const [company, employees, allEntries, adjustments, locations, shifts] = await Promise.all([
     storage.getCompany(companyId), storage.getEmployeesByCompany(companyId), storage.getTimeEntriesByCompany(companyId),
-    storage.getAttendanceAdjustmentsByCompany(companyId), storage.getLocationsByCompany(companyId),
+    storage.getAttendanceAdjustmentsByCompany(companyId), storage.getLocationsByCompany(companyId), storage.getShiftsByCompany(companyId),
   ]);
   if (!company) throw new Error("Company not found");
-  const period = payrollPeriod(start, start, company.payrollPaydayDelayDays, company.payrollSummaryDays);
+  const payroll = payrollPeriod(company.payrollCycleStartDate || start, start, company.payrollPaydayDelayDays, company.payrollSummaryDays);
+  const period = {...payroll, start, end: end || dateShift(start,13)};
+  const dayCount=Math.round((Date.parse(period.end)-Date.parse(start))/86400000)+1;
+  if(dayCount<1||dayCount>366)throw new Error("Invalid date range");
+  const shiftLocations=new Map(shifts.map(shift=>[shift.id,shift.locationId]));
   const locationNames = new Map(locations.map(location => [location.id, location.name]));
   const totals = new Map<string, number>();
-  const worksheetNotes = new Map<string, any>();
   for (const adjustment of adjustments.sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
     totals.set(adjustment.timeEntryId, (totals.get(adjustment.timeEntryId) || 0) + adjustment.adjustmentMinutes);
-    try { const note = JSON.parse(adjustment.note || "{}"); if (note.kind === "timesheet_hours") worksheetNotes.set(adjustment.timeEntryId, note); } catch {}
   }
   const enriched = allEntries.map(entry => ({ ...entry, totalAdjustmentMinutes: totals.get(entry.id) || 0 }));
   const time = (value: string) => new Intl.DateTimeFormat("en-GB", { timeZone: company.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(value));
@@ -32,18 +34,18 @@ export async function payrollSnapshot(companyId: string, start: string, employee
     employees: selected.map(employee => {
       const entries = timesheetRows(enriched, employee.id, period.start, period.end, company.timezone);
       const rows = [];
-      for (let day = 0; day < 14; day++) {
+      for (let day = 0; day < dayCount; day++) {
         const date = dateShift(start, day);
         const daily = entries.filter(entry => dateInZone(entry.clockInAt, company.timezone) === date);
         const dayName = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "long" }).format(new Date(date + "T12:00:00Z"));
         if (!daily.length) rows.push({ date, day: dayName, id: null, startTime: "", endTime: "", rawMinutes: 0, payableMinutes: 0, location: "" });
         for (const entry of daily) {
-          const minutes = entryMinutes(entry); const note = worksheetNotes.get(entry.id);
-          rows.push({ date, day: dayName, id: entry.id, clockInAt: entry.clockInAt, clockOutAt: entry.clockOutAt, endDate: dateInZone(entry.clockOutAt!,company.timezone), startTime: note?.startTime || time(entry.clockInAt), endTime: note?.endTime || time(entry.clockOutAt!), actualStartTime: time(entry.clockInAt), actualEndTime: time(entry.clockOutAt!), rawMinutes: minutes.raw, payableMinutes: minutes.payable, location: locationNames.get(entry.locationId!) || "Not recorded", adjustmentMinutes: minutes.adjustment });
+          const minutes = entryMinutes(entry);
+          rows.push({ date, day: dayName, id: entry.id, clockInAt: entry.clockInAt, clockOutAt: entry.clockOutAt, endDate: dateInZone(entry.clockOutAt!,company.timezone), startTime: time(entry.clockInAt), endTime: time(entry.clockOutAt!), actualStartTime: time(entry.clockInAt), actualEndTime: time(entry.clockOutAt!), rawMinutes: minutes.raw, payableMinutes: minutes.payable, location: locationNames.get(entry.locationId || shiftLocations.get(entry.shiftId!) || "") || "Not recorded", adjustmentMinutes: minutes.adjustment });
         }
       }
       const pendingEntries=enriched.filter(entry=>entry.employeeId===employee.id && !entry.clockOutAt && dateInZone(entry.clockInAt,company.timezone)>=period.start && dateInZone(entry.clockInAt,company.timezone)<=period.end).length;
-      return { id: employee.id, name: `${employee.firstName} ${employee.lastName}`, employeeNumber: employee.employeeId || "", rows, pendingEntries, rawMinutes: entries.reduce((sum, entry) => sum + entryMinutes(entry).raw, 0), payableMinutes: entries.reduce((sum, entry) => sum + entryMinutes(entry).payable, 0) };
+      return { id: employee.id, name: `${employee.firstName} ${employee.lastName}`, employeeNumber: employee.employeeId || "", hourlyRate: employee.hourlyRate, estimatedGross: employee.hourlyRate == null ? null : Math.round(entries.reduce((sum,entry)=>sum+entryMinutes(entry).payable,0)/60*Number(employee.hourlyRate)*100)/100, rows, pendingEntries, rawMinutes: entries.reduce((sum, entry) => sum + entryMinutes(entry).raw, 0), payableMinutes: entries.reduce((sum, entry) => sum + entryMinutes(entry).payable, 0) };
     }),
   };
 }
@@ -52,13 +54,13 @@ export function registerPayrollTimesheetRoutes(app: Express) {
   app.get("/api/admin/attendance/payroll-timesheet", requireRole("admin"), async (req, res) => {
     try {
       if (!validDate(req.query.start)) return res.status(400).json({ message: "Select a valid period start" });
-      res.json(await payrollSnapshot((req.user as any).companyId, req.query.start, typeof req.query.employeeId === "string" ? req.query.employeeId : "all"));
+      res.json(await payrollSnapshot((req.user as any).companyId, req.query.start, typeof req.query.employeeId === "string" ? req.query.employeeId : "all", validDate(req.query.end) ? req.query.end : undefined));
     } catch { res.status(404).json({ message: "Timesheet not found" }); }
   });
   app.get("/api/admin/attendance/payroll-timesheet.xlsx", requireRole("admin"), async (req, res) => {
     try {
       if (!validDate(req.query.start)) return res.status(400).json({ message: "Select a valid period start" });
-      const snapshot = await payrollSnapshot((req.user as any).companyId, req.query.start, typeof req.query.employeeId === "string" ? req.query.employeeId : "all");
+      const snapshot = await payrollSnapshot((req.user as any).companyId, req.query.start, typeof req.query.employeeId === "string" ? req.query.employeeId : "all", validDate(req.query.end) ? req.query.end : undefined);
       const file = await createTimesheetWorkbook(snapshot);
       const label=req.query.employeeId && req.query.employeeId!=="all" ? (snapshot.employees[0]?.employeeNumber || snapshot.employees[0]?.id || "employee").replace(/[^a-zA-Z0-9_-]/g,"_") : "all";
       res.set({ "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": `attachment; filename="timesheets-${label}-${snapshot.period.start}-${snapshot.period.end}.xlsx"`, "Cache-Control": "private, no-store" });
@@ -75,7 +77,7 @@ export function registerPayrollTimesheetRoutes(app: Express) {
       const { rows: [entry] } = await client.query("SELECT * FROM time_entries WHERE id=$1 AND company_id=$2 AND status='completed' FOR UPDATE", [String(req.params.id), admin.companyId]);
       if (!entry) { await client.query("ROLLBACK"); return res.status(404).json({ message: "Completed attendance entry not found" }); }
       const { rows: [adjustment] } = await client.query("SELECT COALESCE(SUM(adjustment_minutes),0)::integer total FROM attendance_adjustments WHERE time_entry_id=$1 AND company_id=$2 AND is_voided=false", [entry.id, admin.companyId]);
-      const recorded = entry.worked_minutes ?? Math.max(0,Math.round((Date.parse(entry.clock_out_at)-Date.parse(entry.clock_in_at))/60000));
+      const recorded = Math.max(0,Math.round((Date.parse(entry.clock_out_at)-Date.parse(entry.clock_in_at))/60000));
       const currentBeforeClamp = recorded + adjustment.total;
       const current = Math.max(0, currentBeforeClamp);
       if (current !== expectedMinutes) { await client.query("ROLLBACK"); return res.status(409).json({ message: "Hours changed since this sheet was opened. Refresh and review again." }); }

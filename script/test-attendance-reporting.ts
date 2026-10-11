@@ -42,3 +42,5 @@ assert.ok(emails[0].clockOut.includes("CDT"));
 assert.equal(new URL(emails[0].attendanceUrl).searchParams.get("date"), "2026-10-09");
 assert.equal(emails[0].workedMinutes, 180);
 console.log("PASS: cleaner/date boundaries, overnight shifts, adjustments, CSV escaping, browser-independent timezone/DST conversion, and company-scoped clock-out emails.");
+
+assert.equal(entryMinutes({clockInAt:"2026-10-05T22:59:00Z",clockOutAt:"2026-10-06T03:15:00Z",workedMinutes:315}).raw,256);

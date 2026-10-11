@@ -16,7 +16,8 @@ export function timesheetRows(entries: any[], employeeId: string, start: string,
 }
 
 export function entryMinutes(entry: any) {
-  const raw = entry.workedMinutes ?? Math.max(0, Math.round((Date.parse(entry.clockOutAt) - Date.parse(entry.clockInAt)) / 60000));
+  const elapsed = (Date.parse(entry.clockOutAt) - Date.parse(entry.clockInAt)) / 60000;
+  const raw = Number.isFinite(elapsed) ? Math.max(0, Math.round(elapsed)) : (entry.workedMinutes ?? 0);
   return { raw, adjustment: entry.totalAdjustmentMinutes || 0, payable: Math.max(0, raw + (entry.totalAdjustmentMinutes || 0)) };
 }
 
