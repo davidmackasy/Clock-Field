@@ -81,7 +81,7 @@ type CourseDetail = {
   stats: { assigned: number; started: number; completed: number; completionPct: number };
 };
 
-type Employee = { id: string; firstName: string; lastName: string; email: string; position: string | null };
+type Employee = { id: string; firstName: string; lastName: string; email: string; position: string | null; role: string; isActive: boolean };
 
 const CATEGORIES = ["Onboarding", "Safety", "Cleaning Techniques", "Equipment", "Customer Service", "Compliance", "Leadership", "Other"];
 
@@ -953,159 +953,22 @@ function LiveActivityPulse({
 
 function CourseCard({ course, onClick }: { course: Course; onClick: () => void }) {
   const Icon = CATEGORY_ICONS[course.category ?? "Other"] ?? BookOpen;
-  const modules = course.modules ?? [];
-  const activeLearners = course.activeLearners ?? [];
-  const moduleCount = course.moduleCount ?? 0;
-  const assignedCount = course.assignedCount ?? 0;
-  const cohortProgress = course.cohortProgress ?? 0;
-  const totalLearners = assignedCount;
-
-  const MAX_DOTS = 8;
-  const displayModules = modules.slice(0, MAX_DOTS);
-  const overflow = modules.length - displayModules.length;
-
+  const assigned = course.assignedCount ?? 0, completed = course.completedCount ?? 0;
   return (
-    <div
-      className="bg-card border border-border rounded-xl p-5 cursor-pointer hover:shadow-md transition-all group"
-      onClick={onClick}
-      data-testid={`card-course-${course.id}`}>
-      {/* Header */}
-      <div className="flex items-start gap-3">
-        <div className="h-9 w-9 rounded-lg bg-foreground text-background flex items-center justify-center shrink-0">
-          <Icon className="w-4 h-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-[15px] font-semibold text-foreground leading-tight line-clamp-1 group-hover:text-primary transition-colors" data-testid={`text-course-title-${course.id}`}>
-            {course.title}
-          </div>
-          <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
-            {course.category ?? "Uncategorized"} · {moduleCount} module{moduleCount === 1 ? "" : "s"} · {assignedCount} learner{assignedCount === 1 ? "" : "s"}
-          </div>
-        </div>
-        <div className="text-right shrink-0" data-testid={`text-cohort-progress-${course.id}`}>
-          <div className="text-2xl font-bold text-foreground leading-none tabular-nums">{cohortProgress}%</div>
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">cohort</div>
-        </div>
+    <button type="button" onClick={onClick} className="text-left bg-card border border-border rounded-xl overflow-hidden hover:shadow-md transition-shadow focus-visible:ring-2 focus-visible:ring-primary" data-testid={`card-course-${course.id}`}>
+      <div className="aspect-video bg-slate-100 relative">
+        {course.thumbnailData ? <img src={course.thumbnailData} alt="" className="w-full h-full object-cover" /> : <div className="h-full flex items-center justify-center"><Icon className="h-12 w-12 text-primary/40" /></div>}
+        <div className="absolute top-3 left-3 flex gap-2"><Badge variant={course.isPublished ? "default" : "secondary"}>{course.isPublished ? "Published" : "Draft"}</Badge>{course.isRequired && <Badge variant="secondary">Required</Badge>}</div>
       </div>
-
-      {/* Status badges */}
-      <div className="flex items-center flex-wrap gap-1 mt-3">
-        {course.isPublished
-          ? <Badge className="bg-green-500 text-white text-[10px] h-5 px-1.5">Published</Badge>
-          : <Badge variant="secondary" className="text-[10px] h-5 px-1.5">Draft</Badge>}
-        {course.isRequired && <Badge className="bg-red-500 text-white text-[10px] h-5 px-1.5">Required</Badge>}
-        {course.publicLinkEnabled && (
-          <Badge variant="outline" className="text-[10px] h-5 px-1.5 gap-1">
-            <Globe className="w-2.5 h-2.5" />Public
-          </Badge>
-        )}
-        {course.estimatedDuration && (
-          <Badge variant="outline" className="text-[10px] h-5 px-1.5 gap-1">
-            <Clock className="w-2.5 h-2.5" />{course.estimatedDuration}
-          </Badge>
-        )}
+      <div className="p-4 space-y-3">
+        <p className="text-xs text-muted-foreground">{course.category || "Training"}</p>
+        <h2 className="text-base font-semibold line-clamp-2 min-h-[3rem]" data-testid={`text-course-title-${course.id}`}>{course.title}</h2>
+        <p className="text-sm text-muted-foreground line-clamp-2">{course.description || "Build skills with practical lessons and knowledge checks."}</p>
+        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground"><span>{course.moduleCount ?? 0} lessons</span>{course.estimatedDuration && <span>{course.estimatedDuration}</span>}</div>
+        <div className="h-1.5 bg-muted rounded-full overflow-hidden"><div className="h-full bg-primary" style={{ width: `${course.cohortProgress ?? 0}%` }} /></div>
+        <div className="flex items-center justify-between gap-3 text-sm"><span className="text-muted-foreground">{completed} of {assigned} assignments complete</span><span className="text-primary font-semibold">Manage course →</span></div>
       </div>
-
-      {/* Module path */}
-      <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground mt-5 mb-3">
-        Module path
-      </div>
-      {modules.length === 0 ? (
-        <div className="py-6 border border-dashed border-border rounded-lg text-center text-xs text-muted-foreground" data-testid={`empty-modules-${course.id}`}>
-          No modules yet — open to add the first one
-        </div>
-      ) : (
-        <div className="relative px-1 pt-2 pb-1">
-          {/* Connecting line */}
-          <div className="absolute left-3 right-3 top-[14px] h-[2px] bg-border">
-            <div
-              className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400"
-              style={{ width: `${cohortProgress}%` }}
-            />
-          </div>
-          {/* Checkpoints */}
-          <div className="relative flex justify-between items-start gap-1">
-            {displayModules.map((m, i) => {
-              const pct = totalLearners > 0 ? m.completedCount / totalLearners : 0;
-              const isDone = totalLearners > 0 && pct >= 0.95;
-              const isActive = pct > 0.1 && pct < 0.95;
-              const isLocked = !isDone && !isActive;
-              return (
-                <div key={m.id} className="flex flex-col items-center gap-1.5 flex-1 min-w-0" data-testid={`module-dot-${m.id}`}>
-                  <div className={`relative z-10 h-7 w-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold shrink-0 ${
-                    isDone
-                      ? "bg-emerald-500 border-emerald-500 text-white"
-                      : isActive
-                      ? "bg-card border-emerald-500 text-emerald-700 dark:text-emerald-400 shadow-sm"
-                      : "bg-card border-border text-muted-foreground"
-                  }`}>
-                    {isDone ? <Check className="w-3.5 h-3.5" /> : isLocked && totalLearners > 0 ? <Lock className="w-3 h-3" /> : i + 1}
-                  </div>
-                  <div className={`text-[10px] text-center leading-tight truncate w-full ${isLocked ? "text-muted-foreground" : "text-foreground"}`} title={m.title}>
-                    {shortName(m.title)}
-                  </div>
-                  <div className="text-[9px] text-muted-foreground tabular-nums">
-                    {m.completedCount}/{totalLearners}
-                  </div>
-                </div>
-              );
-            })}
-            {overflow > 0 && (
-              <div className="flex flex-col items-center gap-1.5 shrink-0" style={{ width: 36 }}>
-                <div className="relative z-10 h-7 w-7 rounded-full border-2 bg-card border-border flex items-center justify-center text-[9px] font-bold text-muted-foreground">
-                  +{overflow}
-                </div>
-                <div className="text-[10px] text-muted-foreground">more</div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* In-flight learners */}
-      {activeLearners.length > 0 ? (
-        <div className="mt-5 rounded-lg bg-muted/40 border border-border px-4 py-3">
-          <div className="flex items-center gap-2 mb-2">
-            <Users className="w-3.5 h-3.5 text-muted-foreground" />
-            <div className="text-[11px] font-medium text-foreground">Currently in flight</div>
-            <div className="ml-auto text-[11px] text-muted-foreground">{activeLearners.length} active</div>
-          </div>
-          <div className="space-y-1.5">
-            {activeLearners.map((l) => {
-              const color = colorForLearner(l.employeeId);
-              const moduleAt = modules[l.currentModuleIndex];
-              const pct = moduleCount > 0 ? (l.currentModuleIndex / moduleCount) * 100 : 0;
-              return (
-                <div key={l.employeeId} className="flex items-center gap-2.5" data-testid={`learner-flight-${l.employeeId}`}>
-                  <div className={`h-6 w-6 rounded-full ${color} text-white text-[10px] font-semibold flex items-center justify-center shrink-0`} title={l.name}>
-                    {l.initials}
-                  </div>
-                  <div className="flex-1 h-1.5 rounded-full bg-border overflow-hidden">
-                    <div className={`h-full ${color} opacity-80`} style={{ width: `${pct}%` }} />
-                  </div>
-                  <div className="text-[10px] text-muted-foreground tabular-nums w-14 text-right truncate" title={moduleAt?.title ?? "Done"}>
-                    {moduleAt ? shortName(moduleAt.title) : "Done"}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : assignedCount === 0 ? (
-        <div className="mt-5 rounded-lg bg-muted/30 border border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground" data-testid={`empty-learners-${course.id}`}>
-          No learners enrolled yet
-        </div>
-      ) : (
-        <div className="mt-5 rounded-lg bg-muted/30 border border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground">
-          {assignedCount} enrolled · waiting to start
-        </div>
-      )}
-
-      <Button variant="ghost" size="sm" className="w-full mt-3 h-8 text-muted-foreground hover:text-foreground justify-between pointer-events-none" tabIndex={-1}>
-        <span>Walk the path</span>
-        <ChevronRight className="w-3.5 h-3.5" />
-      </Button>
-    </div>
+    </button>
   );
 }
 
@@ -1136,6 +999,7 @@ export default function AdminTrainingHub() {
   const [assignDialog, setAssignDialog] = useState(false);
   const [selectedEmployees, setSelectedEmployees] = useState<Set<string>>(new Set());
   const [sendEmailNotification, setSendEmailNotification] = useState(true);
+  const [assignmentDueDate, setAssignmentDueDate] = useState("");
   const assetRef = useRef<HTMLInputElement>(null);
 
   const [editCourseOpen, setEditCourseOpen] = useState(false);
@@ -1149,12 +1013,12 @@ export default function AdminTrainingHub() {
   const [localModules, setLocalModules] = useState<any[] | null>(null);
   const [learnerModal, setLearnerModal] = useState<LearnerModalTarget | null>(null);
 
-  const { data: courses = [], isLoading } = useQuery<Course[]>({ queryKey: ["/api/training/courses"] });
+  const { data: courses = [], isLoading } = useQuery<Course[]>({ queryKey: ["/api/training/courses"], refetchInterval:30000 });
   const { data: stats } = useQuery<{ totalCourses: number; totalAssigned: number; totalCompleted: number; totalPending: number }>({
-    queryKey: ["/api/training/stats"],
+    queryKey: ["/api/training/stats"], refetchInterval:30000,
   });
   const { data: detail, isLoading: detailLoading } = useQuery<CourseDetail>({
-    queryKey: ["/api/training/courses", selectedId],
+    queryKey: ["/api/training/courses", selectedId], refetchInterval:30000,
     enabled: !!selectedId,
   });
   const { data: employees = [] } = useQuery<Employee[]>({
@@ -1243,7 +1107,7 @@ export default function AdminTrainingHub() {
 
   const assignMutation = useMutation({
     mutationFn: async (employeeIds: string[]) => {
-      const res = await apiRequest("POST", `/api/training/courses/${selectedId}/assign`, { employeeIds, sendEmailNotification });
+      const res = await apiRequest("POST", `/api/training/courses/${selectedId}/assign`, { employeeIds, sendEmailNotification, dueDate: assignmentDueDate || null });
       const ct = res.headers.get("content-type") || "";
       if (!ct.includes("application/json")) {
         const text = await res.text();
@@ -1463,9 +1327,9 @@ export default function AdminTrainingHub() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
             { label: "Total Courses", value: stats?.totalCourses ?? courses.length, icon: BookOpen, color: "text-blue-500 bg-blue-50 dark:bg-blue-900/20" },
-            { label: "Employees Assigned", value: stats?.totalAssigned ?? 0, icon: Users, color: "text-purple-500 bg-purple-50 dark:bg-purple-900/20" },
+            { label: "Course Assignments", value: stats?.totalAssigned ?? 0, icon: Users, color: "text-purple-500 bg-purple-50 dark:bg-purple-900/20" },
             { label: "Completions", value: stats?.totalCompleted ?? 0, icon: Trophy, color: "text-green-500 bg-green-50 dark:bg-green-900/20" },
-            { label: "In Progress", value: stats?.totalPending ?? 0, icon: Clock, color: "text-amber-500 bg-amber-50 dark:bg-amber-900/20" },
+            { label: "To Complete", value: stats?.totalPending ?? 0, icon: Clock, color: "text-amber-500 bg-amber-50 dark:bg-amber-900/20" },
           ].map(s => {
             const Icon = s.icon;
             return (
@@ -1577,7 +1441,7 @@ export default function AdminTrainingHub() {
                         data-testid="btn-toggle-publish">
                         {course.isPublished ? <><EyeOff className="w-3.5 h-3.5 mr-1" />Unpublish</> : <><Eye className="w-3.5 h-3.5 mr-1" />Publish</>}
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => setAssignDialog(true)} data-testid="btn-assign-employees">
+                      <Button variant="outline" size="sm" disabled={!course.isPublished || detail.modules.length === 0} onClick={() => { setSelectedEmployees(new Set()); setAssignDialog(true); }} data-testid="btn-assign-employees">
                         <Users className="w-3.5 h-3.5 mr-1" /> Assign
                       </Button>
                       <Button variant="outline" size="sm" onClick={() => sendReminderMutation.mutate()} disabled={sendReminderMutation.isPending} data-testid="btn-send-reminder">
@@ -1821,7 +1685,7 @@ export default function AdminTrainingHub() {
                         .map(c => c.moduleId)
                     ).size;
                     const total = detail.modules.length;
-                    const pct = total > 0 ? Math.round((completedModules / total) * 100) : 0;
+                    const pct = a.progressPct ?? (total > 0 ? Math.round((completedModules / total) * 100) : 0);
                     return {
                       id: a.employeeId ?? a.id,
                       name: a.employeeName ?? "Unknown",
@@ -2215,16 +2079,18 @@ export default function AdminTrainingHub() {
       <Dialog open={assignDialog} onOpenChange={setAssignDialog}>
         <DialogContent className="sm:max-w-md max-h-[80vh]" data-testid="dialog-assign">
           <DialogHeader>
-            <DialogTitle>Assign Employees</DialogTitle>
+            <DialogTitle>Assign training to cleaners</DialogTitle>
           </DialogHeader>
+          <p className="text-sm text-muted-foreground">Assign this published course and an optional completion deadline. It appears in each cleaner’s My learning page.</p>
+          <label className="block text-sm font-medium">Complete by (optional)<Input type="date" value={assignmentDueDate} onChange={e => setAssignmentDueDate(e.target.value)} className="mt-1" data-testid="assignment-due-date" /></label>
           <div className="overflow-y-auto max-h-96 space-y-2 py-2">
             <Button variant="outline" size="sm" className="w-full" onClick={() => {
-              if (selectedEmployees.size === employees.length) setSelectedEmployees(new Set());
-              else setSelectedEmployees(new Set(employees.map(e => e.id)));
+              if (selectedEmployees.size === employees.filter(e => e.role === "employee" && e.isActive).length) setSelectedEmployees(new Set());
+              else setSelectedEmployees(new Set(employees.filter(e => e.role === "employee" && e.isActive).map(e => e.id)));
             }}>
-              {selectedEmployees.size === employees.length ? "Deselect All" : "Select All"}
+              {selectedEmployees.size === employees.filter(e => e.role === "employee" && e.isActive).length ? "Deselect All" : "Select All"}
             </Button>
-            {employees.map(emp => (
+            {employees.filter(emp => emp.role === "employee" && emp.isActive).map(emp => (
               <label key={emp.id} className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${selectedEmployees.has(emp.id) ? "border-primary bg-primary/5" : "border-border hover:bg-muted/30"}`} data-testid={`checkbox-employee-${emp.id}`}>
                 <input type="checkbox" className="sr-only" checked={selectedEmployees.has(emp.id)} onChange={e => {
                   const s = new Set(selectedEmployees);
@@ -2260,7 +2126,7 @@ export default function AdminTrainingHub() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssignDialog(false)}>Cancel</Button>
-            <Button onClick={() => assignMutation.mutate([...selectedEmployees])} disabled={selectedEmployees.size === 0 || assignMutation.isPending} data-testid="btn-confirm-assign">
+            <Button onClick={() => assignMutation.mutate(Array.from(selectedEmployees))} disabled={selectedEmployees.size === 0 || assignMutation.isPending} data-testid="btn-confirm-assign">
               {assignMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
               Assign {selectedEmployees.size > 0 ? `(${selectedEmployees.size})` : ""}
             </Button>

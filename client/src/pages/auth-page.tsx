@@ -199,7 +199,8 @@ export default function AuthPage() {
   if (user) {
     if (user.role === "admin") { setLocation("/admin"); return null; }
     if (user.role === "client") { setLocation("/client"); return null; }
-    setLocation("/employee");
+    const trainingCourse = new URLSearchParams(window.location.search).get("course");
+    setLocation(trainingCourse ? `/employee/training?course=${encodeURIComponent(trainingCourse)}` : "/employee");
     return null;
   }
 

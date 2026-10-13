@@ -122,7 +122,7 @@ export function QuizRunner({
               <Badge variant="outline">{total} questions</Badge>
               <Badge variant="outline">Pass at {quiz.passingScore}%</Badge>
               {quiz.allowRetake && <Badge variant="outline">Retakes allowed</Badge>}
-              {quiz.isRequired && <Badge className="bg-red-500 text-white">Required for certificate</Badge>}
+              {quiz.isRequired && <Badge className="bg-red-500 text-white">Required to complete training</Badge>}
             </div>
           </div>
         </div>
@@ -142,7 +142,7 @@ export function QuizRunner({
         )}
         <Button
           className="w-full"
-          disabled={starting || (!canRetake && !!previouslyFailed)}
+          disabled={total === 0 || starting || (!canRetake && !!previouslyFailed)}
           onClick={async () => {
             try {
               setStarting(true);

@@ -417,6 +417,10 @@ function AppRouter() {
 
   if (!user) {
     if (location === "/") return <LandingPage />;
+    if (location === "/employee/training") {
+      const course = new URLSearchParams(window.location.search).get("course");
+      return <Redirect to={`/employee/login${course ? `?course=${encodeURIComponent(course)}` : ""}`} />;
+    }
     if (location === "/login" || location.startsWith("/login?")) return <AuthPage />;
     if (location === "/business/login" || location === "/business/register" || location === "/employee/login") return <AuthPage />;
     return <Redirect to="/login" />;

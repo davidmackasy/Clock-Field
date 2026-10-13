@@ -1,3 +1,4 @@
+import { trainingState } from "@shared/training-state";
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -10530,7 +10531,7 @@ Return ONLY valid JSON:
     learnerName: string;
   }): Promise<{ certificateCode: string; issuedAt: string } | null> {
     const course = await storage.getTrainingCourse(opts.courseId);
-    if (!course || !course.certificateEnabled) return null;
+    if (!course || course.companyId !== opts.companyId) return null;
 
     const modules = await storage.getTrainingModules(opts.courseId);
     if (modules.length === 0) return null;
@@ -10543,10 +10544,15 @@ Return ONLY valid JSON:
     if (!moduleCheck) return null;
 
     const quiz = await storage.getTrainingQuizByCourse(opts.courseId);
-    if (quiz && quiz.isRequired) {
+    if (quiz && quiz.isRequired && quiz.questions.length > 0) {
       const passed = await storage.hasPassedTrainingQuiz(quiz.id, opts.employeeId ?? undefined, opts.publicLearnerId ?? undefined);
       if (!passed) return null;
     }
+
+    // Assignment completion is independent of optional certificate delivery.
+    if (opts.employeeId) await db.update(trainingAssignments).set({ status: "completed" }).where(and(eq(trainingAssignments.courseId, opts.courseId), eq(trainingAssignments.employeeId, opts.employeeId), eq(trainingAssignments.companyId, opts.companyId)));
+    if (opts.publicLearnerId) await storage.updatePublicLearner(opts.publicLearnerId, { completedAt: trainingNow() });
+    if (!course.certificateEnabled) return null;
 
     const existing = await storage.getTrainingCertificate(opts.courseId, opts.employeeId ?? undefined, opts.publicLearnerId ?? undefined);
     if (existing) return { certificateCode: existing.certificateCode, issuedAt: existing.issuedAt };
@@ -10623,12 +10629,8 @@ Return ONLY valid JSON:
       const assignments = await storage.getTrainingAssignments(course.id);
       const completions = await storage.getTrainingCompletions(course.id);
       const assigned = assignments.length;
-      const completedEmployees = new Set(assignments.filter(a => {
-        const empCompletions = completions.filter(c => c.employeeId === a.employeeId);
-        return empCompletions.length >= modules.filter(m => m.isRequired).length && modules.filter(m => m.isRequired).length > 0;
-      }).map(a => a.employeeId));
-      const started = new Set(completions.filter(c => c.employeeId).map(c => c.employeeId)).size;
-      const completed = completedEmployees.size;
+      const completed = assignments.filter(a => a.status === "completed").length;
+      const started = assignments.filter(a => a.status === "started" || a.status === "completed").length;
       const completionPct = assigned > 0 ? Math.round((completed / assigned) * 100) : 0;
 
       // Enrich completions with actorName + moduleTitle for the activity pulse view
@@ -10999,6 +11001,7 @@ Return ONLY valid JSON:
       if (!mod) return res.status(404).json({ success: false, error: "Module not found" });
       const course = await storage.getTrainingCourse(mod.courseId);
       if (!course || course.companyId !== user.companyId) return res.status(404).json({ success: false, error: "Module not found" });
+      if (user.role === "employee" && !await storage.getMyTrainingCourse(course.id, user.id, user.companyId)) return res.status(404).json({ success: false, error: "Lesson not available" });
       if (!process.env.OPENAI_API_KEY) {
         return res.status(200).json({ success: false, error: "Premium voice is not configured yet. Using browser voice instead." });
       }
@@ -11299,16 +11302,21 @@ Return ONLY valid JSON:
       const user = (req as any).user;
       const course = await storage.getTrainingCourse(req.params.id);
       if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      const { employeeIds, sendEmailNotification = false } = req.body;
-      if (!Array.isArray(employeeIds)) return res.status(400).json({ message: "employeeIds required" });
-      const newlyAssignedIds = await storage.assignTrainingCourse(req.params.id, user.companyId, employeeIds, user.id);
+      const { employeeIds, sendEmailNotification = false, dueDate } = req.body;
+      if (!Array.isArray(employeeIds) || !employeeIds.length || employeeIds.some((id: any) => typeof id !== "string")) return res.status(400).json({ message: "Select at least one cleaner" });
+      if (!course.isPublished) return res.status(400).json({ message: "Publish this course before assigning it." });
+      if (dueDate != null && dueDate !== "" && (typeof dueDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || !Number.isFinite(Date.parse(dueDate)) || new Date(dueDate).toISOString().slice(0, 10) !== dueDate)) return res.status(400).json({ message: "Enter a valid due date" });
+      if (!(await storage.getTrainingModules(course.id)).length) return res.status(400).json({ message: "Add lessons before assigning this course" });
+      const validRecipients = await Promise.all(employeeIds.map((id: string) => storage.getUser(id)));
+      if (validRecipients.some(emp => !emp || emp.companyId !== user.companyId || emp.role !== "employee" || !emp.isActive)) return res.status(400).json({ message: "Select active cleaners from your company" });
+      const newlyAssignedIds = await storage.assignTrainingCourse(req.params.id, user.companyId, employeeIds, user.id, dueDate === undefined ? undefined : dueDate || null);
 
       let emailsSent = 0;
       let emailsFailed = 0;
       if (sendEmailNotification && newlyAssignedIds.length > 0) {
         const company = await storage.getCompany(user.companyId);
         const companyName = company?.name ?? "Your Company";
-        const appUrl = `${req.protocol}://${req.get("host")}/employee`;
+        const appUrl = `${process.env.APP_URL || `${req.protocol}://${req.get("host")}`}/employee/training?course=${encodeURIComponent(course.id)}`;
         const now = new Date().toISOString();
         for (const empId of newlyAssignedIds) {
           const [emp] = await db.select().from(users).where(eq(users.id, empId));
@@ -11320,7 +11328,7 @@ Return ONLY valid JSON:
                 companyName,
                 courseTitle: course.title,
                 isRequired: !!(course as any).isRequired,
-                dueDate: null,
+                dueDate: dueDate || null,
                 appUrl,
               });
               await db.update(trainingAssignments)
@@ -11330,7 +11338,7 @@ Return ONLY valid JSON:
             } catch {
               emailsFailed++;
             }
-          }
+          } else { emailsFailed++; }
         }
       }
 
@@ -11350,7 +11358,7 @@ Return ONLY valid JSON:
 
       const company = await storage.getCompany(user.companyId);
       const companyName = company?.name ?? "Your Company";
-      const appUrl = `${req.protocol}://${req.get("host")}/employee`;
+      const appUrl = `${process.env.APP_URL || `${req.protocol}://${req.get("host")}`}/employee/training?course=${encodeURIComponent(course.id)}`;
       const now = new Date().toISOString();
 
       let emailsSent = 0;
@@ -11417,14 +11425,12 @@ Return ONLY valid JSON:
         const completedIds = new Set(progress.map(p => p.moduleId));
         const totalModules = modules.length;
         const completedModules = modules.filter(m => completedIds.has(m.id)).length;
-        const progressPercent = Math.round((completedModules / totalModules) * 100);
-        const modulesComplete = modules.filter(m => m.isRequired).every(m => completedIds.has(m.id));
-
-        // Check quiz
-        const [quiz] = await db.select().from(trainingQuizzes).where(eq(trainingQuizzes.courseId, course.id));
+        let progressPercent = Math.round((completedModules / totalModules) * 100);
+        const quiz = await storage.getTrainingQuizByCourse(course.id);
+        const modulesComplete = trainingState(modules, completedIds, quiz, false).modulesComplete;
         let quizPassed = true;
         let retakeRequired = false;
-        if (quiz && quiz.isRequired) {
+        if (quiz && quiz.isRequired && quiz.questions.length > 0) {
           quizPassed = await storage.hasPassedTrainingQuiz(quiz.id, user.id, undefined);
           if (!quizPassed && modulesComplete) {
             const attempts = await storage.getTrainingQuizAttempts(quiz.id, user.id, undefined);
@@ -11434,6 +11440,7 @@ Return ONLY valid JSON:
 
         // Skip truly completed
         if (modulesComplete && quizPassed) continue;
+        progressPercent = trainingState(modules, completedIds, quiz, quizPassed).progressPct;
 
         let status: string;
         if (retakeRequired) status = "retake_needed";
@@ -11482,7 +11489,7 @@ Return ONLY valid JSON:
     try {
       const user = (req as any).user;
       if (user.role !== "employee") return res.status(403).json({ message: "Forbidden" });
-      const detail = await storage.getMyTrainingCourse(req.params.courseId, user.id);
+      const detail = await storage.getMyTrainingCourse(req.params.courseId, user.id, user.companyId);
       if (!detail) return res.status(404).json({ message: "Not found" });
       res.json(detail);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -11495,12 +11502,18 @@ Return ONLY valid JSON:
       if (user.role !== "employee") return res.status(403).json({ message: "Forbidden" });
       const course = await storage.getTrainingCourse(req.params.courseId);
       if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const detail = await storage.getMyTrainingCourse(req.params.courseId, user.id, user.companyId);
+      if (!detail || !detail.modules.some((m: any) => m.id === req.params.moduleId)) return res.status(404).json({ message: "Lesson not available" });
       // 15-second engagement gate: skip if module already completed (idempotent re-mark allowed).
       const existingProgress = await storage.getTrainingProgress(req.params.courseId, user.id, undefined);
       const alreadyCompleted = existingProgress.some(p => p.moduleId === req.params.moduleId);
       if (!alreadyCompleted) {
         const elapsed = Number((req.body as any)?.elapsedSeconds);
-        if (!Number.isFinite(elapsed) || elapsed < 15) {
+        const mod = detail.modules.find((m: any) => m.id === req.params.moduleId);
+        const duration = Number(req.body?.videoDuration), watched = Number(req.body?.videoWatchedSeconds);
+        if (mod?.youtubeEmbedId && (!Number.isFinite(duration) || duration <= 0 || duration > 86400 || !Number.isFinite(watched) || watched < duration * .9 || watched > duration + 3)) return res.status(400).json({ message: "Watch the video lesson before completing it", code: "VIDEO_REQUIRED" });
+        const minimum = mod?.youtubeEmbedId ? Math.min(15, duration) : 15;
+        if (!Number.isFinite(elapsed) || elapsed < minimum) {
           return res.status(400).json({
             message: "Please spend at least 15 seconds reading or listening to this module before marking it complete.",
             code: "TIME_GATE",
@@ -11587,7 +11600,9 @@ Return ONLY valid JSON:
       const { learnerId } = req.body;
       if (!learnerId) return res.status(400).json({ message: "learnerId required" });
       const learner = await storage.getPublicLearner(learnerId);
-      if (!learner) return res.status(404).json({ message: "Learner not found" });
+      if (!learner || learner.courseId !== course.id || learner.companyId !== course.companyId) return res.status(404).json({ message: "Learner not found" });
+      const targetModule = await storage.getTrainingModule(req.params.moduleId);
+      if (!targetModule || targetModule.courseId !== course.id) return res.status(404).json({ message: "Lesson not found" });
       await storage.markModuleComplete(course.id, req.params.moduleId, course.companyId, undefined, learnerId);
       const modules = await storage.getTrainingModules(course.id);
       const progress = await storage.getTrainingProgress(course.id, undefined, learnerId);
@@ -11596,11 +11611,9 @@ Return ONLY valid JSON:
       const modulesComplete = modules.length > 0 && (
         reqModules.length > 0 ? reqModules.every(m => completedIds.has(m.id)) : modules.every(m => completedIds.has(m.id))
       );
-      const isCompleted = modulesComplete;
+      const quiz = await storage.getTrainingQuizByCourse(course.id);
+      const isCompleted = trainingState(modules, completedIds, quiz, quiz ? await storage.hasPassedTrainingQuiz(quiz.id, undefined, learnerId) : false).isCompleted;
       let certificate = null;
-      if (isCompleted) {
-        await storage.updatePublicLearner(learnerId, { completedAt: trainingNow() });
-      }
       certificate = await tryIssueTrainingCertificate({
         courseId: course.id,
         companyId: course.companyId,
@@ -11624,7 +11637,7 @@ Return ONLY valid JSON:
   // along with the learner's attempt history and gating flags.
   async function buildQuizPayload(courseId: string, employeeId: string | undefined, publicLearnerId: string | undefined) {
     const quiz = await storage.getTrainingQuizByCourse(courseId);
-    if (!quiz) return null;
+    if (!quiz || !quiz.questions.length) return null;
 
     // Modules-completed gate (matches cert helper)
     const modules = await storage.getTrainingModules(courseId);
@@ -11658,7 +11671,7 @@ Return ONLY valid JSON:
         })),
       },
       modulesComplete,
-      attemptCount: attempts.length,
+      attemptCount: attempts.filter(a => a.completedAt).length,
       lastAttempt: lastCompleted ? {
         id: lastCompleted.id,
         score: lastCompleted.score,
@@ -11666,13 +11679,13 @@ Return ONLY valid JSON:
         completedAt: lastCompleted.completedAt,
       } : null,
       hasPassed,
-      canRetake: canRetake || (!hasPassed && attempts.length === 0),
+      canRetake: canRetake || (!hasPassed && !lastCompleted),
     };
   }
 
   async function startQuizAttempt(courseId: string, companyId: string, employeeId: string | undefined, publicLearnerId: string | undefined) {
     const quiz = await storage.getTrainingQuizByCourse(courseId);
-    if (!quiz) return { error: { status: 404, message: "Quiz not found" } } as const;
+    if (!quiz || !quiz.questions.length) return { error: { status: 404, message: "Quiz not ready" } } as const;
 
     // Block if modules aren't done yet
     const modules = await storage.getTrainingModules(courseId);
@@ -11694,6 +11707,8 @@ Return ONLY valid JSON:
       if (attempts.some(a => a.completedAt)) return { error: { status: 400, message: "Retakes are disabled for this quiz" } } as const;
     }
 
+    const pending = (await storage.getTrainingQuizAttempts(quiz.id, employeeId, publicLearnerId)).find(a => !a.completedAt);
+    if (pending) return { attempt: pending, quiz } as const;
     const attempt = await storage.createTrainingQuizAttempt({
       quizId: quiz.id,
       courseId,
@@ -11709,15 +11724,17 @@ Return ONLY valid JSON:
     return { attempt, quiz } as const;
   }
 
-  async function submitQuizAttempt(attemptId: string, answers: Record<string, any>, identity: { employeeId?: string; publicLearnerId?: string }) {
+  async function submitQuizAttempt(attemptId: string, answers: Record<string, any>, identity: { employeeId?: string; publicLearnerId?: string; companyId: string; courseId?: string }) {
     const attempt = await storage.getTrainingQuizAttempt(attemptId);
     if (!attempt) return { error: { status: 404, message: "Attempt not found" } } as const;
+    if (attempt.companyId !== identity.companyId || (identity.courseId && attempt.courseId !== identity.courseId)) return { error: { status: 403, message: "Forbidden" } } as const;
+    if (identity.employeeId && !await storage.getMyTrainingCourse(attempt.courseId, identity.employeeId, identity.companyId)) return { error: { status: 404, message: "Course not available" } } as const;
     if (attempt.completedAt) return { error: { status: 400, message: "Attempt already submitted" } } as const;
     if (identity.employeeId && attempt.employeeId !== identity.employeeId) return { error: { status: 403, message: "Forbidden" } } as const;
     if (identity.publicLearnerId && attempt.publicLearnerId !== identity.publicLearnerId) return { error: { status: 403, message: "Forbidden" } } as const;
 
     const quiz = await storage.getTrainingQuizByCourse(attempt.courseId);
-    if (!quiz) return { error: { status: 404, message: "Quiz not found" } } as const;
+    if (!quiz || !quiz.questions.length) return { error: { status: 404, message: "Quiz not ready" } } as const;
 
     let correctCount = 0;
     const review = quiz.questions.map(q => {
@@ -11738,13 +11755,14 @@ Return ONLY valid JSON:
     const score = Math.round((correctCount / total) * 100);
     const passed = score >= quiz.passingScore;
 
-    await storage.updateTrainingQuizAttempt(attempt.id, {
+    const savedAttempt = await storage.updateTrainingQuizAttempt(attempt.id, {
       score,
       passed,
       answersJson: JSON.stringify(answers ?? {}),
       completedAt: trainingNow(),
     } as any);
 
+    if (!savedAttempt) return { error: { status: 409, message: "Attempt already submitted" } } as const;
     return { quiz, attempt, score, passed, correctCount, total, review } as const;
   }
 
@@ -11754,7 +11772,7 @@ Return ONLY valid JSON:
       const user = (req as any).user;
       if (user.role !== "employee") return res.status(403).json({ message: "Forbidden" });
       // Assignment check: getMyTrainingCourse only returns when the employee is assigned/visible
-      const detail = await storage.getMyTrainingCourse(req.params.courseId, user.id);
+      const detail = await storage.getMyTrainingCourse(req.params.courseId, user.id, user.companyId);
       if (!detail) return res.status(404).json({ message: "Course not found" });
       const payload = await buildQuizPayload(req.params.courseId, user.id, undefined);
       if (!payload) return res.status(404).json({ message: "No quiz for this course" });
@@ -11767,7 +11785,7 @@ Return ONLY valid JSON:
     try {
       const user = (req as any).user;
       if (user.role !== "employee") return res.status(403).json({ message: "Forbidden" });
-      const detail = await storage.getMyTrainingCourse(req.params.courseId, user.id);
+      const detail = await storage.getMyTrainingCourse(req.params.courseId, user.id, user.companyId);
       if (!detail) return res.status(404).json({ message: "Course not found" });
       const result = await startQuizAttempt(req.params.courseId, user.companyId, user.id, undefined);
       if ("error" in result) return res.status(result.error.status).json({ message: result.error.message });
@@ -11782,7 +11800,7 @@ Return ONLY valid JSON:
       if (user.role !== "employee") return res.status(403).json({ message: "Forbidden" });
       const { answers } = req.body || {};
       if (!answers || typeof answers !== "object") return res.status(400).json({ message: "answers required" });
-      const result = await submitQuizAttempt(req.params.attemptId, answers, { employeeId: user.id });
+      const result = await submitQuizAttempt(req.params.attemptId, answers, { employeeId: user.id, companyId: user.companyId });
       if ("error" in result) return res.status(result.error.status).json({ message: result.error.message });
       // Tenant guard
       if (result.attempt.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
@@ -11846,7 +11864,7 @@ Return ONLY valid JSON:
       }
       const learner = await storage.getPublicLearner(learnerId);
       if (!learner || learner.courseId !== course.id) return res.status(404).json({ message: "Learner not found" });
-      const result = await submitQuizAttempt(attemptId, answers, { publicLearnerId: learnerId });
+      const result = await submitQuizAttempt(attemptId, answers, { publicLearnerId: learnerId, companyId: course.companyId, courseId: course.id });
       if ("error" in result) return res.status(result.error.status).json({ message: result.error.message });
       if (result.attempt.courseId !== course.id) return res.status(403).json({ message: "Forbidden" });
       const cert = result.passed ? await tryIssueTrainingCertificate({
@@ -11886,6 +11904,9 @@ Return ONLY valid JSON:
       const course = await storage.getTrainingCourse(courseId);
       if (!course || course.companyId !== user.companyId) return res.status(404).json({ message: "Course not found" });
 
+      if (employeeId && publicLearnerId) return res.status(400).json({ message: "Select one learner" });
+      if (employeeId && (await storage.getUser(employeeId))?.companyId !== user.companyId) return res.status(404).json({ message: "Learner not found" });
+      if (publicLearnerId && (await storage.getPublicLearner(publicLearnerId))?.courseId !== course.id) return res.status(404).json({ message: "Learner not found" });
       const modules = await storage.getTrainingModules(courseId);
       const progress = await storage.getTrainingProgress(courseId, employeeId, publicLearnerId);
       const completedModuleIds = new Set(progress.map((p: any) => p.moduleId));

@@ -1,3 +1,4 @@
+import { trainingState } from "@shared/training-state";
 import { db } from "./db";
 import { eq, and, desc, sql, inArray, or, isNull, gte, asc, ne } from "drizzle-orm";
 import {
@@ -508,10 +509,10 @@ export interface IStorage {
   createTrainingModuleAsset(data: InsertTrainingModuleAsset): Promise<TrainingModuleAsset>;
   deleteTrainingModuleAssets(moduleId: string): Promise<void>;
 
-  assignTrainingCourse(courseId: string, companyId: string, employeeIds: string[], assignedBy: string): Promise<string[]>;
+  assignTrainingCourse(courseId: string, companyId: string, employeeIds: string[], assignedBy: string, dueDate?: string | null): Promise<string[]>;
   getTrainingAssignments(courseId: string): Promise<(TrainingAssignment & { employeeName: string })[]>;
   getMyTrainingCourses(employeeId: string, companyId: string): Promise<any[]>;
-  getMyTrainingCourse(courseId: string, employeeId: string): Promise<any>;
+  getMyTrainingCourse(courseId: string, employeeId: string, companyId?: string): Promise<any>;
 
   markModuleComplete(courseId: string, moduleId: string, companyId: string, employeeId?: string, publicLearnerId?: string): Promise<void>;
   getTrainingProgress(courseId: string, employeeId?: string, publicLearnerId?: string): Promise<TrainingProgress[]>;
@@ -2493,13 +2494,12 @@ export class DatabaseStorage implements IStorage {
         employeeId: eid, completedModules: learnerCountMap.get(eid) ?? 0,
       }));
 
-      const completedCount = moduleCount > 0
-        ? learnerProgress.filter(l => l.completedModules >= moduleCount).length
-        : 0;
+      const assignmentStates = await this.getTrainingAssignments(c.id);
+      const completedCount = assignmentStates.filter(a => a.status === "completed").length;
 
       // Active learners (in-flight): top 3 by progress, not yet completed
       const activeOnes = learnerProgress
-        .filter(l => moduleCount > 0 && l.completedModules > 0 && l.completedModules < moduleCount)
+        .filter(l => moduleCount > 0 && l.completedModules > 0 && !assignmentStates.find(a => a.employeeId === l.employeeId && a.status === "completed"))
         .sort((a, b) => b.completedModules - a.completedModules)
         .slice(0, 3);
       const activeIds = activeOnes.map(l => l.employeeId);
@@ -2519,7 +2519,7 @@ export class DatabaseStorage implements IStorage {
 
       const totalPossible = assignedCount * moduleCount;
       const totalActual = learnerProgress.reduce((s, l) => s + l.completedModules, 0);
-      const cohortProgress = totalPossible > 0 ? Math.round((totalActual / totalPossible) * 100) : 0;
+      const cohortProgress = assignmentStates.length ? Math.round(assignmentStates.reduce((sum: number, a: any) => sum + a.progressPct, 0) / assignmentStates.length) : 0;
 
       return { ...c, moduleCount, assignedCount, completedCount, modules, activeLearners, cohortProgress };
     }));
@@ -2564,8 +2564,13 @@ export class DatabaseStorage implements IStorage {
   async getTrainingStats(companyId: string): Promise<{ totalCourses: number; totalAssigned: number; totalCompleted: number; totalPending: number }> {
     const [{ count: totalCourses }] = await db.select({ count: sql<number>`count(*)::int` }).from(trainingCourses).where(eq(trainingCourses.companyId, companyId));
     const [{ count: totalAssigned }] = await db.select({ count: sql<number>`count(*)::int` }).from(trainingAssignments).where(eq(trainingAssignments.companyId, companyId));
-    const completedAssignments = await db.select({ employeeId: trainingAssignments.employeeId, courseId: trainingAssignments.courseId }).from(trainingAssignments).where(and(eq(trainingAssignments.companyId, companyId), eq(trainingAssignments.status, "completed")));
-    const totalCompleted = completedAssignments.length;
+    const assignments = await db.select().from(trainingAssignments).where(eq(trainingAssignments.companyId, companyId));
+    const states = await Promise.all(assignments.map(async a => {
+      const modules = await this.getTrainingModules(a.courseId), quiz = await this.getTrainingQuizByCourse(a.courseId);
+      const progress = await this.getTrainingProgress(a.courseId, a.employeeId);
+      return trainingState(modules, new Set(progress.map(p => p.moduleId)), quiz, quiz ? await this.hasPassedTrainingQuiz(quiz.id, a.employeeId) : false);
+    }));
+    const totalCompleted = states.filter(s => s.isCompleted).length;
     const totalPending = Math.max(0, (totalAssigned ?? 0) - totalCompleted);
     return { totalCourses: totalCourses ?? 0, totalAssigned: totalAssigned ?? 0, totalCompleted, totalPending };
   }
@@ -2615,80 +2620,76 @@ export class DatabaseStorage implements IStorage {
     await db.delete(trainingModuleAssets).where(eq(trainingModuleAssets.moduleId, moduleId));
   }
 
-  async assignTrainingCourse(courseId: string, companyId: string, employeeIds: string[], assignedBy: string): Promise<string[]> {
-    const now = new Date().toISOString();
-    const newlyAssigned: string[] = [];
-    for (const employeeId of employeeIds) {
-      const existing = await db.select().from(trainingAssignments).where(and(eq(trainingAssignments.courseId, courseId), eq(trainingAssignments.employeeId, employeeId)));
-      if (existing.length === 0) {
-        await db.insert(trainingAssignments).values({ courseId, companyId, employeeId, assignedBy, status: "assigned", createdAt: now });
-        newlyAssigned.push(employeeId);
+  async assignTrainingCourse(courseId: string, companyId: string, employeeIds: string[], assignedBy: string, dueDate?: string | null): Promise<string[]> {
+    const ids = Array.from(new Set(employeeIds));
+    return db.transaction(async tx => {
+      const [course] = await tx.select().from(trainingCourses).where(and(eq(trainingCourses.id, courseId), eq(trainingCourses.companyId, companyId))).for("update");
+      if (!course?.isPublished) throw new Error("Publish this course before assigning it.");
+      const recipients = ids.length ? await tx.select().from(users).where(and(inArray(users.id, ids), eq(users.companyId, companyId), eq(users.role, "employee"), eq(users.isActive, true))) : [];
+      if (recipients.length !== ids.length) throw new Error("Select active cleaners from your company.");
+      const newlyAssigned: string[] = [];
+      for (const employeeId of ids) {
+        const [existing] = await tx.select().from(trainingAssignments).where(and(eq(trainingAssignments.courseId, courseId), eq(trainingAssignments.employeeId, employeeId), eq(trainingAssignments.companyId, companyId)));
+        if (!existing) {
+          await tx.insert(trainingAssignments).values({ courseId, companyId, employeeId, assignedBy, dueDate: dueDate || null, status: "assigned", createdAt: new Date().toISOString() });
+          newlyAssigned.push(employeeId);
+        } else if (dueDate) {
+          await tx.update(trainingAssignments).set({ dueDate }).where(eq(trainingAssignments.id, existing.id));
+        }
       }
-    }
-    return newlyAssigned;
+      return newlyAssigned;
+    });
   }
 
   async getTrainingAssignments(courseId: string): Promise<(TrainingAssignment & { employeeName: string })[]> {
     const assignments = await db.select().from(trainingAssignments).where(eq(trainingAssignments.courseId, courseId)).orderBy(asc(trainingAssignments.createdAt));
+    const modules = await this.getTrainingModules(courseId), quiz = await this.getTrainingQuizByCourse(courseId);
     return Promise.all(assignments.map(async a => {
-      const emp = await db.select({ firstName: users.firstName, lastName: users.lastName }).from(users).where(eq(users.id, a.employeeId));
-      const name = emp[0] ? `${emp[0].firstName} ${emp[0].lastName}` : "Unknown";
-      return { ...a, employeeName: name };
+      const emp = await this.getUser(a.employeeId);
+      const progress = await this.getTrainingProgress(courseId, a.employeeId);
+      const state = trainingState(modules, new Set(progress.map(p => p.moduleId)), quiz, quiz ? await this.hasPassedTrainingQuiz(quiz.id, a.employeeId) : false);
+      return { ...a, ...state, status: state.isCompleted ? "completed" : state.completedModules ? "started" : "assigned", employeeName: emp ? `${emp.firstName} ${emp.lastName}` : "Unknown" };
     }));
   }
 
   async getMyTrainingCourses(employeeId: string, companyId: string): Promise<any[]> {
-    const assignments = await db.select({ courseId: trainingAssignments.courseId }).from(trainingAssignments).where(and(eq(trainingAssignments.employeeId, employeeId), eq(trainingAssignments.companyId, companyId)));
-    const publicCourses = await db.select().from(trainingCourses).where(and(eq(trainingCourses.companyId, companyId), eq(trainingCourses.isPublished, true)));
-    const assignedIds = new Set(assignments.map(a => a.courseId));
-    const courseIds = [...new Set([...assignments.map(a => a.courseId), ...publicCourses.map(c => c.id)])];
-    if (courseIds.length === 0) return [];
-    const courses = await db.select().from(trainingCourses).where(inArray(trainingCourses.id, courseIds));
-    return Promise.all(courses.map(async c => {
-      const modules = await db.select().from(trainingModules).where(eq(trainingModules.courseId, c.id));
-      const progress = await db.select().from(trainingProgress).where(and(eq(trainingProgress.courseId, c.id), eq(trainingProgress.employeeId, employeeId)));
-      const completedIds = new Set(progress.map(p => p.moduleId));
-      const totalModules = modules.length;
-      const completedModules = modules.filter(m => completedIds.has(m.id)).length;
-      const progressPct = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
-      const isCompleted = totalModules > 0 && completedModules >= modules.filter(m => m.isRequired).length && modules.filter(m => m.isRequired).every(m => completedIds.has(m.id));
-      const status = completedModules === 0 ? "not_started" : isCompleted ? "completed" : "in_progress";
-      const cert = await this.getTrainingCertificate(c.id, employeeId, undefined);
-      return { ...c, totalModules, completedModules, progressPct, isCompleted, status, certificate: cert ? { certificateCode: cert.certificateCode, issuedAt: cert.issuedAt } : null };
-    }));
+    const assignments = await db.select().from(trainingAssignments).where(and(eq(trainingAssignments.employeeId, employeeId), eq(trainingAssignments.companyId, companyId)));
+    if (!assignments.length) return [];
+    const courses = await db.select().from(trainingCourses).where(and(inArray(trainingCourses.id, assignments.map(a => a.courseId)), eq(trainingCourses.companyId, companyId), eq(trainingCourses.isPublished, true)));
+    return Promise.all(courses.map(async course => {
+      const detail = await this.getMyTrainingCourse(course.id, employeeId, companyId);
+      return detail?.course;
+    })).then(rows => rows.filter(Boolean));
   }
 
-  async getMyTrainingCourse(courseId: string, employeeId: string): Promise<any> {
+  async getMyTrainingCourse(courseId: string, employeeId: string, companyId?: string): Promise<any> {
+    const employee = await this.getUser(employeeId);
+    const tenant = companyId || employee?.companyId;
     const course = await this.getTrainingCourse(courseId);
-    if (!course) return null;
+    if (!employee || employee.companyId !== tenant || !course || course.companyId !== tenant || !course.isPublished) return null;
+    const [assignment] = await db.select().from(trainingAssignments).where(and(eq(trainingAssignments.courseId, courseId), eq(trainingAssignments.employeeId, employeeId), eq(trainingAssignments.companyId, tenant!)));
+    if (!assignment) return null;
     const modules = await this.getTrainingModules(courseId);
-    const progress = await db.select().from(trainingProgress).where(and(eq(trainingProgress.courseId, courseId), eq(trainingProgress.employeeId, employeeId)));
-    const completedIds = new Set(progress.map(p => p.moduleId));
-    const modulesWithCompletion = modules.map(m => ({ ...m, completed: completedIds.has(m.id) }));
-    const totalModules = modules.length;
-    const completedModules = modules.filter(m => completedIds.has(m.id)).length;
-    const progressPct = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
-    const reqModules = modules.filter(m => m.isRequired);
-    const isCompleted = reqModules.length > 0 ? reqModules.every(m => completedIds.has(m.id)) : completedModules === totalModules && totalModules > 0;
-    const status = completedModules === 0 ? "not_started" : isCompleted ? "completed" : "in_progress";
-    const cert = await this.getTrainingCertificate(courseId, employeeId, undefined);
-    const courseWithMeta = { ...course, totalModules, completedModules, progressPct, isCompleted, status, certificate: cert ? { certificateCode: cert.certificateCode, issuedAt: cert.issuedAt } : null };
-    return { course: courseWithMeta, modules: modulesWithCompletion };
+    const progress = await this.getTrainingProgress(courseId, employeeId);
+    const quiz = await this.getTrainingQuizByCourse(courseId);
+    const passed = quiz ? await this.hasPassedTrainingQuiz(quiz.id, employeeId) : false;
+    const state = trainingState(modules, new Set(progress.map(p => p.moduleId)), quiz, passed);
+    const cert = await this.getTrainingCertificate(courseId, employeeId);
+    return { course: { ...course, ...state, assignedAt: assignment.createdAt, dueDate: assignment.dueDate, certificate: cert ? { certificateCode: cert.certificateCode, issuedAt: cert.issuedAt, learnerName: cert.learnerName } : null }, modules: modules.map(m => ({ ...m, completed: progress.some(p => p.moduleId === m.id) })) };
   }
 
   async markModuleComplete(courseId: string, moduleId: string, companyId: string, employeeId?: string, publicLearnerId?: string): Promise<void> {
-    const existing = await db.select().from(trainingProgress).where(and(
-      eq(trainingProgress.courseId, courseId),
-      eq(trainingProgress.moduleId, moduleId),
-      employeeId ? eq(trainingProgress.employeeId, employeeId) : isNull(trainingProgress.employeeId),
-      publicLearnerId ? eq(trainingProgress.publicLearnerId, publicLearnerId) : isNull(trainingProgress.publicLearnerId),
-    ));
-    if (existing.length > 0) return;
-    const now = new Date().toISOString();
-    await db.insert(trainingProgress).values({ courseId, moduleId, companyId, employeeId: employeeId ?? null, publicLearnerId: publicLearnerId ?? null, completedAt: now, createdAt: now } as any);
-    if (employeeId) {
-      await db.update(trainingAssignments).set({ status: "started" }).where(and(eq(trainingAssignments.courseId, courseId), eq(trainingAssignments.employeeId, employeeId), eq(trainingAssignments.status, "assigned")));
-    }
+    await db.transaction(async tx => {
+      const [course] = await tx.select().from(trainingCourses).where(and(eq(trainingCourses.id, courseId), eq(trainingCourses.companyId, companyId))).for("update");
+      if (!course) throw new Error("Course not found");
+      const [module] = await tx.select().from(trainingModules).where(and(eq(trainingModules.id, moduleId), eq(trainingModules.courseId, courseId)));
+      if (!module) throw new Error("Lesson not found");
+      const [existing] = await tx.select().from(trainingProgress).where(and(eq(trainingProgress.courseId, courseId), eq(trainingProgress.moduleId, moduleId), employeeId ? eq(trainingProgress.employeeId, employeeId) : isNull(trainingProgress.employeeId), publicLearnerId ? eq(trainingProgress.publicLearnerId, publicLearnerId) : isNull(trainingProgress.publicLearnerId)));
+      if (existing) return;
+      const now = new Date().toISOString();
+      await tx.insert(trainingProgress).values({ courseId, moduleId, companyId, employeeId: employeeId ?? null, publicLearnerId: publicLearnerId ?? null, completedAt: now, createdAt: now });
+      if (employeeId) await tx.update(trainingAssignments).set({ status: "started" }).where(and(eq(trainingAssignments.courseId, courseId), eq(trainingAssignments.employeeId, employeeId), eq(trainingAssignments.companyId, companyId), eq(trainingAssignments.status, "assigned")));
+    });
   }
 
   async getTrainingProgress(courseId: string, employeeId?: string, publicLearnerId?: string): Promise<TrainingProgress[]> {
@@ -2718,8 +2719,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTrainingCertificate(data: InsertTrainingCertificate): Promise<TrainingCertificate> {
-    const [row] = await db.insert(trainingCertificates).values(data as any).returning();
-    return row;
+    return db.transaction(async tx => {
+      await tx.select().from(trainingCourses).where(eq(trainingCourses.id, data.courseId)).for("update");
+      const [existing] = await tx.select().from(trainingCertificates).where(and(eq(trainingCertificates.courseId, data.courseId), eq(trainingCertificates.companyId, data.companyId), data.employeeId ? eq(trainingCertificates.employeeId, data.employeeId) : isNull(trainingCertificates.employeeId), data.publicLearnerId ? eq(trainingCertificates.publicLearnerId, data.publicLearnerId) : isNull(trainingCertificates.publicLearnerId)));
+      if (existing) return existing;
+      const [row] = await tx.insert(trainingCertificates).values(data).returning();
+      return row;
+    });
   }
 
   async getTrainingCertificate(courseId: string, employeeId?: string, publicLearnerId?: string): Promise<TrainingCertificate | undefined> {
@@ -2789,7 +2795,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateTrainingQuizAttempt(id: string, data: Partial<InsertTrainingQuizAttempt>): Promise<TrainingQuizAttempt | undefined> {
-    const [row] = await db.update(trainingQuizAttempts).set(data as any).where(eq(trainingQuizAttempts.id, id)).returning();
+    const [row] = await db.update(trainingQuizAttempts).set(data as any).where(and(eq(trainingQuizAttempts.id, id), isNull(trainingQuizAttempts.completedAt))).returning();
     return row;
   }
 

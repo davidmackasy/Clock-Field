@@ -549,7 +549,7 @@ export default function EmployeeHome() {
             <Button
               size="sm"
               className="w-full bg-blue-600 hover:bg-blue-700 text-white h-9 text-xs font-semibold"
-              onClick={() => navigate("/employee/training")}
+              onClick={() => navigate(`/employee/training?course=${encodeURIComponent(t.courseId)}`)}
               data-testid="button-training-reminder-action"
             >
               <GraduationCap className="w-3.5 h-3.5 mr-1.5" />
