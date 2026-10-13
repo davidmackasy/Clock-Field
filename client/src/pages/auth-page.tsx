@@ -259,8 +259,10 @@ export default function AuthPage() {
     e.preventDefault();
     setEmpError("");
     setIsLoading(true);
+    const assignedCourse = new URLSearchParams(window.location.search).get("course");
     try {
       await employeeLogin(empId.trim().toUpperCase(), empPin.trim());
+      setLocation(assignedCourse ? `/employee/training?course=${encodeURIComponent(assignedCourse)}` : "/employee");
       toast({ title: "Welcome!" });
     } catch (err: any) {
       setEmpError(normalizeLoginError(err));
