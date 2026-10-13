@@ -72,3 +72,13 @@ const statsStore=new Function('db','trainingCourses','trainingAssignments','trai
 Object.assign(statsStore,{getTrainingQuizByCourse:async()=>null,getTrainingProgress:async(_course:string,employee:string)=>employee==='complete'?[{moduleId:'read'}]:[]});
 assert.deepEqual(await statsStore.getTrainingStats('company'),{totalCourses:1,totalAssigned:2,totalCompleted:1,totalPending:1});
 console.log('PASS: lightweight live-summary aggregation reports completed/pending assignments from current learning state.');
+
+// First/last fractional seconds matter for short clips; replays must not inflate viewing.
+const { recordWatch, watchedSeconds } = await import('../shared/training-watch');
+let coverage: [number,number][] = [];
+for(const [from,to] of [[0,.8],[.8,1.7],[1.7,2.5]])coverage=recordWatch(coverage,from,to,2.5);
+assert.equal(watchedSeconds(coverage),2.5);
+assert.equal(watchedSeconds(recordWatch(coverage,0,2,2.5)),2.5);
+assert.equal(watchedSeconds(recordWatch([],0,90,100)),0);
+assert.equal(watchedSeconds(recordWatch([],0,1.2,1.1)),1.1);
+console.log('PASS: short-video start/end coverage, replay de-duplication and seek exclusion.');

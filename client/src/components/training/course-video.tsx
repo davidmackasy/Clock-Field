@@ -1,3 +1,4 @@
+import { recordWatch, watchedSeconds, type WatchedRange } from "@shared/training-watch";
 import { useEffect, useRef, useState } from "react";
 import { AlertCircle } from "lucide-react";
 
@@ -22,7 +23,13 @@ export function CourseVideo({ videoId, title, onWatch }: { videoId: string; titl
   useEffect(() => {
     let disposed = false, player: any, timer: ReturnType<typeof setInterval> | undefined;
     let previous: number | undefined;
-    const watched = new Set<number>();
+    let ranges: WatchedRange[] = [];
+    const sample = () => {
+      const at=Number(player?.getCurrentTime?.() || 0), duration=Number(player?.getDuration?.() || 0);
+      if (previous !== undefined && document.visibilityState === "visible") ranges=recordWatch(ranges,previous,at,duration);
+      previous=at;
+      if(duration>0)report.current({watchedSeconds:watchedSeconds(ranges),duration});
+    };
     setError(false);
     youtubeApi().then(YT => {
       if (disposed || !host.current) return;
@@ -30,18 +37,17 @@ export function CourseVideo({ videoId, title, onWatch }: { videoId: string; titl
       player = new YT.Player(node, {
         host: "https://www.youtube-nocookie.com", videoId, width: "100%", height: "100%",
         playerVars: { playsinline: 1, origin: window.location.origin, rel: 0 },
-        events: { onReady: () => { player.getIframe().title = title; }, onError: () => setError(true) },
+        events: {
+          onReady: () => { player.getIframe().title = title; }, onError: () => setError(true),
+          onStateChange: (event: any) => {
+            if (event.data === 1) previous=Number(event.target.getCurrentTime());
+            else { sample(); previous=undefined; }
+          },
+        },
       });
       timer = setInterval(() => {
-        const at = Number(player.getCurrentTime?.() || 0), duration = Number(player.getDuration?.() || 0);
-        if (player.getPlayerState?.() === 1 && document.visibilityState === "visible") {
-          // Credit only continuous playback. Seeking to the end does not complete a lesson.
-          if (previous !== undefined && at > previous && at - previous <= 3) {
-            for (let sec = Math.floor(previous); sec < Math.floor(at); sec++) watched.add(sec);
-          }
-          previous = at;
-        } else previous = undefined;
-        if (duration > 0) report.current({ watchedSeconds: watched.size, duration });
+        if (player.getPlayerState?.() === 1 && document.visibilityState === "visible") sample();
+        else previous=undefined;
       }, 1000);
     }).catch(() => { if (!disposed) setError(true); });
     return () => { disposed = true; if (timer) clearInterval(timer); player?.destroy?.(); };
