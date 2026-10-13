@@ -1013,8 +1013,8 @@ export default function AdminTrainingHub() {
   const [localModules, setLocalModules] = useState<any[] | null>(null);
   const [learnerModal, setLearnerModal] = useState<LearnerModalTarget | null>(null);
 
-  const { data: courses = [], isLoading } = useQuery<Course[]>({ queryKey: ["/api/training/courses"], refetchInterval:30000 });
-  const { data: stats } = useQuery<{ totalCourses: number; totalAssigned: number; totalCompleted: number; totalPending: number }>({
+  const { data: courses = [], isLoading, isError: coursesError } = useQuery<Course[]>({ queryKey: ["/api/training/courses"], refetchInterval:30000 });
+  const { data: stats, isLoading: statsLoading, isError: statsError } = useQuery<{ totalCourses: number; totalAssigned: number; totalCompleted: number; totalPending: number }>({
     queryKey: ["/api/training/stats"], refetchInterval:30000,
   });
   const { data: detail, isLoading: detailLoading } = useQuery<CourseDetail>({
@@ -1322,6 +1322,7 @@ export default function AdminTrainingHub() {
         )}
       </div>
 
+      {(coursesError || statsError) && <div role="alert" className="rounded-lg border border-destructive/30 p-4 text-sm">Training data could not fully load. <Button size="sm" variant="outline" className="ml-2" onClick={() => { queryClient.refetchQueries({ queryKey: ["/api/training/courses"] }); queryClient.refetchQueries({ queryKey: ["/api/training/stats"] }); }}>Retry</Button></div>}
       {/* Stats */}
       {view === "grid" && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1338,7 +1339,7 @@ export default function AdminTrainingHub() {
                   <Icon className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-lg sm:text-xl font-bold text-foreground leading-tight">{s.value}</div>
+                  <div className="text-lg sm:text-xl font-bold text-foreground leading-tight">{statsLoading || statsError ? "—" : s.value}</div>
                   <div className="text-[11px] sm:text-xs text-muted-foreground leading-tight truncate">{s.label}</div>
                 </div>
               </div>

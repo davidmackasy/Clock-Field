@@ -62,3 +62,13 @@ const certStorage={getTrainingCourse:async()=>({companyId:'company',certificateE
 const finish=new Function('storage','db','trainingAssignments','eq','and','trainingNow','genCertCode',`${certCode};return tryIssueTrainingCertificate;`)(certStorage,{update:()=>({set:()=>({where:async()=>{statusWrites++;}})})},table,(...a:any[])=>a,(...a:any[])=>a,()=>'',()=>'');
 assert.equal(await finish({courseId:'course',companyId:'company',employeeId:'employee',learnerName:'Example Cleaner'}),null);assert.equal(statusWrites,1);
 console.log('PASS: video completion validation, module ownership, and completion saved even with certificates disabled.');
+// The real hub summary counts assignments from required lesson/quiz state, not stale DB status.
+const statsStart=storageSource.indexOf('  async getTrainingStats(companyId:'),statsEnd=storageSource.indexOf('\n  async createTrainingModule',statsStart);
+const statsMethod=(await transform(`class StatsStorage {${storageSource.slice(statsStart,statsEnd)}}`,{loader:'ts'})).code;
+const courseTable={companyId:'companyId'},assignmentTable={companyId:'companyId'},moduleTable={id:'id',isRequired:'isRequired',courseId:'courseId'};
+const rows=[{courseId:'course',employeeId:'complete'},{courseId:'course',employeeId:'pending'}];
+const statsDb={select:(selection:any)=>({from:(table:any)=>({where:async()=>selection?.count!==undefined?[{count:table===courseTable?1:2}]:table===assignmentTable?rows:[{id:'read',isRequired:true}]})})};
+const statsStore=new Function('db','trainingCourses','trainingAssignments','trainingModules','sql','eq','trainingState',`${statsMethod};return new StatsStorage();`)(statsDb,courseTable,assignmentTable,moduleTable,()=> 'count',(...v:any[])=>v,trainingState);
+Object.assign(statsStore,{getTrainingQuizByCourse:async()=>null,getTrainingProgress:async(_course:string,employee:string)=>employee==='complete'?[{moduleId:'read'}]:[]});
+assert.deepEqual(await statsStore.getTrainingStats('company'),{totalCourses:1,totalAssigned:2,totalCompleted:1,totalPending:1});
+console.log('PASS: lightweight live-summary aggregation reports completed/pending assignments from current learning state.');

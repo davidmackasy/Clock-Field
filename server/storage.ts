@@ -2565,8 +2565,13 @@ export class DatabaseStorage implements IStorage {
     const [{ count: totalCourses }] = await db.select({ count: sql<number>`count(*)::int` }).from(trainingCourses).where(eq(trainingCourses.companyId, companyId));
     const [{ count: totalAssigned }] = await db.select({ count: sql<number>`count(*)::int` }).from(trainingAssignments).where(eq(trainingAssignments.companyId, companyId));
     const assignments = await db.select().from(trainingAssignments).where(eq(trainingAssignments.companyId, companyId));
+    const courseIds = Array.from(new Set(assignments.map(a => a.courseId)));
+    const contexts = new Map(await Promise.all(courseIds.map(async courseId => {
+      const modules = await db.select({ id: trainingModules.id, isRequired: trainingModules.isRequired }).from(trainingModules).where(eq(trainingModules.courseId, courseId));
+      return [courseId, { modules, quiz: await this.getTrainingQuizByCourse(courseId) }] as const;
+    })));
     const states = await Promise.all(assignments.map(async a => {
-      const modules = await this.getTrainingModules(a.courseId), quiz = await this.getTrainingQuizByCourse(a.courseId);
+      const { modules, quiz } = contexts.get(a.courseId)!;
       const progress = await this.getTrainingProgress(a.courseId, a.employeeId);
       return trainingState(modules, new Set(progress.map(p => p.moduleId)), quiz, quiz ? await this.hasPassedTrainingQuiz(quiz.id, a.employeeId) : false);
     }));
@@ -2643,7 +2648,7 @@ export class DatabaseStorage implements IStorage {
 
   async getTrainingAssignments(courseId: string): Promise<(TrainingAssignment & { employeeName: string })[]> {
     const assignments = await db.select().from(trainingAssignments).where(eq(trainingAssignments.courseId, courseId)).orderBy(asc(trainingAssignments.createdAt));
-    const modules = await this.getTrainingModules(courseId), quiz = await this.getTrainingQuizByCourse(courseId);
+    const modules = await db.select({ id: trainingModules.id, isRequired: trainingModules.isRequired }).from(trainingModules).where(eq(trainingModules.courseId, courseId)), quiz = await this.getTrainingQuizByCourse(courseId);
     return Promise.all(assignments.map(async a => {
       const emp = await this.getUser(a.employeeId);
       const progress = await this.getTrainingProgress(courseId, a.employeeId);
@@ -2657,9 +2662,13 @@ export class DatabaseStorage implements IStorage {
     if (!assignments.length) return [];
     const courses = await db.select().from(trainingCourses).where(and(inArray(trainingCourses.id, assignments.map(a => a.courseId)), eq(trainingCourses.companyId, companyId), eq(trainingCourses.isPublished, true)));
     return Promise.all(courses.map(async course => {
-      const detail = await this.getMyTrainingCourse(course.id, employeeId, companyId);
-      return detail?.course;
-    })).then(rows => rows.filter(Boolean));
+      const modules = await db.select({ id: trainingModules.id, isRequired: trainingModules.isRequired }).from(trainingModules).where(eq(trainingModules.courseId, course.id));
+      const progress = await this.getTrainingProgress(course.id, employeeId), quiz = await this.getTrainingQuizByCourse(course.id);
+      const state = trainingState(modules, new Set(progress.map(p => p.moduleId)), quiz, quiz ? await this.hasPassedTrainingQuiz(quiz.id, employeeId) : false);
+      const assignment = assignments.find(a => a.courseId === course.id)!;
+      const cert = await this.getTrainingCertificate(course.id, employeeId);
+      return { ...course, ...state, assignedAt: assignment.createdAt, dueDate: assignment.dueDate, certificate: cert ? { certificateCode: cert.certificateCode, issuedAt: cert.issuedAt, learnerName: cert.learnerName } : null };
+    }));
   }
 
   async getMyTrainingCourse(courseId: string, employeeId: string, companyId?: string): Promise<any> {
