@@ -869,7 +869,7 @@ function TemplatesTab() {
       </div>
 
       {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}
         </div>
       ) : !filtered.length ? (
@@ -878,14 +878,14 @@ function TemplatesTab() {
           <p className="font-medium">{search ? "No matching templates" : "No templates yet"}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map(t => (
             <div key={t.id} data-testid={`card-template-${t.id}`}
               className="group border rounded-xl p-4 bg-card hover:border-primary/30 hover:shadow-md transition-all cursor-pointer flex flex-col gap-3"
               onClick={() => setSelectedTemplateId(t.id)}>
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm truncate">{t.name}</p>
+                  <p className="font-semibold text-sm break-words line-clamp-2">{t.name}</p>
                   {t.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{t.description}</p>}
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" onClick={e => e.stopPropagation()}>
@@ -1012,7 +1012,7 @@ function AssignmentsTab() {
       </div>
 
       {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-36 rounded-xl" />)}
         </div>
       ) : !filtered.length ? (
@@ -1021,7 +1021,7 @@ function AssignmentsTab() {
           <p className="font-medium">{search ? "No matching assignments" : "No assignments yet"}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map(a => (
             <div key={a.id} data-testid={`card-assignment-${a.id}`} className="border rounded-xl p-4 bg-card flex flex-col gap-3">
               <div>
@@ -1169,7 +1169,7 @@ function CleanerHistoryView({ cleanerName, submissions, onViewSubmission, onBack
           <BarChart2 className="w-10 h-10 mx-auto mb-3 opacity-30" /><p className="font-medium">No matching submissions</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {sorted.map(s => (
             <div key={s.id} data-testid={`card-submission-${s.id}`}
               className="border rounded-xl p-4 bg-card hover:border-primary/20 hover:shadow-sm cursor-pointer transition-all flex flex-col gap-3"
@@ -1264,7 +1264,7 @@ function SubmissionsTab({ onViewSubmission }: { onViewSubmission: (id: string) =
       </div>
 
       {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}
         </div>
       ) : !cleanerCards.length ? (
@@ -1272,7 +1272,7 @@ function SubmissionsTab({ onViewSubmission }: { onViewSubmission: (id: string) =
           <BarChart2 className="w-10 h-10 mx-auto mb-3 opacity-30" /><p className="font-medium">No submissions found</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {cleanerCards.map(c => (
             <div key={c.id} className="border rounded-xl p-4 bg-card hover:border-primary/20 hover:shadow-md cursor-pointer transition-all flex flex-col gap-3"
               onClick={() => setSelectedCleaner({ id: c.id, name: c.name })}>
@@ -1493,7 +1493,7 @@ function ReportsTab({ onViewSubmission }: { onViewSubmission: (id: string) => vo
       </div>
 
       {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-48 rounded-xl" />)}
         </div>
       ) : !filtered.length ? (
@@ -1502,7 +1502,7 @@ function ReportsTab({ onViewSubmission }: { onViewSubmission: (id: string) => vo
           <p className="font-medium">{search ? "No matching reports" : "No completed checklists yet"}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map(s => {
             const publicUrl = s.publicId ? `${window.location.origin}/public/scheduled-field-notes/${s.publicId}` : null;
             return (

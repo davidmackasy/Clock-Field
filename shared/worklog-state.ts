@@ -20,7 +20,11 @@ export function scheduledAssignmentDue(assignment:any,schedule:any,date:string,s
   if(schedule.repeatFrequency==='biweekly')return Math.floor((Date.parse(date)-Date.parse(schedule.startDate))/86400000/7)%2===0;
   return true;
 }
-export function isSupplyRequest(s:any) { return Number(s.requestedQuantity) > 0 || !s.inventoryItemId; }
+export function isSupplyRequest(s:any) {
+ if(Number(s.requestedQuantity)>0)return true;
+ if(s.createdByUserRole)return s.createdByUserRole==='employee';
+ return !s.inventoryItemId;
+}
 export function openSupplyRequest(s:any) { return isSupplyRequest(s) && !['fulfilled','not_needed','resolved'].includes(s.status); }
 export function reportNeedsSignature(report:any,role?:string) {
  if(['finalized','archived','closed'].includes(report.status))return false;

@@ -971,8 +971,8 @@ function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sho
   });
 
   // Split into two groups:
-  // Assigned Supplies = admin-assigned from inventory (inventoryItemId set)
-  // Cleaner Requests  = employee-submitted new supply requests (no inventoryItemId)
+  // Keep cleaner requests in their history after inventory fulfillment.
+  // Creator role also identifies legacy business stock without an inventory link.
   const assigned = allSupplies.filter((s: any) => !isSupplyRequest(s));
   const cleanerReqs = allSupplies.filter((s: any) => isSupplyRequest(s));
 

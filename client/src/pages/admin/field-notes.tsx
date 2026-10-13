@@ -122,7 +122,7 @@ function SessionCard({ s, onClick, onDelete, onStopRecording }: {
       <div className="p-3.5 flex flex-col gap-2 flex-1">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm truncate leading-tight pr-5">{s.title || label}</p>
+            <p className="font-semibold text-sm break-words line-clamp-2 leading-tight pr-5">{s.title || label}</p>
             <p className="text-[11px] text-muted-foreground mt-0.5">{label}</p>
           </div>
           <div className={cn("w-2 h-2 rounded-full flex-shrink-0 mt-1 invisible", isPage ? "bg-purple-400" : cfg.dot)} />
@@ -350,7 +350,7 @@ export default function AdminFieldNotes() {
                 {[1, 2].map(i => <Skeleton key={i} className="h-28 w-full rounded-xl" />)}
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-3">
                 {walks.map((w) => {
                   return (
                     <div
@@ -371,7 +371,7 @@ export default function AdminFieldNotes() {
                         <div className="flex items-start gap-2">
                           <Building2 className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
                           <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-sm truncate leading-tight pr-5">{w.title}</p>
+                            <p className="font-semibold text-sm break-words line-clamp-2 leading-tight pr-5">{w.title}</p>
                             <p className="text-[11px] text-muted-foreground mt-0.5">{SITE_TYPE_LABELS[w.siteType] ?? w.siteType}</p>
                           </div>
                         </div>
@@ -437,7 +437,7 @@ export default function AdminFieldNotes() {
               {Object.entries(dateGroups).map(([date, list]) => (
                 <div key={date} className="mb-5">
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2 pl-1">{date}</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-3">
                     {list.map(s => (
                       <SessionCard
                         key={s.id}

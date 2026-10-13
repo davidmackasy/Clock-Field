@@ -6979,7 +6979,7 @@ FINAL RULES:
       const items = await db.select().from(inventoryItems).where(eq(inventoryItems.companyId, cid));
       const purchases = await db.select().from(inventoryPurchases).where(eq(inventoryPurchases.companyId, cid));
       const expenses = await db.select().from(locationSupplyExpenses).where(eq(locationSupplyExpenses.companyId, cid));
-      const requests = await db.select().from(supplies).where(and(eq(supplies.companyId, cid), eq(supplies.isActive, true)));
+      const requests = await db.select({ requestedQuantity: supplies.requestedQuantity, inventoryItemId: supplies.inventoryItemId, status: supplies.status, createdByUserRole: users.role }).from(supplies).leftJoin(users, eq(supplies.createdByUserId, users.id)).where(and(eq(supplies.companyId, cid), eq(supplies.isActive, true)));
       const totalItems = items.length;
       const outOfStock = items.filter(i => i.status === "out_of_stock").length;
       const runningLow = items.filter(i => i.status === "running_low").length;

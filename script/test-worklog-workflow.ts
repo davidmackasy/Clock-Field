@@ -73,3 +73,6 @@ console.log('PASS: Needs Signature / Needs Action counts exclude signatures alre
 Object.assign(storage,{getScheduledFieldNoteSection:async()=>({id:'section',companyId:company,templateId:'template'}),getScheduledFieldNoteSubmissions:async()=>[{templateId:'template',assignmentId:'assignment'}]});
 assert.equal((await gate('/api/admin/scheduled-field-notes/sections/:recordId',admin,{recordId:'section'},'DELETE')).code,409);
 console.log('PASS: historical checklist steps cannot be deleted after a recorded submission.');
+assert.equal(isSupplyRequest({createdByUserRole:'admin',inventoryItemId:null,status:'in_stock'}),false);
+assert.equal(isSupplyRequest({createdByUserRole:'employee',inventoryItemId:'stock',requestedQuantity:1,status:'fulfilled'}),true);
+console.log('PASS: legacy business stock is excluded from cleaner request counts, while fulfilled cleaner requests remain identifiable.');
