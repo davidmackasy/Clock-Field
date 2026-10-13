@@ -351,8 +351,9 @@ export default function AdminQuoteFormBuilder() {
   const [localConfig, setLocalConfig] = useState<FormConfig | null>(null);
   const [localName, setLocalName] = useState("");
   const [dirty, setDirty] = useState(false);
+  const [loadedId, setLoadedId] = useState<string | null>(null);
 
-  const { data: form, isLoading } = useQuery<QuoteForm>({
+  const { data: form, isLoading, isError, refetch } = useQuery<QuoteForm>({
     queryKey: ["/api/admin/quote-forms", id],
     queryFn: () => apiRequest("GET", `/api/admin/quote-forms/${id}`).then(r => r.json()),
     enabled: !!id,
@@ -365,22 +366,25 @@ export default function AdminQuoteFormBuilder() {
   });
 
   useEffect(() => {
-    if (form && !localConfig) {
+    if (form && loadedId !== form.id) {
       setLocalConfig(form.config);
       setLocalName(form.name);
+      setLoadedId(form.id);
+      setDirty(false);
     }
-  }, [form]);
+  }, [form, loadedId]);
 
   const saveMutation = useMutation({
     mutationFn: () => apiRequest("PATCH", `/api/admin/quote-forms/${id}`, {
       name: localName, config: localConfig,
     }).then(r => r.json()),
-    onSuccess: () => {
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["/api/admin/quote-forms", id], updated);
       queryClient.invalidateQueries({ queryKey: ["/api/admin/quote-forms"] });
       setDirty(false);
       toast({ title: "Form saved." });
     },
-    onError: () => toast({ title: "Failed to save", variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Failed to save", description: e.message, variant: "destructive" }),
   });
 
   const statusMutation = useMutation({
@@ -410,6 +414,7 @@ export default function AdminQuoteFormBuilder() {
   const publicUrl = form ? `${window.location.origin}/form/${form.companyId}/${form.slug}` : "";
   const isSmartForm = localConfig?.smartMode === "cleaning";
 
+  if (isError) return <div role="alert" className="p-6 space-y-3"><p>Unable to load this form.</p><Button onClick={() => { void refetch(); }}>Retry</Button><Button variant="outline" onClick={() => navigate("/admin/quote-forms")}>Back to Forms</Button></div>;
   if (isLoading || !localConfig) {
     return (
       <div className="p-6 space-y-4">
@@ -473,9 +478,9 @@ export default function AdminQuoteFormBuilder() {
       </div>
 
       {tab === "builder" ? (
-        <div className="flex-1 flex min-h-0 gap-0">
+        <div className="flex-1 flex flex-col lg:flex-row min-h-0 gap-0 overflow-y-auto lg:overflow-hidden">
           {/* Left panel */}
-          <div className="w-72 border-r flex flex-col overflow-hidden flex-shrink-0">
+          <div className="w-full lg:w-80 border-b lg:border-r flex flex-col max-h-[50vh] lg:max-h-none overflow-y-auto flex-shrink-0">
             <div className="px-4 py-2.5 border-b bg-muted/20 flex items-center gap-2">
               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex-1">Form Steps & Fields</p>
               {isSmartForm && (
@@ -507,7 +512,7 @@ export default function AdminQuoteFormBuilder() {
           </div>
 
           {/* Right panel — Live Preview */}
-          <div className="flex-1 p-4 min-h-0 overflow-hidden">
+          <div className="flex-1 min-w-0 p-4 min-h-0 lg:overflow-hidden">
             <div className="h-full">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">

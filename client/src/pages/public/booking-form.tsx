@@ -218,6 +218,7 @@ export default function PublicBookingForm() {
       if (!name.trim()) errs.name = "Name is required";
       if (!phone.trim()) errs.phone = "Phone is required";
       if (!email.trim()) errs.email = "Email is required";
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = "Enter a valid email address";
       if (!serviceAddress.trim()) errs.serviceAddress = "Service address is required";
       if (!serviceType) errs.serviceType = "Service type is required";
       if (!customerType) errs.customerType = "Customer type is required";

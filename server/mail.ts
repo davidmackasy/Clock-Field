@@ -946,3 +946,10 @@ export async function sendQuoteDeclinedAdminEmail(opts: {
   const text = `Quote declined by ${opts.clientName}.\nService: ${opts.serviceType}${opts.declineReason ? `\nReason: ${opts.declineReason}` : ""}\n\nLog in: ${opts.appUrl}`;
   await client.messages.create(domain, { from, to: [opts.to], subject, text, html });
 }
+
+export async function sendFormConfirmationEmail(opts: { to: string; subject: string; body: string; companyName: string }) {
+  const { client, domain } = getClient();
+  const escape = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  await client.messages.create(domain, { from: process.env.MAIL_FROM || "ClockField <noreply@mg.clockfield.com>", to: [opts.to], subject: opts.subject, text: opts.body,
+    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:24px"><h2>${escape(opts.companyName)}</h2><div style="white-space:pre-wrap">${escape(opts.body)}</div></div>` });
+}

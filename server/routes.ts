@@ -1,3 +1,4 @@
+import { validateForm, formName, validFormConfig } from "@shared/form-validation";
 import { trainingState } from "@shared/training-state";
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
@@ -8048,14 +8049,16 @@ FINAL RULES:
     try {
       const user = req.user as any;
       const { name, config } = req.body;
-      if (!name) return res.status(400).json({ message: "Name is required" });
-      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "form";
+      if (!formName(name)) return res.status(400).json({ message: "Enter a form name (1–120 characters)" });
+      const baseSlug = formName(name)!.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "form";
+      const slug = `${baseSlug}-${randomBytes(4).toString("hex")}`;
       const { DEFAULT_FORM_CONFIG, SMART_CLEANING_CONFIG } = await import("@shared/schema");
       // When smartMode === "cleaning", seed the full pre-built config (not empty steps)
       const finalConfig = config?.smartMode === "cleaning" ? SMART_CLEANING_CONFIG : (config ?? DEFAULT_FORM_CONFIG);
+      if (!validFormConfig(finalConfig)) return res.status(400).json({ message: "Invalid form configuration. Keep at least one enabled step." });
       const form = await storage.createQuoteForm({
         companyId: user.companyId,
-        name,
+        name: formName(name)!,
         slug,
         isActive: true,
         config: JSON.stringify(finalConfig),
@@ -8082,11 +8085,18 @@ FINAL RULES:
       if (!form || form.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       const updates: any = {};
       if (req.body.name !== undefined) {
-        updates.name = req.body.name;
-        updates.slug = req.body.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "form";
+        if (!formName(req.body.name)) return res.status(400).json({ message: "Enter a form name (1–120 characters)" });
+        updates.name = formName(req.body.name);
+        // Preserve public links when the display name changes.
       }
-      if (req.body.isActive !== undefined) updates.isActive = req.body.isActive;
-      if (req.body.config !== undefined) updates.config = JSON.stringify(req.body.config);
+      if (req.body.isActive !== undefined) {
+        if (typeof req.body.isActive !== "boolean") return res.status(400).json({ message: "Invalid form status" });
+        updates.isActive = req.body.isActive;
+      }
+      if (req.body.config !== undefined) {
+        if (!validFormConfig(req.body.config)) return res.status(400).json({ message: "Invalid form configuration. Keep at least one enabled step." });
+        updates.config = JSON.stringify(req.body.config);
+      }
       const updated = await storage.updateQuoteForm(req.params.id, updates);
       res.json({ ...updated, config: JSON.parse(updated!.config) });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -8117,6 +8127,9 @@ FINAL RULES:
       const user = req.user as any;
       const form = await storage.getQuoteForm(req.params.formId);
       if (!form || form.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const submission = await storage.getQuoteFormSubmission(req.params.id);
+      if (!submission || submission.formId !== form.id || submission.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (!["new", "reviewed", "contacted", "converted", "archived"].includes(req.body.status)) return res.status(400).json({ message: "Invalid submission status" });
       const updated = await storage.updateQuoteFormSubmission(req.params.id, { status: req.body.status });
       res.json({ ...updated, data: JSON.parse(updated!.data) });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -8487,11 +8500,14 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
       const sub = await storage.getQuoteFormSubmission(req.params.id);
       if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       const now = new Date().toISOString();
+      const quoteData: any = {};
+      for (const key of ["price", "scopeOfWork", "addOns", "estimatedDuration", "terms", "notes", "status"]) if (req.body[key] !== undefined) quoteData[key] = req.body[key];
+      if (quoteData.price !== undefined && (!Number.isFinite(Number(quoteData.price)) || Number(quoteData.price) < 0)) return res.status(400).json({ message: "Enter a valid quote price" });
       let quote = await storage.getFormQuoteBySubmission(req.params.id);
       if (quote) {
-        quote = (await storage.updateFormQuote(quote.id, { ...req.body, updatedAt: now }))!;
+        quote = (await storage.updateFormQuote(quote.id, { ...quoteData, updatedAt: now }))!;
       } else {
-        quote = await storage.createFormQuote({ submissionId: sub.id, companyId: user.companyId, ...req.body, createdAt: now, updatedAt: now });
+        quote = await storage.createFormQuote({ ...quoteData, submissionId: sub.id, companyId: user.companyId, createdAt: now, updatedAt: now });
       }
       if (req.body.status === "ready" || req.body.status === "sent") {
         await storage.updateQuoteFormSubmission(sub.id, { pipelineStage: req.body.status === "sent" ? "quote_sent" : "quote_ready" });
@@ -8557,9 +8573,9 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
           subject,
           text: message,
           html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
-<p style="white-space:pre-line;font-size:15px;color:#374151;line-height:1.7;">${message.replace(/\n/g, "<br/>")}</p>
+<p style="white-space:pre-line;font-size:15px;color:#374151;line-height:1.7;">${escHtml(message).replace(/\n/g, "<br/>")}</p>
 <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
-<p style="font-size:12px;color:#9ca3af;">${companyName}</p>
+<p style="font-size:12px;color:#9ca3af;">${escHtml(companyName)}</p>
 </div>`,
         });
         emailSent = true;
@@ -8576,7 +8592,7 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
       });
 
       // Move stage to "follow_up" if still at new_request
-      if (sub.pipelineStage === "new_request") {
+      if (emailSent && sub.pipelineStage === "new_request") {
         await storage.updateQuoteFormSubmission(sub.id, { pipelineStage: "follow_up" });
       }
 
@@ -9043,6 +9059,9 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
       const form = await storage.getQuoteFormBySlug(req.params.companyId, req.params.slug);
       if (!form || !form.isActive) return res.status(404).json({ message: "Form not found" });
       const d = req.body as Record<string, any>;
+      if (!d || typeof d !== "object" || Array.isArray(d)) return res.status(400).json({ message: "Invalid form data" });
+      const validation = validateForm(JSON.parse(await maybeUpgradeSmartConfig(form)), d);
+      if (Object.keys(validation).length) return res.status(400).json({ message: Object.values(validation)[0], errors: validation });
       const now = new Date().toISOString();
 
       // Extract CRM fields from submitted data
@@ -9050,8 +9069,8 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
       const clientEmail = d.email || d.clientEmail || "";
       const clientPhone = d.phone || d.clientPhone || "";
       const serviceType = d.serviceType || d.service_type || "";
-      const addressParts = [d.street, d.city, d.province, d.postalCode].filter(Boolean);
-      const serviceAddress = d.address || addressParts.join(", ") || "";
+      const addressParts = [d.serviceAddress || d.streetAddress || d.street || d.address, d.city, d.province, d.postalCode].filter(Boolean);
+      const serviceAddress = addressParts.join(", ");
 
       const submission = await storage.createQuoteFormSubmission({
         formId: form.id,
@@ -9088,11 +9107,11 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
             .replace(/{company_name}/g, companyName)
             .replace(/{service_type}/g, serviceType)
             .replace(/{service_address}/g, serviceAddress)
-            .replace(/{submission_date}/g, new Date().toLocaleDateString());
+            .replace(/{submission_date}/g, dateInZone(new Date(), company?.timezone || "America/Winnipeg"));
           const subject = (emailSettings.confirmationSubject || "We received your request!")
             .replace(/{company_name}/g, companyName);
-          const { sendProposalEmail } = await import("./mail");
-          await sendProposalEmail({ to: clientEmail, subject, message: body, sendCopyToSelf: false });
+          const { sendFormConfirmationEmail } = await import("./mail");
+          await sendFormConfirmationEmail({ to: clientEmail, subject, body, companyName });
           await storage.updateQuoteFormSubmission(submission.id, { confirmationEmailSentAt: new Date().toISOString() });
         }
       } catch (emailErr) {
@@ -12972,6 +12991,14 @@ Return ONLY valid JSON:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  app.use("/api/booking-requests/:id", requireAuth, requireRole("admin", "management"), async (req, res, next) => {
+    try {
+      const booking = await storage.getBookingRequest(req.params.id);
+      if (!booking || booking.companyId !== (req.user as any).companyId) return res.status(404).json({ message: "Booking request not found" });
+      next();
+    } catch { res.status(500).json({ message: "Unable to load booking request" }); }
+  });
+
   // ── Booking Requests ───────────────────────────────────────────────────────
   app.get("/api/booking-requests/:id", requireAuth, requireRole("admin", "management"), async (req, res) => {
     try {
@@ -12992,7 +13019,9 @@ Return ONLY valid JSON:
   app.patch("/api/booking-requests/:id", requireAuth, requireRole("admin", "management"), async (req, res) => {
     try {
       const now = new Date().toISOString();
-      const request = await storage.updateBookingRequest(req.params.id, { ...req.body, updatedAt: now });
+      const updates = { ...req.body };
+      for (const key of ["id", "companyId", "createdAt", "createdBy", "clientId", "estimateId", "quoteId", "convertedJobId"]) delete updates[key];
+      const request = await storage.updateBookingRequest(req.params.id, { ...updates, updatedAt: now });
       if (!request) return res.status(404).json({ message: "Not found" });
       res.json(request);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -13046,7 +13075,9 @@ Return ONLY valid JSON:
       const existing = await storage.getBookingEstimate(req.params.id);
       if (!existing) return res.status(404).json({ message: "No estimate found for this booking" });
       const now = new Date().toISOString();
-      const updated = await storage.updateBookingEstimate(existing.id, { ...req.body, updatedAt: now });
+      const updates = { ...req.body };
+      for (const key of ["id", "companyId", "bookingRequestId", "createdAt"]) delete updates[key];
+      const updated = await storage.updateBookingEstimate(existing.id, { ...updates, updatedAt: now });
       res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -13245,7 +13276,7 @@ Return this exact JSON structure:
       const user = req.user as any;
       const br = await storage.getBookingRequest(req.params.id);
       if (!br) return res.status(404).json({ message: "Booking request not found" });
-      if (!req.body.clientName || !req.body.email || !req.body.serviceAddress || !req.body.price) {
+      if (!req.body.clientName || !req.body.email || !req.body.serviceAddress || !Number.isFinite(Number(req.body.price)) || Number(req.body.price) <= 0) {
         return res.status(400).json({ message: "Quote needs a client name, email, service address, and price before it can be saved." });
       }
       const now = new Date().toISOString();
@@ -13282,7 +13313,12 @@ Return this exact JSON structure:
   app.patch("/api/booking-requests/:id/quotes/:quoteId", requireAuth, requireRole("admin", "management"), async (req, res) => {
     try {
       const now = new Date().toISOString();
-      const quote = await storage.updateBookingQuote(req.params.quoteId, { ...req.body, updatedAt: now });
+      const existing = await storage.getBookingQuote(req.params.quoteId);
+      if (!existing || existing.companyId !== (req.user as any).companyId || existing.bookingRequestId !== req.params.id) return res.status(404).json({ message: "Quote not found" });
+      if (["accepted", "declined"].includes(existing.status)) return res.status(409).json({ message: "A responded quote cannot be edited" });
+      const updates = { ...req.body };
+      for (const key of ["id", "companyId", "bookingRequestId", "createdAt", "createdBy", "publicLinkSlug", "acceptedAt", "declinedAt", "sentAt", "viewedAt", "status"]) delete updates[key];
+      const quote = await storage.updateBookingQuote(req.params.quoteId, { ...updates, updatedAt: now });
       if (!quote) return res.status(404).json({ message: "Quote not found" });
       res.json(quote);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -13292,8 +13328,9 @@ Return this exact JSON structure:
     try {
       const user = req.user as any;
       const quote = await storage.getBookingQuote(req.params.quoteId);
-      if (!quote) return res.status(404).json({ message: "Quote not found" });
-      if (!quote.email || !quote.clientName || !quote.price) {
+      if (!quote || quote.companyId !== user.companyId || quote.bookingRequestId !== req.params.id) return res.status(404).json({ message: "Quote not found" });
+      if (["accepted", "declined"].includes(quote.status)) return res.status(409).json({ message: "This quote has already been answered" });
+      if (!quote.email || !quote.clientName || !quote.serviceAddress || !Number.isFinite(Number(quote.price)) || Number(quote.price) <= 0) {
         return res.status(400).json({ message: "Quote needs a client name, email, service address, and price before it can be sent." });
       }
       const company = await storage.getCompany(user.companyId);
@@ -13310,11 +13347,9 @@ Return this exact JSON structure:
           expiresAt: quote.expiresAt || undefined,
         });
       } catch { emailSent = false; }
+      if (!emailSent) return res.status(502).json({ success: false, message: "Email could not be sent. The quote status is unchanged; please retry.", quoteUrl });
       await storage.updateBookingQuote(quote.id, { status: "sent", sentAt: now, updatedAt: now });
       await storage.updateBookingRequest(req.params.id, { status: "quote_sent", updatedAt: now });
-      if (!emailSent) {
-        return res.json({ success: true, warning: "Quote was marked as sent, but the email could not be delivered. Please check email settings or share the quote link manually.", quoteUrl });
-      }
       res.json({ success: true, quoteUrl });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -13348,6 +13383,8 @@ Return this exact JSON structure:
     try {
       const quote = await storage.getBookingQuoteBySlug(req.params.slug);
       if (!quote) return res.status(404).json({ message: "Quote not found" });
+      if (!["sent", "viewed"].includes(quote.status)) return res.status(400).json({ message: "This quote is not available for a response" });
+      if (quote.expiresAt && Date.parse(quote.expiresAt.length === 10 ? `${quote.expiresAt}T23:59:59Z` : quote.expiresAt) < Date.now()) return res.status(410).json({ message: "This quote has expired. Please contact the business for an updated quote." });
       if (["accepted", "declined"].includes(quote.status)) {
         return res.status(400).json({ message: `This quote has already been ${quote.status}.` });
       }
@@ -13377,6 +13414,8 @@ Return this exact JSON structure:
     try {
       const quote = await storage.getBookingQuoteBySlug(req.params.slug);
       if (!quote) return res.status(404).json({ message: "Quote not found" });
+      if (!["sent", "viewed"].includes(quote.status)) return res.status(400).json({ message: "This quote is not available for a response" });
+      if (quote.expiresAt && Date.parse(quote.expiresAt.length === 10 ? `${quote.expiresAt}T23:59:59Z` : quote.expiresAt) < Date.now()) return res.status(410).json({ message: "This quote has expired. Please contact the business for an updated quote." });
       if (["accepted", "declined"].includes(quote.status)) {
         return res.status(400).json({ message: `This quote has already been ${quote.status}.` });
       }
@@ -13405,6 +13444,10 @@ Return this exact JSON structure:
     try {
       const company = await storage.getCompany(req.params.companyId);
       if (!company) return res.status(404).json({ message: "Company not found" });
+      const required = ["name", "phone", "email", "serviceAddress", "serviceType", "customerType", "frequency", "preferredDate", "preferredTime"];
+      if (required.some(key => typeof req.body[key] !== "string" || !req.body[key].trim()) || req.body.consentGiven !== true) return res.status(400).json({ message: "Complete the required contact, service and scheduling details, and consent to being contacted." });
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(req.body.email)) return res.status(400).json({ message: "Enter a valid email address" });
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(req.body.preferredDate) || Number.isNaN(Date.parse(req.body.preferredDate)) || new Date(req.body.preferredDate).toISOString().slice(0,10) !== req.body.preferredDate) return res.status(400).json({ message: "Enter a valid preferred date" });
       const now = new Date().toISOString();
       const request = await storage.createBookingRequest({
         companyId: company.id,

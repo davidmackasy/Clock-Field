@@ -1,3 +1,4 @@
+import { fieldVisible as isFieldVisible, validateForm } from "@shared/form-validation";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRoute, useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -6,20 +7,6 @@ import { cn } from "@/lib/utils";
 import type { FormConfig, FormStep, FormField } from "@shared/schema";
 
 type FormData = { id: string; name: string; config: FormConfig; companyName: string; companyLogo: string | null; brandColor: string | null };
-
-function isFieldVisible(field: FormField, values: Record<string, any>): boolean {
-  const rule = field.visibilityRule ?? "always";
-  if (rule !== "always") {
-    const propType = (values.propertyType ?? "").toLowerCase();
-    if (rule === "residential_only" && propType !== "residential") return false;
-    if (rule === "commercial_only" && propType !== "commercial") return false;
-  }
-  if (field.showWhenField && field.showWhenValues) {
-    const triggerValue = values[field.showWhenField];
-    if (!triggerValue || !field.showWhenValues.includes(triggerValue)) return false;
-  }
-  return true;
-}
 
 function FormInput({ field, value, onChange, error }: {
   field: FormField; value: any; onChange: (v: any) => void; error?: string;
@@ -31,14 +18,14 @@ function FormInput({ field, value, onChange, error }: {
   );
   if (field.type === "select") {
     return (
-      <select className={cn(base, "cursor-pointer")} value={value ?? ""} onChange={e => onChange(e.target.value)}>
+      <select id={field.id} aria-label={field.label} aria-invalid={!!error} className={cn(base, "cursor-pointer")} value={value ?? ""} onChange={e => onChange(e.target.value)}>
         <option value="">Select an option…</option>
         {(field.options ?? []).map(o => <option key={o} value={o}>{o}</option>)}
       </select>
     );
   }
   if (field.type === "textarea") {
-    return <textarea className={cn(base, "resize-none min-h-[100px]")} placeholder={field.placeholder} value={value ?? ""} onChange={e => onChange(e.target.value)} rows={4} />;
+    return <textarea id={field.id} aria-label={field.label} aria-invalid={!!error} className={cn(base, "resize-none min-h-[100px]")} placeholder={field.placeholder} value={value ?? ""} onChange={e => onChange(e.target.value)} rows={4} />;
   }
   if (field.type === "checkbox") {
     return (
@@ -51,7 +38,7 @@ function FormInput({ field, value, onChange, error }: {
       </label>
     );
   }
-  return <input type={field.type} className={base} placeholder={field.placeholder} value={value ?? ""} onChange={e => onChange(e.target.value)} />;
+  return <input type={field.type} id={field.id} aria-label={field.label} aria-invalid={!!error} className={base} placeholder={field.placeholder} value={value ?? ""} onChange={e => onChange(e.target.value)} />;
 }
 
 function StepForm({ step, values, errors, onChange }: {
@@ -68,11 +55,11 @@ function StepForm({ step, values, errors, onChange }: {
   return (
     <div className="space-y-4">
       {rows.map((row, ri) => (
-        <div key={ri} className={cn("flex gap-3", row.length === 2 ? "flex-row" : "flex-col")}>
+        <div key={ri} className={cn("flex gap-3", row.length === 2 ? "flex-col sm:flex-row" : "flex-col")}>
           {row.map(field => (
-            <div key={field.id} className="flex-1 flex flex-col gap-1.5">
+            <div key={field.id} className="min-w-0 flex-1 flex flex-col gap-1.5">
               {field.type !== "checkbox" && (
-                <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                <label htmlFor={field.id} className="text-sm font-medium text-gray-700 flex items-center gap-1">
                   {field.label}{field.required && <span className="text-red-500 text-xs">*</span>}
                 </label>
               )}
@@ -171,8 +158,9 @@ function WalkthroughStep({ companyId, brandColor, onComplete, onSkip }: {
         body: JSON.stringify({ companyId }),
       });
       const data = await r.json();
+      if (!r.ok || !data.walkthroughId) throw new Error(data.message || "Unable to start walkthrough");
       setWalkthroughId(data.walkthroughId);
-    } catch {}
+    } catch { setCameraDenied(true); return; }
     photoIndexRef.current = 0;
     await startCamera();
     if (micOn) await startMic();
@@ -201,6 +189,7 @@ function WalkthroughStep({ companyId, brandColor, onComplete, onSkip }: {
         body: JSON.stringify({ fileUrl: dataUrl, orderIndex, timestampSeconds: timer }),
       });
       const result = await r.json();
+      if (!r.ok || !result.photoId) throw new Error("Photo upload failed");
       setPhotos(prev => prev.map(p => p.localId === localId ? { ...p, photoId: result.photoId, uploading: false } : p));
     } catch {
       setPhotos(prev => prev.map(p => p.localId === localId ? { ...p, uploading: false, error: true } : p));
@@ -226,6 +215,7 @@ function WalkthroughStep({ companyId, brandColor, onComplete, onSkip }: {
             body: JSON.stringify({ fileUrl: dataUrl, orderIndex, timestampSeconds: timer }),
           });
           const result = await r.json();
+          if (!r.ok || !result.photoId) throw new Error("Photo upload failed");
           setPhotos(prev => prev.map(p => p.localId === localId ? { ...p, photoId: result.photoId, uploading: false } : p));
         } catch {
           setPhotos(prev => prev.map(p => p.localId === localId ? { ...p, uploading: false, error: true } : p));
@@ -248,7 +238,7 @@ function WalkthroughStep({ companyId, brandColor, onComplete, onSkip }: {
     let audioUrl: string | null = null;
     if (recorderRef.current && recorderRef.current.state !== "inactive") {
       await new Promise<void>(resolve => {
-        recorderRef.current!.onstop = resolve;
+        recorderRef.current!.onstop = () => resolve();
         recorderRef.current!.stop();
         recorderRef.current!.stream?.getTracks().forEach(t => t.stop());
       });
@@ -517,9 +507,9 @@ export default function PublicQuoteForm() {
   });
 
   const submitMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (_walkthrough?: WalkthroughResult) => {
       const visibleData: Record<string, any> = {};
-      formData?.config.steps.forEach(step => {
+      formData?.config.steps.filter(step => step.enabled).forEach(step => {
         step.fields.forEach(field => {
           if (field.enabled && isFieldVisible(field, formValues) && formValues[field.id] !== undefined) {
             visibleData[field.id] = formValues[field.id];
@@ -531,12 +521,14 @@ export default function PublicQuoteForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(visibleData),
       });
-      return r.json();
+      const result = await r.json();
+      if (!r.ok || !result.id) throw new Error(result.message || "Unable to submit your request. Please try again.");
+      return result;
     },
-    onSuccess: async (data) => {
+    onSuccess: async (data, walkthrough) => {
       // Link walkthrough to submission if exists
-      if (walkthroughResult?.walkthroughId && data?.id) {
-        await fetch(`/api/public/walkthrough/${walkthroughResult.walkthroughId}/link`, {
+      if (walkthrough?.walkthroughId && data?.id) {
+        await fetch(`/api/public/walkthrough/${walkthrough.walkthroughId}/link`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ submissionId: data.id }),
@@ -583,11 +575,7 @@ export default function PublicQuoteForm() {
 
   const validateStep = () => {
     if (!step) return true;
-    const newErrors: Record<string, string> = {};
-    step.fields.filter(f => f.enabled && f.required && isFieldVisible(f, formValues)).forEach(f => {
-      const v = formValues[f.id];
-      if (!v || (typeof v === "string" && !v.trim())) { newErrors[f.id] = `${f.label} is required`; }
-    });
+    const newErrors = validateForm({ steps: [step] }, formValues);
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -710,9 +698,9 @@ export default function PublicQuoteForm() {
                 brandColor={brandColor}
                 onComplete={(result) => {
                   setWalkthroughResult(result);
-                  submitMutation.mutate();
+                  if (!submitMutation.isPending) submitMutation.mutate(result);
                 }}
-                onSkip={() => submitMutation.mutate()}
+                onSkip={() => { if (!submitMutation.isPending) submitMutation.mutate(undefined); }}
               />
             ) : step ? (
               <>
@@ -749,6 +737,7 @@ export default function PublicQuoteForm() {
               </>
             ) : null}
 
+            {submitMutation.isError && <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{submitMutation.error.message}</p>}
             {/* Submission pending spinner (shown on walkthrough skip/after walkthrough complete) */}
             {submitMutation.isPending && (
               <div className="flex items-center justify-center gap-2 mt-4 text-sm text-gray-400">

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +25,12 @@ import {
   Edit3, X, ChevronDown, ChevronUp, CalendarCheck, Globe,
 } from "lucide-react";
 import { ScheduleCleanerModal, type ScheduleBookingInfo } from "@/components/admin/schedule-cleaner-modal";
+
+async function copyFormLink(value: string, toast: any, label = "Link") {
+  try { if (!value) throw new Error("The link is not ready"); await navigator.clipboard.writeText(value); toast({ title: `${label} copied!` }); }
+  catch { toast({ title: "Could not copy the link", description: "Open Preview and copy the address from your browser.", variant: "destructive" }); }
+}
+function RequestError({ retry }: { retry: () => void }) { return <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">Unable to load this information. <Button variant="outline" size="sm" onClick={retry}>Retry</Button></div>; }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type QuoteForm = { id: string; name: string; slug: string; companyId: string; isActive: boolean; createdAt: string; config: any };
@@ -201,7 +207,7 @@ function BookingFormManagementPanel({
           <button
             data-testid="button-copy-booking-link-manage"
             className="flex-shrink-0 flex items-center gap-1 text-[10px] font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
-            onClick={() => { navigator.clipboard.writeText(bookingFormUrl); toast({ title: "Link copied!" }); }}
+            onClick={() => { void copyFormLink(bookingFormUrl, toast); }}
           >
             <Copy className="w-3 h-3" /> Copy
           </button>
@@ -313,7 +319,7 @@ function FormsTab() {
   const [deleteTarget, setDeleteTarget] = useState<QuoteForm | null>(null);
   const [managingBookingForm, setManagingBookingForm] = useState(false);
 
-  const { data: forms = [], isLoading } = useQuery<QuoteForm[]>({ queryKey: ["/api/admin/quote-forms"] });
+  const { data: forms = [], isLoading, isError: formsError, refetch: retryForms } = useQuery<QuoteForm[]>({ queryKey: ["/api/admin/quote-forms"] });
   const { data: company } = useQuery<{ id: string; name: string }>({ queryKey: ["/api/company"] });
   const { data: allBookings = [] } = useQuery<{ id: string; status: string }[]>({ queryKey: ["/api/booking-requests"] });
   const bookingFormUrl = company?.id ? `${window.location.origin}/public/booking/${company.id}` : "";
@@ -331,20 +337,23 @@ function FormsTab() {
       if (smart) { toast({ title: `Smart Cleaning Form "${form.name}" created!` }); }
       else { navigate(`/admin/quote-forms/${form.id}`); }
     },
-    onError: () => toast({ title: "Failed to create form", variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Failed to create form", description: e.message, variant: "destructive" }),
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiRequest("DELETE", `/api/admin/quote-forms/${id}`).then(r => r.json()),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/quote-forms"] }); toast({ title: "Form deleted." }); setDeleteTarget(null); },
+    onError: () => toast({ title: "Could not delete form", variant: "destructive" }),
   });
   const toggleMutation = useMutation({
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => apiRequest("PATCH", `/api/admin/quote-forms/${id}`, { isActive }).then(r => r.json()),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/quote-forms"] }),
+    onError: () => toast({ title: "Could not update form status", variant: "destructive" }),
   });
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+      {formsError && <RequestError retry={() => { void retryForms(); }} />}
+      <div className="flex flex-wrap gap-3 items-center justify-between">
         <p className="text-sm text-muted-foreground">Shareable multi-step forms clients fill out to request a quote.</p>
         <Button data-testid="button-new-quote-form" size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
           <Plus className="w-4 h-4" /> New Form
@@ -384,7 +393,7 @@ function FormsTab() {
             <button
               data-testid="button-copy-booking-link"
               className="flex items-center gap-1.5 text-[11px] text-indigo-600 hover:text-indigo-800 transition-colors"
-              onClick={() => { navigator.clipboard.writeText(bookingFormUrl); toast({ title: "Booking form link copied!" }); }}
+              onClick={() => { void copyFormLink(bookingFormUrl, toast); }}
             >
               <Copy className="w-3 h-3" /> Copy Link
             </button>
@@ -432,7 +441,7 @@ function FormsTab() {
           <Button className="mt-5 gap-1.5" onClick={() => setCreateOpen(true)}><Plus className="w-4 h-4" /> Create First Form</Button>
         </div>
       ) : !managingBookingForm ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           {forms.map(form => {
             const publicUrl = `${window.location.origin}/form/${form.companyId}/${form.slug}`;
             return (
@@ -441,15 +450,15 @@ function FormsTab() {
                 onClick={() => navigate(`/admin/quote-forms/${form.id}`)}>
                 <div className={cn("h-1 w-full", form.isActive ? "bg-green-400" : "bg-gray-200")} />
                 <div className="p-4 flex flex-col gap-3 flex-1 relative">
-                  <button data-testid={`button-delete-form-${form.id}`}
-                    className="absolute top-2.5 right-2.5 w-6 h-6 rounded-md items-center justify-center hidden group-hover:flex text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                  <button aria-label={`Delete ${form.name}`} data-testid={`button-delete-form-${form.id}`}
+                    className="absolute top-2.5 right-2.5 w-6 h-6 rounded-md items-center justify-center flex text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                     onClick={e => { e.stopPropagation(); setDeleteTarget(form); }}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                   <div className="flex items-start justify-between gap-2 pr-6">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <p className="font-semibold text-sm truncate leading-tight">{form.name}</p>
+                        <p className="font-semibold text-base break-words leading-tight">{form.name}</p>
                         {form.config?.smartMode === "cleaning" && (
                           <span className="flex-shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">Smart</span>
                         )}
@@ -463,7 +472,7 @@ function FormsTab() {
                   <p className="text-[11px] text-muted-foreground">Created {fmtDate(form.createdAt)}</p>
                   <div className="flex items-center gap-2 mt-auto pt-2 border-t">
                     <button className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-primary transition-colors"
-                      onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(publicUrl); toast({ title: "Link copied!" }); }}>
+                      onClick={e => { e.stopPropagation(); void copyFormLink(publicUrl, toast); }}>
                       <Copy className="w-3 h-3" /> Copy Link
                     </button>
                     <a href={publicUrl} target="_blank" rel="noopener noreferrer"
@@ -474,7 +483,7 @@ function FormsTab() {
                     <div className="flex-1" />
                     <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                       <span className="text-[11px] text-muted-foreground">{form.isActive ? "On" : "Off"}</span>
-                      <Switch data-testid={`switch-form-active-${form.id}`} checked={form.isActive} onCheckedChange={v => toggleMutation.mutate({ id: form.id, isActive: v })} className="scale-75" />
+                      <Switch data-testid={`switch-form-active-${form.id}`} aria-label={`Activate ${form.name}`} disabled={toggleMutation.isPending} checked={form.isActive} onCheckedChange={v => toggleMutation.mutate({ id: form.id, isActive: v })} className="scale-75" />
                     </div>
                   </div>
                 </div>
@@ -556,7 +565,7 @@ function FormsTab() {
                   <div className="flex items-center gap-2">
                     <code className="text-[10px] bg-white/80 border border-indigo-200 rounded px-2 py-1.5 flex-1 truncate text-muted-foreground">{bookingFormUrl}</code>
                     <button className="text-[10px] text-indigo-600 hover:text-indigo-800 font-medium flex-shrink-0 flex items-center gap-1"
-                      onClick={() => { navigator.clipboard.writeText(bookingFormUrl); toast({ title: "Link copied!" }); }}>
+                      onClick={() => { void copyFormLink(bookingFormUrl, toast); }}>
                       <Copy className="w-3 h-3" /> Copy
                     </button>
                     <a href={bookingFormUrl} target="_blank" rel="noopener noreferrer"
@@ -621,9 +630,9 @@ function BookingDetailPane({ bookingId, onGoToEstimator }: { bookingId: string; 
   const qc = useQueryClient();
   const [showScheduler, setShowScheduler] = useState(false);
 
-  const { data: booking, isLoading: bookingLoading } = useQuery<BookingRequest>({
+  const { data: booking, isLoading: bookingLoading, isError: bookingError, refetch: retryBooking } = useQuery<BookingRequest>({
     queryKey: ["/api/booking-requests", bookingId],
-    queryFn: async () => { const r = await fetch(`/api/booking-requests/${bookingId}`, { credentials: "include" }); return r.json(); },
+    queryFn: async () => { const r = await apiRequest("GET", `/api/booking-requests/${bookingId}`); return r.json(); },
     enabled: !!bookingId,
   });
   const { data: estimate, isLoading: estLoading } = useQuery<BookingEstimateData | null>({
@@ -643,6 +652,7 @@ function BookingDetailPane({ bookingId, onGoToEstimator }: { bookingId: string; 
   });
 
   if (bookingLoading) return <div className="space-y-3 p-4"><Skeleton className="h-6 w-48" /><Skeleton className="h-24" /><Skeleton className="h-40" /></div>;
+  if (bookingError) return <RequestError retry={() => { void retryBooking(); }} />;
   if (!booking) return null;
 
   const com = (booking.commercialDetails as any) || {};
@@ -743,7 +753,7 @@ function BookingDetailPane({ bookingId, onGoToEstimator }: { bookingId: string; 
             ["Preferred Time", booking.preferredTime],
             booking.alternateDate ? ["Alternate Date", booking.alternateDate] : null,
             booking.alternateTime ? ["Alternate Time", booking.alternateTime] : null,
-          ] as ([string, string] | null)[]).filter(Boolean).map(([lbl, val]) => (
+          ] as ([string, string] | null)[]).filter((row): row is [string, string] => row !== null).map(([lbl, val]) => (
             <div key={lbl}><p className="text-muted-foreground text-xs">{lbl}</p><p className="font-medium capitalize">{val}</p></div>
           ))}
         </div>
@@ -973,7 +983,7 @@ function SubmissionsTab({ onGoToEstimator, initialBookingId }: { onGoToEstimator
   const { toast } = useToast();
   const qc = useQueryClient();
   const [, navigate] = useLocation();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(new URLSearchParams(window.location.search).get("submission"));
   const [stageFilter, setStageFilter] = useState("all");
   const [noteInput, setNoteInput] = useState("");
   const [respondOpen, setRespondOpen] = useState(false);
@@ -991,11 +1001,11 @@ function SubmissionsTab({ onGoToEstimator, initialBookingId }: { onGoToEstimator
   const [sourceFilter, setSourceFilter] = useState<"all" | "submission" | "booking">(initialBookingId ? "booking" : "all");
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(initialBookingId || null);
 
-  const { data: submissions = [], isLoading } = useQuery<Submission[]>({ queryKey: ["/api/admin/submissions"] });
-  const { data: bookingRequests = [], isLoading: bookingsLoading } = useQuery<BookingRequest[]>({ queryKey: ["/api/booking-requests"] });
-  const { data: detail } = useQuery<Submission>({
+  const { data: submissions = [], isLoading, isError: submissionsError, refetch: retrySubmissions } = useQuery<Submission[]>({ queryKey: ["/api/admin/submissions"] });
+  const { data: bookingRequests = [], isLoading: bookingsLoading, isError: bookingsError, refetch: retryBookings } = useQuery<BookingRequest[]>({ queryKey: ["/api/booking-requests"] });
+  const { data: detail, isError: detailError, refetch: retryDetail } = useQuery<Submission>({
     queryKey: ["/api/admin/submissions", selectedId],
-    queryFn: async () => { if (!selectedId) throw new Error(); const r = await fetch(`/api/admin/submissions/${selectedId}`, { credentials: "include" }); return r.json(); },
+    queryFn: async () => { if (!selectedId) throw new Error(); const r = await apiRequest("GET", `/api/admin/submissions/${selectedId}`); return r.json(); },
     enabled: !!selectedId,
   });
 
@@ -1078,14 +1088,14 @@ function SubmissionsTab({ onGoToEstimator, initialBookingId }: { onGoToEstimator
   const filtered = stageFilter === "all" ? sourceItems : sourceItems.filter(item => item._source === "submission" && item.pipelineStage === stageFilter);
 
   return (
-    <div className="flex gap-4 min-h-0 h-full">
+    <div className="flex flex-col lg:flex-row gap-4 min-h-0 h-full">
       {/* List */}
-      <div className="w-72 flex-shrink-0 flex flex-col gap-2">
+      <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-2">
         {/* Source filter */}
         <div className="flex gap-1 rounded-lg bg-muted/40 p-0.5">
           {(["all", "submission", "booking"] as const).map(f => (
             <button key={f} data-testid={`button-source-filter-${f}`}
-              onClick={() => { setSourceFilter(f); if (f === "booking") setSelectedId(null); if (f === "submission") setSelectedBookingId(null); }}
+              onClick={() => { setSourceFilter(f); setStageFilter("all"); if (f === "booking") setSelectedId(null); if (f === "submission") setSelectedBookingId(null); }}
               className={cn("flex-1 text-[11px] font-medium py-1 rounded-md transition-colors",
                 sourceFilter === f ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}>
               {f === "all" ? "All" : f === "submission" ? "Forms" : "Bookings"}
@@ -1106,8 +1116,8 @@ function SubmissionsTab({ onGoToEstimator, initialBookingId }: { onGoToEstimator
           </Select>
         )}
 
-        <div className="flex-1 overflow-y-auto space-y-1">
-          {(isLoading || bookingsLoading) ? [1,2,3].map(i => <Skeleton key={i} className="h-20 rounded-lg" />) :
+        <div className="max-h-72 lg:max-h-none lg:flex-1 overflow-y-auto space-y-2">
+          {(submissionsError || bookingsError) ? <RequestError retry={() => { void retrySubmissions(); void retryBookings(); }} /> : (isLoading || bookingsLoading) ? [1,2,3].map(i => <Skeleton key={i} className="h-20 rounded-lg" />) :
             filtered.length === 0 ? <p className="text-center text-sm text-muted-foreground py-12">No submissions yet.</p> :
             filtered.map(item => (
               <button key={item.id} data-testid={`card-submission-${item.id}`}
@@ -1136,7 +1146,7 @@ function SubmissionsTab({ onGoToEstimator, initialBookingId }: { onGoToEstimator
       </div>
 
       {/* Detail pane */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="min-w-0 flex-1 lg:overflow-y-auto">
         {selectedBookingId ? (
           <BookingDetailPane bookingId={selectedBookingId} onGoToEstimator={onGoToEstimator} />
         ) : !selectedId ? (
@@ -1144,7 +1154,7 @@ function SubmissionsTab({ onGoToEstimator, initialBookingId }: { onGoToEstimator
             <Inbox className="w-10 h-10 text-muted-foreground/30 mb-3" />
             <p className="text-sm text-muted-foreground">Select a submission to view details</p>
           </div>
-        ) : !detail ? (
+        ) : detailError ? <RequestError retry={() => { void retryDetail(); }} /> : !detail ? (
           <div className="space-y-3 p-4"><Skeleton className="h-6 w-48" /><Skeleton className="h-24" /><Skeleton className="h-40" /></div>
         ) : (
           <div className="space-y-4 p-1">
@@ -1679,19 +1689,22 @@ function SubmissionsTab({ onGoToEstimator, initialBookingId }: { onGoToEstimator
 // ── Pipeline Tab ──────────────────────────────────────────────────────────────
 function PipelineTab() {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [, navigate] = useLocation();
-  const { data: submissions = [], isLoading } = useQuery<Submission[]>({ queryKey: ["/api/admin/submissions"] });
+  const { data: submissions = [], isLoading, isError, refetch } = useQuery<Submission[]>({ queryKey: ["/api/admin/submissions"] });
 
   const stageMutation = useMutation({
     mutationFn: ({ id, pipelineStage }: { id: string; pipelineStage: string }) =>
       apiRequest("PATCH", `/api/admin/submissions/${id}`, { pipelineStage }).then(r => r.json()),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/submissions"] }),
+    onError: () => toast({ title: "Could not move request", variant: "destructive" }),
   });
 
   const byStage: Record<string, Submission[]> = {};
   PIPELINE_STAGES.forEach(s => { byStage[s.id] = []; });
   submissions.filter(s => !s.archivedAt).forEach(s => { if (byStage[s.pipelineStage]) byStage[s.pipelineStage].push(s); });
 
+  if (isError) return <RequestError retry={() => { void refetch(); }} />;
   if (isLoading) return <div className="flex gap-3 overflow-x-auto pb-2">{PIPELINE_STAGES.map(s => <Skeleton key={s.id} className="w-48 h-64 rounded-xl flex-shrink-0" />)}</div>;
 
   return (
@@ -1710,6 +1723,7 @@ function PipelineTab() {
             )}
             {byStage[stage.id].map(sub => (
               <div key={sub.id} data-testid={`pipeline-card-${sub.id}`}
+                role="button" tabIndex={0} onClick={() => navigate(`/admin/quote-forms?tab=submissions&submission=${sub.id}`)} onKeyDown={e => { if (e.key === "Enter") navigate(`/admin/quote-forms?tab=submissions&submission=${sub.id}`); }}
                 className="rounded-xl border bg-card p-3 cursor-pointer hover:border-primary/30 hover:shadow-sm transition-all">
                 <p className="font-medium text-xs truncate">{sub.clientName || "Unknown Client"}</p>
                 {sub.serviceType && <p className="text-[11px] text-muted-foreground truncate">{sub.serviceType}</p>}
@@ -1718,7 +1732,7 @@ function PipelineTab() {
                   {PIPELINE_STAGES.filter(s => s.id !== stage.id).slice(0,3).map(s => (
                     <button key={s.id} data-testid={`button-move-stage-${sub.id}-${s.id}`}
                       className="text-[9px] border rounded px-1 py-0.5 hover:bg-primary/5 text-muted-foreground transition-colors"
-                      onClick={() => stageMutation.mutate({ id: sub.id, pipelineStage: s.id })}>
+                      onClick={e => { e.stopPropagation(); stageMutation.mutate({ id: sub.id, pipelineStage: s.id }); }}>
                       → {s.label}
                     </button>
                   ))}
@@ -1737,7 +1751,7 @@ function EstimatorSettingsTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [pricingTab, setPricingTab] = useState<"residential" | "commercial">("residential");
-  const { data: settings, isLoading } = useQuery<any>({ queryKey: ["/api/admin/estimator-settings"] });
+  const { data: settings, isLoading, isError, refetch } = useQuery<any>({ queryKey: ["/api/admin/estimator-settings"] });
 
   const defaults = {
     // Residential
@@ -1794,6 +1808,7 @@ function EstimatorSettingsTab() {
 
   const commProfileConfigured = !!(settings?.commHourlyRate);
 
+  if (isError) return <RequestError retry={() => { void refetch(); }} />;
   if (isLoading) return <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-10" />)}</div>;
 
   return (
@@ -1950,7 +1965,7 @@ const EMAIL_VARS = "{client_first_name}, {client_full_name}, {company_name}, {se
 function EmailSettingsTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const { data: settings, isLoading } = useQuery<any>({ queryKey: ["/api/admin/form-email-settings"] });
+  const { data: settings, isLoading, isError, refetch } = useQuery<any>({ queryKey: ["/api/admin/form-email-settings"] });
 
   const [form, setForm] = useState<Record<string, any>>({
     confirmationEnabled: true,
@@ -2000,6 +2015,7 @@ function EmailSettingsTab() {
     </div>
   );
 
+  if (isError) return <RequestError retry={() => { void refetch(); }} />;
   if (isLoading) return <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-32" />)}</div>;
 
   return (
@@ -2045,7 +2061,7 @@ function EmbedTab() {
   const embedUrl = form ? `${publicUrl}?embed=true` : "";
   const embedCode = form ? `<iframe src="${embedUrl}" width="100%" height="900" frameborder="0" style="border:none; width:100%; max-width:100%;"></iframe>` : "";
 
-  const copy = (text: string, label: string) => { navigator.clipboard.writeText(text); toast({ title: `${label} copied!` }); };
+  const copy = (text: string, label: string) => { void copyFormLink(text, toast); };
 
   return (
     <div className="max-w-2xl space-y-5">
@@ -2094,7 +2110,8 @@ function EmbedTab() {
 
 // ── Main Hub Page ─────────────────────────────────────────────────────────────
 export default function AdminQuoteForms() {
-  const urlParams = new URLSearchParams(window.location.search);
+  const search = useSearch();
+  const urlParams = new URLSearchParams(search);
   const urlTab = urlParams.get("tab");
   const urlBooking = urlParams.get("booking");
 
@@ -2104,10 +2121,11 @@ export default function AdminQuoteForms() {
   const newBookingsCount = bookingRequests.filter(b => b.status === "new").length;
   const newCount = newSubmissionsCount + newBookingsCount;
   const [activeTab, setActiveTab] = useState(urlTab === "submissions" ? "submissions" : "forms");
-  const [initialBookingId] = useState<string | null>(urlBooking);
+  const initialBookingId = urlBooking;
+  useEffect(() => { if (urlTab === "submissions") setActiveTab("submissions"); }, [search]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-w-0">
       <div className="border-b bg-background px-4 md:px-6 py-3.5 flex items-center gap-3">
         <ClipboardList className="w-5 h-5 text-primary" />
         <div>
@@ -2121,8 +2139,8 @@ export default function AdminQuoteForms() {
 
       <div className="flex-1 overflow-hidden">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-          <div className="border-b bg-background px-4 md:px-6">
-            <TabsList className="h-9 bg-transparent border-0 p-0 gap-1">
+          <div className="border-b bg-background px-4 md:px-6 overflow-x-auto shrink-0">
+            <TabsList className="h-11 w-max bg-transparent border-0 p-0 gap-1">
               {[
                 { value: "forms",     label: "Forms",             icon: FileText },
                 { value: "submissions",label: "Submissions",       icon: Inbox,   badge: newCount },
@@ -2141,9 +2159,9 @@ export default function AdminQuoteForms() {
             </TabsList>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4 md:px-6 py-5">
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 py-5">
             <TabsContent value="forms" className="mt-0"><FormsTab /></TabsContent>
-            <TabsContent value="submissions" className="mt-0 h-full"><SubmissionsTab onGoToEstimator={() => setActiveTab("estimator")} initialBookingId={initialBookingId || undefined} /></TabsContent>
+            <TabsContent value="submissions" className="mt-0 h-full"><SubmissionsTab key={`${initialBookingId || ""}:${urlParams.get("submission") || ""}`} onGoToEstimator={() => setActiveTab("estimator")} initialBookingId={initialBookingId || undefined} /></TabsContent>
             <TabsContent value="pipeline" className="mt-0"><PipelineTab /></TabsContent>
             <TabsContent value="estimator" className="mt-0"><EstimatorSettingsTab /></TabsContent>
             <TabsContent value="email" className="mt-0"><EmailSettingsTab /></TabsContent>
