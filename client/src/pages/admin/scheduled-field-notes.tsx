@@ -1,3 +1,7 @@
+import { useCompanyTimezone } from "@/hooks/use-company-timezone";
+import { formatCompanyTime, formatCompanyLongDate, companyDateKey, localToday } from "@/lib/timezone";
+import { dateShift } from "@shared/payroll-cycle";
+import { WorklogQueryError } from "@/components/worklog-query-error";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -116,9 +120,10 @@ function LightboxModal({ images, initialIndex = 0, onClose }: {
 function StepDetailModal({ step, sectionTitle, cleanerName, onClose }: {
   step: Step; sectionTitle: string; cleanerName: string; onClose: () => void;
 }) {
+  const timezone = useCompanyTimezone();
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-sm font-semibold">{step.title}</DialogTitle>
           <p className="text-xs text-muted-foreground">{sectionTitle}</p>
@@ -153,7 +158,7 @@ function StepDetailModal({ step, sectionTitle, cleanerName, onClose }: {
         <div className="flex items-center gap-4 text-xs text-muted-foreground border-t pt-3">
           {cleanerName && <span><span className="font-medium">Cleaner:</span> {cleanerName}</span>}
           {step.submission?.submittedAt && (
-            <span><span className="font-medium">Submitted:</span> {format(parseISO(step.submission.submittedAt), "h:mm a")}</span>
+            <span><span className="font-medium">Submitted:</span> {formatCompanyTime(step.submission.submittedAt, timezone)}</span>
           )}
           {!step.submission && <span className="text-amber-600 font-medium">Not yet submitted</span>}
         </div>
@@ -481,7 +486,7 @@ function EditStepDialog({ open, onClose, step, templateType, templateId, section
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader><DialogTitle>Edit Photo Task</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
           <div>
@@ -724,7 +729,7 @@ function TemplateBuilder({ template, onBack }: { template: FullTemplate; onBack:
 
       {/* Template Settings Dialog */}
       <Dialog open={editingTemplateInfo} onOpenChange={setEditingTemplateInfo}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
           <DialogHeader><DialogTitle>Template Settings</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">
@@ -815,11 +820,11 @@ function TemplatesTab() {
   const [newType, setNewType] = useState("commercial");
   const [search, setSearch] = useState("");
 
-  const { data: templates, isLoading } = useQuery<Template[]>({ queryKey: ["/api/admin/scheduled-field-notes/templates"] });
+  const { data: templates, isLoading, isError, refetch } = useQuery<Template[]>({ queryKey: ["/api/admin/scheduled-field-notes/templates"] });
   const { data: fullTemplate } = useQuery<FullTemplate>({
     queryKey: ["/api/admin/scheduled-field-notes/templates", selectedTemplateId],
     enabled: !!selectedTemplateId,
-    queryFn: () => fetch(`/api/admin/scheduled-field-notes/templates/${selectedTemplateId}`, { credentials: "include" }).then(r => r.json()),
+    queryFn: () => apiRequest("GET", `/api/admin/scheduled-field-notes/templates/${selectedTemplateId}`).then(r => r.json()),
   });
 
   const createTemplate = useMutation({
@@ -863,7 +868,7 @@ function TemplatesTab() {
         <span className="absolute left-2.5 top-2.5 text-muted-foreground text-sm">🔍</span>
       </div>
 
-      {isLoading ? (
+      {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}
         </div>
@@ -954,14 +959,14 @@ function AssignmentsTab() {
   const [form, setForm] = useState({ templateId: "", cleanerId: "", clientId: "", scheduleId: "" });
   const [search, setSearch] = useState("");
 
-  const { data: assignments, isLoading } = useQuery<Assignment[]>({ queryKey: ["/api/admin/scheduled-field-notes/assignments"] });
+  const { data: assignments, isLoading, isError, refetch } = useQuery<Assignment[]>({ queryKey: ["/api/admin/scheduled-field-notes/assignments"] });
   const { data: templates } = useQuery<Template[]>({ queryKey: ["/api/admin/scheduled-field-notes/templates"] });
   const { data: cleaners } = useQuery<Cleaner[]>({ queryKey: ["/api/employees"] });
   const { data: clients } = useQuery<Client[]>({ queryKey: ["/api/clients"] });
   const { data: cleanerSchedules } = useQuery<RecurringSchedule[]>({
     queryKey: ["/api/recurring-schedules", form.cleanerId],
     queryFn: () => form.cleanerId
-      ? fetch(`/api/recurring-schedules?employeeId=${form.cleanerId}`, { credentials: "include" }).then(r => r.json())
+      ? apiRequest("GET", `/api/recurring-schedules?employeeId=${form.cleanerId}`).then(r => r.json())
       : Promise.resolve([]),
     enabled: !!form.cleanerId,
   });
@@ -1006,7 +1011,7 @@ function AssignmentsTab() {
         <span className="absolute left-2.5 top-2.5 text-muted-foreground text-sm">🔍</span>
       </div>
 
-      {isLoading ? (
+      {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-36 rounded-xl" />)}
         </div>
@@ -1120,6 +1125,7 @@ function AssignmentsTab() {
 function CleanerHistoryView({ cleanerName, submissions, onViewSubmission, onBack }: {
   cleanerName: string; submissions: Submission[]; onViewSubmission: (id: string) => void; onBack: () => void;
 }) {
+  const timezone = useCompanyTimezone();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
 
@@ -1176,7 +1182,7 @@ function CleanerHistoryView({ cleanerName, submissions, onViewSubmission, onBack
               <div>
                 <p className="text-sm font-medium">{format(parseISO(s.submissionDate), "MMMM d, yyyy")}</p>
                 <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
-                  {s.startedAt && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{format(parseISO(s.startedAt), "h:mm a")}</span>}
+                  {s.startedAt && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatCompanyTime(s.startedAt, timezone)}</span>}
                   {s.completedAt && <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500" />{format(parseISO(s.completedAt), "h:mm a")}</span>}
                 </div>
               </div>
@@ -1205,7 +1211,7 @@ function SubmissionsTab({ onViewSubmission }: { onViewSubmission: (id: string) =
   const [filterStatus, setFilterStatus] = useState("all");
   const [selectedCleaner, setSelectedCleaner] = useState<{ id: string; name: string } | null>(null);
 
-  const { data: submissions, isLoading } = useQuery<Submission[]>({ queryKey: ["/api/admin/scheduled-field-notes/submissions"] });
+  const { data: submissions, isLoading, isError, refetch } = useQuery<Submission[]>({ queryKey: ["/api/admin/scheduled-field-notes/submissions"] });
 
   if (selectedCleaner) {
     const cleanerSubs = (submissions || []).filter(s => s.cleanerId === selectedCleaner.id);
@@ -1223,7 +1229,7 @@ function SubmissionsTab({ onViewSubmission }: { onViewSubmission: (id: string) =
       ...c,
       latestDate: c.subs.reduce((m, s) => s.submissionDate > m ? s.submissionDate : m, ""),
       completed: c.subs.filter(s => s.status === "completed").length,
-      templates: [...new Set(c.subs.map(s => s.templateName))],
+      templates: Array.from(new Set(c.subs.map(s => s.templateName))),
     }))
     .filter(c => {
       if (filterStatus === "completed" && c.completed === 0) return false;
@@ -1257,7 +1263,7 @@ function SubmissionsTab({ onViewSubmission }: { onViewSubmission: (id: string) =
         </Select>
       </div>
 
-      {isLoading ? (
+      {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}
         </div>
@@ -1297,6 +1303,7 @@ function SubmissionsTab({ onViewSubmission }: { onViewSubmission: (id: string) =
 
 // ─── Compact Submission Step Card ─────────────────────────────────────────────
 function SubmissionStepCard({ step, idx, onClick }: { step: Step; idx: number; onClick: () => void }) {
+  const timezone = useCompanyTimezone();
   const hasSub = !!step.submission?.submittedImageUrl;
   const hasRef = !!step.referenceImageUrl;
   return (
@@ -1319,19 +1326,20 @@ function SubmissionStepCard({ step, idx, onClick }: { step: Step; idx: number; o
         {/* Show short label: strip the "Section - " prefix if present (e.g. "Office 2 - Window" → "Window") */}
         {step.title.includes(" - ") ? step.title.split(" - ").slice(1).join(" - ") : `Photo ${idx + 1}`}
       </p>
-      {hasSub && <p className="text-[9px] text-muted-foreground">{format(parseISO(step.submission!.submittedAt), "h:mm a")}</p>}
+      {hasSub && <p className="text-[9px] text-muted-foreground">{formatCompanyTime(step.submission!.submittedAt, timezone)}</p>}
     </div>
   );
 }
 
 // ─── Submission Detail ────────────────────────────────────────────────────────
 function SubmissionDetail({ submissionId, onBack }: { submissionId: string; onBack: () => void }) {
+  const timezone = useCompanyTimezone();
   const { toast } = useToast();
   const [selectedStep, setSelectedStep] = useState<{ step: Step; sectionTitle: string } | null>(null);
 
-  const { data: sub, isLoading } = useQuery<FullSubmission>({
+  const { data: sub, isLoading, isError, refetch } = useQuery<FullSubmission>({
     queryKey: ["/api/admin/scheduled-field-notes/submissions", submissionId],
-    queryFn: () => fetch(`/api/admin/scheduled-field-notes/submissions/${submissionId}`, { credentials: "include" }).then(r => r.json()),
+    queryFn: () => apiRequest("GET", `/api/admin/scheduled-field-notes/submissions/${submissionId}`).then(r => r.json()),
   });
   const generateLink = useMutation({
     mutationFn: () => apiRequest("POST", `/api/admin/scheduled-field-notes/submissions/${submissionId}/generate-link`, {}).then(r => r.json()),
@@ -1349,6 +1357,7 @@ function SubmissionDetail({ submissionId, onBack }: { submissionId: string; onBa
     },
   });
 
+  if (isError) return <WorklogQueryError retry={() => { void refetch(); }} />;
   if (isLoading) return <div className="p-6 space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>;
   if (!sub) return <div className="p-6 text-center text-muted-foreground">Submission not found</div>;
 
@@ -1389,8 +1398,8 @@ function SubmissionDetail({ submissionId, onBack }: { submissionId: string; onBa
             style={{ width: allSteps.length ? `${Math.round((completedCount / allSteps.length) * 100)}%` : "0%" }} />
         </div>
         <div className="flex items-center gap-4 text-xs text-muted-foreground pt-1">
-          {sub.startedAt && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />Started {format(parseISO(sub.startedAt), "h:mm a")}</span>}
-          {sub.completedAt && <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500" />Done {format(parseISO(sub.completedAt), "h:mm a")}</span>}
+          {sub.startedAt && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />Started {formatCompanyTime(sub.startedAt, timezone)}</span>}
+          {sub.completedAt && <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500" />Done {formatCompanyTime(sub.completedAt, timezone)}</span>}
         </div>
       </div>
 
@@ -1445,7 +1454,7 @@ function ReportsTab({ onViewSubmission }: { onViewSubmission: (id: string) => vo
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [disablingId, setDisablingId] = useState<string | null>(null);
 
-  const { data: submissions, isLoading } = useQuery<Submission[]>({ queryKey: ["/api/admin/scheduled-field-notes/submissions"] });
+  const { data: submissions, isLoading, isError, refetch } = useQuery<Submission[]>({ queryKey: ["/api/admin/scheduled-field-notes/submissions"] });
 
   const generateLink = useMutation({
     mutationFn: (id: string) => { setGeneratingId(id); return apiRequest("POST", `/api/admin/scheduled-field-notes/submissions/${id}/generate-link`, {}).then(r => r.json()); },
@@ -1483,7 +1492,7 @@ function ReportsTab({ onViewSubmission }: { onViewSubmission: (id: string) => vo
         <span className="absolute left-2.5 top-2.5 text-muted-foreground text-sm">🔍</span>
       </div>
 
-      {isLoading ? (
+      {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-48 rounded-xl" />)}
         </div>

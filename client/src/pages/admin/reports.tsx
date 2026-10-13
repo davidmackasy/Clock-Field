@@ -1,3 +1,5 @@
+import { reportNeedsSignature } from "@shared/worklog-state";
+import { WorklogQueryError } from "@/components/worklog-query-error";
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import IncidentReportWizard from "./incident-report-wizard";
@@ -826,9 +828,9 @@ function ReportDetailDialog({ reportId: rptId, open, onClose, employees, clients
 
   const toggleSection = (k: string) => setExpandedSections(s => ({ ...s, [k]: !s[k] }));
 
-  const { data: report, isLoading } = useQuery<any>({
+  const { data: report, isLoading, isError: reportError, refetch: retryReport } = useQuery<any>({
     queryKey: ["/api/reports", rptId],
-    queryFn: () => fetch(`/api/reports/${rptId}`).then(r => r.json()),
+    queryFn: () => apiRequest("GET", `/api/reports/${rptId}`).then(r => r.json()),
     enabled: !!rptId && open,
   });
 
@@ -908,7 +910,7 @@ function ReportDetailDialog({ reportId: rptId, open, onClose, employees, clients
     <>
       <Dialog open={open} onOpenChange={onClose}>
         <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto print:hidden">
-          {isLoading ? (
+          {reportError ? <WorklogQueryError retry={() => { void retryReport(); }} /> : isLoading ? (
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
             </div>
@@ -1570,7 +1572,7 @@ export default function AdminReports() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
 
-  const { data: reports = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/reports"] });
+  const { data: reports = [], isLoading, isError, refetch } = useQuery<any[]>({ queryKey: ["/api/reports"] });
   const { data: timezoneData } = useQuery<{ timezone: string }>({ queryKey: ["/api/settings/timezone"], staleTime: Infinity });
   const timezone = timezoneData?.timezone || "UTC";
   const { data: employees = [] } = useQuery<any[]>({ queryKey: ["/api/employees"] });
@@ -1584,7 +1586,7 @@ export default function AdminReports() {
     incoming: reports.filter(r => ["submitted"].includes(r.status) && r.createdByRole !== "admin").length,
     sent: reports.filter(r => r.sentToEmployee || r.sentToClient).length,
     drafts: reports.filter(r => r.status === "draft").length,
-    needs_signature: reports.filter(r => r.requiresAdminSignature || r.requiresEmployeeSignature || r.requiresClientSignature).filter(r => r.status !== "finalized" && r.status !== "archived").length,
+    needs_signature: reports.filter(r => reportNeedsSignature(r)).length,
     completed: reports.filter(r => ["finalized", "closed"].includes(r.status)).length,
     archived: reports.filter(r => r.status === "archived").length,
   };
@@ -1593,7 +1595,7 @@ export default function AdminReports() {
     if (tab === "incoming") return ["submitted"].includes(r.status) && r.createdByRole !== "admin";
     if (tab === "sent") return r.sentToEmployee || r.sentToClient;
     if (tab === "drafts") return r.status === "draft";
-    if (tab === "needs_signature") return (r.requiresAdminSignature || r.requiresEmployeeSignature || r.requiresClientSignature) && !["finalized", "archived"].includes(r.status);
+    if (tab === "needs_signature") return reportNeedsSignature(r);
     if (tab === "completed") return ["finalized", "closed"].includes(r.status);
     if (tab === "archived") return r.status === "archived";
     return true;
@@ -1702,7 +1704,7 @@ export default function AdminReports() {
 
       {/* Reports Table */}
       <div className="border rounded-lg overflow-hidden">
-        {isLoading ? (
+        {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
           <div className="flex items-center justify-center h-48">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
           </div>

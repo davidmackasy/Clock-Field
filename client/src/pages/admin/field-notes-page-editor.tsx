@@ -334,13 +334,13 @@ export default function FieldNotesPageEditor() {
 
   const { data: session, isLoading } = useQuery<PageSession & { assets: Asset[]; publicDoc?: PublicDoc | null }>({
     queryKey: ["/api/field-notes/sessions", sessionId],
-    queryFn: () => fetch(`/api/field-notes/sessions/${sessionId}`, { credentials: "include" }).then(r => r.json()),
+    queryFn: () => apiRequest("GET", `/api/field-notes/sessions/${sessionId}`).then(r => r.json()),
     enabled: !!sessionId,
   });
 
   const { data: todos = [] } = useQuery<Todo[]>({
     queryKey: ["/api/field-notes/sessions", sessionId, "todos"],
-    queryFn: () => fetch(`/api/field-notes/sessions/${sessionId}/todos`, { credentials: "include" }).then(r => r.json()),
+    queryFn: () => apiRequest("GET", `/api/field-notes/sessions/${sessionId}/todos`).then(r => r.json()),
     enabled: !!sessionId,
   });
 

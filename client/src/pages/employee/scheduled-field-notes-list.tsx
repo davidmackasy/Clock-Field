@@ -1,3 +1,4 @@
+import { WorklogQueryError } from "@/components/worklog-query-error";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -20,7 +21,7 @@ export default function EmployeeScheduledFieldNotesList() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
-  const { data: items, isLoading } = useQuery<TodayItem[]>({
+  const { data: items, isLoading, isError, refetch } = useQuery<TodayItem[]>({
     queryKey: ["/api/employee/scheduled-field-notes/today"],
     refetchInterval: 30_000,
   });
@@ -56,7 +57,7 @@ export default function EmployeeScheduledFieldNotesList() {
       </div>
 
       <div className="px-4 py-4 max-w-lg mx-auto space-y-3">
-        {isLoading ? (
+        {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
           [...Array(2)].map((_, i) => <Skeleton key={i} className="h-28 rounded-2xl" />)
         ) : !items?.length ? (
           <div className="text-center py-20 text-muted-foreground">

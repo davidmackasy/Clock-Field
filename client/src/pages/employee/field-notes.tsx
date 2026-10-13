@@ -1,3 +1,7 @@
+import { useCompanyTimezone } from "@/hooks/use-company-timezone";
+import { formatCompanyTime, formatCompanyLongDate, companyDateKey, localToday } from "@/lib/timezone";
+import { dateShift } from "@shared/payroll-cycle";
+import { WorklogQueryError } from "@/components/worklog-query-error";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -46,13 +50,14 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function EmployeeFieldNotes() {
+  const timezone = useCompanyTimezone();
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
   const [startOpen, setStartOpen] = useState(false);
   const [newSession, setNewSession] = useState({ sessionType: "site_visit", locationId: "", title: "" });
 
-  const { data: sessions = [], isLoading } = useQuery<Session[]>({
+  const { data: sessions = [], isLoading, isError, refetch } = useQuery<Session[]>({
     queryKey: ["/api/field-notes"],
   });
 
@@ -72,10 +77,10 @@ export default function EmployeeFieldNotes() {
   });
 
   function dayLabel(iso: string) {
-    const d = parseISO(iso);
-    if (isToday(d)) return "Today";
-    if (isYesterday(d)) return "Yesterday";
-    return format(d, "MMM d, yyyy");
+    const key = companyDateKey(iso, timezone);
+    if (key === localToday(timezone)) return "Today";
+    if (key === dateShift(localToday(timezone), -1)) return "Yesterday";
+    return formatCompanyLongDate(iso, timezone);
   }
 
   function sessionLabel(type: string) {
@@ -101,7 +106,7 @@ export default function EmployeeFieldNotes() {
       </div>
 
       <div className="px-4 py-4 space-y-4">
-        {isLoading ? (
+        {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
           <div className="space-y-3">
             {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
           </div>
@@ -135,7 +140,7 @@ export default function EmployeeFieldNotes() {
                     <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{s.locationName}</span>
                   )}
                   <span className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />{dayLabel(s.startedAt)} · {format(parseISO(s.startedAt), "h:mm a")}
+                    <Clock className="w-3 h-3" />{dayLabel(s.startedAt)} · {formatCompanyTime(s.startedAt, timezone)}
                   </span>
                 </div>
                 {s.aiSummary && s.status === "ready" && (

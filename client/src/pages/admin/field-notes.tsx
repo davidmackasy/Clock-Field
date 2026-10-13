@@ -1,3 +1,7 @@
+import { useCompanyTimezone } from "@/hooks/use-company-timezone";
+import { formatCompanyTime, formatCompanyLongDate, companyDateKey, localToday } from "@/lib/timezone";
+import { dateShift } from "@shared/payroll-cycle";
+import { WorklogQueryError } from "@/components/worklog-query-error";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -89,6 +93,7 @@ function SessionCard({ s, onClick, onDelete, onStopRecording }: {
   onDelete: (e: React.MouseEvent) => void;
   onStopRecording: (e: React.MouseEvent) => void;
 }) {
+  const timezone = useCompanyTimezone();
   const label = SESSION_TYPES.find(t => t.value === s.sessionType)?.label ?? s.sessionType;
   const cfg = STATUS_CONFIG[s.status] ?? STATUS_CONFIG.failed;
   const isPage = s.sessionSubtype === "manual_page";
@@ -126,7 +131,7 @@ function SessionCard({ s, onClick, onDelete, onStopRecording }: {
         <div className="flex flex-col gap-1 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-1 min-w-0">
             <Clock className="w-3 h-3 flex-shrink-0" />
-            <span className="truncate">{format(parseISO(s.startedAt), "h:mm a")}</span>
+            <span className="truncate">{formatCompanyTime(s.startedAt, timezone)}</span>
           </span>
           <span className="flex items-center gap-1 min-w-0">
             <User className="w-3 h-3 flex-shrink-0" />
@@ -172,6 +177,7 @@ function SessionCard({ s, onClick, onDelete, onStopRecording }: {
 type CreateMode = null | "walkthrough" | "jobsite_walk";
 
 export default function AdminFieldNotes() {
+  const timezone = useCompanyTimezone();
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
@@ -184,7 +190,7 @@ export default function AdminFieldNotes() {
   const [stopTarget, setStopTarget] = useState<Session | null>(null);
   const [deleteWalkTarget, setDeleteWalkTarget] = useState<JobsiteWalk | null>(null);
 
-  const { data: sessions = [], isLoading } = useQuery<Session[]>({ queryKey: ["/api/field-notes"] });
+  const { data: sessions = [], isLoading, isError, refetch } = useQuery<Session[]>({ queryKey: ["/api/field-notes"] });
   const { data: locations = [] } = useQuery<any[]>({ queryKey: ["/api/locations"] });
   const { data: walks = [], isLoading: walksLoading } = useQuery<JobsiteWalk[]>({ queryKey: ["/api/jobsite-walks"] });
 
@@ -199,7 +205,7 @@ export default function AdminFieldNotes() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/field-notes/sessions/${id}`).then(r => r.json()),
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/field-notes/sessions/${id}`).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/field-notes"] });
       toast({ title: "Field Note deleted." });
@@ -255,7 +261,8 @@ export default function AdminFieldNotes() {
   for (const s of filtered) {
     const proj = s.locationName ?? "No Project";
     const d = parseISO(s.startedAt);
-    const dateKey = isToday(d) ? "Today" : isYesterday(d) ? "Yesterday" : format(d, "MMM d, yyyy");
+    const key = companyDateKey(s.startedAt, timezone);
+    const dateKey = key === localToday(timezone) ? "Today" : key === dateShift(localToday(timezone), -1) ? "Yesterday" : formatCompanyLongDate(s.startedAt, timezone);
     if (!byProject[proj]) byProject[proj] = {};
     if (!byProject[proj][dateKey]) byProject[proj][dateKey] = [];
     byProject[proj][dateKey].push(s);
@@ -405,7 +412,7 @@ export default function AdminFieldNotes() {
           </div>
         )}
 
-        {isLoading ? (
+        {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {[1, 2, 3, 4, 5, 6].map(i => <Skeleton key={i} className="h-36 w-full rounded-xl" />)}
           </div>

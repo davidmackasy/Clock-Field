@@ -1,3 +1,4 @@
+import { WorklogQueryError } from "@/components/worklog-query-error";
 import { useState, useRef, forwardRef, useImperativeHandle, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -189,7 +190,7 @@ const SubmissionDetail = forwardRef<SubmissionDetailHandle, {
   const [uploadTarget, setUploadTarget] = useState<{ itemId: string; type: "before" | "after" } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { data, isLoading } = useQuery<any>({
+  const { data, isLoading, isError, refetch } = useQuery<any>({
     queryKey: ["/api/work-submissions", subId],
     enabled: !!subId,
     staleTime: 30 * 1000,
@@ -257,6 +258,7 @@ const SubmissionDetail = forwardRef<SubmissionDetailHandle, {
     setLightbox({ photos, idx, groupLabel, section, subArea });
   };
 
+  if (isError) return <WorklogQueryError retry={() => { void refetch(); }} />;
   if (isLoading) {
     return (
       <div className="space-y-4 pt-2 flex-1 overflow-y-auto">
@@ -486,7 +488,7 @@ function ReviewPopup({ subId, onClose }: { subId: string; onClose: () => void })
   const { data: timezoneData } = useQuery<{ timezone: string }>({ queryKey: ["/api/settings/timezone"], staleTime: Infinity });
   const timezone = timezoneData?.timezone || "UTC";
 
-  const { data: review, isLoading } = useQuery<any>({
+  const { data: review, isLoading, isError, refetch } = useQuery<any>({
     queryKey: ["/api/work-submissions", subId, "review"],
     queryFn: async () => {
       const res = await fetch(`/api/work-submissions/${subId}/review`, { credentials: "include" });
@@ -569,7 +571,7 @@ function ReviewPopup({ subId, onClose }: { subId: string; onClose: () => void })
 
   return (
     <Dialog open onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-emerald-500" />
@@ -578,7 +580,7 @@ function ReviewPopup({ subId, onClose }: { subId: string; onClose: () => void })
           <DialogDescription>Verified feedback from the public service report</DialogDescription>
         </DialogHeader>
 
-        {isLoading ? (
+        {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
           <div className="space-y-3 py-2">
             <Skeleton className="h-4 w-1/3" />
             <Skeleton className="h-16 w-full" />
@@ -749,7 +751,7 @@ export default function AdminWorkLog() {
     setEditMode(false);
   }
 
-  const { data: submissions, isLoading } = useQuery<any[]>({
+  const { data: submissions, isLoading, isError, refetch } = useQuery<any[]>({
     queryKey: ["/api/work-submissions"],
     refetchInterval: 30 * 1000,
   });
@@ -1021,7 +1023,7 @@ export default function AdminWorkLog() {
       )}
 
       {/* Submissions list */}
-      {isLoading ? (
+      {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-20 w-full" />)}
         </div>
@@ -1080,7 +1082,7 @@ export default function AdminWorkLog() {
 
       {/* Create Priority Clean Alert Dialog */}
       <Dialog open={paOpen} onOpenChange={v => { setPaOpen(v); if (!v) { setPaTitle("Priority Clean Required"); setPaMessage(""); setPaLocationId(""); setPaEmployeeId(""); setPaPhotos([]); } }}>
-        <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-sm mx-auto max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-red-600" />
@@ -1204,7 +1206,7 @@ export default function AdminWorkLog() {
 
       {/* Detail Dialog */}
       <Dialog open={!!detailSub} onOpenChange={(v) => { if (!v && !showReviewPopup) closeDetail(); }}>
-        <DialogContent className="max-w-2xl mx-auto max-h-[90vh] flex flex-col gap-4">
+        <DialogContent className="max-w-2xl mx-auto max-h-[90dvh] flex flex-col gap-4">
           {detailSub && (
             <>
               <DialogHeader>

@@ -1,3 +1,4 @@
+import { WorklogQueryError } from "@/components/worklog-query-error";
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -196,7 +197,7 @@ export default function EmployeeWorkLog() {
     },
     enabled: !!user?.id && startOpen,
   });
-  const { data: submissions, isLoading: subsLoading } = useQuery<any[]>({
+  const { data: submissions, isLoading: subsLoading, isError: subsError, refetch: retrySubs } = useQuery<any[]>({
     queryKey: ["/api/work-submissions", user?.id],
     queryFn: async () => {
       const res = await fetch("/api/work-submissions", { credentials: "include" });
@@ -205,7 +206,7 @@ export default function EmployeeWorkLog() {
     },
     enabled: !!user?.id,
   });
-  const { data: subDetail, isLoading: detailLoading } = useQuery<any>({
+  const { data: subDetail, isLoading: detailLoading, isError: detailError, refetch: retryDetail } = useQuery<any>({
     queryKey: ["/api/work-submissions", activeSub?.id],
     enabled: !!activeSub?.id,
     refetchInterval: activeSub?.status === "draft" ? 5000 : false,
@@ -510,7 +511,7 @@ export default function EmployeeWorkLog() {
             </div>
 
             {/* Work items list */}
-            {detailLoading ? (
+            {detailError ? <WorklogQueryError retry={() => { void retryDetail(); }} /> : detailLoading ? (
               <div className="space-y-2">{[1,2].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
             ) : items.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-3">No work items yet. Add your first area.</p>
@@ -609,7 +610,7 @@ export default function EmployeeWorkLog() {
       {pastSubs.length > 0 && (
         <div className="space-y-2">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">History</h2>
-          {subsLoading ? (
+          {subsError ? <WorklogQueryError retry={() => { void retrySubs(); }} /> : subsLoading ? (
             <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
           ) : (
             pastSubs.map((sub: any) => {
@@ -702,7 +703,7 @@ export default function EmployeeWorkLog() {
 
       {/* Add Work Item Dialog */}
       <Dialog open={addItemOpen} onOpenChange={(v) => { setAddItemOpen(v); if (!v) setDraft({ section: "", subArea: "", notes: "", beforePhotos: [], afterPhotos: [] }); }}>
-        <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-sm mx-auto max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Work Area</DialogTitle>
             <DialogDescription>Document what was cleaned or worked on.</DialogDescription>
@@ -824,7 +825,7 @@ export default function EmployeeWorkLog() {
         setEditOpen(v);
         if (!v) { setEditItem(null); setEditDraft({ notes: "", newBeforePhotos: [], newAfterPhotos: [], removePhotoIds: [] }); }
       }}>
-        <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-sm mx-auto max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {editItem?.priorityAlertId && <Zap className="w-4 h-4 text-red-500 shrink-0" />}
@@ -990,11 +991,12 @@ export default function EmployeeWorkLog() {
 }
 
 function SubmissionDetail({ subId }: { subId: string }) {
-  const { data, isLoading } = useQuery<any>({
+  const { data, isLoading, isError, refetch } = useQuery<any>({
     queryKey: ["/api/work-submissions", subId],
     enabled: !!subId,
   });
 
+  if (isError) return <WorklogQueryError retry={() => { void refetch(); }} />;
   if (isLoading) return <div className="space-y-3 pt-2">{[1,2].map(i => <Skeleton key={i} className="h-20 w-full" />)}</div>;
   if (!data) return <p className="text-sm text-muted-foreground py-4 text-center">Unable to load details.</p>;
 

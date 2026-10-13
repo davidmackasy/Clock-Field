@@ -1,3 +1,4 @@
+import { formatCompanyInstant } from "@/lib/timezone";
 import { useState } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -6,10 +7,9 @@ import { ChevronLeft, ChevronRight, X, Clock, MapPin, User, Calendar, CheckCircl
 const DEFAULT_BRAND = "#2563eb";
 const DEFAULT_INTRO = "This report provides a summary of the work completed, observations recorded, and supporting service photos for this visit. It is intended to give you a clear record of the completed service.";
 
-function fmt(iso: string) {
-  return new Date(iso).toLocaleString("en-CA", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
+function fmt(iso: string, timezone = "UTC") {
+  try { return formatCompanyInstant(iso, timezone, {month:"short", day:"numeric", year:"numeric", hour:"numeric", minute:"2-digit"}); } catch { return iso; }
 }
-
 function fmtDate(d: string) {
   return new Date(d + "T12:00:00").toLocaleDateString("en-CA", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 }
@@ -102,7 +102,7 @@ function PhotoRow({ photos, token, label }: { photos: any[]; token: string; labe
   );
 }
 
-function ReviewSection({ token, companyName, existingReview, googleReviewUrl, brandColor }: { token: string; companyName: string; existingReview: any; googleReviewUrl?: string | null; brandColor: string }) {
+function ReviewSection({ token, companyName, existingReview, googleReviewUrl, brandColor, timezone = "UTC" }: { token: string; companyName: string; existingReview: any; googleReviewUrl?: string | null; brandColor: string; timezone?: string }) {
   const [showForm, setShowForm] = useState(false);
   const [clientName, setClientName] = useState("");
   const [companyNameVal, setCompanyNameVal] = useState("");
@@ -162,7 +162,7 @@ function ReviewSection({ token, companyName, existingReview, googleReviewUrl, br
           <div>
             <p className="text-sm font-semibold text-gray-800">{review.clientName}</p>
             {review.companyName && <p className="text-xs text-gray-500">{review.companyName}</p>}
-            <p className="text-xs text-gray-400 mt-0.5">{fmt(review.submittedAt)}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{fmt(review.submittedAt, timezone)}</p>
           </div>
         </div>
       </div>
@@ -426,7 +426,7 @@ export default function PublicWorkReport() {
               </div>
               <div>
                 <p className="text-xs text-gray-400 font-medium">Submitted</p>
-                <p className="text-sm font-semibold text-gray-800">{fmt(data.submittedAt)}</p>
+                <p className="text-sm font-semibold text-gray-800">{fmt(data.submittedAt, data.companyTimezone || "UTC")}</p>
               </div>
             </div>
           )}
@@ -601,6 +601,7 @@ export default function PublicWorkReport() {
         </div>
       </div>
       <ReviewSection
+        timezone={data.companyTimezone || "UTC"}
         token={token!}
         companyName={data.companyName}
         existingReview={data.review}

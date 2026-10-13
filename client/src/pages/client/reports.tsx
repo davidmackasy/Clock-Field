@@ -1,3 +1,6 @@
+import { reportNeedsSignature } from "@shared/worklog-state";
+import { createAndSubmitReport } from "@/lib/report-actions";
+import { WorklogQueryError } from "@/components/worklog-query-error";
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -53,13 +56,7 @@ function SubmitReportDialog({ open, onClose }: any) {
   });
 
   const createMut = useMutation({
-    mutationFn: async (data: any) => {
-      const report = await apiRequest("POST", "/api/reports", data);
-      if (report?.id) {
-        await apiRequest("POST", `/api/reports/${report.id}/submit`, {});
-      }
-      return report;
-    },
+    mutationFn: (data: any) => createAndSubmitReport(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/reports"] });
       toast({ title: "Report submitted to admin" });
@@ -155,9 +152,9 @@ function ReportViewDialog({ reportId: rptId, open, onClose }: any) {
   const timezone = timezoneData?.timezone || "UTC";
   const [comments, setComments] = useState("");
 
-  const { data: report, isLoading } = useQuery<any>({
+  const { data: report, isLoading, isError: reportError, refetch: retryReport } = useQuery<any>({
     queryKey: ["/api/reports", rptId],
-    queryFn: () => fetch(`/api/reports/${rptId}`).then(r => r.json()),
+    queryFn: () => apiRequest("GET", `/api/reports/${rptId}`).then(r => r.json()),
     enabled: !!rptId && open,
   });
 
@@ -173,14 +170,19 @@ function ReportViewDialog({ reportId: rptId, open, onClose }: any) {
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const submitDraft = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/reports/${rptId}/submit`, {}),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/reports"] }); toast({ title: "Report submitted to admin" }); },
+    onError: (e: Error) => toast({ title: "Could not submit report", description: e.message, variant: "destructive" }),
+  });
   const rpt = report;
   const mySignature = rpt?.signatures?.find((s: any) => s.signerUserId === user?.id);
-  const canSign = rpt && !mySignature && rpt.requiresClientSignature;
+  const canSign = rpt && !["finalized", "archived", "closed"].includes(rpt.status) && !mySignature && rpt.requiresClientSignature;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        {isLoading ? (
+        {reportError ? <WorklogQueryError retry={() => { void retryReport(); }} /> : isLoading ? (
           <div className="flex items-center justify-center h-40">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
           </div>
@@ -199,6 +201,7 @@ function ReportViewDialog({ reportId: rptId, open, onClose }: any) {
               </div>
             </DialogHeader>
 
+            {rpt.status === "draft" && rpt.createdByUserId === user?.id && <Button disabled={submitDraft.isPending} onClick={() => submitDraft.mutate()}><SendIcon className="w-4 h-4 mr-2" />{submitDraft.isPending ? "Submitting…" : "Submit to admin"}</Button>}
             <div className="space-y-4 py-2">
               {/* Details */}
               <div className="rounded-lg bg-muted/30 p-3 space-y-2">
@@ -325,13 +328,13 @@ export default function ClientReports() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState("all");
 
-  const { data: reports = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/reports"] });
+  const { data: reports = [], isLoading, isError, refetch } = useQuery<any[]>({ queryKey: ["/api/reports"] });
   const { data: timezoneData } = useQuery<{ timezone: string }>({ queryKey: ["/api/settings/timezone"], staleTime: Infinity });
   const timezone = timezoneData?.timezone || "UTC";
 
   const received = reports.filter(r => r.sentToClient && r.createdByRole === "admin");
-  const submitted = reports.filter(r => r.createdByRole === "client");
-  const needsAction = reports.filter(r => r.requiresClientSignature && !["finalized", "archived"].includes(r.status) && r.sentToClient);
+  const submitted = reports.filter(r => r.createdByRole === "client" && r.status !== "draft");
+  const needsAction = reports.filter(r => reportNeedsSignature(r, "client") && r.sentToClient);
 
   const filtered = tab === "received" ? received
     : tab === "submitted" ? submitted
@@ -385,7 +388,7 @@ export default function ClientReports() {
 
       {/* List */}
       <div className="px-4 space-y-2">
-        {isLoading ? (
+        {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
           <div className="flex items-center justify-center h-40">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
           </div>
@@ -410,7 +413,7 @@ export default function ClientReports() {
                       {statusLabel(r.status)}
                     </span>
                     {r.createdByRole === "admin" && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">From Admin</span>}
-                    {r.requiresClientSignature && !["finalized", "archived"].includes(r.status) && (
+                    {reportNeedsSignature(r, "client") && (
                       <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded flex items-center gap-1"><PenLine className="w-2.5 h-2.5" />Sign required</span>
                     )}
                   </div>

@@ -1,3 +1,4 @@
+import { WorklogQueryError } from "@/components/worklog-query-error";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -123,7 +124,7 @@ function useVoiceToText(onResult: (text: string) => void) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function EmployeeSupplies() {
-  const { data, isLoading } = useQuery<any>({ queryKey: ["/api/employee/supplies"] });
+  const { data, isLoading, isError, refetch } = useQuery<any>({ queryKey: ["/api/employee/supplies"] });
   const { data: locationData } = useQuery<any[]>({ queryKey: ["/api/locations"] });
   const [selectedLocationKey, setSelectedLocationKey] = useState<string>("");
   const [openSupplyId, setOpenSupplyId] = useState<string | null>(null);
@@ -201,7 +202,7 @@ export default function EmployeeSupplies() {
       )}
 
       {/* Supply grid */}
-      {isLoading ? (
+      {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
         <div className="px-4 grid grid-cols-3 gap-2">
           {[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-32 rounded-xl" />)}
         </div>
@@ -362,7 +363,7 @@ function SupplyUpdateSheet({ supply, submitted, onSubmitted, onClose }: {
 
   return (
     <Sheet open={true} onOpenChange={v => { if (!v) onClose(); }}>
-      <SheetContent side="bottom" className="rounded-t-2xl pb-8 max-h-[90vh] overflow-y-auto" data-testid="sheet-supply-update">
+      <SheetContent side="bottom" className="rounded-t-2xl pb-8 max-h-[90dvh] overflow-y-auto" data-testid="sheet-supply-update">
         <SheetHeader className="text-left mb-4">
           <SheetTitle>{supply.name}</SheetTitle>
           <SheetDescription>{supply.category}{supply.locationName ? ` · ${supply.locationName}` : ""}</SheetDescription>
@@ -577,7 +578,7 @@ function RequestNewSupplyDialog({ activeLocationId, activeLocationName, onClose 
 
   return (
     <Dialog open onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-sm mx-auto max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Request New Supply</DialogTitle>
           <DialogDescription>

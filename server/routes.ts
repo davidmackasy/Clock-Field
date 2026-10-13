@@ -1,3 +1,5 @@
+import { completedChecklistSteps, scheduledAssignmentDue, openSupplyRequest } from "@shared/worklog-state";
+import { registerWorkSubmissionAccess, registerReportAccess, registerFieldNoteAccess, registerScheduledNoteAccess } from "./worklog-access";
 import { validateForm, formName, validFormConfig } from "@shared/form-validation";
 import { trainingState } from "@shared/training-state";
 import type { Express, Request, Response, NextFunction } from "express";
@@ -2779,6 +2781,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
   registerGeneratedTimesheets(app);
   registerPayrollStubActions(app);
 
+  registerWorkSubmissionAccess(app, storage, requireAuth);
   // ── Work Submissions ──────────────────────────────────────────────────────
   app.get("/api/work-submissions", requireAuth, async (req, res) => {
     try {
@@ -2798,17 +2801,24 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     try {
       const user = req.user as any;
       const now = new Date().toISOString();
-      const today = now.split("T")[0];
+      const company = await storage.getCompany(user.companyId);
       // Auto-link active shift if present
       const activeEntry = await storage.getActiveTimeEntry(user.id);
       const shiftId = activeEntry?.shiftId || null;
+      const today = dateInZone(activeEntry?.clockInAt || now, company?.timezone || "UTC");
+      const locationId = req.body.locationId || activeEntry?.locationId || null;
+      const loc = locationId ? await storage.getLocation(locationId) : null;
+      if (locationId && (!loc || loc.companyId !== user.companyId)) return res.status(400).json({ message: "Invalid location" });
+      const clientId = req.body.clientId || activeEntry?.clientId || null;
+      const client = clientId ? await storage.getClient(clientId) : null;
+      if (clientId && (!client || client.companyId !== user.companyId)) return res.status(400).json({ message: "Invalid client" });
       const sub = await storage.createWorkSubmission({
         companyId: user.companyId,
         employeeId: user.id,
         shiftId,
-        clientId: req.body.clientId || null,
-        locationId: req.body.locationId || null,
-        locationName: req.body.locationName || null,
+        clientId,
+        locationId,
+        locationName: loc?.name || req.body.locationName || null,
         workDate: today,
         status: "draft",
         createdAt: now,
@@ -2846,7 +2856,11 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       if (user.role === "employee" && sub.employeeId !== user.id) return res.status(403).json({ message: "Forbidden" });
       if (user.role === "admin" && sub.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
       const now = new Date().toISOString();
-      const updates: any = { ...req.body, updatedAt: now };
+      if (user.role === "employee" && sub.status !== "draft") return res.status(409).json({ message: "Submitted work is locked" });
+      if (req.body.status && !(user.role === "admin" ? ["draft", "submitted", "reviewed"] : ["draft", "submitted"]).includes(req.body.status)) return res.status(400).json({ message: "Invalid work status" });
+      const updates: any = { updatedAt: now };
+      for (const key of ["status", "serviceSummary"]) if (req.body[key] !== undefined) updates[key] = req.body[key];
+      if (user.role === "admin" && req.body.publicShareEnabled !== undefined) updates.publicShareEnabled = !!req.body.publicShareEnabled;
       if (req.body.status === "submitted" && !sub.submittedAt) updates.submittedAt = now;
       const updated = await storage.updateWorkSubmission(req.params.id, updates);
       // Auto-resolve open priority alerts for this location when work is submitted
@@ -2946,6 +2960,8 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       const sub = await storage.getWorkSubmission(req.params.id);
       if (!sub || sub.employeeId !== user.id) return res.status(403).json({ message: "Forbidden" });
       if (sub.status !== "draft") return res.status(400).json({ message: "Submission already submitted" });
+      const ownedPhotos = await storage.getWorkSubmissionPhotosByItem(req.params.itemId);
+      if (req.body.removePhotoIds && (!Array.isArray(req.body.removePhotoIds) || req.body.removePhotoIds.some((id: string) => !ownedPhotos.some(p => p.id === id)))) return res.status(400).json({ message: "Photo does not belong to this work item" });
       const now = new Date().toISOString();
       const updated = await storage.updateWorkSubmissionItem(req.params.itemId, { notes: req.body.notes });
       // Add new photos and remove old ones in parallel
@@ -2969,6 +2985,8 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       const user = req.user as any;
       const sub = await storage.getWorkSubmission(req.params.id);
       if (!sub || sub.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
+      const ownedPhotos = await storage.getWorkSubmissionPhotosByItem(req.params.itemId);
+      if (req.body.removePhotoIds && (!Array.isArray(req.body.removePhotoIds) || req.body.removePhotoIds.some((id: string) => !ownedPhotos.some(p => p.id === id)))) return res.status(400).json({ message: "Photo does not belong to this work item" });
       const now = new Date().toISOString();
       const updated = await storage.updateWorkSubmissionItem(req.params.itemId, { notes: req.body.notes ?? null });
       const addBefore: string[] = req.body.addBeforePhotos || [];
@@ -3223,6 +3241,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
         locationName: sub.locationName,
         status: sub.status,
         companyName: company?.name || "ClockField",
+        companyTimezone: company?.timezone || "UTC",
         companyAddress,
         companyLogoUrl: company?.companyLogoUrl || null,
         brandColor: company?.brandColor || null,
@@ -3291,9 +3310,9 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       const existing = await storage.getWorkSubmissionReviewBySubmissionId(sub.id);
       if (existing) return res.status(409).json({ message: "A review has already been submitted for this report." });
       const { clientName, companyName, reviewText, rating } = req.body;
-      if (!clientName || !clientName.trim()) return res.status(400).json({ message: "Client name is required." });
-      if (!reviewText || !reviewText.trim()) return res.status(400).json({ message: "Review message is required." });
-      if (rating !== undefined && rating !== null && (isNaN(Number(rating)) || Number(rating) < 1 || Number(rating) > 5)) {
+      if (typeof clientName !== "string" || !clientName.trim()) return res.status(400).json({ message: "Client name is required." });
+      if (typeof reviewText !== "string" || !reviewText.trim()) return res.status(400).json({ message: "Review message is required." });
+      if (rating !== undefined && rating !== null && (!Number.isInteger(Number(rating)) || Number(rating) < 1 || Number(rating) > 5)) {
         return res.status(400).json({ message: "Rating must be between 1 and 5." });
       }
       const now = new Date().toISOString();
@@ -3302,7 +3321,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
         companyId: sub.companyId,
         shareToken: req.params.token,
         clientName: clientName.trim().substring(0, 200),
-        companyName: companyName ? companyName.trim().substring(0, 200) : null,
+        companyName: typeof companyName === "string" ? companyName.trim().substring(0, 200) : null,
         reviewText: reviewText.trim().substring(0, 2000),
         rating: rating ? Number(rating) : null,
         status: "submitted",
@@ -3312,7 +3331,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       res.status(201).json({ id: review.id, message: "Thank you! Your review has been submitted." });
     } catch (err: any) {
       console.error("[review submit]", err);
-      res.status(500).json({ message: "Unable to submit your review right now. Please try again in a moment." });
+      res.status(err.status || 500).json({ message: err.status === 409 ? err.message : "Unable to submit your review right now. Please try again in a moment." });
     }
   });
 
@@ -5370,6 +5389,7 @@ Return a JSON object with these exact fields:
   });
 
   // List reports (role-aware)
+  registerReportAccess(app, storage, requireAuth);
   app.get("/api/reports", requireAuth, async (req: any, res) => {
     try {
       const { user } = req;
@@ -5396,7 +5416,8 @@ Return a JSON object with these exact fields:
       } else {
         reps = [];
       }
-      res.json(reps);
+      const signatureRows = reps.length ? await db.select({reportId:reportSignatures.reportId,signerRole:reportSignatures.signerRole}).from(reportSignatures).where(inArray(reportSignatures.reportId,reps.map(r=>r.id))) : [];
+      res.json(reps.map(report => { const result = { ...report, signatureRoles: Array.from(new Set(signatureRows.filter(sig=>sig.reportId===report.id).map(sig=>sig.signerRole))) } as any; if(user.role !== "admin") delete result.internalNotes; return result; }));
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
@@ -5432,7 +5453,9 @@ Return a JSON object with these exact fields:
         storage.getReportSignatures(report.id),
         storage.getReportActivity(report.id),
       ]);
-      res.json({ ...report, signatures, activity });
+      const visibleReport = { ...report } as any;
+      if (user.role !== "admin") delete visibleReport.internalNotes;
+      res.json({ ...visibleReport, signatures, activity });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
@@ -5451,12 +5474,19 @@ Return a JSON object with these exact fields:
         }
       }
       const now = new Date().toISOString();
+      const input = { ...req.body };
+      for (const key of ["id", "createdAt", "updatedAt", "sentAt", "employeeViewedAt", "clientViewedAt"]) delete input[key];
+      if (user.role !== "admin") {
+        for (const key of ["sentToEmployee", "sentToClient", "assignedEmployeeId", "assignedClientId", "internalNotes", "adminFindings", "requiresAdminSignature", "requiresEmployeeSignature", "requiresClientSignature"]) delete input[key];
+        input.status = "draft";
+      }
+      if (!String(input.title || "").trim()) return res.status(400).json({ message: "Report title is required" });
       const report = await storage.createReport({
-        ...req.body,
+        ...input,
         companyId: user.companyId,
         createdByUserId: user.id,
         createdByRole: user.role,
-        status: req.body.status || "draft",
+        status: input.status || "draft",
         createdAt: now,
         updatedAt: now,
       });
@@ -5478,7 +5508,8 @@ Return a JSON object with these exact fields:
         res.status(403).json({ message: "Cannot edit a finalized report" }); return;
       }
       // Non-admin: only allowed to update their own statement/comments
-      let updateData = req.body;
+      let updateData = { ...req.body };
+      for (const key of ["id", "companyId", "createdByUserId", "createdByRole", "createdAt", "sentAt", "sentToEmployee", "sentToClient", "employeeViewedAt", "clientViewedAt"]) delete updateData[key];
       if (user.role === "employee") {
         const allowed: any = {};
         if (updateData.employeeStatement !== undefined) allowed.employeeStatement = updateData.employeeStatement;
@@ -5509,14 +5540,18 @@ Return a JSON object with these exact fields:
         sendToClientEmail = false,
       } = req.body;
 
+      if (![sendToEmployee, sendToClient, sendToEmployeeEmail, sendToClientEmail].some(Boolean)) return res.status(400).json({ message: "Select at least one delivery method" });
+      if (sendToEmployee || sendToEmployeeEmail) { const employee = report.assignedEmployeeId ? await storage.getUser(report.assignedEmployeeId) : null; if (!employee || employee.companyId !== user.companyId || employee.role !== "employee") return res.status(400).json({ message: "Select a cleaner in this company" }); }
+      if (sendToClient || sendToClientEmail) { const client = report.assignedClientId ? await storage.getClient(report.assignedClientId) : null; if (!client || client.companyId !== user.companyId) return res.status(400).json({ message: "Select a client in this company" }); }
+      if (report.status === "archived") return res.status(409).json({ message: "An archived report cannot be sent" });
       // Update in-app delivery flags
-      const updateData: any = { sentAt: new Date().toISOString(), status: "sent" };
+      const updateData: any = { sentAt: new Date().toISOString(), status: report.status === "finalized" ? "finalized" : "sent" };
       if (sendToEmployee) updateData.sentToEmployee = true;
       if (sendToClient) updateData.sentToClient = true;
-      const updated = await storage.updateReport(req.params.id, user.companyId, updateData);
+      let updated = report;
 
       // Build base app URL for CTA links
-      const appUrl = `${req.protocol}://${req.get("host")}`;
+      const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
       const company = await storage.getCompany(user.companyId);
       const companyName = company?.name || "ClockField";
 
@@ -5615,7 +5650,9 @@ Return a JSON object with these exact fields:
         }
       }
 
-      await logReportActivity(req.params.id, "sent", user.id, user.role, {
+      const delivered = sendToEmployee || sendToClient || emailResults.some(result => result.ok);
+      if (delivered) updated = (await storage.updateReport(req.params.id, user.companyId, updateData)) || report;
+      await logReportActivity(req.params.id, delivered ? "sent" : "delivery_failed", user.id, user.role, {
         sendToEmployee, sendToClient, sendToEmployeeEmail, sendToClientEmail,
       });
 
@@ -5630,6 +5667,8 @@ Return a JSON object with these exact fields:
       const report = await storage.getReport(req.params.id, user.companyId);
       if (!report) { res.status(404).json({ message: "Report not found" }); return; }
       if (report.reportType === "incident" && report.incidentDeclarationText) { res.status(403).json({ message: "Use the incident finalize endpoint." }); return; }
+      if (["finalized", "archived"].includes(report.status)) return res.status(409).json({ message: "This report is locked" });
+      if (user.role === "employee" && !report.requiresEmployeeSignature || user.role === "client" && !report.requiresClientSignature) return res.status(403).json({ message: "A signature was not requested from you" });
       const existing = await storage.getReportSignatureByUser(req.params.id, user.id);
       if (existing) { res.status(400).json({ message: "Already signed" }); return; }
       const { signerName, acknowledgementText, signatureType, signatureDataUrl } = req.body;
@@ -5749,6 +5788,7 @@ Return a JSON object with these exact fields:
       if (!report) { res.status(404).json({ message: "Report not found" }); return; }
       if (report.reportType === "incident" && report.incidentDeclarationText) { res.status(403).json({ message: "Use the incident submit endpoint." }); return; }
       if (report.createdByUserId !== user.id) { res.status(403).json({ message: "Access denied" }); return; }
+      if (report.status !== "draft") return res.status(409).json({ message: "Only a draft report can be submitted" });
       const updated = await storage.updateReport(req.params.id, user.companyId, { status: "submitted" });
       await logReportActivity(req.params.id, "submitted", user.id, user.role);
       res.json(updated);
@@ -5764,6 +5804,7 @@ Return a JSON object with these exact fields:
         res.status(404).json({ error: "invalid_token", message: "This report link is no longer available." });
         return;
       }
+      if (tokenRecord.expiresAt && Date.parse(tokenRecord.expiresAt) <= Date.now()) return res.status(410).json({ error: "expired", message: "This report link has expired. Contact the sender for a new link." });
       if (tokenRecord.revokedAt) {
         res.status(410).json({ error: "revoked", message: "This report link has been revoked. Please contact the sender for a new link." });
         return;
@@ -5829,6 +5870,7 @@ Return a JSON object with these exact fields:
         res.status(404).json({ error: "invalid_token", message: "This report link is no longer available." });
         return;
       }
+      if (tokenRecord.expiresAt && Date.parse(tokenRecord.expiresAt) <= Date.now()) return res.status(410).json({ error: "expired", message: "This report link has expired. Contact the sender for a new link." });
       if (tokenRecord.revokedAt) {
         res.status(410).json({ error: "revoked", message: "This report link has been revoked." });
         return;
@@ -5901,6 +5943,7 @@ Return a JSON object with these exact fields:
     next();
   };
 
+  registerFieldNoteAccess(app, storage, fnAuth);
   // GET /api/field-notes — list sessions for company
   app.get("/api/field-notes", fnAuth, async (req, res) => {
     try {
@@ -5925,7 +5968,7 @@ Return a JSON object with these exact fields:
       // Fetch photo counts per session
       const sessionIds = sessions.map(s => s.id);
       const assetRows = sessionIds.length
-        ? await db.select().from(fieldNotesAssets).where(inArray(fieldNotesAssets.sessionId, sessionIds))
+        ? await db.select({ sessionId: fieldNotesAssets.sessionId }).from(fieldNotesAssets).where(inArray(fieldNotesAssets.sessionId, sessionIds))
         : [];
       const photoCountMap: Record<string, number> = {};
       for (const a of assetRows) { photoCountMap[a.sessionId] = (photoCountMap[a.sessionId] || 0) + 1; }
@@ -6391,14 +6434,15 @@ Return a JSON object with these exact fields:
         storage.getFieldNotesTranscriptChunks(session.id),
       ]);
       // Filter: exclude hidden entries; only show client-safe entries unless showInternalNotes is on
-      const publicEntries = entries.filter(e =>
-        !(e as any).isHiddenFromPublic &&
-        (doc.showInternalNotes || (e as any).clientSafeSummary || e.body)
-      );
+      const publicEntries = entries.filter(e => !(e as any).isHiddenFromPublic).map(e => doc.showInternalNotes ? e : ({
+        id: e.id, title: e.title, areaName: e.areaName, sortOrder: e.sortOrder,
+        body: e.clientSafeSummary || e.body, clientSafeSummary: e.clientSafeSummary,
+        assetIds: e.assetIds, priority: e.priority, recommendedAction: e.recommendedAction,
+      }));
       // Filter: exclude hidden assets
       const publicAssets = assets.filter(a => !(a as any).isHiddenFromPublic);
       res.json({
-        session: { ...session, createdByName, locationName },
+        session: { id: session.id, title: session.title, startedAt: session.startedAt, endedAt: session.endedAt, documentMode: session.documentMode, quoteData: session.quoteData, pageIntro: session.pageIntro, pageSummary: session.pageSummary, clientSafeSummary: session.clientSafeSummary, aiSummary: doc.showInternalNotes ? session.aiSummary : session.clientSafeSummary, createdByName, locationName },
         company: { name: companyRow?.name, companyLogoUrl: (companyRow as any)?.companyLogoUrl ?? null },
         entries: publicEntries,
         assets: publicAssets.map(a => ({ id: a.id, fileUrl: a.fileUrl, capturedAt: a.capturedAt, areaLabel: (a as any).areaLabel ?? null, phase: a.phase ?? null, caption: a.caption ?? null })),
@@ -6941,7 +6985,7 @@ FINAL RULES:
       const runningLow = items.filter(i => i.status === "running_low").length;
       const totalInventoryValue = items.reduce((acc, i) => acc + (parseFloat(i.unitPrice) || 0) * i.currentQuantity, 0);
       const totalSpent = expenses.reduce((acc, e) => acc + (parseFloat(e.totalExpense) || 0), 0);
-      const pendingRequests = requests.filter(r => r.status === "in_stock" || r.status === "running_low" || r.status === "out_of_stock").length;
+      const pendingRequests = requests.filter(openSupplyRequest).length;
       const recentPurchases = [...purchases].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
       const recentExpenses = [...expenses].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
       // Location expense summary
@@ -6974,9 +7018,10 @@ FINAL RULES:
       const now = new Date().toISOString();
       const { name, category, unitPrice, currentQuantity, lowStockThreshold, supplierName, notes, imageData } = req.body;
       if (!name || !category) return res.status(400).json({ message: "name and category required" });
-      const qty = parseInt(currentQuantity) || 0;
-      const price = unitPrice || "0";
-      const threshold = parseInt(lowStockThreshold) || 2;
+      const qty = Number(currentQuantity ?? 0);
+      const price = String(unitPrice ?? "0");
+      const threshold = Number(lowStockThreshold ?? 2);
+      if (!Number.isInteger(qty) || qty < 0 || !Number.isInteger(threshold) || threshold < 0 || !Number.isFinite(Number(price)) || Number(price) < 0) return res.status(400).json({ message: "Enter non-negative quantities, threshold and price" });
       let status = "in_stock";
       if (qty === 0) status = "out_of_stock";
       else if (qty <= threshold) status = "running_low";
@@ -7017,7 +7062,8 @@ FINAL RULES:
       if (!item || item.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       const now = new Date().toISOString();
       const { name, category, unitPrice, lowStockThreshold, supplierName, notes, imageData } = req.body;
-      const threshold = lowStockThreshold !== undefined ? parseInt(lowStockThreshold) : item.lowStockThreshold;
+      const threshold = lowStockThreshold !== undefined ? Number(lowStockThreshold) : item.lowStockThreshold;
+      if (!Number.isInteger(threshold) || threshold < 0 || (unitPrice !== undefined && (!Number.isFinite(Number(unitPrice)) || Number(unitPrice) < 0))) return res.status(400).json({ message: "Enter a valid threshold and price" });
       const currentQty = item.currentQuantity;
       let status = "in_stock";
       if (currentQty === 0) status = "out_of_stock";
@@ -7039,22 +7085,24 @@ FINAL RULES:
   // POST /api/supplies/inventory/:id/restock — add more stock
   app.post("/api/supplies/inventory/:id/restock", requireAuth, requireRole("admin"), async (req, res) => {
     try {
+      const result = await db.transaction(async tx => {
       const user = req.user as any;
-      const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.id, req.params.id));
-      if (!item || item.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const [item] = await tx.select().from(inventoryItems).where(eq(inventoryItems.id, req.params.id)).for("update");
+      if (!item || item.companyId !== user.companyId) throw Object.assign(new Error("Not found"), { status: 404 });
       const now = new Date().toISOString();
       const { quantityAdded, unitPrice, supplierName, purchaseDate, notes } = req.body;
-      const qty = parseInt(quantityAdded);
-      if (!qty || qty <= 0) return res.status(400).json({ message: "quantityAdded must be positive" });
-      const price = unitPrice || item.unitPrice;
+      const qty = Number(quantityAdded);
+      if (!Number.isInteger(qty) || qty <= 0) throw Object.assign(new Error("quantityAdded must be positive"), { status: 400 });
+      const price = String(unitPrice ?? item.unitPrice);
+      if (!Number.isFinite(Number(price)) || Number(price) < 0) throw Object.assign(new Error("Enter a non-negative unit price"), { status: 400 });
       const total = (parseFloat(price) * qty).toFixed(2);
       const newQty = item.currentQuantity + qty;
       const threshold = item.lowStockThreshold;
       let status = "in_stock";
       if (newQty === 0) status = "out_of_stock";
       else if (newQty <= threshold) status = "running_low";
-      await db.update(inventoryItems).set({ currentQuantity: newQty, unitPrice: price, status, updatedAt: now }).where(eq(inventoryItems.id, item.id));
-      const [purchase] = await db.insert(inventoryPurchases).values({
+      await tx.update(inventoryItems).set({ currentQuantity: newQty, unitPrice: price, status, updatedAt: now }).where(eq(inventoryItems.id, item.id));
+      const [purchase] = await tx.insert(inventoryPurchases).values({
         companyId: user.companyId, inventoryItemId: item.id, inventoryItemName: item.name,
         quantityAdded: qty, unitPrice: price, totalCost: total,
         supplierName: supplierName || item.supplierName || null,
@@ -7062,27 +7110,34 @@ FINAL RULES:
         notes: notes || null, createdByAdminId: user.id,
         createdByAdminName: `${user.firstName} ${user.lastName}`, createdAt: now,
       }).returning();
-      await db.insert(inventoryMovements).values({
+      await tx.insert(inventoryMovements).values({
         companyId: user.companyId, inventoryItemId: item.id, inventoryItemName: item.name,
         movementType: "purchase", quantity: qty,
         unitPriceAtTime: price, totalValue: total,
         notes: notes || null, createdByAdminId: user.id, createdAt: now,
       });
-      res.json({ purchase, newQuantity: newQty, status });
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
+      return { purchase, newQuantity: newQty, status };
+      });
+      res.json(result);
+    } catch (e: any) { res.status(e.status || 500).json({ message: e.message }); }
   });
 
   // POST /api/supplies/inventory/:id/assign-location — assign inventory to a location
   app.post("/api/supplies/inventory/:id/assign-location", requireAuth, requireRole("admin"), async (req, res) => {
     try {
+      const result = await db.transaction(async tx => {
       const user = req.user as any;
-      const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.id, req.params.id));
-      if (!item || item.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      const [item] = await tx.select().from(inventoryItems).where(eq(inventoryItems.id, req.params.id)).for("update");
+      if (!item || item.companyId !== user.companyId) throw Object.assign(new Error("Not found"), { status: 404 });
       const { locationId, locationName, quantity, supplyRequestId, notes, assignedEmployeeId, assignedEmployeeName } = req.body;
-      if (!locationId || !quantity) return res.status(400).json({ message: "locationId and quantity required" });
-      const qty = parseInt(quantity);
-      if (qty <= 0) return res.status(400).json({ message: "quantity must be positive" });
-      if (item.currentQuantity < qty) return res.status(400).json({ message: `Only ${item.currentQuantity} unit${item.currentQuantity !== 1 ? "s" : ""} available` });
+      if (!locationId || !quantity) throw Object.assign(new Error("locationId and quantity required"), { status: 400 });
+      const qty = Number(quantity);
+      if (!Number.isInteger(qty) || qty <= 0) throw Object.assign(new Error("quantity must be positive"), { status: 400 });
+      if (item.currentQuantity < qty) throw Object.assign(new Error(`Only ${item.currentQuantity} unit${item.currentQuantity !== 1 ? "s" : ""} available`), { status: 400 });
+      const location = await storage.getLocation(locationId);
+      if (!location || location.companyId !== user.companyId) throw Object.assign(new Error("Location not found"), { status: 400 });
+      if (assignedEmployeeId) { const employee = await storage.getUser(assignedEmployeeId); if (!employee || employee.companyId !== user.companyId || employee.role !== "employee") throw Object.assign(new Error("Cleaner not found"), { status: 400 }); }
+      if (supplyRequestId) { const [request] = await tx.select().from(supplies).where(and(eq(supplies.id,supplyRequestId),eq(supplies.companyId,user.companyId))).for("update"); if (!request || request.locationId && request.locationId !== locationId) throw Object.assign(new Error("Supply request does not belong to this location"), { status: 400 }); }
       const now = new Date().toISOString();
       const price = item.unitPrice;
       const total = (parseFloat(price) * qty).toFixed(2);
@@ -7091,8 +7146,8 @@ FINAL RULES:
       let invStatus = "in_stock";
       if (newQty === 0) invStatus = "out_of_stock";
       else if (newQty <= threshold) invStatus = "running_low";
-      await db.update(inventoryItems).set({ currentQuantity: newQty, status: invStatus, updatedAt: now }).where(eq(inventoryItems.id, item.id));
-      const [expense] = await db.insert(locationSupplyExpenses).values({
+      await tx.update(inventoryItems).set({ currentQuantity: newQty, status: invStatus, updatedAt: now }).where(eq(inventoryItems.id, item.id));
+      const [expense] = await tx.insert(locationSupplyExpenses).values({
         companyId: user.companyId, locationId, locationName: locationName || null,
         inventoryItemId: item.id, inventoryItemName: item.name,
         category: item.category, supplyRequestId: supplyRequestId || null,
@@ -7103,7 +7158,7 @@ FINAL RULES:
         assignedEmployeeName: assignedEmployeeName || null,
         notes: notes || null, createdAt: now,
       }).returning();
-      await db.insert(inventoryMovements).values({
+      await tx.insert(inventoryMovements).values({
         companyId: user.companyId, inventoryItemId: item.id, inventoryItemName: item.name,
         movementType: "assigned_to_location", quantity: -qty,
         unitPriceAtTime: price, totalValue: total,
@@ -7112,14 +7167,14 @@ FINAL RULES:
         notes: notes || null, createdByAdminId: user.id, createdAt: now,
       });
       // Upsert supply record so employee can see it
-      const existingSupplies = await db.select().from(supplies).where(and(
+      const existingSupplies = await tx.select().from(supplies).where(and(
         eq(supplies.inventoryItemId, item.id),
         eq(supplies.locationId, locationId),
         eq(supplies.companyId, user.companyId),
-        eq(supplies.isActive, true)
+        eq(supplies.isActive, true), isNull(supplies.requestedQuantity)
       ));
       if (existingSupplies.length === 0) {
-        await db.insert(supplies).values({
+        await tx.insert(supplies).values({
           companyId: user.companyId, locationId, locationName: locationName || null,
           name: item.name, category: item.category,
           imageData: item.imageData || null, status: "in_stock",
@@ -7131,7 +7186,7 @@ FINAL RULES:
       } else {
         const existing = existingSupplies[0];
         const newTotal = (existing.fulfilledQuantity || 0) + qty;
-        await db.update(supplies).set({
+        await tx.update(supplies).set({
           status: "in_stock",
           quantityLabel: `${newTotal} unit${newTotal !== 1 ? "s" : ""} assigned`,
           fulfilledQuantity: newTotal, updatedAt: now,
@@ -7139,16 +7194,16 @@ FINAL RULES:
       }
       // If linked to a supply request, update it
       if (supplyRequestId) {
-        const [req2] = await db.select().from(supplies).where(eq(supplies.id, supplyRequestId));
+        const [req2] = await tx.select().from(supplies).where(eq(supplies.id, supplyRequestId));
         if (req2 && req2.companyId === user.companyId) {
           const newFulfilled = (req2.fulfilledQuantity || 0) + qty;
           const requested = req2.requestedQuantity || 0;
           const newStatus = requested > 0 && newFulfilled >= requested ? "fulfilled" : requested > 0 ? "partially_fulfilled" : "fulfilled";
-          await db.update(supplies).set({
+          await tx.update(supplies).set({
             fulfilledQuantity: newFulfilled, linkedExpenseId: expense.id,
             inventoryItemId: item.id, status: newStatus, updatedAt: now,
           }).where(eq(supplies.id, supplyRequestId));
-          await db.insert(supplyUpdates).values({
+          await tx.insert(supplyUpdates).values({
             supplyId: supplyRequestId, companyId: user.companyId,
             locationId: locationId, updatedByRole: "admin",
             updateType: "status_changed",
@@ -7157,8 +7212,10 @@ FINAL RULES:
           });
         }
       }
-      res.json({ expense, newQuantity: newQty, invStatus });
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
+      return { expense, newQuantity: newQty, invStatus };
+      });
+      res.json(result);
+    } catch (e: any) { res.status(e.status || 500).json({ message: e.message }); }
   });
 
   // GET /api/supplies/company-employees — list active employees for selector
@@ -7244,7 +7301,7 @@ FINAL RULES:
   });
 
   // POST /api/supplies/grammarize-note — AI grammar cleanup for cleaner voice notes
-  app.post("/api/supplies/grammarize-note", requireAuth, async (req, res) => {
+  app.post("/api/supplies/grammarize-note", requireAuth, requireRole("admin", "employee"), async (req, res) => {
     try {
       const { rawText } = req.body;
       if (!rawText || typeof rawText !== "string") return res.status(400).json({ message: "rawText required" });
@@ -7350,7 +7407,7 @@ FINAL RULES:
   });
 
   // GET /api/supplies/:id — supply detail with updates
-  app.get("/api/supplies/:id", requireAuth, async (req, res) => {
+  app.get("/api/supplies/:id", requireAuth, requireRole("admin", "employee"), async (req, res) => {
     try {
       const user = req.user as any;
       const [supply] = await db.select().from(supplies).where(eq(supplies.id, req.params.id));
@@ -7409,7 +7466,7 @@ FINAL RULES:
   });
 
   // POST /api/supplies/:id/updates — add activity (admin or employee)
-  app.post("/api/supplies/:id/updates", requireAuth, async (req, res) => {
+  app.post("/api/supplies/:id/updates", requireAuth, requireRole("admin", "employee"), async (req, res) => {
     try {
       const user = req.user as any;
       const [supply] = await db.select().from(supplies).where(eq(supplies.id, req.params.id));
@@ -9634,6 +9691,7 @@ Return ONLY valid JSON:
   // ══════════════════════════════════════════════════════════════════════════
 
   // ── Admin: Templates ──────────────────────────────────────────────────────
+  registerScheduledNoteAccess(app, storage, requireRole);
   app.get("/api/admin/scheduled-field-notes/templates", requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
@@ -9689,7 +9747,7 @@ Return ONLY valid JSON:
       const user = req.user as any;
       const template = await storage.getScheduledFieldNoteTemplate(req.params.id);
       if (!template || template.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      const updated = await storage.updateScheduledFieldNoteTemplate(req.params.id, { ...req.body, updatedAt: new Date().toISOString() });
+      const updated = await storage.updateScheduledFieldNoteTemplate(req.params.id, Object.fromEntries(Object.entries(req.body).filter(([key]) => ["name", "description", "clientId", "templateType", "frequency", "requiredBeforeClockOut", "introText", "outroText", "status"].includes(key))));
       res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -9699,6 +9757,7 @@ Return ONLY valid JSON:
       const user = req.user as any;
       const template = await storage.getScheduledFieldNoteTemplate(req.params.id);
       if (!template || template.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if ((await storage.getScheduledFieldNoteSubmissions(user.companyId)).some(sub => sub.templateId === template.id)) return res.status(409).json({ message: "This checklist has recorded submissions. Duplicate or archive the template to preserve its history." });
       await storage.deleteScheduledFieldNoteTemplate(req.params.id);
       res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -9751,6 +9810,7 @@ Return ONLY valid JSON:
       const user = req.user as any;
       const template = await storage.getScheduledFieldNoteTemplate(req.params.id);
       if (!template || template.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if ((await storage.getScheduledFieldNoteSubmissions(user.companyId)).some(sub => sub.templateId === template.id)) return res.status(409).json({ message: "This checklist has recorded submissions. Duplicate or archive the template to preserve its history." });
       const now = new Date().toISOString();
       const existingSections = await storage.getScheduledFieldNoteSections(template.id);
       const section = await storage.createScheduledFieldNoteSection({
@@ -9764,7 +9824,7 @@ Return ONLY valid JSON:
 
   app.patch("/api/admin/scheduled-field-notes/sections/:id", requireRole("admin"), async (req, res) => {
     try {
-      const updated = await storage.updateScheduledFieldNoteSection(req.params.id, req.body);
+      const updated = await storage.updateScheduledFieldNoteSection(req.params.id, Object.fromEntries(Object.entries(req.body).filter(([key]) => ["title", "description", "sortOrder"].includes(key))));
       res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -9780,10 +9840,12 @@ Return ONLY valid JSON:
   app.post("/api/admin/scheduled-field-notes/sections/:sectionId/steps", requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
+      const section = (req as any).checklistRecord;
+      if (!section || (req.body.templateId && req.body.templateId !== section.templateId)) return res.status(400).json({ message: "Step must belong to the selected template" });
       const now = new Date().toISOString();
       const existingSteps = await storage.getScheduledFieldNoteStepsBySection(req.params.sectionId);
       const step = await storage.createScheduledFieldNoteStep({
-        templateId: req.body.templateId, sectionId: req.params.sectionId, companyId: user.companyId,
+        templateId: section.templateId, sectionId: req.params.sectionId, companyId: user.companyId,
         title: req.body.title || "Take a photo", description: req.body.description || "",
         areaCategory: req.body.areaCategory || null,
         areaName: req.body.areaName || null,
@@ -9800,7 +9862,7 @@ Return ONLY valid JSON:
 
   app.patch("/api/admin/scheduled-field-notes/steps/:id", requireRole("admin"), async (req, res) => {
     try {
-      const updated = await storage.updateScheduledFieldNoteStep(req.params.id, req.body);
+      const updated = await storage.updateScheduledFieldNoteStep(req.params.id, Object.fromEntries(Object.entries(req.body).filter(([key]) => ["title", "description", "areaCategory", "areaName", "itemType", "customAreaName", "customItemType", "referenceImageUrl", "isRequired", "sortOrder"].includes(key))));
       res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -9843,6 +9905,11 @@ Return ONLY valid JSON:
   app.post("/api/admin/scheduled-field-notes/assignments", requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
+      const template = await storage.getScheduledFieldNoteTemplate(req.body.templateId);
+      const cleaner = await storage.getUser(req.body.cleanerId);
+      if (!template || template.companyId !== user.companyId || template.status !== "active" || !cleaner || cleaner.companyId !== user.companyId || cleaner.role !== "employee" || !cleaner.isActive) return res.status(400).json({ message: "Select an active cleaner and checklist from this company" });
+      if (req.body.clientId) { const client = await storage.getClient(req.body.clientId); if (!client || client.companyId !== user.companyId) return res.status(400).json({ message: "Invalid client" }); }
+      if (req.body.scheduleId) { const schedule = await storage.getRecurringSchedule(req.body.scheduleId); if (!schedule || schedule.companyId !== user.companyId || schedule.employeeId !== cleaner.id || schedule.status !== "active") return res.status(400).json({ message: "Select this cleaner's active schedule" }); }
       const assignment = await storage.createScheduledFieldNoteAssignment({
         templateId: req.body.templateId, companyId: user.companyId,
         cleanerId: req.body.cleanerId, clientId: req.body.clientId || null,
@@ -9855,7 +9922,7 @@ Return ONLY valid JSON:
 
   app.patch("/api/admin/scheduled-field-notes/assignments/:id", requireRole("admin"), async (req, res) => {
     try {
-      const updated = await storage.updateScheduledFieldNoteAssignment(req.params.id, req.body);
+      const updated = await storage.updateScheduledFieldNoteAssignment(req.params.id, Object.fromEntries(Object.entries(req.body).filter(([key]) => ["status"].includes(key))));
       res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -9911,7 +9978,7 @@ Return ONLY valid JSON:
         ...s,
         steps: steps.filter(st => st.sectionId === s.id).map(st => ({
           ...st,
-          submission: stepSubs.find(ss => ss.stepId === st.id) || null,
+          submission: stepSubs.filter(ss => ss.stepId === st.id).sort((a,b)=>b.submittedAt.localeCompare(a.submittedAt))[0] || null,
         })),
       }));
       res.json({ ...sub, template, sections: sectionsWithSteps, stepSubmissions: stepSubs, cleanerName: cleaner ? `${cleaner.firstName} ${cleaner.lastName}` : "Unknown", clientName: client?.name || null });
@@ -9923,9 +9990,10 @@ Return ONLY valid JSON:
       const user = req.user as any;
       const sub = await storage.getScheduledFieldNoteSubmission(req.params.id);
       if (!sub || sub.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (sub.status !== "completed") return res.status(409).json({ message: "Complete this checklist before publishing its report" });
       let publicId = sub.publicId;
       if (!publicId) {
-        publicId = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
+        publicId = randomBytes(16).toString("base64url");
         await storage.updateScheduledFieldNoteSubmission(sub.id, { publicId, publicEnabled: true, updatedAt: new Date().toISOString() });
       } else {
         await storage.updateScheduledFieldNoteSubmission(sub.id, { publicEnabled: true, updatedAt: new Date().toISOString() });
@@ -9945,20 +10013,26 @@ Return ONLY valid JSON:
   });
 
   // ── Employee: Scheduled Field Notes ──────────────────────────────────────
-  app.get("/api/employee/scheduled-field-notes/today", requireAuth, async (req, res) => {
+  app.get("/api/employee/scheduled-field-notes/today", requireRole("employee"), async (req, res) => {
     try {
       const user = req.user as any;
       // user.id IS the cleaner/employee ID in this system
       const assignments = await storage.getScheduledFieldNoteAssignmentsByCleaner(user.id);
       if (assignments.length === 0) return res.json([]);
-      const today = new Date().toISOString().split("T")[0];
+      const company = await storage.getCompany(user.companyId);
+      const activeClock = await storage.getActiveTimeEntry(user.id);
+      const today = dateInZone(activeClock?.clockInAt || new Date(), company?.timezone || "UTC");
+      const shifts = await storage.getShiftsByEmployee(user.id);
       const result = [];
       for (const assignment of assignments) {
         const template = await storage.getScheduledFieldNoteTemplate(assignment.templateId);
-        if (!template || template.status !== "active") continue;
+        if (!template || template.companyId !== user.companyId || template.status !== "active") continue;
+        const schedule = assignment.scheduleId ? await storage.getRecurringSchedule(assignment.scheduleId) : null;
+        if (!scheduledAssignmentDue(assignment, schedule, today, shifts)) continue;
         // Get or check today's submission
         const existing = await storage.getScheduledFieldNoteSubmissionByAssignmentAndDate(assignment.id, today);
-        const steps = await storage.getScheduledFieldNoteSteps(template.id);
+        const sections = await storage.getScheduledFieldNoteSections(template.id);
+      const steps = (await Promise.all(sections.map(section => storage.getScheduledFieldNoteStepsBySection(section.id)))).flat();
         const clients = await storage.getClientsByCompany(template.companyId);
         const client = clients.find(c => c.id === (assignment.clientId || template.clientId));
         result.push({
@@ -9973,7 +10047,7 @@ Return ONLY valid JSON:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.post("/api/employee/scheduled-field-notes/start", requireAuth, async (req, res) => {
+  app.post("/api/employee/scheduled-field-notes/start", requireRole("employee"), async (req, res) => {
     try {
       const user = req.user as any;
       const { assignmentId } = req.body;
@@ -9981,14 +10055,20 @@ Return ONLY valid JSON:
       const found = myAssignments.find(a => a.id === assignmentId);
       if (!found) return res.status(403).json({ message: "Not your assignment" });
       const template = await storage.getScheduledFieldNoteTemplate(found.templateId);
-      if (!template) return res.status(404).json({ message: "Template not found" });
-      const today = new Date().toISOString().split("T")[0];
+      if (!template || template.companyId !== user.companyId || template.status !== "active") return res.status(404).json({ message: "Template not found" });
+      const company = await storage.getCompany(user.companyId);
+      const activeClock = await storage.getActiveTimeEntry(user.id);
+      const today = dateInZone(activeClock?.clockInAt || new Date(), company?.timezone || "UTC");
+      const shifts = await storage.getShiftsByEmployee(user.id);
+      const schedule = found.scheduleId ? await storage.getRecurringSchedule(found.scheduleId) : null;
+      if (!scheduledAssignmentDue(found, schedule, today, shifts)) return res.status(400).json({ message: "This checklist is not scheduled for this work day" });
       // Check if submission already exists
       const existing = await storage.getScheduledFieldNoteSubmissionByAssignmentAndDate(assignmentId, today);
       if (existing) return res.json(existing);
       // Get active clock entry
       const clockEntry = await storage.getActiveTimeEntry(user.id);
-      const steps = await storage.getScheduledFieldNoteSteps(template.id);
+      const sections = await storage.getScheduledFieldNoteSections(template.id);
+      const steps = (await Promise.all(sections.map(section => storage.getScheduledFieldNoteStepsBySection(section.id)))).flat();
       const requiredSteps = steps.filter(s => s.isRequired);
       const now = new Date().toISOString();
       const submission = await storage.createScheduledFieldNoteSubmission({
@@ -10005,11 +10085,11 @@ Return ONLY valid JSON:
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.get("/api/employee/scheduled-field-notes/submissions/:id", requireAuth, async (req, res) => {
+  app.get("/api/employee/scheduled-field-notes/submissions/:id", requireRole("employee"), async (req, res) => {
     try {
       const user = req.user as any;
       const sub = await storage.getScheduledFieldNoteSubmission(req.params.id);
-      if (!sub || sub.cleanerId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      if (!sub || sub.cleanerId !== user.id || sub.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
       const [template, stepSubs] = await Promise.all([
         storage.getScheduledFieldNoteTemplate(sub.templateId),
         storage.getScheduledFieldNoteStepSubmissions(sub.id),
@@ -10023,60 +10103,34 @@ Return ONLY valid JSON:
         ...s,
         steps: (await storage.getScheduledFieldNoteStepsBySection(s.id)).map(st => ({
           ...st,
-          submission: stepSubs.find(ss => ss.stepId === st.id) || null,
+          submission: stepSubs.filter(ss => ss.stepId === st.id).sort((a,b)=>b.submittedAt.localeCompare(a.submittedAt))[0] || null,
         })),
       })));
       res.json({ ...sub, template, sections: sectionsWithSteps });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.post("/api/employee/scheduled-field-notes/submissions/:id/steps/:stepId", requireAuth, async (req, res) => {
+  app.post("/api/employee/scheduled-field-notes/submissions/:id/steps/:stepId", requireRole("employee"), async (req, res) => {
     try {
       const user = req.user as any;
       const sub = await storage.getScheduledFieldNoteSubmission(req.params.id);
-      if (!sub || sub.cleanerId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      if (!sub || sub.cleanerId !== user.id || sub.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
       if (sub.status === "completed") return res.status(400).json({ message: "Submission already completed" });
+      const stepInfo = await storage.getScheduledFieldNoteStepById(req.params.stepId);
+      const ownedSections = await storage.getScheduledFieldNoteSections(sub.templateId);
+      if (!stepInfo || stepInfo.companyId !== user.companyId || !ownedSections.some(section => section.id === stepInfo.sectionId)) return res.status(404).json({ message: "Checklist step not found" });
       const { imageUrl } = req.body;
-      if (!imageUrl || !imageUrl.startsWith("data:image/")) return res.status(400).json({ message: "Invalid image" });
-      const now = new Date().toISOString();
-      // Check if already submitted — allow retake
-      const existing = await storage.getScheduledFieldNoteStepSubmissionByStep(sub.id, req.params.stepId);
-      let stepSub: any;
-      if (existing) {
-        stepSub = await storage.updateScheduledFieldNoteStepSubmission(existing.id, { submittedImageUrl: imageUrl, submittedAt: now });
-      } else {
-        // Look up step directly by ID — avoids templateId mismatch issues
-        const stepInfo = await storage.getScheduledFieldNoteStepById(req.params.stepId);
-        stepSub = await storage.createScheduledFieldNoteStepSubmission({
-          submissionId: sub.id, templateId: sub.templateId,
-          sectionId: stepInfo?.sectionId || "", stepId: req.params.stepId,
-          companyId: sub.companyId, cleanerId: user.id,
-          submittedImageUrl: imageUrl, submittedAt: now, createdAt: now,
-        });
-        // Update completed steps count (only for required steps, and only on first submission)
-        const sections = await storage.getScheduledFieldNoteSections(sub.templateId);
-        const allStepsNested = await Promise.all(sections.map(s => storage.getScheduledFieldNoteStepsBySection(s.id)));
-        const allSteps = allStepsNested.flat();
-        const allStepSubs = await storage.getScheduledFieldNoteStepSubmissions(sub.id);
-        const completedRequiredCount = allStepSubs.filter(ss => {
-          const s = allSteps.find(st => st.id === ss.stepId);
-          return s?.isRequired;
-        }).length + (stepInfo?.isRequired ? 1 : 0);
-        await storage.updateScheduledFieldNoteSubmission(sub.id, {
-          completedSteps: completedRequiredCount, updatedAt: now,
-        });
-      }
-      // Re-fetch submission for updated counts
-      const updated = await storage.getScheduledFieldNoteSubmission(sub.id);
-      res.json({ stepSubmission: stepSub, submission: updated });
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
+      if (typeof imageUrl !== "string" || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(imageUrl) || imageUrl.length > 12 * 1024 * 1024) return res.status(400).json({ message: "Invalid image" });
+      res.json(await storage.saveScheduledFieldNotePhoto(sub.id, req.params.stepId, user.id, user.companyId, imageUrl));
+    } catch (e: any) { res.status(e.status || 500).json({ message: e.message }); }
   });
 
-  app.post("/api/employee/scheduled-field-notes/submissions/:id/complete", requireAuth, async (req, res) => {
+  app.post("/api/employee/scheduled-field-notes/submissions/:id/complete", requireRole("employee"), async (req, res) => {
     try {
       const user = req.user as any;
       const sub = await storage.getScheduledFieldNoteSubmission(req.params.id);
-      if (!sub || sub.cleanerId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      if (!sub || sub.cleanerId !== user.id || sub.companyId !== user.companyId) return res.status(403).json({ message: "Forbidden" });
+      if (sub.status === "completed") return res.json(sub);
       const now = new Date().toISOString();
       // Use section-based step query to avoid templateId mismatch issues
       const sections = await storage.getScheduledFieldNoteSections(sub.templateId);
@@ -10084,11 +10138,11 @@ Return ONLY valid JSON:
       const allSteps = allStepsNested.flat();
       const requiredSteps = allSteps.filter(s => s.isRequired);
       const stepSubs = await storage.getScheduledFieldNoteStepSubmissions(sub.id);
-      const completedRequiredIds = stepSubs.map(ss => ss.stepId).filter(id => requiredSteps.some(s => s.id === id));
-      if (completedRequiredIds.length < requiredSteps.length) {
+      const progress = completedChecklistSteps(allSteps, stepSubs);
+      if (progress.missing > 0) {
         return res.status(400).json({
           message: "Not all required steps are complete",
-          missing: requiredSteps.length - completedRequiredIds.length,
+          missing: progress.missing,
         });
       }
       const updated = await storage.updateScheduledFieldNoteSubmission(sub.id, {
@@ -10099,15 +10153,20 @@ Return ONLY valid JSON:
   });
 
   // Clock-out check: are there any incomplete required scheduled field notes today?
-  app.get("/api/employee/scheduled-field-notes/clock-out-check", requireAuth, async (req, res) => {
+  app.get("/api/employee/scheduled-field-notes/clock-out-check", requireRole("employee"), async (req, res) => {
     try {
       const user = req.user as any;
       const assignments = await storage.getScheduledFieldNoteAssignmentsByCleaner(user.id);
-      const today = new Date().toISOString().split("T")[0];
+      const company = await storage.getCompany(user.companyId);
+      const activeClock = await storage.getActiveTimeEntry(user.id);
+      const today = dateInZone(activeClock?.clockInAt || new Date(), company?.timezone || "UTC");
+      const shifts = await storage.getShiftsByEmployee(user.id);
       const incomplete = [];
       for (const assignment of assignments) {
         const template = await storage.getScheduledFieldNoteTemplate(assignment.templateId);
-        if (!template || template.status !== "active" || !template.requiredBeforeClockOut) continue;
+        if (!template || template.companyId !== user.companyId || template.status !== "active" || !template.requiredBeforeClockOut) continue;
+        const schedule = assignment.scheduleId ? await storage.getRecurringSchedule(assignment.scheduleId) : null;
+        if (!scheduledAssignmentDue(assignment, schedule, today, shifts)) continue;
         const submission = await storage.getScheduledFieldNoteSubmissionByAssignmentAndDate(assignment.id, today);
         if (!submission || submission.status !== "completed") {
           incomplete.push({ assignmentId: assignment.id, templateName: template.name, submissionId: submission?.id || null });
@@ -10144,12 +10203,13 @@ Return ONLY valid JSON:
           id: st.id, title: st.title, description: st.description,
           referenceImageUrl: st.referenceImageUrl || null,
           isRequired: st.isRequired, sortOrder: st.sortOrder,
-          submission: stepSubs.find(ss => ss.stepId === st.id) || null,
+          submission: (() => { const photo = stepSubs.filter(ss => ss.stepId === st.id).sort((a,b)=>b.submittedAt.localeCompare(a.submittedAt))[0]; return photo ? { id: photo.id, submittedImageUrl: photo.submittedImageUrl, submittedAt: photo.submittedAt } : null; })(),
         })),
       }));
       res.json({
         companyName: company?.name || "Unknown Company",
-        companyLogo: company?.logoUrl || null,
+        companyTimezone: company?.timezone || "UTC",
+        companyLogo: company?.companyLogoUrl || null,
         templateName: template?.name || "Scheduled Field Note",
         introText: template?.introText || "",
         outroText: template?.outroText || "",

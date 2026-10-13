@@ -24,7 +24,7 @@ export default function AdminWorkLogHub() {
   const isSuppliesPath = location.startsWith("/admin/work-log/supplies");
   const rawTab = isSuppliesPath ? "supplies" : (params.get("tab") || "submissions");
   // "requests" tab has been removed — redirect to submissions if someone lands on it directly
-  const activeTab = rawTab === "requests" ? "submissions" : rawTab;
+  const activeTab = TABS.some(tab => tab.id === rawTab) ? rawTab : "submissions";
 
   const handleTabChange = (tabId: string) => {
     if (tabId === "submissions") {
@@ -37,7 +37,7 @@ export default function AdminWorkLogHub() {
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col h-full min-h-0 min-w-0">
       {/* Tab navigation */}
       <div className="border-b bg-background shrink-0 px-4 md:px-6 pt-4 md:pt-6">
         <div className="flex gap-1 overflow-x-auto pb-0 scrollbar-hide">
@@ -46,6 +46,7 @@ export default function AdminWorkLogHub() {
             return (
               <button
                 key={tab.id}
+                aria-current={isActive ? "page" : undefined}
                 onClick={() => handleTabChange(tab.id)}
                 data-testid={`tab-worklog-${tab.id}`}
                 className={cn(

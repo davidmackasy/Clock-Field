@@ -1,3 +1,7 @@
+import { useCompanyTimezone } from "@/hooks/use-company-timezone";
+import { formatCompanyTime } from "@/lib/timezone";
+import { prepareWorkPhoto } from "@/lib/work-photo";
+import { WorklogQueryError } from "@/components/worklog-query-error";
 import { useState, useRef, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -29,6 +33,7 @@ type Submission = {
 };
 
 export default function EmployeeScheduledFieldNotesCapture() {
+  const timezone = useCompanyTimezone();
   const [, params] = useRoute("/employee/scheduled-field-notes/:id");
   const submissionId = params?.id || "";
   const [, navigate] = useLocation();
@@ -40,27 +45,28 @@ export default function EmployeeScheduledFieldNotesCapture() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [retaking, setRetaking] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPreparingPhoto, setIsPreparingPhoto] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
-  const { data: submission, isLoading, refetch: refetchSubmission } = useQuery<Submission>({
+  const { data: submission, isLoading, isError, refetch: refetchSubmission } = useQuery<Submission>({
     queryKey: ["/api/employee/scheduled-field-notes/submissions", submissionId],
-    queryFn: () => fetch(`/api/employee/scheduled-field-notes/submissions/${submissionId}`, { credentials: "include" }).then(r => r.json()),
+    queryFn: () => apiRequest("GET", `/api/employee/scheduled-field-notes/submissions/${submissionId}`).then(r => r.json()),
     enabled: !!submissionId,
     refetchOnWindowFocus: false,
   });
 
-  const handleImageCapture = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleImageCapture = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; e.target.value = "";
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => { if (typeof reader.result === "string") setCapturedImage(reader.result); };
-    reader.readAsDataURL(file);
-    e.target.value = "";
-    setRetaking(false);
-  }, []);
+    setIsPreparingPhoto(true);
+    try { setCapturedImage(await prepareWorkPhoto(file)); setRetaking(false); }
+    catch (error: any) { toast({ title: "Could not prepare photo", description: error.message, variant: "destructive" }); }
+    finally { setIsPreparingPhoto(false); }
+  }, [toast]);
 
+  if (isError) return <div className="p-4"><WorklogQueryError retry={() => { void refetchSubmission(); }} /></div>;
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background p-4 space-y-4">
@@ -103,7 +109,7 @@ export default function EmployeeScheduledFieldNotesCapture() {
 
   // ── Submit photo handler ──────────────────────────────────────────────────
   const handleSubmitPhoto = async () => {
-    if (!capturedImage || isSubmitting || !currentStep) return;
+    if (!capturedImage || isSubmitting || isPreparingPhoto || !currentStep) return;
     setIsSubmitting(true);
     try {
       const res = await apiRequest("POST",
@@ -348,7 +354,7 @@ export default function EmployeeScheduledFieldNotesCapture() {
               <div className="rounded-2xl overflow-hidden border-2 border-green-200 relative">
                 <img src={currentStep.submission.submittedImageUrl} alt="Your photo" className="w-full object-cover max-h-64" />
                 <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/50 to-transparent p-3 flex items-center justify-between">
-                  <span className="text-white text-xs">Submitted {format(parseISO(currentStep.submission.submittedAt), "h:mm a")}</span>
+                  <span className="text-white text-xs">Submitted {formatCompanyTime(currentStep.submission.submittedAt, timezone)}</span>
                   <Button size="sm" variant="secondary" onClick={() => setRetaking(true)}
                     data-testid={`button-retake-${currentStep.id}`} className="text-xs h-7">
                     <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Retake
@@ -401,7 +407,7 @@ export default function EmployeeScheduledFieldNotesCapture() {
               <Button
                 className="flex-1"
                 onClick={handleSubmitPhoto}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isPreparingPhoto}
                 data-testid={`button-submit-step-${currentStep.id}`}
               >
                 {isSubmitting

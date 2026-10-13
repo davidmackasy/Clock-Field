@@ -1,3 +1,4 @@
+import { formatCompanyTime } from "@/lib/timezone";
 import { useState, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -15,7 +16,7 @@ type PublicStep = {
   submission: { id: string; submittedImageUrl: string; submittedAt: string } | null;
 };
 type PublicReport = {
-  companyName: string; companyLogo: string | null;
+  companyName: string; companyTimezone?: string; companyLogo: string | null;
   templateName: string; introText: string; outroText: string;
   clientName: string | null; cleanerName: string | null;
   submissionDate: string; status: string;
@@ -263,7 +264,7 @@ export default function PublicScheduledFieldNoteReport() {
       label: s.title.includes(" - ")
         ? s.title.split(" - ").slice(1).join(" - ")
         : `Photo ${photoIdx + 1}`,
-      time: format(parseISO(s.submission!.submittedAt), "h:mm a"),
+      time: formatCompanyTime(s.submission!.submittedAt, report.companyTimezone || "UTC"),
     }));
     const thumbnailSrc = photos[0]?.src || null;
     let timeRange: string | null = null;
@@ -275,8 +276,8 @@ export default function PublicScheduledFieldNoteReport() {
     return { id: section.id, title: section.title, sortOrder: section.sortOrder, photos, thumbnailSrc, timeRange };
   }).filter(s => s.photos.length > 0);
 
-  const startedLabel = report.startedAt ? format(parseISO(report.startedAt), "h:mm a") : null;
-  const completedLabel = report.completedAt ? format(parseISO(report.completedAt), "h:mm a") : null;
+  const startedLabel = report.startedAt ? formatCompanyTime(report.startedAt, report.companyTimezone || "UTC") : null;
+  const completedLabel = report.completedAt ? formatCompanyTime(report.completedAt, report.companyTimezone || "UTC") : null;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">

@@ -1,3 +1,5 @@
+import { isSupplyRequest } from "@shared/worklog-state";
+import { WorklogQueryError } from "@/components/worklog-query-error";
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -209,8 +211,9 @@ export default function AdminSupplies() {
 
 // ─── Overview Tab ─────────────────────────────────────────────────────────────
 function OverviewTab({ locations, onAddSupplyToLocation }: { locations: any[]; onAddSupplyToLocation: () => void }) {
-  const { data: ov, isLoading } = useQuery<any>({ queryKey: ["/api/supplies/inventory-overview"] });
+  const { data: ov, isLoading, isError, refetch } = useQuery<any>({ queryKey: ["/api/supplies/inventory-overview"] });
 
+  if (isError) return <WorklogQueryError retry={() => { void refetch(); }} />;
   if (isLoading) return <div className="space-y-3">{[1,2,3,4].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>;
   if (!ov) return null;
 
@@ -259,7 +262,7 @@ function OverviewTab({ locations, onAddSupplyToLocation }: { locations: any[]; o
         <Card className="border-0 shadow-sm bg-emerald-50 dark:bg-emerald-950/20">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-1">
-              <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium uppercase tracking-wide">Total Spent</p>
+              <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium uppercase tracking-wide">Location Usage Cost</p>
               <TrendingUp className="w-4 h-4 text-emerald-400" />
             </div>
             <p className="text-xl font-bold text-emerald-700 dark:text-emerald-400">{fmtCurrency(ov.totalSpent)}</p>
@@ -368,7 +371,7 @@ function InventoryTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sh
   const [filterCat, setFilterCat] = useState("__all__");
   const [filterStatus, setFilterStatus] = useState("__all__");
 
-  const { data: items = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/supplies/inventory"] });
+  const { data: items = [], isLoading, isError, refetch } = useQuery<any[]>({ queryKey: ["/api/supplies/inventory"] });
 
   const filtered = items.filter(i => {
     if (filterCat !== "__all__" && i.category !== filterCat) return false;
@@ -410,7 +413,7 @@ function InventoryTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sh
       </div>
 
       {/* Items Grid — shelf-style, 4 per row on desktop */}
-      {isLoading ? (
+      {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           {[1,2,3,4,5,6,7,8].map(i => <Skeleton key={i} className="aspect-[3/4] rounded-xl" />)}
         </div>
@@ -521,7 +524,7 @@ function AddInventoryItemDialog({ open, onClose }: { open: boolean; onClose: () 
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-sm mx-auto max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Inventory Item</DialogTitle>
           <DialogDescription>Track a new supply item in your inventory.</DialogDescription>
@@ -620,7 +623,7 @@ function EditInventoryItemDialog({ item, onClose }: { item: any; onClose: () => 
 
   return (
     <Dialog open onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-sm mx-auto max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Inventory Item</DialogTitle>
         </DialogHeader>
@@ -831,7 +834,7 @@ function AssignToLocationDialog({ item, locations, onClose }: { item: any; locat
 // ─── Location Expenses Tab ────────────────────────────────────────────────────
 function LocationExpensesTab({ locations, showAdd, onCloseAdd, onAdd }: { locations: any[]; showAdd: boolean; onCloseAdd: () => void; onAdd: () => void }) {
   const [selectedLocation, setSelectedLocation] = useState<any | null>(null);
-  const { data: locationGroups = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/supplies/location-expenses"] });
+  const { data: locationGroups = [], isLoading, isError, refetch } = useQuery<any[]>({ queryKey: ["/api/supplies/location-expenses"] });
 
   const locationName = (id: string) => locations.find(l => l.id === id)?.name || id;
   const grandTotal = locationGroups.reduce((acc, l) => acc + l.totalExpense, 0);
@@ -849,7 +852,7 @@ function LocationExpensesTab({ locations, showAdd, onCloseAdd, onAdd }: { locati
         </div>
       )}
 
-      {isLoading ? (
+      {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
         <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
       ) : locationGroups.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -961,7 +964,7 @@ function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sho
   const [fulfillId, setFulfillId] = useState<string | null>(null);  // for cleaner request fulfillment
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const { data: allSupplies = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/supplies"] });
+  const { data: allSupplies = [], isLoading, isError, refetch } = useQuery<any[]>({ queryKey: ["/api/supplies"] });
   const { data: detail, isLoading: detailLoading } = useQuery<any>({
     queryKey: ["/api/supplies", detailId],
     enabled: !!detailId,
@@ -970,8 +973,8 @@ function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sho
   // Split into two groups:
   // Assigned Supplies = admin-assigned from inventory (inventoryItemId set)
   // Cleaner Requests  = employee-submitted new supply requests (no inventoryItemId)
-  const assigned = allSupplies.filter((s: any) => !!s.inventoryItemId);
-  const cleanerReqs = allSupplies.filter((s: any) => !s.inventoryItemId);
+  const assigned = allSupplies.filter((s: any) => !isSupplyRequest(s));
+  const cleanerReqs = allSupplies.filter((s: any) => isSupplyRequest(s));
 
   // Apply location filter to both
   const applyLocFilter = (list: any[]) =>
@@ -1035,7 +1038,7 @@ function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sho
           </div>
         </div>
 
-        {isLoading ? (
+        {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {[1,2,3,4].map(i => <Skeleton key={i} className="aspect-[3/4] rounded-xl" />)}
           </div>
@@ -1132,7 +1135,7 @@ function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sho
           )}
         </div>
 
-        {isLoading ? (
+        {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {[1,2,3,4].map(i => <Skeleton key={i} className="aspect-[3/4] rounded-xl" />)}
           </div>
@@ -1265,7 +1268,7 @@ function RequestsTab({ locations, showAdd, onCloseAdd }: { locations: any[]; sho
 
 // ─── Purchase History Tab ─────────────────────────────────────────────────────
 function PurchaseHistoryTab() {
-  const { data: purchases = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/supplies/purchase-history"] });
+  const { data: purchases = [], isLoading, isError, refetch } = useQuery<any[]>({ queryKey: ["/api/supplies/purchase-history"] });
   const [filterItem, setFilterItem] = useState("");
 
   const filtered = purchases.filter((p: any) =>
@@ -1298,7 +1301,7 @@ function PurchaseHistoryTab() {
         </div>
       )}
 
-      {isLoading ? (
+      {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">{[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}</div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -1371,7 +1374,7 @@ function AddSupplyDialog({ open, onClose, locations }: { open: boolean; onClose:
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-sm mx-auto max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Supply Request</DialogTitle>
           <DialogDescription>Create a new supply item for a location.</DialogDescription>
@@ -1784,7 +1787,7 @@ function AddSupplyToLocationModal({ open, onClose, locations }: { open: boolean;
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-sm mx-auto max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Supply to Location</DialogTitle>
           <DialogDescription>Select an inventory item and assign it to a location.</DialogDescription>
@@ -1972,7 +1975,7 @@ function RestockAssignedSupplyDialog({ supply, locations, onClose }: { supply: a
 
   return (
     <Dialog open onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-sm mx-auto max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Restock Supply</DialogTitle>
           <DialogDescription>Add more of this item to the location from inventory.</DialogDescription>
@@ -2109,7 +2112,7 @@ function FulfillFromInventoryDialog({ supply, locations, onClose }: { supply: an
 
   return (
     <Dialog open onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-sm mx-auto max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Restock from Inventory</DialogTitle>
           <DialogDescription>Fulfill the cleaner's request using inventory stock.</DialogDescription>
@@ -2268,7 +2271,7 @@ function AdminRespondDialog({ report, onClose }: { report: any; onClose: () => v
 
   return (
     <Dialog open onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-sm mx-auto max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Respond to Report</DialogTitle>
           <DialogDescription>
@@ -2341,7 +2344,7 @@ function AdminRespondDialog({ report, onClose }: { report: any; onClose: () => v
 
 // ─── Cleaner Reports Section ──────────────────────────────────────────────────
 function CleanerReportsSection() {
-  const { data: reports = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/supplies/employee-reports"] });
+  const { data: reports = [], isLoading, isError, refetch } = useQuery<any[]>({ queryKey: ["/api/supplies/employee-reports"] });
   const [respondTo, setRespondTo] = useState<any | null>(null);
   const [lightboxPhotos, setLightboxPhotos] = useState<string[] | null>(null);
   const [lightboxIdx, setLightboxIdx] = useState(0);
@@ -2376,7 +2379,7 @@ function CleanerReportsSection() {
         )}
       </div>
 
-      {isLoading ? (
+      {isError ? <WorklogQueryError retry={() => { void refetch(); }} /> : isLoading ? (
         <div className="space-y-2">{[1,2].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
       ) : reports.length === 0 ? (
         <div className="rounded-xl border border-dashed bg-muted/20 p-6 text-center">

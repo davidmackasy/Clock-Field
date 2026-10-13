@@ -1,3 +1,4 @@
+import { completedChecklistSteps } from "../shared/worklog-state";
 import { trainingState } from "@shared/training-state";
 import { db } from "./db";
 import { eq, and, desc, sql, inArray, or, isNull, gte, asc, ne } from "drizzle-orm";
@@ -1355,8 +1356,13 @@ export class DatabaseStorage implements IStorage {
       return !!existing;
     });
     const withToken = { ...data, reviewShareToken: crypto.randomUUID(), reviewShortCode };
-    const [review] = await db.insert(workSubmissionReviews).values(withToken).returning();
-    return review;
+    return db.transaction(async tx => {
+      await tx.select({id:workSubmissions.id}).from(workSubmissions).where(eq(workSubmissions.id,data.submissionId)).for("update");
+      const [existing] = await tx.select({id:workSubmissionReviews.id}).from(workSubmissionReviews).where(eq(workSubmissionReviews.submissionId,data.submissionId));
+      if(existing) throw Object.assign(new Error("A review has already been submitted for this report."),{status:409});
+      const [review] = await tx.insert(workSubmissionReviews).values(withToken).returning();
+      return review;
+    });
   }
 
   async getWorkSubmissionReviewBySubmissionId(submissionId: string): Promise<WorkSubmissionReview | undefined> {
@@ -1647,6 +1653,9 @@ export class DatabaseStorage implements IStorage {
       .orderBy(asc(fieldNotesTranscriptChunks.chunkIndex));
   }
 
+  async getFieldNotesAsset(id: string) { const [row] = await db.select().from(fieldNotesAssets).where(eq(fieldNotesAssets.id,id)); return row; }
+  async getFieldNotesTodo(id: string) { const [row] = await db.select().from(fieldNotesTodos).where(eq(fieldNotesTodos.id,id)); return row; }
+  async getFieldNotesEntry(id: string) { const [row] = await db.select().from(fieldNotesEntries).where(eq(fieldNotesEntries.id,id)); return row; }
   async createFieldNotesEntry(data: InsertFieldNotesEntry): Promise<FieldNotesEntry> {
     const [row] = await db.insert(fieldNotesEntries).values(data as any).returning();
     return row;
@@ -1748,6 +1757,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async resolveAlertsForLocation(locationId: string, companyId: string, submissionId: string): Promise<void> {
+    const submission = await this.getWorkSubmission(submissionId);
+    if (!submission || submission.companyId !== companyId) return;
     const now = new Date().toISOString();
     await db.update(priorityCleanAlerts)
       .set({ status: "resolved", submissionId, resolvedAt: now, updatedAt: now } as any)
@@ -1755,6 +1766,7 @@ export class DatabaseStorage implements IStorage {
         eq(priorityCleanAlerts.locationId, locationId),
         eq(priorityCleanAlerts.companyId, companyId),
         eq(priorityCleanAlerts.status, "open"),
+        or(isNull(priorityCleanAlerts.assignedEmployeeId),eq(priorityCleanAlerts.assignedEmployeeId,submission.employeeId)),
       ));
   }
 
@@ -2211,6 +2223,8 @@ export class DatabaseStorage implements IStorage {
     await db.delete(scheduledFieldNoteTemplates).where(eq(scheduledFieldNoteTemplates.id, id));
   }
 
+  async getScheduledFieldNoteSection(id: string) { const [row] = await db.select().from(scheduledFieldNoteSections).where(eq(scheduledFieldNoteSections.id,id)); return row; }
+  async getScheduledFieldNoteAssignment(id: string) { const [row] = await db.select().from(scheduledFieldNoteAssignments).where(eq(scheduledFieldNoteAssignments.id,id)); return row; }
   async createScheduledFieldNoteSection(data: InsertScheduledFieldNoteSection): Promise<ScheduledFieldNoteSection> {
     const [row] = await db.insert(scheduledFieldNoteSections).values(data as any).returning();
     return row;
@@ -2271,8 +2285,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createScheduledFieldNoteSubmission(data: InsertScheduledFieldNoteSubmission): Promise<ScheduledFieldNoteSubmission> {
-    const [row] = await db.insert(scheduledFieldNoteSubmissions).values(data as any).returning();
-    return row;
+    return db.transaction(async tx => {
+      await tx.select().from(scheduledFieldNoteAssignments).where(eq(scheduledFieldNoteAssignments.id, data.assignmentId)).for("update");
+      const [existing] = await tx.select().from(scheduledFieldNoteSubmissions).where(and(eq(scheduledFieldNoteSubmissions.assignmentId, data.assignmentId),eq(scheduledFieldNoteSubmissions.submissionDate,data.submissionDate)));
+      if(existing) return existing;
+      const [row] = await tx.insert(scheduledFieldNoteSubmissions).values(data as any).returning();
+      return row;
+    });
   }
   async getScheduledFieldNoteSubmissions(companyId: string): Promise<ScheduledFieldNoteSubmission[]> {
     return db.select().from(scheduledFieldNoteSubmissions).where(eq(scheduledFieldNoteSubmissions.companyId, companyId)).orderBy(desc(scheduledFieldNoteSubmissions.createdAt));
@@ -2298,6 +2317,23 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
+  async saveScheduledFieldNotePhoto(submissionId: string, stepId: string, employeeId: string, companyId: string, imageUrl: string) {
+    return db.transaction(async tx => {
+      const [sub] = await tx.select().from(scheduledFieldNoteSubmissions).where(and(eq(scheduledFieldNoteSubmissions.id,submissionId),eq(scheduledFieldNoteSubmissions.cleanerId,employeeId),eq(scheduledFieldNoteSubmissions.companyId,companyId))).for("update");
+      if(!sub || sub.status === "completed") throw Object.assign(new Error("Checklist is unavailable or already completed"),{status:409});
+      const sections = await tx.select({id:scheduledFieldNoteSections.id}).from(scheduledFieldNoteSections).where(eq(scheduledFieldNoteSections.templateId,sub.templateId));
+      const steps = sections.length ? await tx.select({id:scheduledFieldNoteSteps.id,sectionId:scheduledFieldNoteSteps.sectionId,isRequired:scheduledFieldNoteSteps.isRequired}).from(scheduledFieldNoteSteps).where(and(inArray(scheduledFieldNoteSteps.sectionId,sections.map(s=>s.id)),eq(scheduledFieldNoteSteps.companyId,companyId))) : [];
+      const step = steps.find(s=>s.id===stepId);
+      if(!step) throw Object.assign(new Error("Checklist step not found"),{status:404});
+      const now=new Date().toISOString();
+      const [existing] = await tx.select().from(scheduledFieldNoteStepSubmissions).where(and(eq(scheduledFieldNoteStepSubmissions.submissionId,sub.id),eq(scheduledFieldNoteStepSubmissions.stepId,stepId)));
+      const [stepSubmission] = existing ? await tx.update(scheduledFieldNoteStepSubmissions).set({submittedImageUrl:imageUrl,submittedAt:now}).where(eq(scheduledFieldNoteStepSubmissions.id,existing.id)).returning() : await tx.insert(scheduledFieldNoteStepSubmissions).values({submissionId:sub.id,templateId:sub.templateId,sectionId:step.sectionId,stepId,companyId,cleanerId:employeeId,submittedImageUrl:imageUrl,submittedAt:now,createdAt:now}).returning();
+      const allPhotos = await tx.select({stepId:scheduledFieldNoteStepSubmissions.stepId,submittedImageUrl:scheduledFieldNoteStepSubmissions.submittedImageUrl}).from(scheduledFieldNoteStepSubmissions).where(eq(scheduledFieldNoteStepSubmissions.submissionId,sub.id));
+      const progress=completedChecklistSteps(steps,allPhotos);
+      const [submission] = await tx.update(scheduledFieldNoteSubmissions).set({completedSteps:progress.completed,totalSteps:progress.total,updatedAt:now}).where(eq(scheduledFieldNoteSubmissions.id,sub.id)).returning();
+      return {stepSubmission,submission};
+    });
+  }
   async createScheduledFieldNoteStepSubmission(data: InsertScheduledFieldNoteStepSubmission): Promise<ScheduledFieldNoteStepSubmission> {
     const [row] = await db.insert(scheduledFieldNoteStepSubmissions).values(data as any).returning();
     return row;
