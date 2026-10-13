@@ -2111,6 +2111,8 @@ function EmbedTab() {
 // ── Main Hub Page ─────────────────────────────────────────────────────────────
 export default function AdminQuoteForms() {
   const search = useSearch();
+  const [, navigate] = useLocation();
+  const validTabs = ["forms", "submissions", "pipeline", "estimator", "email", "embed"];
   const urlParams = new URLSearchParams(search);
   const urlTab = urlParams.get("tab");
   const urlBooking = urlParams.get("booking");
@@ -2120,9 +2122,10 @@ export default function AdminQuoteForms() {
   const newSubmissionsCount = submissions.filter(s => s.pipelineStage === "new_request" && !s.archivedAt).length;
   const newBookingsCount = bookingRequests.filter(b => b.status === "new").length;
   const newCount = newSubmissionsCount + newBookingsCount;
-  const [activeTab, setActiveTab] = useState(urlTab === "submissions" ? "submissions" : "forms");
+  const [activeTab, setActiveTab] = useState(urlTab && validTabs.includes(urlTab) ? urlTab : "forms");
   const initialBookingId = urlBooking;
-  useEffect(() => { if (urlTab === "submissions") setActiveTab("submissions"); }, [search]);
+  useEffect(() => { setActiveTab(urlTab && validTabs.includes(urlTab) ? urlTab : "forms"); }, [search]);
+  const changeTab = (tab: string) => { setActiveTab(tab); navigate(`/admin/quote-forms?tab=${tab}`); };
 
   return (
     <div className="flex flex-col h-full min-w-0">
@@ -2138,7 +2141,7 @@ export default function AdminQuoteForms() {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+        <Tabs value={activeTab} onValueChange={changeTab} className="h-full flex flex-col">
           <div className="border-b bg-background px-4 md:px-6 overflow-x-auto shrink-0">
             <TabsList className="h-11 w-max bg-transparent border-0 p-0 gap-1">
               {[
@@ -2161,7 +2164,7 @@ export default function AdminQuoteForms() {
 
           <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 py-5">
             <TabsContent value="forms" className="mt-0"><FormsTab /></TabsContent>
-            <TabsContent value="submissions" className="mt-0 h-full"><SubmissionsTab key={`${initialBookingId || ""}:${urlParams.get("submission") || ""}`} onGoToEstimator={() => setActiveTab("estimator")} initialBookingId={initialBookingId || undefined} /></TabsContent>
+            <TabsContent value="submissions" className="mt-0 h-full"><SubmissionsTab key={`${initialBookingId || ""}:${urlParams.get("submission") || ""}`} onGoToEstimator={() => changeTab("estimator")} initialBookingId={initialBookingId || undefined} /></TabsContent>
             <TabsContent value="pipeline" className="mt-0"><PipelineTab /></TabsContent>
             <TabsContent value="estimator" className="mt-0"><EstimatorSettingsTab /></TabsContent>
             <TabsContent value="email" className="mt-0"><EmailSettingsTab /></TabsContent>

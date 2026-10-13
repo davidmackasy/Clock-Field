@@ -47,7 +47,6 @@ const publicationsPaths  = ["/admin/publications", "/admin/proposals", "/admin/a
 
 const pageTitles: Record<string, string> = {
   "/admin":                    "Dashboard",
-  "/admin/employees":          "Employees",
   "/admin/schedule":           "Schedule",
   "/admin/attendance":         "Attendance",
   "/admin/payroll":            "Payroll",
@@ -101,7 +100,7 @@ export function AdminMobileNav() {
 
   const getPageTitle = () => {
     if (location === "/admin/attendance/timesheets") return "Timesheets";
-    for (const [path, title] of Object.entries(pageTitles)) {
+    for (const [path, title] of Object.entries(pageTitles).sort(([a], [b]) => b.length - a.length)) {
       if (location === path || location.startsWith(path + "/") || location.startsWith(path + "?")) return title;
     }
     return "ClockField";
