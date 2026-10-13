@@ -2078,13 +2078,13 @@ export default function AdminTrainingHub() {
 
       {/* ── ASSIGN DIALOG ── */}
       <Dialog open={assignDialog} onOpenChange={setAssignDialog}>
-        <DialogContent className="sm:max-w-md max-h-[80vh]" data-testid="dialog-assign">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-md max-h-[90dvh] flex flex-col overflow-hidden" data-testid="dialog-assign">
+          <DialogHeader className="shrink-0">
             <DialogTitle>Assign training to cleaners</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">Assign this published course and an optional completion deadline. It appears in each cleaner’s My learning page.</p>
-          <label className="block text-sm font-medium">Complete by (optional)<Input type="date" value={assignmentDueDate} onChange={e => setAssignmentDueDate(e.target.value)} className="mt-1" data-testid="assignment-due-date" /></label>
-          <div className="overflow-y-auto max-h-96 space-y-2 py-2">
+          <p className="text-sm text-muted-foreground shrink-0">Assign this published course and an optional completion deadline. It appears in each cleaner’s My learning page.</p>
+          <label className="block text-sm font-medium shrink-0">Complete by (optional)<Input type="date" value={assignmentDueDate} onChange={e => setAssignmentDueDate(e.target.value)} className="mt-1" data-testid="assignment-due-date" /></label>
+          <div className="overflow-y-auto min-h-0 flex-1 space-y-2 py-2">
             <Button variant="outline" size="sm" className="w-full" onClick={() => {
               if (selectedEmployees.size === employees.filter(e => e.role === "employee" && e.isActive).length) setSelectedEmployees(new Set());
               else setSelectedEmployees(new Set(employees.filter(e => e.role === "employee" && e.isActive).map(e => e.id)));
@@ -2108,7 +2108,7 @@ export default function AdminTrainingHub() {
               </label>
             ))}
           </div>
-          <div className="border-t pt-3 pb-1">
+          <div className="border-t pt-3 pb-1 shrink-0">
             <label className="flex items-center gap-2 cursor-pointer select-none" data-testid="checkbox-send-email-notification">
               <input
                 type="checkbox"
@@ -2125,7 +2125,7 @@ export default function AdminTrainingHub() {
               </div>
             </label>
           </div>
-          <DialogFooter>
+          <DialogFooter className="shrink-0">
             <Button variant="outline" onClick={() => setAssignDialog(false)}>Cancel</Button>
             <Button onClick={() => assignMutation.mutate(Array.from(selectedEmployees))} disabled={selectedEmployees.size === 0 || assignMutation.isPending} data-testid="btn-confirm-assign">
               {assignMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
