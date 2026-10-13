@@ -140,6 +140,10 @@ export const locations = pgTable("locations", {
   name: text("name").notNull(),
   address: text("address"),
   notes: text("notes"),
+  geofenceEnabled: boolean("geofence_enabled").notNull().default(false),
+  latitude: decimal("latitude", { precision: 10, scale: 7 }),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }),
+  geofenceRadiusMeters: integer("geofence_radius_meters").notNull().default(100),
 });
 
 export const recurringSchedules = pgTable("recurring_schedules", {
@@ -191,6 +195,7 @@ export const timeEntries = pgTable("time_entries", {
   clientId: varchar("client_id"),
   locationId: varchar("location_id"),
   clockInAt: text("clock_in_at").notNull(),
+  clockInLocationCheck: json("clock_in_location_check"),
   clockOutAt: text("clock_out_at"),
   breakTotalMinutes: integer("break_total_minutes").notNull().default(0),
   workedMinutes: integer("worked_minutes"),

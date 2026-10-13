@@ -1,3 +1,4 @@
+import {clockInPosition,clockInError} from "@/lib/clock-in-position";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -82,6 +83,17 @@ export default function EmployeeHome() {
   const [paClockInDialogOpen, setPaClockInDialogOpen] = useState(false);
   const [paLightbox, setPaLightbox] = useState<{ photoIds: string[]; idx: number } | null>(null);
   const [fitOpen, setFitOpen] = useState(false);
+  const [fitLocationId,setFitLocationId]=useState("");
+  const [fitVerificationId,setFitVerificationId]=useState<string|null>(null);
+  const [locationError,setLocationError]=useState("");
+  const {data:clockInSites=[]}=useQuery<any[]>({queryKey:["/api/employee/clock-in-sites"]});
+  const checkClockInSite=async(shiftId?:string)=>{
+    const input={shiftId,locationId:shiftId?undefined:fitLocationId||undefined};
+    const site=await (await apiRequest("POST","/api/time-entries/clock-in-location",input)).json();
+    const position=site.required?await clockInPosition():undefined;
+    if(position)await apiRequest("POST","/api/time-entries/clock-in-location",{...input,position});
+    return {...input,position};
+  };
   const [fitShiftId, setFitShiftId] = useState<string | undefined>();
   const [fitAnswers, setFitAnswers] = useState<(boolean | undefined)[]>([undefined, undefined, undefined, undefined, undefined]);
   const [fitConfirmed, setFitConfirmed] = useState(false);
@@ -148,7 +160,9 @@ export default function EmployeeHome() {
 
   const clockInMut = useMutation({
     mutationFn: async ({ shiftId, verificationId }: { shiftId?: string; verificationId: string }) => {
-      const res = await apiRequest("POST", "/api/time-entries/clock-in", { shiftId, verificationId });
+      setLocationError("");
+      const input=await checkClockInSite(shiftId);
+      const res = await apiRequest("POST", "/api/time-entries/clock-in", { ...input, verificationId });
       return res.json();
     },
     onSuccess: () => {
@@ -158,22 +172,26 @@ export default function EmployeeHome() {
       queryClient.invalidateQueries({ queryKey: ["/api/shifts"] });
       toast({ title: "Clock-In Successful", description: "Your Fit for Duty Check has been submitted." });
     },
-    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: any) => {setLocationError(clockInError(err));toast({ title: "Unable to clock in", description: clockInError(err), variant: "destructive" });},
   });
 
   const fitSubmitMut = useMutation({
     mutationFn: async () => {
+      setLocationError("");
+      await checkClockInSite(fitShiftId);
+      if(fitVerificationId)return {id:fitVerificationId};
       const res = await apiRequest("POST", "/api/fit-for-duty", { answers: fitAnswers, confirmationAccepted: fitConfirmed, shiftId: fitShiftId, facePhotoData, facePhotoCapturedAt });
       return res.json();
     },
     onSuccess: (data) => {
+      setFitVerificationId(data.id);
       clockInMut.mutate({ shiftId: fitShiftId, verificationId: data.id });
     },
-    onError: (err: any) => toast({ title: "Unable to save verification", description: err.message, variant: "destructive" }),
+    onError: (err: any) => {setLocationError(clockInError(err));toast({ title: "Unable to clock in", description: clockInError(err), variant: "destructive" });},
   });
 
   const openFit = (shiftId?: string) => {
-    setFitShiftId(shiftId); setFitAnswers([undefined, undefined, undefined, undefined, undefined]); setFitConfirmed(false); setFacePhotoData(null); setFacePhotoCapturedAt(null); setFacePhotoAccepted(false); setCameraError(""); setFitOpen(true);
+    setFitLocationId("");setFitVerificationId(null);setLocationError("");setFitShiftId(shiftId); setFitAnswers([undefined, undefined, undefined, undefined, undefined]); setFitConfirmed(false); setFacePhotoData(null); setFacePhotoCapturedAt(null); setFacePhotoAccepted(false); setCameraError(""); setFitOpen(true);
   };
 
   const stopFaceCamera = () => {
@@ -368,7 +386,12 @@ export default function EmployeeHome() {
       <Dialog open={fitOpen} onOpenChange={(open) => { if (!open) stopFaceCamera(); setFitOpen(open); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Fit for Duty Check</DialogTitle><DialogDescription>Complete each question and take a live photo before clocking in.</DialogDescription></DialogHeader>
+          {!fitShiftId && clockInSites.length>0 && <div className="space-y-2"><label htmlFor="clock-in-site" className="text-sm font-medium">Assigned work site</label><select id="clock-in-site" className="w-full border rounded-md p-2" value={fitLocationId} onChange={e=>{setFitLocationId(e.target.value);setLocationError("");}} disabled={!!fitVerificationId}><option value="">Select where you are working</option>{clockInSites.map(site=><option key={site.id} value={site.id}>{site.name}</option>)}</select></div>}
+          <p className="text-sm text-muted-foreground">Work sites with a clock-in boundary require your current location. Allow precise location when prompted. Location is checked only when you clock in.</p>
+          {locationError && <p role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{locationError}</p>}
+
           <p className="text-sm text-muted-foreground">To help maintain a safe workplace for employees, clients, and the public, we require a quick fitness-for-duty check before starting your shift. Please answer the following questions honestly.</p>
+          <fieldset disabled={!!fitVerificationId}>
           <div className="space-y-5 mt-2">
             {[
               "Are you fit and able to safely perform your assigned duties today?",
@@ -398,7 +421,8 @@ export default function EmployeeHome() {
               <Checkbox checked={fitConfirmed} onCheckedChange={v => setFitConfirmed(v === true)} className="mt-0.5" />
               <span>I confirm that the answers I provided are true and accurate and that I am fit to safely perform my assigned duties.</span>
             </label>}
-          <Button className="w-full h-12 text-base" disabled={fitAnswers.some(a => a === undefined) || !facePhotoAccepted || !fitConfirmed || fitSubmitMut.isPending || clockInMut.isPending} onClick={() => fitSubmitMut.mutate()}>Confirm &amp; Clock In</Button>
+          </fieldset>
+          <Button className="w-full h-12 text-base" disabled={(!fitVerificationId && (fitAnswers.some(a => a === undefined) || !facePhotoAccepted || !fitConfirmed)) || fitSubmitMut.isPending || clockInMut.isPending} onClick={() => fitSubmitMut.mutate()}>{fitSubmitMut.isPending || clockInMut.isPending ? "Checking location…" : fitVerificationId ? "Retry Clock In" : "Confirm & Clock In"}</Button>
         </DialogContent>
       </Dialog>
       {/* Clock-out blocker modal */}
@@ -680,13 +704,13 @@ export default function EmployeeHome() {
                     <Button
                       key={shift.id}
                       size="lg"
-                      className="w-full h-14 text-base font-semibold"
+                      className="w-full min-h-14 h-auto py-3 text-base font-semibold whitespace-normal break-words"
                        onClick={() => openFit(shift.id)}
                       disabled={clockInMut.isPending}
                       data-testid={`button-clock-in-${shift.id}`}
                     >
                       <Play className="w-5 h-5 mr-2" />
-                      Clock In — {new Date(shift.scheduledStartAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      Clock In — {clockInSites.find(site=>site.id===shift.locationId)?.name || "Work site"} — {new Date(shift.scheduledStartAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </Button>
                   ))}
                 </div>

@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import {transform} from 'esbuild';
+import {checkGeofence,distanceMeters,geofenceInput} from '../shared/geofence';
+import {clockInSite,verifyClockInLocation} from '../server/clock-in-location';
+const now=Date.now(),site={id:'olympic',companyId:'company',name:'Olympic',latitude:'49.9',longitude:'-97.1',geofenceEnabled:true,geofenceRadiusMeters:100},fix={latitude:49.9,longitude:-97.1,accuracy:10,timestamp:now};
+assert.equal(checkGeofence(site,fix,now)?.distanceMeters,0);
+const near={...fix,latitude:49.90089};assert.ok(distanceMeters(fix,near)<100);assert.ok(checkGeofence(site,near,now));
+assert.throws(()=>checkGeofence(site,{...fix,latitude:49.90091},now),/within 100 metres/);
+for(const bad of [null,{...fix,latitude:NaN},{...fix,longitude:181},{...fix,accuracy:51},{...fix,accuracy:-1},{...fix,timestamp:now-60001},{...fix,timestamp:now+10001},{...fix,accuracy:'10'},{...fix,latitude:'49.9'}])assert.throws(()=>checkGeofence(site,bad,now));
+assert.throws(()=>geofenceInput({geofenceEnabled:true}),/coordinates/);assert.throws(()=>geofenceInput({latitude:91}),/valid/);assert.throws(()=>geofenceInput({geofenceRadiusMeters:49}),/Radius/);assert.throws(()=>geofenceInput({geofenceRadiusMeters:100.5}),/Radius/);assert.throws(()=>geofenceInput({geofenceEnabled:'true'}),/true or false/);
+assert.deepEqual(geofenceInput({latitude:0,longitude:0,geofenceEnabled:true,geofenceRadiusMeters:100}),{latitude:'0',longitude:'0',geofenceEnabled:true,geofenceRadiusMeters:100});
+assert.throws(()=>geofenceInput({latitude:null},site),/coordinates/);
+const user={id:'cleaner',companyId:'company',role:'employee'},shift={id:'shift',companyId:'company',employeeId:'cleaner',locationId:'olympic',status:'scheduled'};
+let currentShift:any=shift,allow=true,writes=0;
+const storage:any={getCompany:async()=>({allowUnscheduledClockIns:allow,timezone:'America/Winnipeg'}),getLocationsByCompany:async()=>[site,{...site,id:'ash',name:'Ash Grove',latitude:'50.1'}],getShift:async()=>currentShift,getShiftsByEmployee:async()=>[],getRecurringSchedulesByEmployee:async()=>[{companyId:'company',employeeId:'cleaner',locationId:'ash',status:'active',startDate:'2026-01-01'}],getActiveTimeEntry:async()=>null,getFitForDutyVerification:async()=>({id:'verification',companyId:'company',employeeId:'cleaner',shiftId:'shift',status:'cleared'}),createTimeEntry:async()=>{writes++;throw new Error('Unexpected write');}};
+assert.equal((await verifyClockInLocation(storage,user,{shiftId:'shift',position:fix})).site.id,'olympic');
+await assert.rejects(verifyClockInLocation(storage,user,{shiftId:'shift',locationId:'ash',position:fix}),/assigned to this shift/);
+await assert.rejects(verifyClockInLocation(storage,user,{shiftId:'shift',position:{...fix,latitude:50.1}}),/within/);
+await assert.rejects(clockInSite(storage,user,{}),/assigned work site/);
+await assert.rejects(clockInSite(storage,user,{locationId:'olympic'}),/assigned to you/);
+assert.equal((await clockInSite(storage,user,{locationId:'ash'})).site.id,'ash');
+allow=false;await assert.rejects(clockInSite(storage,user,{locationId:'ash'}),/scheduled shift/);allow=true;
+for(const bad of [null,{...shift,companyId:'other'},{...shift,employeeId:'other'},{...shift,status:'cancelled'},{...shift,status:'completed'}]){currentShift=bad;await assert.rejects(clockInSite(storage,user,{shiftId:'shift'}),/not available/);}currentShift=shift;
+const source=await fs.readFile('server/routes.ts','utf8'),start=source.indexOf('  app.post("/api/time-entries/clock-in",'),end=source.indexOf('\n  app.',start+5);let handler:any;
+const app={post:(_path:any,...args:any[])=>handler=args.at(-1)};
+const deps={app,storage,requireRole:()=>()=>{},verifyClockInLocation};
+new Function(...Object.keys(deps),(await transform(source.slice(start,end),{loader:'ts'})).code)(...Object.values(deps));
+for(const position of [undefined,{...fix,latitude:50.1},{...fix,timestamp:now-90000}]){const res:any={status(code:number){this.code=code;return this},json(body:any){this.body=body;return this}};await handler({user,body:{shiftId:'shift',verificationId:'verification',position}},res);assert.equal(res.code,403);assert.equal(writes,0);}
+// Browser helper requests fresh, high-accuracy GPS; refusal is a retryable error.
+const {clockInPosition}=await import('../client/src/lib/clock-in-position');let options:any;
+Object.defineProperty(globalThis,'navigator',{configurable:true,value:{geolocation:{getCurrentPosition(success:any,_error:any,input:any){options=input;success({coords:fix,timestamp:fix.timestamp});}}}});
+assert.deepEqual(await clockInPosition(),fix);assert.deepEqual(options,{enableHighAccuracy:true,maximumAge:0,timeout:20000});
+Object.defineProperty(globalThis,'navigator',{configurable:true,value:{geolocation:{getCurrentPosition(_success:any,error:any){error({code:1});}}}});await assert.rejects(clockInPosition(),/Allow precise location/);
+console.log('PASS: 100m boundary, accuracy and freshness, invalid/missing coordinates, company and employee assignments, wrong-site bypass, unscheduled policy, actual clock-in denies before any attendance write, GPS permission failure. No production attendance changed.');

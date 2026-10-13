@@ -11,6 +11,13 @@ export async function runStartupMigrations() {
   try {
     log("Running startup migrations...", "migrations");
     await client.query(`
+      ALTER TABLE locations ADD COLUMN IF NOT EXISTS geofence_enabled boolean NOT NULL DEFAULT false;
+      ALTER TABLE locations ADD COLUMN IF NOT EXISTS latitude numeric(10,7);
+      ALTER TABLE locations ADD COLUMN IF NOT EXISTS longitude numeric(10,7);
+      ALTER TABLE locations ADD COLUMN IF NOT EXISTS geofence_radius_meters integer NOT NULL DEFAULT 100;
+      ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS clock_in_location_check json;
+    `);
+    await client.query(`
       ALTER TABLE companies ADD COLUMN IF NOT EXISTS payroll_payday_delay_days integer NOT NULL DEFAULT 5;
       ALTER TABLE companies ADD COLUMN IF NOT EXISTS payroll_summary_enabled boolean NOT NULL DEFAULT false;
       ALTER TABLE companies ADD COLUMN IF NOT EXISTS payroll_summary_days json NOT NULL DEFAULT '[2,4]';

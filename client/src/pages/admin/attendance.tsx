@@ -939,6 +939,7 @@ export default function AdminAttendance() {
                         </TableCell>
                         {showDetails && <TableCell>
                           <div className="flex gap-1 flex-wrap">
+                            {entry.clockInLocationCheck && <Badge variant="outline" className="text-[10px] h-4" title={`Within ${entry.clockInLocationCheck.radiusMeters}m boundary; GPS accuracy ${entry.clockInLocationCheck.accuracyMeters}m`}>Location checked · {entry.clockInLocationCheck.distanceMeters}m</Badge>}
                             {(entry.flags || []).map((flag: string, i: number) => (
                               <Badge key={i} variant={(flagColors[flag] as any) || "secondary"} className="text-[10px] h-4">
                                 {flag.replace(/_/g, " ")}

@@ -1,3 +1,5 @@
+import {geofenceInput} from "../shared/geofence";
+import {clockInSite,verifyClockInLocation} from "./clock-in-location";
 import { completedChecklistSteps, scheduledAssignmentDue, openSupplyRequest } from "@shared/worklog-state";
 import { registerWorkSubmissionAccess, registerReportAccess, registerFieldNoteAccess, registerScheduledNoteAccess } from "./worklog-access";
 import { validateForm, formName, validFormConfig } from "@shared/form-validation";
@@ -1390,7 +1392,11 @@ Welcome again, and thank you for choosing ClockField.
       const user = req.user as any;
       const { name, address, clientId, notes } = req.body;
       if (!name?.trim()) return res.status(400).json({ message: "Location name is required" });
+      let boundary;
+      try { boundary=geofenceInput(req.body); } catch(error:any) {return res.status(400).json({message:error.message});}
+      if(clientId) {const client=await storage.getClient(clientId);if(!client||client.companyId!==user.companyId)return res.status(400).json({message:"Client not found"});}
       const location = await storage.createLocation({
+        ...boundary,
         companyId: user.companyId,
         name: name.trim(),
         address: address?.trim() || null,
@@ -1407,7 +1413,12 @@ Welcome again, and thank you for choosing ClockField.
       const target = await storage.getLocation(req.params.id);
       if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       const { name, address, clientId, notes } = req.body;
+      let boundary;
+      try {boundary=geofenceInput(req.body,target);}catch(error:any){return res.status(400).json({message:error.message});}
+      if(clientId){const client=await storage.getClient(clientId);if(!client||client.companyId!==user.companyId)return res.status(400).json({message:"Client not found"});}
+      if(name!==undefined && (typeof name!=="string"||!name.trim()))return res.status(400).json({message:"Location name is required"});
       const updated = await storage.updateLocation(req.params.id, {
+        ...boundary,
         ...(name !== undefined && { name: name.trim() }),
         ...(address !== undefined && { address: address?.trim() || null }),
         ...(clientId !== undefined && { clientId: clientId || null }),
@@ -1711,6 +1722,22 @@ Welcome again, and thank you for choosing ClockField.
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  app.get("/api/employee/clock-in-sites", requireRole("employee"), async(req,res)=>{
+    try {
+      const user=req.user as any,company=await storage.getCompany(user.companyId),today=dateInZone(new Date(),company?.timezone||"UTC");
+      const [sites,shifts,schedules]=await Promise.all([storage.getLocationsByCompany(user.companyId),storage.getShiftsByEmployee(user.id),storage.getRecurringSchedulesByEmployee(user.id)]);
+      const ids=new Set([...shifts.filter(s=>s.companyId===user.companyId&&s.employeeId===user.id&&s.shiftDate===today&&!['cancelled','completed'].includes(s.status)).map(s=>s.locationId),...schedules.filter(s=>s.companyId===user.companyId&&s.employeeId===user.id&&s.status==='active'&&s.startDate<=today&&(!s.endDate||s.endDate>=today)).map(s=>s.locationId)]);
+      res.json(sites.filter(site=>ids.has(site.id)).map(site=>({id:site.id,name:site.name,address:site.address,geofenceEnabled:site.geofenceEnabled,geofenceRadiusMeters:site.geofenceRadiusMeters})));
+    }catch{res.status(500).json({message:"Could not load assigned work sites"});}
+  });
+  app.post("/api/time-entries/clock-in-location",requireRole("employee"),async(req,res)=>{
+    try {
+      const {site}=await clockInSite(storage,req.user,req.body);
+      if(req.body.position)await verifyClockInLocation(storage,req.user,req.body);
+      res.json({required:!!site?.geofenceEnabled,siteName:site?.name||null,radiusMeters:site?.geofenceRadiusMeters||null});
+    }catch(error:any){res.status(403).json({message:error.message});}
+  });
+
   app.post("/api/time-entries/clock-in", requireRole("employee"), async (req, res) => {
     try {
       const user = req.user as any;
@@ -1730,10 +1757,9 @@ Welcome again, and thank you for choosing ClockField.
       if ((verification.shiftId || null) !== (shiftId || null)) {
         return res.status(400).json({ message: "Fit for Duty verification does not match this shift" });
       }
-      let shift = shiftId ? await storage.getShift(shiftId) : null;
-      if (shift && (shift.companyId !== user.companyId || shift.employeeId !== user.id)) {
-        return res.status(403).json({ message: "Shift not available" });
-      }
+      let locationResult;
+      try {locationResult=await verifyClockInLocation(storage,user,req.body);}catch(error:any){return res.status(403).json({message:error.message});}
+      const {shift,site,check:locationCheck}=locationResult;
       const now = new Date().toISOString();
       let flags: string[] = [];
       if (shift) {
@@ -1751,9 +1777,10 @@ Welcome again, and thank you for choosing ClockField.
         companyId: user.companyId,
         employeeId: user.id,
         shiftId: shiftId || null,
-        clientId: shift?.clientId || null,
-        locationId: shift?.locationId || null,
+        clientId: shift?.clientId || site?.clientId || null,
+        locationId: site?.id || null,
         clockInAt: now,
+        clockInLocationCheck: locationCheck,
         status: "active",
         flags: flags.length ? flags : null,
       });

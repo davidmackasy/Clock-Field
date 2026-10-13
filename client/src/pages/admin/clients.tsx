@@ -1,3 +1,4 @@
+import {LocationBoundaries} from "@/components/location-boundaries";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -127,7 +128,8 @@ export default function AdminClients() {
           <h1 className="text-2xl font-bold" data-testid="text-clients-title">Clients</h1>
           <p className="text-muted-foreground text-sm mt-1">{clientsList?.length || 0} clients</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <LocationBoundaries locations={locationsList}/>
           <Dialog open={locOpen} onOpenChange={setLocOpen}>
             <DialogTrigger asChild>
               <Button variant="secondary" data-testid="button-add-location"><MapPin className="w-4 h-4 mr-1.5" />Add Location</Button>
