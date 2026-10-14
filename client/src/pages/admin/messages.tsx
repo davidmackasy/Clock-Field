@@ -554,7 +554,7 @@ export default function AdminMessages() {
             </div>
 
             {/* Actions */}
-            <div className="flex gap-2 pt-1">
+            <div className="flex gap-2 sticky bottom-0 bg-background py-3 border-t z-10">
               <button
                 onClick={() => setShowNewMsg(false)}
                 data-testid="button-cancel-new-message"
@@ -564,7 +564,7 @@ export default function AdminMessages() {
               </button>
               <button
                 onClick={() => createMsgMut.mutate()}
-                disabled={createMsgMut.isPending || !newBody.trim()}
+                disabled={createMsgMut.isPending || !newBody.trim() || !newRecipient}
                 data-testid="button-send-new-message"
                 className="flex-1 py-2 rounded-[8px] text-[13px] font-semibold bg-primary text-white hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
               >
