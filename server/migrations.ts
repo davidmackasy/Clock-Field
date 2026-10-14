@@ -11,6 +11,11 @@ export async function runStartupMigrations() {
   try {
     log("Running startup migrations...", "migrations");
     await client.query(`
+      ALTER TABLE employee_hiring_policy_acceptances ADD COLUMN IF NOT EXISTS signer_name text;
+      ALTER TABLE employee_hiring_policy_acceptances ADD COLUMN IF NOT EXISTS signed_date text;
+      ALTER TABLE employee_hiring_policy_acceptances ADD COLUMN IF NOT EXISTS signature_data text;
+      ALTER TABLE employee_hiring_policy_acceptances ADD COLUMN IF NOT EXISTS personalized_content text;
+      ALTER TABLE employee_hiring_documents ADD COLUMN IF NOT EXISTS description text;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_details json;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_permissions text[];
       ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_file_path text;

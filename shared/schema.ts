@@ -2108,6 +2108,10 @@ export const employeeHiringPolicyAcceptances = pgTable("employee_hiring_policy_a
   policyTitle: text("policy_title").notNull(),
   policyVersion: text("policy_version").notNull().default("1.0"),
   policyContentSnapshot: text("policy_content_snapshot").notNull(),
+  signerName: text("signer_name"),
+  signedDate: text("signed_date"),
+  signatureData: text("signature_data"),
+  personalizedContent: text("personalized_content"),
   acceptedAt: text("accepted_at").notNull(),
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
@@ -2115,6 +2119,7 @@ export const employeeHiringPolicyAcceptances = pgTable("employee_hiring_policy_a
 });
 
 export const employeeHiringDocuments = pgTable("employee_hiring_documents", {
+  description: text("description"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   companyId: varchar("company_id").notNull(),
   submissionId: varchar("submission_id").notNull(),

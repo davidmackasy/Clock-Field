@@ -1,5 +1,6 @@
+import {personalizePolicy} from "../shared/policy-personalization";
 import {permissionAllowed,canManageStaff} from '../shared/people';
-import {hiringSubmissionError,validDocument,personalInfoSchema,medicalInfoSchema,policySchema} from "../shared/hiring-validation";
+import {hiringSubmissionError,validPolicySignature,validDocument,personalInfoSchema,medicalInfoSchema,policySchema} from "../shared/hiring-validation";
 import {registerTeamHiring} from "./team-hiring";
 import {registerPeopleProfile} from "./people-profile";
 import {employeeInput,clientInput,safePerson,hasAccess,validPermissions,emptyProfile,profileSchema} from "../shared/people";
@@ -10498,7 +10499,7 @@ Return ONLY valid JSON:
       const company = await storage.getCompany(pkg.companyId);
       const safeDocuments = documents.map(d => ({
         id: d.id, documentType: d.documentType, originalName: d.originalName,
-        fileSize: d.fileSize, uploadedAt: d.uploadedAt,
+        fileSize: d.fileSize, uploadedAt: d.uploadedAt, mimeType:d.mimeType, description:d.description,
       }));
       res.json({
         package: { id: pkg.id, employeeName: pkg.employeeName, employeeEmail: pkg.employeeEmail, position: pkg.position, status: pkg.status, sentAt: pkg.sentAt, applicationKind: pkg.applicationKind },
@@ -10569,13 +10570,16 @@ Return ONLY valid JSON:
       if (sub.status === "submitted") return res.status(400).json({ message: "Already submitted" });
       const { policyId } = req.body;
       const template=await storage.getHPTemplate(pkg.templateId);const policies=Array.isArray(template?.policies)?template.policies as any[]:[];const policy=policies.find(p=>p.id===policyId);if(!policy)return res.status(400).json({message:"Policy not found"});const policyTitle=policy.title,policyContentSnapshot=policy.content;
-      const existingAcceptance=(await storage.getHPPolicyAcceptances(sub.id)).find(p=>p.policyId===policyId);if(existingAcceptance?.policyContentSnapshot===policyContentSnapshot)return res.json(existingAcceptance);
+      const info=sub.personalInfoJson as any;const signerName=`${info?.firstName||""} ${info?.lastName||""}`.trim();
+      if(!validPolicySignature(req.body)||req.body.signerName.trim()!==signerName)return res.status(400).json({message:"Your full name, signing date and a drawn signature are required for this policy"});
+      const existingAcceptance=(await storage.getHPPolicyAcceptances(sub.id)).find(p=>p.policyId===policyId&&p.policyContentSnapshot===policyContentSnapshot&&p.signerName===signerName&&validPolicySignature(p));if(existingAcceptance)return res.json(existingAcceptance);
       const now = hpNow();
       const acceptance = await storage.createHPPolicyAcceptance({
         companyId: pkg.companyId,
         submissionId: sub.id,
         policyId,
         policyTitle,
+        signerName, signedDate:req.body.signedDate, signatureData:req.body.signatureData, personalizedContent:personalizePolicy(policy.content,signerName,req.body.signedDate),
         policyVersion: "1.0",
         policyContentSnapshot,
         acceptedAt: now,
@@ -10598,26 +10602,32 @@ Return ONLY valid JSON:
       if (sub.status === "submitted") return res.status(400).json({ message: "Already submitted" });
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
       const { documentType } = req.body;
-      if (!["sin_card","void_cheque","government_id","resume","certification","other"].includes(documentType)) return res.status(400).json({ message: "Select a valid document type" });
+      const description=String(req.body.description||"").trim();if(description.length>500)return res.status(400).json({message:"Document details must be 500 characters or less"});
+      if(["other","other_id","supporting_2","supporting_3"].includes(documentType)&&!description)return res.status(400).json({message:"Describe this supporting document before uploading"});
+      if (!["sin_card","void_cheque","government_id","resume","certification","other","passport","work_permit","provincial_id","other_id","supporting_2","supporting_3"].includes(documentType)) return res.status(400).json({ message: "Select a valid document type" });
       const now = hpNow();
       if(!validDocument(req.file.buffer,req.file.mimetype))return res.status(400).json({message:"Upload a valid PDF, image, Word document or text file"});
       const fileData = req.file.buffer.toString("base64");
       const doc = await storage.upsertHPDocument(sub.id, documentType, {
         companyId: pkg.companyId,
         submissionId: sub.id,
-        documentType,
+        documentType, description,
         originalName: req.file.originalname,
         fileName: req.file.originalname,
         mimeType: req.file.mimetype,
         fileSize: req.file.size,
         fileData,
-        required: pkg.applicationKind!=="application",
+        required: pkg.applicationKind!=="application"&&["sin_card","void_cheque","government_id"].includes(documentType),
         uploadedAt: now,
         createdAt: now,
       } as any);
       await storage.updateHPSubmission(sub.id, { currentStep: Math.max(sub.currentStep ?? 1, 6), lastSavedAt: now, updatedAt: now });
       res.json({ id: doc.id, documentType: doc.documentType, originalName: doc.originalName, fileSize: doc.fileSize });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/public/hiring-package/:token/documents/:id",async(req,res)=>{
+    try{const pkg=await storage.getHPPackageByToken(req.params.token),sub=pkg?await storage.getHPSubmissionByPackage(pkg.id):null,doc=await storage.getHPDocument(req.params.id);if(!sub||sub.status==="submitted"||!doc||doc.submissionId!==sub.id||doc.companyId!==pkg!.companyId)return res.status(404).json({message:"Document unavailable"});const bytes=Buffer.from(doc.fileData,"base64");if(!validDocument(bytes,doc.mimeType))return res.status(415).json({message:"Preview unavailable"});res.set({"Content-Type":doc.mimeType,"Content-Disposition":`${["application/pdf","image/png","image/jpeg","image/webp"].includes(doc.mimeType)?"inline":"attachment"}; filename*=UTF-8''${encodeURIComponent(doc.originalName)}`,"X-Content-Type-Options":"nosniff","Content-Security-Policy":"sandbox"});res.send(bytes);}catch{res.status(500).json({message:"Unable to open document"});}
   });
 
   // DELETE /api/public/hiring-package/:token/documents/:documentType

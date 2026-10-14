@@ -1,3 +1,4 @@
+import {HiringPolicyReader} from "@/components/hiring-policy-reader";
 import {EmployeeProfileFields} from "@/components/employee-profile-fields";
 import {emptyProfile} from "@shared/people";
 import { useState, useRef, useEffect } from "react";
@@ -45,8 +46,8 @@ type HPPublicData = {
     bootReimbursementAmount: string;
     requireDateOfBirth: boolean;
   } | null;
-  policyAcceptances: { id: string; policyId: string; policyTitle: string; acceptedAt: string }[];
-  documents: { id: string; documentType: string; originalName: string; fileSize: number }[];
+  policyAcceptances: { id: string; policyId: string; policyTitle: string; signerName?:string; signedDate?:string; signatureData?:string; acceptedAt: string }[];
+  documents: { id: string; documentType: string; originalName: string; fileSize: number; description?:string }[];
   companyName: string;
   companyLogoUrl?:string;
   brandColor?:string;
@@ -86,6 +87,7 @@ export default function HiringPackagePage() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [lastPoint, setLastPoint] = useState<{ x: number; y: number } | null>(null);
   const [step, setStep] = useState(0);
+  const initialized=useRef(false);
   const [saving, setSaving] = useState(false);
 
   const [profileDetails,setProfileDetails]=useState<any>(emptyProfile());
@@ -102,6 +104,7 @@ export default function HiringPackagePage() {
     allergies: "", medications: "", conditions: "", otherNotes: "",
   });
   const [acceptedPolicies, setAcceptedPolicies] = useState<Set<string>>(new Set());
+  const [documentDescriptions,setDocumentDescriptions]=useState<Record<string,string>>({});
   const [finalAck, setFinalAck] = useState(false);
 
   const { data, isLoading, isError } = useQuery<HPPublicData>({
@@ -125,13 +128,14 @@ export default function HiringPackagePage() {
       setMedicalInfo(data.submission.medicalInfoJson);
     }
     if (data?.policyAcceptances) {
-      setAcceptedPolicies(new Set(data.policyAcceptances.map(p => p.policyId)));
+      setAcceptedPolicies(new Set(data.policyAcceptances.filter(p=>p.signatureData&&p.signerName===`${data.submission?.personalInfoJson?.firstName||""} ${data.submission?.personalInfoJson?.lastName||""}`.trim()).map(p => p.policyId)));
     }
     if(data?.submission?.signatureData)setSavedSignature(data.submission.signatureData);
     if (data?.submission?.finalAcknowledgement) {
       setFinalAck(data.submission.finalAcknowledgement);
     }
-    if (data?.submission?.currentStep) {
+    if (!initialized.current && data?.submission?.currentStep) {
+      initialized.current=true;
       setStep(Math.max(0, data.submission.currentStep - 1));
     }
   }, [data]);
@@ -151,11 +155,12 @@ export default function HiringPackagePage() {
   });
 
   const acceptPolicyMutation = useMutation({
-    mutationFn: async (policy: { id: string; title: string; content: string }) => {
+    mutationFn: async (policy: { id: string; title: string; content: string; signerName:string; signedDate:string; signatureData:string }) => {
       const res = await fetch(`/api/public/hiring-package/${token}/policy-accept`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          signerName:policy.signerName, signedDate:policy.signedDate, signatureData:policy.signatureData,
           policyId: policy.id,
           policyTitle: policy.title,
           policyContentSnapshot: policy.content,
@@ -165,6 +170,7 @@ export default function HiringPackagePage() {
       return res.json();
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/public/hiring-package", token] }),
+    onError:(e:any)=>toast({title:"Policy not saved",description:e.message,variant:"destructive"}),
   });
 
   const uploadDocMutation = useMutation({
@@ -172,6 +178,7 @@ export default function HiringPackagePage() {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("documentType", documentType);
+      formData.append("description",documentDescriptions[documentType]||"");
       const res = await fetch(`/api/public/hiring-package/${token}/documents`, {
         method: "POST",
         body: formData,
@@ -283,7 +290,8 @@ export default function HiringPackagePage() {
 
   const { package: pkg, submission, template, policyAcceptances, documents, companyName } = data;
   const application=pkg.applicationKind==="application";
-  const documentOptions=application?[{type:"resume",label:"Resume / employment history",description:"Optional PDF, image or Word file"},{type:"government_id",label:"Driver’s licence / government ID",description:"Provide only when requested by your employer"},{type:"certification",label:"Training / certifications",description:"Optional supporting certificates"},{type:"other",label:"Other supporting document",description:"Optional additional document"}]:REQUIRED_DOCS;
+  const additionalDocs=[{type:"passport",label:"Passport",description:"Only if requested by your employer"},{type:"work_permit",label:"Work permit / work authorization",description:"Only if applicable and requested"},{type:"provincial_id",label:"Provincial / state ID",description:"An alternative government-issued ID"},{type:"other_id",label:"Other identification",description:"Describe the identification you are providing"},{type:"other",label:"Supporting document",description:"Describe this document before uploading"},{type:"supporting_2",label:"Additional supporting document",description:"Optional"},{type:"supporting_3",label:"Additional supporting document",description:"Optional"}];
+  const documentOptions=[...(application?[{type:"resume",label:"Resume / employment history",description:"Optional PDF, image or Word file"},{type:"government_id",label:"Driver’s licence / government ID",description:"Provide only when requested by your employer"}]:REQUIRED_DOCS),...additionalDocs,...(documents.some(d=>d.documentType==="certification")?[{type:"certification",label:"Previously uploaded certificate",description:"Retained from your earlier draft"}]:[])];
   const visibleSteps=STEPS.map((step,index)=>application&&index===2?{...step,label:"Experience & references"}:step);
 
 
@@ -316,7 +324,7 @@ export default function HiringPackagePage() {
             <div className="text-xs text-muted-foreground">Step {step + 1} of {STEPS.length}</div>
           </div>
           <ProgressBar step={step + 1} total={STEPS.length} />
-          <div className="flex gap-1 mt-3 overflow-x-auto pb-1">
+          <div className="flex flex-wrap gap-1 mt-3 pb-1">
             {visibleSteps.map((s, i) => {
               const Icon = s.icon;
               return (
@@ -334,7 +342,7 @@ export default function HiringPackagePage() {
 
       {/* Content */}
       <div className="max-w-2xl mx-auto px-4 py-8">
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-border shadow-sm p-6">
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-border shadow-sm p-4 sm:p-6">
 
           {/* Step 0: Personal Info */}
           {step === 0 && (
@@ -452,41 +460,8 @@ export default function HiringPackagePage() {
           {step === 3 && (
             <div className="space-y-4" data-testid="step-policies">
               <h2 className="text-lg font-semibold text-foreground">Company Policies</h2>
-              <p className="text-sm text-muted-foreground">Please read and accept each company policy below before proceeding.</p>
-              {policies.length === 0 ? (
-                <div className="text-center py-8 text-sm text-muted-foreground">No policies to review.</div>
-              ) : (
-                <div className="space-y-4">
-                  {policies.map(policy => {
-                    const accepted = acceptedPolicies.has(policy.id);
-                    return (
-                      <div key={policy.id} className={`border rounded-lg overflow-hidden transition-colors ${accepted ? "border-green-400 dark:border-green-600" : "border-border"}`}>
-                        <div className={`flex items-center justify-between px-4 py-3 ${accepted ? "bg-green-50 dark:bg-green-900/20" : "bg-muted/30"}`}>
-                          <span className="text-sm font-medium text-foreground">{policy.title}</span>
-                          {accepted && <CheckCircle2 className="w-4 h-4 text-green-500" />}
-                        </div>
-                        <div className="px-4 py-3 max-h-48 overflow-y-auto">
-                          <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">{policy.content}</p>
-                        </div>
-                        {!accepted && (
-                          <div className="px-4 pb-3 border-t border-border bg-muted/10">
-                            <Button
-                              size="sm" className="mt-3"
-                              onClick={() => {
-                                setAcceptedPolicies(s => new Set([...s, policy.id]));
-                                acceptPolicyMutation.mutate(policy);
-                              }}
-                              disabled={acceptPolicyMutation.isPending}
-                              data-testid={`btn-accept-policy-${policy.id}`}>
-                              <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> I Accept This Policy
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <p className="text-sm text-muted-foreground">Read and sign each policy separately before proceeding.</p>
+              <HiringPolicyReader policies={policies} acceptances={data.policyAcceptances||[]} name={`${personalInfo.firstName} ${personalInfo.lastName}`.trim()} onSign={(p:any)=>acceptPolicyMutation.mutate(p)} pending={acceptPolicyMutation.isPending}/>
               {!allPoliciesAccepted && policies.length > 0 && (
                 <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-700 dark:text-amber-400">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -500,36 +475,38 @@ export default function HiringPackagePage() {
           {step === 4 && (
             <div className="space-y-4" data-testid="step-documents">
               <h2 className="text-lg font-semibold text-foreground">Document Uploads</h2>
-              <p className="text-sm text-muted-foreground">Please upload the following required documents. Accepted formats: PDF, JPG, PNG (max 20MB each).</p>
+              <p className="text-sm text-muted-foreground">{application?"Upload documents requested by your employer. Other documents are optional.":"Upload the required onboarding documents."} Accepted formats: PDF, JPG, PNG, WebP, Word or text (max 20MB each).</p>
               <div className="space-y-4">
                 {documentOptions.map(doc => {
                   const uploaded = documents.find(d => d.documentType === doc.type);
                   return (
                     <div key={doc.type} className={`border rounded-lg p-4 transition-colors ${uploaded ? "border-green-400 dark:border-green-600 bg-green-50/50 dark:bg-green-900/10" : "border-border"}`}>
-                      <div className="flex items-start justify-between">
+                      {["other","other_id","supporting_2","supporting_3"].includes(doc.type)&&!uploaded&&<div className="mb-3"><Label htmlFor={`description-${doc.type}`}>What is this document?</Label><Input id={`description-${doc.type}`} maxLength={500} value={documentDescriptions[doc.type]||""} onChange={e=>setDocumentDescriptions(d=>({...d,[doc.type]:e.target.value}))} placeholder="Document name and supporting details"/></div>}
+                      <div className="flex flex-wrap gap-3 items-start justify-between">
                         <div>
                           <div className="text-sm font-medium text-foreground">{doc.label}</div>
                           <div className="text-xs text-muted-foreground mt-0.5">{doc.description}</div>
                         </div>
                         {uploaded ? (
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
-                              <CheckCircle2 className="w-3.5 h-3.5" /> {uploaded.originalName}
+                          <div className="flex flex-wrap items-center gap-2 min-w-0">
+                            <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1 break-all">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> {uploaded.originalName}{uploaded.description&&` · ${uploaded.description}`}
                             </span>
-                            <Button
+                            <a className="text-xs underline" href={`/api/public/hiring-package/${token}/documents/${uploaded.id}`} target="_blank" rel="noopener noreferrer">View file</a><Button
                               variant="ghost" size="sm" className="text-destructive h-7 w-7 p-0"
                               onClick={() => deleteDocMutation.mutate(doc.type)}
                               disabled={deleteDocMutation.isPending}
-                              data-testid={`btn-delete-doc-${doc.type}`}>
+                              aria-label={`Remove ${doc.label}`} data-testid={`btn-delete-doc-${doc.type}`}>
                               <Trash2 className="w-3.5 h-3.5" />
                             </Button>
                           </div>
                         ) : (
                           <label className="cursor-pointer" data-testid={`upload-${doc.type}`}>
                             <input
+                              disabled={uploadDocMutation.isPending||(["other","other_id","supporting_2","supporting_3"].includes(doc.type)&&!documentDescriptions[doc.type]?.trim())}
                               type="file"
                               className="sr-only"
-                              accept=".pdf,.jpg,.jpeg,.png"
+                              accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.txt"
                               onChange={e => {
                                 const file = e.target.files?.[0];
                                 if (file) uploadDocMutation.mutate({ file, documentType: doc.type });
@@ -545,7 +522,7 @@ export default function HiringPackagePage() {
                   );
                 })}
               </div>
-              {template?.bootReimbursementAmount && parseFloat(template.bootReimbursementAmount) > 0 && (
+              {!application && template?.bootReimbursementAmount && parseFloat(template.bootReimbursementAmount) > 0 && (
                 <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm text-blue-700 dark:text-blue-400">
                   Note: You are eligible for a boot reimbursement of <strong>${template.bootReimbursementAmount}</strong>. Please include your receipt with your SIN Card document or send it separately.
                 </div>
@@ -606,7 +583,7 @@ export default function HiringPackagePage() {
                   { label: "Emergency Contacts", complete: emergencyContacts.some(c => c.name.trim()), icon: Heart },
                   { label: "Medical Information", complete: true, icon: Shield },
                   { label: "Policy Acceptances", complete: allPoliciesAccepted || policies.length === 0, icon: FileText },
-                  { label: "Documents", complete: application || REQUIRED_DOCS.every(doc=>documents.some(d=>d.documentType===doc.type)), icon: Upload },
+                  { label: "Documents", complete: application || ["sin_card","void_cheque"].every(type=>documents.some(d=>d.documentType===type)) && documents.some(d=>["government_id","passport","provincial_id","work_permit","other_id"].includes(d.documentType)), icon: Upload },
                   { label: "Signature", complete: finalAck, icon: PenTool },
                 ].map(item => {
                   const Icon = item.icon;
