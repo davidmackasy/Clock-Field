@@ -10587,7 +10587,7 @@ Return ONLY valid JSON:
         userAgent: req.headers["user-agent"] ?? "",
         createdAt: now,
       } as any);
-      await storage.updateHPSubmission(sub.id, { currentStep: Math.max(sub.currentStep ?? 1, 5), lastSavedAt: now, updatedAt: now });
+      await storage.updateHPSubmission(sub.id, { currentStep: Math.max(sub.currentStep ?? 1, 4), lastSavedAt: now, updatedAt: now });
       res.json(acceptance);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -10621,7 +10621,7 @@ Return ONLY valid JSON:
         uploadedAt: now,
         createdAt: now,
       } as any);
-      await storage.updateHPSubmission(sub.id, { currentStep: Math.max(sub.currentStep ?? 1, 6), lastSavedAt: now, updatedAt: now });
+      await storage.updateHPSubmission(sub.id, { currentStep: Math.max(sub.currentStep ?? 1, 5), lastSavedAt: now, updatedAt: now });
       res.json({ id: doc.id, documentType: doc.documentType, originalName: doc.originalName, fileSize: doc.fileSize });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
