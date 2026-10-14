@@ -1,3 +1,9 @@
+import {entryMinutes} from '@shared/time-report';
+import {EmployeeProfileFields} from "@/components/employee-profile-fields";
+import {EmployeeFullProfile} from "@/components/employee-full-profile";
+import {EmployeeHiringPanel,EmployeeCollectedDocuments} from "@/components/employee-hiring-panel";
+import {ProfilePhotoUpload} from "@/components/profile-photo-upload";
+import {emptyProfile} from "@shared/people";
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -8,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
@@ -27,7 +33,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
-import { formatCompanyLongDate, formatCompanyTime, formatLocalDate, formatLocalWallTime } from "@/lib/timezone";
+import { companyDateKey, formatCompanyLongDate, formatCompanyTime, formatLocalDate, formatLocalWallTime } from "@/lib/timezone";
 
 type Employee = {
   id: string;
@@ -144,6 +150,8 @@ export default function AdminEmployees() {
     staleTime: Infinity,
   });
   const timezone = timezoneData?.timezone || "UTC";
+  const [newProfile,setNewProfile]=useState<any>(emptyProfile());
+  const [applicationsOpen,setApplicationsOpen]=useState(false);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -156,7 +164,7 @@ export default function AdminEmployees() {
   const [profileMode, setProfileMode] = useState<"view" | "edit">("view");
   const [uploadOpen, setUploadOpen] = useState(false);
 
-  const { data: employees, isLoading } = useQuery<Employee[]>({ queryKey: ["/api/employees"] });
+  const { data: employees, isLoading,error:directoryError,refetch:reloadDirectory } = useQuery<Employee[]>({ queryKey: ["/api/employees"] });
 
   useEffect(() => {
     if (selectedEmployee) {
@@ -174,13 +182,11 @@ export default function AdminEmployees() {
     }
   }, [selectedEmployee?.id]);
 
-  const { data: allShifts } = useQuery<Shift[]>({ queryKey: ["/api/shifts"] });
-  const { data: allRecurringSchedules } = useQuery<RecurringSchedule[]>({ queryKey: ["/api/recurring-schedules"] });
-  const { data: allTimeEntries } = useQuery<TimeEntry[]>({ queryKey: ["/api/time-entries"] });
-
-  const shifts = allShifts?.filter(s => s.employeeId === selectedEmployee?.id);
-  const recurringSchedules = allRecurringSchedules?.filter(s => s.employeeId === selectedEmployee?.id);
-  const timeEntries = allTimeEntries?.filter(e => e.employeeId === selectedEmployee?.id);
+  const {data:activity,isLoading:activityLoading,error:activityError}=useQuery<any>({queryKey:[`/api/employees/${selectedEmployee?.id}/activity`],enabled:!!selectedEmployee&&(activeTab==="schedule"||activeTab==="attendance"),staleTime:30000});
+  const allShifts:Shift[]=activity?.shifts||[];
+  const allRecurringSchedules:RecurringSchedule[]=activity?.schedules||[];
+  const allTimeEntries:TimeEntry[]=activity?.entries||[];
+  const shifts=allShifts,recurringSchedules=allRecurringSchedules,timeEntries=allTimeEntries;
 
   // Lazy queries — only fetch when their tab is active
   const { data: documents, isLoading: documentsLoading } = useQuery<EmployeeDocument[]>({
@@ -218,6 +224,7 @@ export default function AdminEmployees() {
         phone: data.phone || undefined,
         hourlyRate: data.hourlyRate || undefined,
         position: data.position || undefined,
+        profileDetails:newProfile,
       };
       const res = await apiRequest("POST", "/api/employees", cleaned);
       return res.json();
@@ -225,6 +232,7 @@ export default function AdminEmployees() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
       toast({ title: "Employee profile created" });
+      setNewProfile(emptyProfile());
       setOpen(false);
       setFormData({ firstName: "", lastName: "", email: "", phone: "", hourlyRate: "", position: "" });
     },
@@ -372,11 +380,12 @@ export default function AdminEmployees() {
           <h1 className="text-2xl font-bold" data-testid="text-employees-title">Employees</h1>
           <p className="text-muted-foreground text-sm mt-1">{employees?.length || 0} team members</p>
         </div>
+        <Button variant="outline" onClick={()=>setApplicationsOpen(true)}>Applications & hiring</Button>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button data-testid="button-add-employee"><Plus className="w-4 h-4 mr-1.5" />Add Employee</Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Add New Employee</DialogTitle>
             </DialogHeader>
@@ -407,8 +416,9 @@ export default function AdminEmployees() {
                 <Label>Hourly Rate ($) <span className="text-muted-foreground font-normal">(optional)</span></Label>
                 <Input data-testid="input-emp-rate" type="number" step="0.01" value={formData.hourlyRate} onChange={e => setFormData(p => ({ ...p, hourlyRate: e.target.value }))} placeholder="0.00" />
               </div>
+              <details className="border rounded-lg p-3"><summary className="text-sm font-medium cursor-pointer">Full employee details (address, history, references)</summary><div className="pt-4"><EmployeeProfileFields value={newProfile} onChange={setNewProfile}/></div></details>
               <p className="text-xs text-muted-foreground">
-                After creating the profile, you can enable login access from the employee card.
+                After reviewing the profile, activate login access from its Profile tab.
               </p>
               <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-save-employee">
                 {createMutation.isPending ? "Creating..." : "Create Employee Profile"}
@@ -423,7 +433,7 @@ export default function AdminEmployees() {
         <Input data-testid="input-search-employees" placeholder="Search employees..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
       </div>
 
-      {isLoading ? (
+      {directoryError ? (<div role="alert" className="rounded-lg border p-4 text-sm">The directory could not be loaded. <Button type="button" size="sm" variant="outline" onClick={()=>reloadDirectory()}>Retry</Button></div>) : isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map(i => <Skeleton key={i} className="h-40" />)}
         </div>
@@ -435,136 +445,25 @@ export default function AdminEmployees() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filtered.map((emp: Employee) => (
-            <Card
-              key={emp.id}
-              data-testid={`card-employee-${emp.id}`}
-              className="cursor-pointer hover-elevate active-elevate-2 transition-all border-border/60 group"
-              onClick={() => setSelectedEmployee(emp)}
-            >
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-start gap-3">
-                  <Avatar className="w-11 h-11 flex-shrink-0 ring-2 ring-primary/5 group-hover:ring-primary/20 transition-all">
-                    <AvatarFallback className="bg-primary/10 text-sm font-medium">
-                      {emp.firstName[0]}{emp.lastName[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-sm truncate" data-testid={`text-employee-name-${emp.id}`}>
-                          {emp.firstName} {emp.lastName}
-                        </p>
-                        {emp.position && (
-                          <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                            <Briefcase className="w-3 h-3" /> {emp.position}
-                          </p>
-                        )}
-                      </div>
-                      {statusBadge(emp)}
-                    </div>
-                    {emp.employeeId && (
-                      <p className="text-[11px] text-muted-foreground font-mono mt-1.5">{emp.employeeId}</p>
-                    )}
-                    <div className="mt-1.5 space-y-0.5">
-                      {emp.email && (
-                        <div className="flex items-center gap-1.5">
-                          <Mail className="w-3 h-3 text-muted-foreground/70 shrink-0" />
-                          <p className="text-xs text-muted-foreground truncate">{emp.email}</p>
-                        </div>
-                      )}
-                      {emp.phone && (
-                        <div className="flex items-center gap-1.5">
-                          <Phone className="w-3 h-3 text-muted-foreground/70 shrink-0" />
-                          <p className="text-xs text-muted-foreground">{emp.phone}</p>
-                        </div>
-                      )}
-                      {emp.hourlyRate && (
-                        <div className="flex items-center gap-1.5">
-                          <DollarSign className="w-3 h-3 text-muted-foreground/70 shrink-0" />
-                          <p className="text-xs text-muted-foreground">${emp.hourlyRate}/hr</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <Separator />
-
-                <div className="flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
-                  {!emp.loginEnabled ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-xs h-7 gap-1"
-                      data-testid={`button-enable-access-${emp.id}`}
-                      disabled={enableAccessMutation.isPending}
-                      onClick={() => enableAccessMutation.mutate(emp.id)}
-                    >
-                      <UserCheck className="w-3 h-3" />
-                      Enable Login Access
-                    </Button>
-                  ) : (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs h-7 gap-1"
-                        data-testid={`button-reset-pin-${emp.id}`}
-                        disabled={resetPinMutation.isPending}
-                        onClick={() => resetPinMutation.mutate(emp.id)}
-                      >
-                        <RefreshCw className="w-3 h-3" />
-                        Reset PIN
-                      </Button>
-                      {emp.accountStatus !== "disabled" ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-xs h-7 gap-1 text-destructive hover:text-destructive"
-                          data-testid={`button-disable-access-${emp.id}`}
-                          disabled={disableAccessMutation.isPending}
-                          onClick={() => disableAccessMutation.mutate(emp.id)}
-                        >
-                          <UserX className="w-3 h-3" />
-                          Disable Access
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-xs h-7 gap-1"
-                          data-testid={`button-enable-access-re-${emp.id}`}
-                          disabled={enableAccessMutation.isPending}
-                          onClick={() => enableAccessMutation.mutate(emp.id)}
-                        >
-                          <UserCheck className="w-3 h-3" />
-                          Re-enable Access
-                        </Button>
-                      )}
-                    </>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="rounded-xl border bg-background divide-y">
+          <div className="hidden lg:grid grid-cols-[minmax(0,2fr)_minmax(0,2fr)_7rem_9rem_4rem] gap-4 px-4 py-3 text-xs font-medium text-muted-foreground bg-muted/30"><span>Employee</span><span>Contact</span><span>Hourly rate</span><span>Access</span><span>Profile</span></div>
+          {filtered.map((emp:Employee)=><button type="button" key={emp.id} data-testid={`card-employee-${emp.id}`} onClick={()=>setSelectedEmployee(emp)} className="w-full text-left grid grid-cols-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_7rem_9rem_4rem] items-center gap-3 lg:gap-4 px-4 py-3 hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><div className="flex items-center gap-3 min-w-0"><Avatar className="h-9 w-9 shrink-0"><AvatarImage src={(emp as any).avatarUrl} alt={`${emp.firstName} ${emp.lastName}`}/><AvatarFallback className="text-xs">{emp.firstName?.[0]}{emp.lastName?.[0]}</AvatarFallback></Avatar><div className="min-w-0"><p className="text-sm font-medium break-words" data-testid={`text-employee-name-${emp.id}`}>{emp.firstName} {emp.lastName}</p><p className="text-xs text-muted-foreground">{emp.employeeId||'Profile only'} · {emp.position||'Employee'}</p><p className="lg:hidden text-xs text-muted-foreground">{emp.hourlyRate?`$${emp.hourlyRate}/hr`:''}</p></div></div><div className="hidden lg:block min-w-0 text-xs text-muted-foreground"><p className="break-all">{emp.email||'—'}</p><p>{emp.phone||'—'}</p></div><span className="hidden lg:block text-sm">{emp.hourlyRate?`$${emp.hourlyRate}`:'—'}</span><span className="justify-self-end lg:justify-self-start">{statusBadge(emp)}</span><span className="hidden lg:block text-xs text-primary">Open →</span></button>)}
         </div>
       )}
 
-      <Sheet open={!!selectedEmployee} onOpenChange={(v) => !v && setSelectedEmployee(null)}>
-        <SheetContent className="sm:max-w-2xl w-full p-0">
-          {selectedEmployee && (
+      <Dialog open={applicationsOpen} onOpenChange={setApplicationsOpen}><DialogContent className="max-w-4xl max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>Applications & hiring</DialogTitle></DialogHeader><EmployeeHiringPanel/></DialogContent></Dialog>
+      <Sheet open={!!selectedEmployee} onOpenChange={v=>{if(!v)setSelectedEmployee(null);}}><SheetContent className="sm:max-w-3xl w-full p-0">
+      {selectedEmployee && (
             <div className="flex flex-col h-full overflow-hidden">
               <SheetHeader className="p-4 sm:p-6 border-b">
                 <div className="flex items-center gap-3 sm:gap-4">
                   <Avatar className="w-12 h-12 sm:w-14 sm:h-14">
-                    <AvatarFallback className="bg-primary/10 text-base sm:text-lg font-semibold">
+                    <AvatarImage src={(selectedEmployee as any).avatarUrl} alt="Employee profile"/><AvatarFallback className="bg-primary/10 text-base sm:text-lg font-semibold">
                       {selectedEmployee.firstName[0]}{selectedEmployee.lastName[0]}
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0 flex-1">
-                    <SheetTitle className="text-lg sm:text-xl truncate">
+                    <SheetTitle className="text-lg sm:text-xl break-words">
                       {selectedEmployee.firstName} {selectedEmployee.lastName}
                     </SheetTitle>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -585,11 +484,12 @@ export default function AdminEmployees() {
               <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0 overflow-hidden">
                 <div className="border-b">
                   <ScrollArea className="w-full">
-                    <TabsList className="w-full justify-start h-12 bg-transparent gap-4 sm:gap-6 px-4 sm:px-6 rounded-none">
+                    <TabsList className="grid grid-cols-3 sm:flex w-full justify-start h-auto sm:h-12 bg-transparent gap-x-4 sm:gap-6 px-4 sm:px-6 rounded-none">
                       <TabsTrigger value="profile" data-testid="tab-profile" className="h-12 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-0 whitespace-nowrap">Profile</TabsTrigger>
                       <TabsTrigger value="schedule" data-testid="tab-schedule" className="h-12 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-0 whitespace-nowrap">Schedule</TabsTrigger>
                       <TabsTrigger value="attendance" data-testid="tab-attendance" className="h-12 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-0 whitespace-nowrap">Attendance</TabsTrigger>
                       <TabsTrigger value="documents" data-testid="tab-documents" className="h-12 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-0 whitespace-nowrap">Documents</TabsTrigger>
+                      <TabsTrigger value="hiring" className="h-12 rounded-none border-b-2 border-transparent data-[state=active]:border-primary whitespace-nowrap">Hiring</TabsTrigger>
                       <TabsTrigger value="training" data-testid="tab-training" className="h-12 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-0 whitespace-nowrap">Training</TabsTrigger>
                     </TabsList>
                   </ScrollArea>
@@ -600,6 +500,8 @@ export default function AdminEmployees() {
 
                     {/* ── Profile tab ─────────────────────────────────────── */}
                     <TabsContent value="profile" className="mt-0 space-y-5">
+                      <ProfilePhotoUpload kind="employees" id={selectedEmployee.id} name={`${selectedEmployee.firstName} ${selectedEmployee.lastName}`} url={(selectedEmployee as any).avatarUrl} onUpdated={e=>setSelectedEmployee(e)}/>
+                      <div className="flex flex-wrap gap-2 border rounded-lg p-3"><span className="text-sm font-medium mr-auto">Login access</span>{!selectedEmployee.loginEnabled?<Button type="button" size="sm" variant="outline" disabled={enableAccessMutation.isPending} onClick={()=>enableAccessMutation.mutate(selectedEmployee.id)}>Activate login access</Button>:<><Button type="button" size="sm" variant="outline" onClick={()=>resetPinMutation.mutate(selectedEmployee.id)}>Reset PIN</Button><Button type="button" size="sm" variant="outline" onClick={()=>disableAccessMutation.mutate(selectedEmployee.id)}>Disable access</Button></>}</div>
                       <div className="flex items-center justify-between">
                         <h3 className="text-sm font-semibold">Personal Information</h3>
                         {profileMode === "view" ? (
@@ -738,10 +640,12 @@ export default function AdminEmployees() {
                           </Button>
                         </div>
                       )}
+                      <EmployeeFullProfile employeeId={selectedEmployee.id}/>
                     </TabsContent>
 
                     {/* ── Schedule tab (preserved) ─────────────────────────── */}
-                    <TabsContent value="schedule" className="mt-0 space-y-6">
+                    <TabsContent value="hiring"><EmployeeHiringPanel employee={selectedEmployee} onUpdated={e=>setSelectedEmployee(e)}/></TabsContent>
+                    <TabsContent value="schedule" className="mt-0 space-y-6">{activityLoading&&<p role="status">Loading schedules…</p>}{activityError&&<p role="alert" className="text-destructive">Schedules could not be loaded. Reopen this profile to retry.</p>}
                       <div className="space-y-4">
                         <h3 className="text-sm font-semibold flex items-center gap-2">
                           <Calendar className="w-4 h-4" />
@@ -789,13 +693,13 @@ export default function AdminEmployees() {
                         ) : (
                           <div className="space-y-2">
                             {shifts
-                              .filter(s => s.status === "scheduled")
+                              .filter(s => s.status === "scheduled" && s.shiftDate>=companyDateKey(new Date(),timezone)).sort((a,b)=>a.shiftDate.localeCompare(b.shiftDate))
                               .slice(0, 10)
                               .map((s) => (
                                 <div key={s.id} className="flex items-center justify-between p-3 border rounded-lg bg-card">
                                   <div>
                                     <p className="text-sm font-medium">{formatLocalDate(s.shiftDate, true, true)}</p>
-                                    {s.shiftLabel && <p className="text-xs text-muted-foreground">{s.shiftLabel}</p>}
+                                    {((s as any).locationName||s.shiftLabel) && <p className="text-xs text-muted-foreground">{(s as any).locationName||s.shiftLabel}</p>}
                                   </div>
                                   <div className="text-right">
                                     <p className="text-xs font-mono">
@@ -811,6 +715,7 @@ export default function AdminEmployees() {
 
                     {/* ── Attendance tab (preserved) ───────────────────────── */}
                     <TabsContent value="attendance" className="mt-0 space-y-6">
+                      {activityLoading&&<p role="status">Loading attendance…</p>}{activityError&&<p role="alert" className="text-destructive">Attendance could not be loaded. Reopen this profile to retry.</p>}
                       <div className="grid grid-cols-3 gap-3">
                         <div className="p-3 border rounded-lg bg-muted/30 text-center">
                           <p className="text-2xl font-bold">{timeEntries?.filter(e => e.status === "completed").length || 0}</p>
@@ -828,7 +733,7 @@ export default function AdminEmployees() {
                               ? Math.round((timeEntries.filter(e => !e.flags?.includes("late_clock_in")).length / timeEntries.length) * 100)
                               : 0}%
                           </p>
-                          <p className="text-[10px] text-muted-foreground uppercase">Rate</p>
+                          <p className="text-[10px] text-muted-foreground uppercase">On-time clock-ins</p>
                         </div>
                       </div>
 
@@ -850,7 +755,7 @@ export default function AdminEmployees() {
                           </p>
                         ) : (
                           <div className="space-y-2">
-                            {timeEntries.slice(0, 10).map((entry) => (
+                            {[...timeEntries].sort((a,b)=>b.clockInAt.localeCompare(a.clockInAt)).slice(0, 10).map((entry) => (
                               <div key={entry.id} className="flex items-center justify-between p-3 border rounded-lg bg-card">
                                 <div className="flex items-center gap-3">
                                   {entry.flags?.includes("late_clock_in") ? (
@@ -869,7 +774,7 @@ export default function AdminEmployees() {
                                 </div>
                                 <div className="text-right">
                                   <p className="text-sm font-medium">
-                                    {entry.workedMinutes ? `${Math.floor(entry.workedMinutes / 60)}h ${entry.workedMinutes % 60}m` : "--"}
+                                    {entry.clockOutAt ? `${Math.floor(entryMinutes(entry).raw / 60)}h ${entryMinutes(entry).raw % 60}m` : "In progress"}
                                   </p>
                                   {entry.flags?.map(f => (
                                     <Badge key={f} variant="outline" className="text-[9px] h-3.5 px-1 ml-1 bg-amber-50 text-amber-700 border-amber-200">
@@ -981,6 +886,7 @@ export default function AdminEmployees() {
                           })}
                         </div>
                       )}
+                      <EmployeeCollectedDocuments employeeId={selectedEmployee.id}/>
                     </TabsContent>
 
                     {/* ── Training tab (NEW, read-only) ────────────────────── */}

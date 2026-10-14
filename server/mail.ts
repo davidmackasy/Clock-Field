@@ -153,6 +153,7 @@ export async function sendManagementInviteEmail(opts: {
   inviteUrl: string;
   role: string;
 }) {
+  const escapeInvite=(value:string)=>String(value||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]!));
   const { client, domain } = getClient();
   const from = process.env.MAIL_FROM || "Clockfield <noreply@clockfield.ca>";
   const subject = `You've been invited to join ${opts.companyName} on ClockField`;
@@ -175,9 +176,9 @@ This link expires in 48 hours.
 <tr><td style="background:#2563eb;padding:24px 32px;"><span style="color:#fff;font-size:20px;font-weight:700;">ClockField</span></td></tr>
 <tr><td style="padding:36px 32px 24px;">
 <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">You've been invited</p>
-<p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;"><strong>${opts.inviterName}</strong> has invited you to join <strong>${opts.companyName}</strong> on ClockField as <strong>${opts.role}</strong>.</p>
+<p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;"><strong>${escapeInvite(opts.inviterName)}</strong> has invited you to join <strong>${escapeInvite(opts.companyName)}</strong> on ClockField as <strong>${escapeInvite(opts.role)}</strong>.</p>
 <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;"><tr><td style="background:#2563eb;border-radius:6px;">
-<a href="${opts.inviteUrl}" style="display:inline-block;padding:13px 28px;color:#fff;font-size:15px;font-weight:600;text-decoration:none;">Accept Invitation</a>
+<a href="${escapeInvite(opts.inviteUrl)}" style="display:inline-block;padding:13px 28px;color:#fff;font-size:15px;font-weight:600;text-decoration:none;">Accept Invitation</a>
 </td></tr></table>
 <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;">This invitation link expires in <strong>48 hours</strong>.</p>
 </td></tr>

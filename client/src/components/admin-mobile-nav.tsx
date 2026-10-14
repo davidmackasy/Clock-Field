@@ -1,3 +1,4 @@
+import {hasAccess,pageModule} from "@shared/people";
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/lib/auth";
@@ -91,7 +92,7 @@ export function AdminMobileNav() {
 
   const { data: messages = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/platform-messages"],
-    enabled: !!user,
+    enabled: !!user&&hasAccess(user,"messages"),
     staleTime: 60_000,
   });
   const unreadMessages = (messages as any[]).filter(m => !m.isRead).length;
@@ -187,7 +188,7 @@ export function AdminMobileNav() {
         data-testid="mobile-bottom-nav"
       >
         <div className="flex items-center justify-around h-full px-1">
-          {primaryTabs.map((tab) => {
+          {primaryTabs.filter(tab=>hasAccess(user,pageModule(tab.href))).map((tab) => {
             const isActive =
               location === tab.href ||
               (tab.href !== "/admin" && location.startsWith(tab.href));
@@ -285,7 +286,7 @@ export function AdminMobileNav() {
           {/* Navigation section */}
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 mb-1">Navigation</p>
           <div className="space-y-0.5 mb-3">
-            {navMoreItems.map(renderMoreRow)}
+            {navMoreItems.filter(item=>hasAccess(user,pageModule(item.href))).map(renderMoreRow)}
           </div>
 
           <Separator className="mb-3" />

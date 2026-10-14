@@ -1,3 +1,4 @@
+import {permissionAllowed} from "../shared/people";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import session from "express-session";
@@ -60,6 +61,7 @@ export function setupAuth(app: Express) {
           const user = await storage.getUserByEmail(email);
           if (!user) return done(null, false, { message: "Invalid credentials" });
           if (!user.isActive) return done(null, false, { message: "Account is disabled" });
+          if(user.inviteToken&&!user.inviteAcceptedAt&&!user.loginEnabled)return done(null,false,{message:"Use your invitation to create your password first"});
           const isValid = await comparePasswords(password, user.password);
           if (!isValid) return done(null, false, { message: "Invalid credentials" });
           return done(null, user);
@@ -115,6 +117,7 @@ export function requireAuth(req: Request, res: any, next: any) {
     req.logout(() => {});
     return res.status(401).json({ message: "Account is disabled" });
   }
+  if(!permissionAllowed(user,(req.originalUrl||req.url||"/").split("?")[0],req.method))return res.status(403).json({message:"You do not have access to this area"});
   next();
 }
 
@@ -131,6 +134,7 @@ export function requireRole(...roles: string[]) {
     if (!roles.includes(user.role)) {
       return res.status(403).json({ message: "Forbidden" });
     }
+    if(!permissionAllowed(user,(req.originalUrl||req.url||"/").split("?")[0],req.method))return res.status(403).json({message:"You do not have access to this area"});
     next();
   };
 }

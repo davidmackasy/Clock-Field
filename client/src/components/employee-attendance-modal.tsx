@@ -1,3 +1,4 @@
+import {entryMinutes} from '@shared/time-report';
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -23,7 +24,12 @@ export function EmployeeAttendanceModal({ employee, entries, shifts, timezone, o
   const { data: timezoneData } = useQuery<{ timezone: string }>({ queryKey: ["/api/settings/timezone"], staleTime: Infinity });
   const tz = timezone || timezoneData?.timezone || "UTC";
 
-  const empEntries = entries.filter(e => e.employeeId === employee.id);
+  const [range,setRange]=useState("all"),[start,setStart]=useState(""),[end,setEnd]=useState(""),[page,setPage]=useState(0);
+  const today=companyDateKey(new Date(),tz);const back=(days:number)=>{const d=new Date(`${today}T12:00:00Z`);d.setUTCDate(d.getUTCDate()-days);return d.toISOString().slice(0,10);};
+  const lower=range==="custom"?start:range==="month"?today.slice(0,7)+"-01":range==="week"?back(6):range==="two-weeks"?back(13):range==="30-days"?back(29):"";
+  const upper=range==="custom"?end:range==="all"?"":today;
+  const empEntries=entries.filter(e=>e.employeeId===employee.id).filter(e=>{const day=companyDateKey(e.clockInAt,tz);return (!lower||day>=lower)&&(!upper||day<=upper);}).sort((a,b)=>b.clockInAt.localeCompare(a.clockInAt));
+
   const totalShifts = empEntries.length;
   const completed = empEntries.filter(e => e.status === "completed").length;
   const lates = empEntries.filter(e => e.flags?.includes("late_clock_in")).length;
@@ -41,7 +47,7 @@ export function EmployeeAttendanceModal({ employee, entries, shifts, timezone, o
 
     if (dayEntries.length === 0) {
       const dayShifts = shifts.filter((s: any) => s.employeeId === employee.id && s.shiftDate === dateStr);
-      if (dayShifts.length > 0) return "absent";
+      if(dayShifts.some((s:any)=>s.status!=="cancelled"&&s.shiftDate<today))return "absent";
       return "none";
     }
 
@@ -86,7 +92,8 @@ export function EmployeeAttendanceModal({ employee, entries, shifts, timezone, o
           </div>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mt-6">
+        <div className="flex flex-wrap items-center gap-3 mt-4"><label className="text-sm">Period <select className="border rounded-md p-2 ml-2" aria-label="Attendance period" value={range} onChange={e=>{setRange(e.target.value);setPage(0);}}><option value="all">All attendance</option><option value="week">Last 7 days</option><option value="two-weeks">Last 2 weeks</option><option value="30-days">Last 30 days</option><option value="month">This month</option><option value="custom">Custom dates</option></select></label>{range==="custom"&&<><input aria-label="Attendance start date" type="date" className="border rounded-md p-2" value={start} onChange={e=>{setStart(e.target.value);setPage(0);}}/><input aria-label="Attendance end date" type="date" className="border rounded-md p-2" value={end} onChange={e=>{setEnd(e.target.value);setPage(0);}}/></>}<p className="text-sm text-muted-foreground">{empEntries.length} clock-in records · {(empEntries.reduce((sum,e)=>sum+(e.clockOutAt?entryMinutes(e).raw:0),0)/60).toFixed(2)} recorded hours</p></div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mt-4">
           <Card className="p-3 text-center">
             <p className="text-xs text-muted-foreground">Total Shifts</p>
             <p className="text-xl font-bold">{totalShifts}</p>
@@ -108,7 +115,7 @@ export function EmployeeAttendanceModal({ employee, entries, shifts, timezone, o
             <p className="text-xl font-bold text-destructive">{noShows}</p>
           </Card>
           <Card className="p-3 text-center bg-primary/5 border-primary/20">
-            <p className="text-xs text-muted-foreground">Rate</p>
+            <p className="text-xs text-muted-foreground">Completed sessions</p>
             <p className="text-xl font-bold text-primary">{attendanceRate}%</p>
           </Card>
         </div>
@@ -149,22 +156,22 @@ export function EmployeeAttendanceModal({ employee, entries, shifts, timezone, o
                 <TableHeader>
                   <TableRow>
                     <TableHead>Date</TableHead>
-                    <TableHead>Scheduled</TableHead>
+                    <TableHead className="hidden sm:table-cell">Scheduled</TableHead>
                     <TableHead>Actual</TableHead>
-                    <TableHead>Variance</TableHead>
+                    <TableHead>Hours</TableHead><TableHead className="hidden sm:table-cell">Variance</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {empEntries.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground text-sm py-8">
+                      <TableCell colSpan={5} className="text-center text-muted-foreground text-sm py-8">
                         No attendance records found
                       </TableCell>
                     </TableRow>
                   ) : (
                     empEntries
                       .sort((a, b) => new Date(b.clockInAt).getTime() - new Date(a.clockInAt).getTime())
-                      .slice(0, 10)
+                      .slice(page*20,page*20+20)
                       .map(entry => {
                         const shift = entry.shiftId ? shiftMap.get(entry.shiftId) : null;
                         const clockIn = new Date(entry.clockInAt);
@@ -183,15 +190,15 @@ export function EmployeeAttendanceModal({ employee, entries, shifts, timezone, o
                         return (
                           <TableRow key={entry.id}>
                             <TableCell className="text-xs">{formatCompanyDate(clockIn, tz, true)}</TableCell>
-                            <TableCell className="text-xs">
+                            <TableCell className="hidden sm:table-cell text-xs">
                               {shift
                                 ? `${formatLocalWallTime(shift.scheduledStartAt)} – ${formatLocalWallTime(shift.scheduledEndAt)}`
                                 : "Unscheduled"}
                             </TableCell>
                             <TableCell className="text-xs">
-                              {formatCompanyTime(clockIn, tz)} – {clockOut ? formatCompanyTime(clockOut, tz) : "In progress"}
+                              {formatCompanyTime(clockIn, tz)} – {clockOut ? formatCompanyTime(clockOut, tz) : "In progress"}<p className="text-muted-foreground mt-1">{entry.locationName||""}</p>
                             </TableCell>
-                            <TableCell className={cn("text-xs font-medium",
+                            <TableCell className="text-xs">{clockOut?(entryMinutes(entry).raw/60).toFixed(2):"—"}</TableCell><TableCell className={cn("hidden sm:table-cell text-xs font-medium",
                               variance.includes("late") ? "text-destructive" : variance.includes("early") ? "text-orange-500" : "text-green-600"
                             )}>
                               {variance}
@@ -205,6 +212,7 @@ export function EmployeeAttendanceModal({ employee, entries, shifts, timezone, o
             </div>
           </div>
         </div>
+        {empEntries.length>20&&<div className="flex justify-between items-center gap-3"><button className="border rounded-md px-3 py-2 text-sm" disabled={page===0} onClick={()=>setPage(p=>p-1)}>Previous</button><span className="text-sm">{page+1} / {Math.ceil(empEntries.length/20)}</span><button className="border rounded-md px-3 py-2 text-sm" disabled={(page+1)*20>=empEntries.length} onClick={()=>setPage(p=>p+1)}>Next</button></div>}
       </DialogContent>
     </Dialog>
   );

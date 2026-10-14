@@ -1,3 +1,5 @@
+import EmployeeApplication from "@/pages/public/EmployeeApplication";
+import {hasAccess,pageModule,firstAccessiblePage} from "@shared/people";
 import { Switch, Route, useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
@@ -104,6 +106,7 @@ function LoadingScreen() {
 }
 
 function AdminLayout() {
+  const {user}=useAuth();const [adminPath]=useLocation();
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
@@ -118,7 +121,7 @@ function AdminLayout() {
             <SidebarTrigger data-testid="button-sidebar-toggle" />
           </header>
           <main className="flex-1 flex flex-col min-h-0 overflow-y-auto overflow-x-hidden pt-14 pb-16 md:pt-0 md:pb-0">
-            <Switch>
+            {!hasAccess(user,pageModule(adminPath))?(adminPath==="/admin"&&firstAccessiblePage(user)?<Redirect to={firstAccessiblePage(user)!}/>:<div className="p-6 space-y-2"><h1 className="font-semibold text-xl">Access to this area is restricted</h1><p className="text-muted-foreground">Choose an available area in the navigation, or ask your business owner to update your access.</p></div>):(            <Switch>
               <Route path="/admin" component={AdminDashboard} />
               <Route path="/admin/employees" component={AdminEmployees} />
               <Route path="/admin/schedule" component={AdminSchedule} />
@@ -130,7 +133,7 @@ function AdminLayout() {
               </Route>
               <Route path="/admin/clients" component={AdminClients} />
               <Route path="/admin/management" component={AdminManagement} />
-              <Route path="/admin/admins"><Redirect to="/admin/management" /></Route>
+              <Route path="/admin/admins" component={AdminManagement} />
               <Route path="/admin/timesheets">
                 <FeatureGate feature="timesheets"><AdminTimesheets /></FeatureGate>
               </Route>
@@ -160,7 +163,7 @@ function AdminLayout() {
               <Route path="/admin/incidents/:id" component={AdminIncidentDetail} />
               <Route path="/admin/incidents" component={AdminIncidents} />
               <Route component={NotFound} />
-            </Switch>
+            </Switch>)}
           </main>
         </div>
       </div>
@@ -359,6 +362,7 @@ function AppRouter() {
     );
   }
 
+  if(location.startsWith("/apply/"))return <Switch><Route path="/apply/:token" component={EmployeeApplication}/></Switch>;
   if (location.startsWith("/public/hiring-package/")) {
     return (
       <Switch>

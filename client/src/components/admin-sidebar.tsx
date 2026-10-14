@@ -1,3 +1,4 @@
+import {hasAccess,pageModule} from "@shared/people";
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/lib/auth";
@@ -56,14 +57,14 @@ export function AdminSidebar() {
 
   const { data: messages = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/platform-messages"],
-    enabled: !!user,
+    enabled: !!user&&hasAccess(user,"messages"),
     staleTime: 60_000,
   });
   const unreadMessages = (messages as any[]).filter(m => !m.isRead).length;
 
   const { data: unreadMsgs } = useQuery<{ count: number }>({
     queryKey: ["/api/admin/messages/unread-count"],
-    enabled: !!user,
+    enabled: !!user&&hasAccess(user,"messages"),
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
@@ -107,7 +108,7 @@ export function AdminSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {/* Pre-Team items (Dashboard) */}
-              {preTeamItems.map((item) => (
+              {preTeamItems.filter(item=>hasAccess(user,pageModule(item.url))).map((item) => (
                 <SidebarMenuItem key={item.url}>
                   <SidebarMenuButton asChild isActive={getIsActive(item.url)}>
                     <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
@@ -119,7 +120,7 @@ export function AdminSidebar() {
               ))}
 
               {/* Team collapsible */}
-              <Collapsible open={teamOpen || isTeamActive} onOpenChange={setTeamOpen}>
+              {(hasAccess(user,"employees")||hasAccess(user,"team")) && (<Collapsible open={teamOpen || isTeamActive} onOpenChange={setTeamOpen}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton isActive={isTeamActive} data-testid="nav-team">
@@ -130,37 +131,37 @@ export function AdminSidebar() {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <SidebarMenuSub>
-                      <SidebarMenuSubItem>
+                      {hasAccess(user,"employees") && (<SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={location === "/admin/employees" || location.startsWith("/admin/employees/")}>
                           <Link href="/admin/employees" data-testid="nav-team-employees">
                             <Users className="w-3.5 h-3.5" />
                             <span>Employees</span>
                           </Link>
                         </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
+                      </SidebarMenuSubItem>)}
+                      {hasAccess(user,"team") && (<SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={location === "/admin/management" || location.startsWith("/admin/management/")}>
                           <Link href="/admin/management" data-testid="nav-team-managers">
                             <Users2 className="w-3.5 h-3.5" />
                             <span>Managers</span>
                           </Link>
                         </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
+                      </SidebarMenuSubItem>)}
+                      {hasAccess(user,"team") && (<SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={location === "/admin/admins"}>
                           <Link href="/admin/admins" data-testid="nav-team-admins">
                             <ShieldAlert className="w-3.5 h-3.5" />
                             <span>Admins</span>
                           </Link>
                         </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
+                      </SidebarMenuSubItem>)}
                     </SidebarMenuSub>
                   </CollapsibleContent>
                 </SidebarMenuItem>
-              </Collapsible>
+              </Collapsible>)}
 
               {/* Post-Team items */}
-              {postTeamItems.map((item) => {
+              {postTeamItems.filter(item=>hasAccess(user,pageModule(item.url))).map((item) => {
                 if (item.url === "/admin/attendance") return <Collapsible key={item.url} open={attendanceOpen || location.startsWith("/admin/attendance")} onOpenChange={setAttendanceOpen} onMouseEnter={() => setAttendanceOpen(true)} onMouseLeave={() => setAttendanceOpen(false)} onFocusCapture={() => setAttendanceOpen(true)}><SidebarMenuItem><SidebarMenuButton asChild isActive={location.startsWith("/admin/attendance")}><Link href="/admin/attendance" data-testid="nav-attendance"><ClipboardList className="w-4 h-4"/><span>Attendance</span><ChevronRight className="ml-auto w-3.5 h-3.5"/></Link></SidebarMenuButton><CollapsibleContent><SidebarMenuSub><SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={location === "/admin/attendance"}><Link href="/admin/attendance">Overview</Link></SidebarMenuSubButton></SidebarMenuSubItem><SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={location === "/admin/attendance/timesheets"}><Link href="/admin/attendance/timesheets" data-testid="nav-attendance-timesheets">Timesheets</Link></SidebarMenuSubButton></SidebarMenuSubItem></SidebarMenuSub></CollapsibleContent></SidebarMenuItem></Collapsible>;
                 const isMessages = item.url === "/admin/messages";
                 return (
@@ -189,15 +190,15 @@ export function AdminSidebar() {
           <SidebarGroupLabel>Account</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
+              {hasAccess(user,"billing") && (<SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/admin/subscription"}>
                   <Link href="/admin/subscription" data-testid="nav-subscription">
                     <CreditCard className="w-4 h-4" />
                     <span>Subscription</span>
                   </Link>
                 </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
+              </SidebarMenuItem>)}
+              {hasAccess(user,"messages") && (<SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/admin/platform-messages"}>
                   <Link href="/admin/platform-messages" data-testid="nav-platform-messages">
                     <Bell className="w-4 h-4" />
@@ -211,7 +212,7 @@ export function AdminSidebar() {
                     </span>
                   </Link>
                 </SidebarMenuButton>
-              </SidebarMenuItem>
+              </SidebarMenuItem>)}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

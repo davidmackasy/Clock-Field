@@ -1,3 +1,5 @@
+import {EmployeeProfileFields} from "@/components/employee-profile-fields";
+import {emptyProfile} from "@shared/people";
 import { useState, useRef, useEffect } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -16,6 +18,7 @@ import {
 type HPPublicData = {
   package: {
     id: string;
+    applicationKind?:string;
     employeeName: string;
     employeeEmail: string;
     position: string;
@@ -45,6 +48,8 @@ type HPPublicData = {
   policyAcceptances: { id: string; policyId: string; policyTitle: string; acceptedAt: string }[];
   documents: { id: string; documentType: string; originalName: string; fileSize: number }[];
   companyName: string;
+  companyLogoUrl?:string;
+  brandColor?:string;
 };
 
 const STEPS = [
@@ -83,9 +88,12 @@ export default function HiringPackagePage() {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
+  const [profileDetails,setProfileDetails]=useState<any>(emptyProfile());
+  const [savedSignature,setSavedSignature]=useState<string|null>(null);
+  const [signatureDrawn,setSignatureDrawn]=useState(false);
   const [personalInfo, setPersonalInfo] = useState({
     firstName: "", lastName: "", dateOfBirth: "", sinNumber: "",
-    phone: "", address: "", city: "", province: "", postalCode: "",
+    email:"",phone: "", address: "", city: "", province: "", postalCode: "",
   });
   const [emergencyContacts, setEmergencyContacts] = useState([
     { name: "", relationship: "", phone: "" },
@@ -107,7 +115,8 @@ export default function HiringPackagePage() {
 
   useEffect(() => {
     if (data?.submission?.personalInfoJson) {
-      setPersonalInfo(data.submission.personalInfoJson);
+      setPersonalInfo(p=>({...p,...data.submission!.personalInfoJson}));
+      setProfileDetails(data.submission.personalInfoJson.profileDetails||emptyProfile());
     }
     if (data?.submission?.emergencyContactsJson && Array.isArray(data.submission.emergencyContactsJson)) {
       setEmergencyContacts(data.submission.emergencyContactsJson);
@@ -118,6 +127,7 @@ export default function HiringPackagePage() {
     if (data?.policyAcceptances) {
       setAcceptedPolicies(new Set(data.policyAcceptances.map(p => p.policyId)));
     }
+    if(data?.submission?.signatureData)setSavedSignature(data.submission.signatureData);
     if (data?.submission?.finalAcknowledgement) {
       setFinalAck(data.submission.finalAcknowledgement);
     }
@@ -187,7 +197,8 @@ export default function HiringPackagePage() {
   const submitMutation = useMutation({
     mutationFn: async () => {
       const canvas = canvasRef.current;
-      const signatureData = canvas ? canvas.toDataURL() : null;
+      const signatureData = canvas&&signatureDrawn ? canvas.toDataURL() : savedSignature;
+      if(!signatureData)throw new Error("Please draw your signature before submitting");
       await saveMutation.mutateAsync({ endpoint: `/api/public/hiring-package/${token}/signature`, payload: { signatureData, finalAcknowledgement: finalAck } });
       const res = await fetch(`/api/public/hiring-package/${token}/submit`, { method: "POST" });
       if (!res.ok) throw new Error(await res.text());
@@ -205,9 +216,9 @@ export default function HiringPackagePage() {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
     if ("touches" in e) {
-      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+      return { x: (e.touches[0].clientX - rect.left)*canvas.width/rect.width, y: (e.touches[0].clientY - rect.top)*canvas.height/rect.height };
     }
-    return { x: (e as React.MouseEvent).clientX - rect.left, y: (e as React.MouseEvent).clientY - rect.top };
+    return { x: ((e as React.MouseEvent).clientX - rect.left)*canvas.width/rect.width, y: ((e as React.MouseEvent).clientY - rect.top)*canvas.height/rect.height };
   };
   const startDraw = (e: any) => { setIsDrawing(true); setLastPoint(getPos(e)); };
   const draw = (e: any) => {
@@ -222,6 +233,7 @@ export default function HiringPackagePage() {
     ctx.lineWidth = 2;
     ctx.lineCap = "round";
     ctx.stroke();
+    setSignatureDrawn(true);
     setLastPoint(pos);
   };
   const endDraw = () => { setIsDrawing(false); setLastPoint(null); };
@@ -229,20 +241,22 @@ export default function HiringPackagePage() {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setSignatureDrawn(false);setSavedSignature(null);
   };
 
   const saveAndNext = async () => {
     setSaving(true);
     try {
+      if(step===5){const signature=signatureDrawn&&canvasRef.current?canvasRef.current.toDataURL():savedSignature;if(!signature)throw new Error("Please draw your signature before continuing");if(!finalAck)throw new Error("Please confirm your acknowledgement");await saveMutation.mutateAsync({endpoint:`/api/public/hiring-package/${token}/signature`,payload:{signatureData:signature,finalAcknowledgement:finalAck}});setSavedSignature(signature);}
       if (step === 0) {
         await saveMutation.mutateAsync({ endpoint: `/api/public/hiring-package/${token}/personal-info`, payload: { personalInfoJson: personalInfo } });
       } else if (step === 1) {
         await saveMutation.mutateAsync({ endpoint: `/api/public/hiring-package/${token}/emergency-contacts`, payload: { emergencyContactsJson: emergencyContacts } });
       } else if (step === 2) {
-        await saveMutation.mutateAsync({ endpoint: `/api/public/hiring-package/${token}/medical-info`, payload: { medicalInfoJson: medicalInfo } });
+        if(data?.package.applicationKind==="application")await saveMutation.mutateAsync({endpoint:`/api/public/hiring-package/${token}/profile-details`,payload:{profileDetails}});else await saveMutation.mutateAsync({ endpoint: `/api/public/hiring-package/${token}/medical-info`, payload: { medicalInfoJson: medicalInfo } });
       }
       setStep(s => s + 1);
-    } finally {
+    } catch(error:any){toast({title:"Please check this step",description:error.message,variant:"destructive"});} finally {
       setSaving(false);
     }
   };
@@ -266,12 +280,16 @@ export default function HiringPackagePage() {
   }
 
   const { package: pkg, submission, template, policyAcceptances, documents, companyName } = data;
+  const application=pkg.applicationKind==="application";
+  const documentOptions=application?[{type:"resume",label:"Resume / employment history",description:"Optional PDF, image or Word file"},{type:"government_id",label:"Driver’s licence / government ID",description:"Provide only when requested by your employer"},{type:"certification",label:"Training / certifications",description:"Optional supporting certificates"},{type:"other",label:"Other supporting document",description:"Optional additional document"}]:REQUIRED_DOCS;
+  const visibleSteps=STEPS.map((step,index)=>application&&index===2?{...step,label:"Experience & references"}:step);
+
 
   if (submission?.status === "submitted") {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-950 text-center px-4">
         <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-border p-10 max-w-md">
-          <CheckCircle2 className="w-14 h-14 text-green-500 mx-auto mb-4" />
+          {data.companyLogoUrl&&<img src={data.companyLogoUrl} alt={`${companyName} logo`} className="h-16 max-w-full object-contain mx-auto mb-4"/>}<CheckCircle2 className="w-14 h-14 text-green-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-foreground mb-2">All Done!</h1>
           <p className="text-muted-foreground mb-6">Your hiring package has been submitted to <strong>{companyName}</strong>. They will review it and be in touch soon.</p>
           <p className="text-sm text-muted-foreground">Submitted on {submission.submittedAt ? new Date(submission.submittedAt).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" }) : "—"}</p>
@@ -286,18 +304,18 @@ export default function HiringPackagePage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-900 border-b border-border sticky top-0 z-10">
+      <div className="bg-white dark:bg-gray-900 border-b border-border sticky top-0 z-10" style={{borderTop:`4px solid ${/^#[0-9a-f]{6}$/i.test(data.brandColor||"")?data.brandColor:"#006bbd"}`}}>
         <div className="max-w-2xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wide">{companyName}</div>
+              <div className="flex items-center gap-3">{data.companyLogoUrl&&<img src={data.companyLogoUrl} alt={companyName} className="h-12 max-w-36 object-contain"/>}<div className="text-xs text-muted-foreground uppercase tracking-wide">{companyName}</div></div>
               <div className="font-semibold text-foreground">Hiring Package — {pkg.employeeName}</div>
             </div>
             <div className="text-xs text-muted-foreground">Step {step + 1} of {STEPS.length}</div>
           </div>
           <ProgressBar step={step + 1} total={STEPS.length} />
           <div className="flex gap-1 mt-3 overflow-x-auto pb-1">
-            {STEPS.map((s, i) => {
+            {visibleSteps.map((s, i) => {
               const Icon = s.icon;
               return (
                 <div
@@ -336,10 +354,10 @@ export default function HiringPackagePage() {
                     <Input className="mt-1" type="date" value={personalInfo.dateOfBirth} onChange={e => setPersonalInfo(p => ({ ...p, dateOfBirth: e.target.value }))} data-testid="input-dob" />
                   </div>
                 )}
-                <div>
+                {!application&&(<div>
                   <Label>SIN (last 3 digits or full)</Label>
                   <Input className="mt-1" value={personalInfo.sinNumber} onChange={e => setPersonalInfo(p => ({ ...p, sinNumber: e.target.value }))} data-testid="input-sin" />
-                </div>
+                </div>)}
                 <div>
                   <Label>Phone Number</Label>
                   <Input className="mt-1" type="tel" value={personalInfo.phone} onChange={e => setPersonalInfo(p => ({ ...p, phone: e.target.value }))} data-testid="input-phone" />
@@ -402,7 +420,8 @@ export default function HiringPackagePage() {
           )}
 
           {/* Step 2: Medical Info */}
-          {step === 2 && (
+          {step === 2 && application && <EmployeeProfileFields value={profileDetails} onChange={setProfileDetails} application experienceOnly/>}
+          {step === 2 && !application && (
             <div className="space-y-4" data-testid="step-medical-info">
               <h2 className="text-lg font-semibold text-foreground">Medical Information</h2>
               <p className="text-sm text-muted-foreground">This information helps us ensure a safe working environment. All fields are optional.</p>
@@ -481,7 +500,7 @@ export default function HiringPackagePage() {
               <h2 className="text-lg font-semibold text-foreground">Document Uploads</h2>
               <p className="text-sm text-muted-foreground">Please upload the following required documents. Accepted formats: PDF, JPG, PNG (max 20MB each).</p>
               <div className="space-y-4">
-                {REQUIRED_DOCS.map(doc => {
+                {documentOptions.map(doc => {
                   const uploaded = documents.find(d => d.documentType === doc.type);
                   return (
                     <div key={doc.type} className={`border rounded-lg p-4 transition-colors ${uploaded ? "border-green-400 dark:border-green-600 bg-green-50/50 dark:bg-green-900/10" : "border-border"}`}>
@@ -585,7 +604,7 @@ export default function HiringPackagePage() {
                   { label: "Emergency Contacts", complete: emergencyContacts.some(c => c.name.trim()), icon: Heart },
                   { label: "Medical Information", complete: true, icon: Shield },
                   { label: "Policy Acceptances", complete: allPoliciesAccepted || policies.length === 0, icon: FileText },
-                  { label: "Documents", complete: documents.length >= REQUIRED_DOCS.length, icon: Upload },
+                  { label: "Documents", complete: application || REQUIRED_DOCS.every(doc=>documents.some(d=>d.documentType===doc.type)), icon: Upload },
                   { label: "Signature", complete: finalAck, icon: PenTool },
                 ].map(item => {
                   const Icon = item.icon;

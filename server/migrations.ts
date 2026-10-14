@@ -11,6 +11,18 @@ export async function runStartupMigrations() {
   try {
     log("Running startup migrations...", "migrations");
     await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_details json;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_permissions text[];
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_file_path text;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_mime_type text;
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS avatar_url text;
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS avatar_file_path text;
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS avatar_mime_type text;
+      ALTER TABLE employee_hiring_packages ADD COLUMN IF NOT EXISTS employee_id varchar;
+      ALTER TABLE employee_hiring_packages ADD COLUMN IF NOT EXISTS application_kind text NOT NULL DEFAULT 'onboarding';
+      CREATE TABLE IF NOT EXISTS hiring_application_links (company_id varchar PRIMARY KEY, public_token varchar UNIQUE NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), is_active boolean NOT NULL DEFAULT true);
+    `);
+    await client.query(`
       ALTER TABLE locations ADD COLUMN IF NOT EXISTS geofence_enabled boolean NOT NULL DEFAULT false;
       ALTER TABLE locations ADD COLUMN IF NOT EXISTS latitude numeric(10,7);
       ALTER TABLE locations ADD COLUMN IF NOT EXISTS longitude numeric(10,7);

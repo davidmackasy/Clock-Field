@@ -1,3 +1,5 @@
+import {Avatar,AvatarFallback,AvatarImage} from "@/components/ui/avatar";
+import {ProfilePhotoUpload} from "@/components/profile-photo-upload";
 import {LocationBoundaries} from "@/components/location-boundaries";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -29,7 +31,7 @@ export default function AdminClients() {
   const [credDialog, setCredDialog] = useState<{ email: string; tempPin: string } | null>(null);
   const [upgradeReason, setUpgradeReason] = useState<UpgradeReason>(null);
 
-  const { data: clientsList, isLoading } = useQuery<any[]>({ queryKey: ["/api/clients"] });
+  const { data: clientsList, isLoading,error:directoryError,refetch:reloadDirectory } = useQuery<any[]>({ queryKey: ["/api/clients"] });
   const { data: locationsList } = useQuery<any[]>({ queryKey: ["/api/locations"] });
   const { data: requestsList } = useQuery<any[]>({ queryKey: ["/api/client-requests"] });
 
@@ -116,7 +118,7 @@ export default function AdminClients() {
     setDetailOpen(true);
   };
 
-  const filtered = (clientsList || []).filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = (clientsList || []).filter(c => `${c.name} ${c.contactName||""} ${c.contactEmail||""} ${c.contactPhone||""}`.toLowerCase().includes(search.toLowerCase()));
 
   const getClientLocs = (clientId: string) =>
     (locationsList || []).filter(l => (l.clientId || l.client_id) === clientId);
@@ -190,7 +192,7 @@ export default function AdminClients() {
         <Input data-testid="input-search-clients" placeholder="Search clients..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
       </div>
 
-      {isLoading ? (
+      {directoryError ? (<div role="alert" className="rounded-lg border p-4 text-sm">The directory could not be loaded. <Button type="button" size="sm" variant="outline" onClick={()=>reloadDirectory()}>Retry</Button></div>) : isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{[1,2,3].map(i => <Skeleton key={i} className="h-32" />)}</div>
       ) : filtered.length === 0 ? (
         <Card>
@@ -200,76 +202,12 @@ export default function AdminClients() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {filtered.map((client: any) => {
-            const locs = getClientLocs(client.id);
-            return (
-              <Card
-                key={client.id}
-                data-testid={`card-client-${client.id}`}
-                className="cursor-pointer hover-elevate active-elevate-2 overflow-visible"
-                onClick={() => handleClientClick(client)}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div>
-                      <p className="font-medium text-foreground">{client.name}</p>
-                      {client.contactName && <p className="text-sm text-muted-foreground">{client.contactName}</p>}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      {client.userId && <Badge variant="outline" className="text-xs"><KeyRound className="w-3 h-3 mr-1" />Login</Badge>}
-                      <Badge variant={client.isActive ? "default" : "secondary"} className="text-xs">{client.isActive ? "Active" : "Inactive"}</Badge>
-                    </div>
-                  </div>
-                  <div className="space-y-0.5 text-xs text-muted-foreground">
-                    {client.contactEmail && <div className="flex items-center gap-1.5"><Mail className="w-3 h-3" />{client.contactEmail}</div>}
-                    {client.contactPhone && <div className="flex items-center gap-1.5"><Phone className="w-3 h-3" />{client.contactPhone}</div>}
-                    {locs.length > 0 && <div className="flex items-center gap-1.5"><MapPin className="w-3 h-3" />{locs.length} location{locs.length > 1 ? "s" : ""}</div>}
-                  </div>
-                  <div className="flex flex-wrap gap-2 mt-3 border-t pt-3" onClick={(e) => e.stopPropagation()}>
-                    {!client.userId || !client.loginEnabled ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs h-7 gap-1"
-                        data-testid={`button-enable-login-client-${client.id}`}
-                        disabled={enableLoginMut.isPending || !client.contactEmail}
-                        onClick={() => enableLoginMut.mutate(client.id)}
-                      >
-                        <UserCheck className="w-3 h-3" />
-                        Enable Login
-                      </Button>
-                    ) : (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-xs h-7 gap-1"
-                          data-testid={`button-reset-pin-client-${client.id}`}
-                          disabled={resetPinMut.isPending}
-                          onClick={() => resetPinMut.mutate(client.id)}
-                        >
-                          <RefreshCw className="w-3 h-3" />
-                          Reset PIN
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-xs h-7 gap-1 text-destructive hover:text-destructive"
-                          data-testid={`button-disable-login-client-${client.id}`}
-                          disabled={disableLoginMut.isPending}
-                          onClick={() => disableLoginMut.mutate(client.id)}
-                        >
-                          <UserX className="w-3 h-3" />
-                          Disable Login
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+        <div className="rounded-xl border bg-background divide-y">
+          <div className="hidden lg:grid grid-cols-[minmax(0,2fr)_minmax(0,2fr)_6rem_6rem_5rem] gap-4 px-4 py-3 text-xs font-medium text-muted-foreground bg-muted/30"><span>Client</span><span>Contact</span><span>Work sites</span><span>Status</span><span>Profile</span></div>
+          {filtered.map((client:any)=><button key={client.id} type="button" data-testid={`card-client-${client.id}`} onClick={()=>handleClientClick(client)} className="w-full text-left grid grid-cols-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_6rem_6rem_5rem] items-center gap-3 lg:gap-4 px-4 py-3 hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+            <div className="flex items-center gap-3 min-w-0"><Avatar className="h-9 w-9 rounded-lg shrink-0"><AvatarImage src={client.avatarUrl} alt={client.name} className="object-contain"/><AvatarFallback className="text-xs bg-primary/10">{client.name.slice(0,2).toUpperCase()}</AvatarFallback></Avatar><div className="min-w-0"><p className="text-sm font-medium break-words">{client.name}</p><p className="text-xs text-muted-foreground">{client.contactName||'No contact name'}</p><p className="lg:hidden text-xs text-muted-foreground break-all">{client.contactEmail||client.contactPhone||''}</p></div></div>
+            <div className="hidden lg:block min-w-0 text-xs text-muted-foreground"><p className="break-all">{client.contactEmail||'—'}</p><p>{client.contactPhone||'—'}</p></div><span className="hidden lg:block text-sm">{getClientLocs(client.id).length}</span><Badge className="justify-self-end lg:justify-self-start text-[10px]" variant={client.isActive?'secondary':'outline'}>{client.isActive?'Active':'Inactive'}</Badge><span className="hidden lg:block text-xs text-primary">Open →</span>
+          </button>)}
         </div>
       )}
 
@@ -286,6 +224,8 @@ export default function AdminClients() {
             </TabsList>
 
             <TabsContent value="overview" className="space-y-4 py-4">
+              {selectedClient&&<ProfilePhotoUpload kind="clients" id={selectedClient.id} name={selectedClient.name} url={selectedClient.avatarUrl} onUpdated={updated=>setSelectedClient((prev:any)=>({...prev,...updated}))}/>}
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3"><span className="text-sm font-medium mr-auto">Client login access</span>{!selectedClient?.userId||!selectedClient?.loginEnabled?<Button type="button" size="sm" variant="outline" disabled={!selectedClient?.contactEmail||enableLoginMut.isPending} onClick={()=>enableLoginMut.mutate(selectedClient.id)}>Enable login</Button>:<><Button type="button" size="sm" variant="outline" onClick={()=>resetPinMut.mutate(selectedClient.id)}>Reset PIN</Button><Button type="button" size="sm" variant="outline" onClick={()=>disableLoginMut.mutate(selectedClient.id)}>Disable login</Button></>}</div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Company Name</Label>

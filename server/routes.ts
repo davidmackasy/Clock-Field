@@ -1,3 +1,8 @@
+import {permissionAllowed,canManageStaff} from '../shared/people';
+import {hiringSubmissionError,validDocument,personalInfoSchema,medicalInfoSchema,policySchema} from "../shared/hiring-validation";
+import {registerTeamHiring} from "./team-hiring";
+import {registerPeopleProfile} from "./people-profile";
+import {employeeInput,clientInput,safePerson,hasAccess,validPermissions,emptyProfile,profileSchema} from "../shared/people";
 import {resolveWorkSite} from "./location-geocoding";
 import {geofenceInput} from "../shared/geofence";
 import {clockInSite,verifyClockInLocation} from "./clock-in-location";
@@ -20,7 +25,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { isNotNull, eq, and, isNull, inArray, desc, asc, sql } from "drizzle-orm";
-import { clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, platformMessages, incidentEmployeeSnapshots, incidentEvidence, incidentTemplates, incidentAmendments, incidentInvestigations, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments, supplies, supplyUpdates, inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses, trainingPublicLearners, trainingCourses, trainingModules, trainingModuleAssets, trainingAssignments, trainingQuizzes, trainingQuizQuestions, trainingLessonBlocks, trainingModuleAudio } from "@shared/schema";
+import { clients, clientRequests, companies, reportAccessTokens, reportSignatures, reports, locations, users, platformMessages, incidentEmployeeSnapshots, incidentEvidence, incidentTemplates, incidentAmendments, incidentInvestigations, fieldNotesAssets, fieldNotesEntryTags, fieldNotesPublicDocuments, supplies, supplyUpdates, inventoryItems, inventoryPurchases, inventoryMovements, locationSupplyExpenses, trainingPublicLearners, trainingCourses, trainingModules, trainingModuleAssets, trainingAssignments, trainingQuizzes, trainingQuizQuestions, trainingLessonBlocks, trainingModuleAudio } from "@shared/schema";
 import { getPlan } from "./plans";
 import { generateReviewOgImage } from "./og-image";
 import { dataDirectory, uploadsDirectory, fitForDutyPhotosDirectory, incidentEvidenceDirectory } from "./file-storage";
@@ -271,7 +276,10 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  app.use(['/apply','/public/hiring-package'],(_req,res,next)=>{res.set({'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow','Referrer-Policy':'no-referrer'});next();});
   setupAuth(app);
+  // Enforce staff scopes even on handlers with their own authentication checks.
+  app.use('/api', (req,res,next)=>{const user=req.user as any;const route=req.originalUrl.split('?')[0];if(user?.role==='admin'&&!/^\/api\/(public(?:\/|$)|invite(?:\/|$))/.test(route)&&!permissionAllowed(user,route,req.method))return res.status(403).json({message:'You do not have access to this area'});next();});
   registerPayrollTimesheetRoutes(app);
   registerPublicTimesheetRoutes(app);
   registerCompanyGeographyRoutes(app);
@@ -503,8 +511,7 @@ Welcome again, and thank you for choosing ClockField.
 
   app.get("/api/auth/me", (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
-    const { password: _, tempPin: __, ...safeUser } = req.user as any;
-    res.json(safeUser);
+    res.json(safePerson(req.user,true));
   });
 
   // ── Forgot / Reset Password ────────────────────────────────────────────────
@@ -587,18 +594,20 @@ Welcome again, and thank you for choosing ClockField.
   });
   // ──────────────────────────────────────────────────────────────────────────
 
+  registerPeopleProfile(app,storage,requireRole,requireAuth);
   // Employees
   app.get("/api/employees", requireRole("admin"), async (req, res) => {
     const user = req.user as any;
     const employees = await storage.getEmployeesByCompany(user.companyId);
-    const safe = employees.map(({ password: _, tempPin: __, ...e }) => e);
+    const safe=employees.map(e=>{const safe=safePerson(e,true);if(!hasAccess(user,"employees")&&!hasAccess(user,"payroll")){const {id,firstName,lastName,position,employeeId,isActive,accountStatus,avatarUrl}=safe;return {id,firstName,lastName,position,employeeId,isActive,accountStatus,avatarUrl};}return safe;});
     res.json(safe);
   });
 
   app.post("/api/employees", requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
-      const { firstName, lastName, email, phone, hourlyRate, overtimeRate, position } = req.body;
+      let input;try{input=employeeInput(req.body,true);}catch(e:any){return res.status(400).json({message:e.message});}
+      const {firstName,lastName,email,phone,hourlyRate,overtimeRate,position}=input;
 
       // Plan limit enforcement
       const company = await storage.getCompany(user.companyId);
@@ -616,8 +625,10 @@ Welcome again, and thank you for choosing ClockField.
       }
 
       const employee = await storage.createUser({
+        profileDetails: input.profileDetails || emptyProfile(),
         companyId: user.companyId,
         email: email || null,
+        isActive:false,
         password: await hashPassword(randomBytes(16).toString("hex")),
         role: "employee",
         firstName,
@@ -645,14 +656,8 @@ Welcome again, and thank you for choosing ClockField.
       const user = req.user as any;
       const target = await storage.getUser(req.params.id);
       if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      const { password: _p, tempPin: _t, employeeId: _e, accountStatus: _a, loginEnabled: _l, mustChangePassword: _m, ...allowedFields } = req.body;
-      const toNum = (v: any) => {
-        if (v === "" || v === undefined || v === null) return null;
-        const n = Number(v);
-        return isNaN(n) ? null : n;
-      };
-      if ("hourlyRate" in allowedFields) allowedFields.hourlyRate = toNum(allowedFields.hourlyRate);
-      if ("overtimeRate" in allowedFields) allowedFields.overtimeRate = toNum(allowedFields.overtimeRate);
+      if(target.role!=="employee")return res.status(404).json({message:"Employee not found"});
+      let allowedFields;try{allowedFields=employeeInput(req.body);}catch(error:any){return res.status(400).json({message:error.message});}
       // Skip email update if unchanged (prevents unnecessary uniqueness re-check)
       if ("email" in allowedFields) {
         const incoming = (allowedFields.email || "").trim().toLowerCase();
@@ -662,8 +667,7 @@ Welcome again, and thank you for choosing ClockField.
       }
       const employee = await storage.updateUser(req.params.id, allowedFields);
       if (!employee) return res.status(404).json({ message: "Not found" });
-      const { password: _, tempPin: __, ...safe } = employee;
-      res.json(safe);
+      res.json(safePerson(employee));
     } catch (err: any) {
       if (err.message?.includes("users_email_unique") || err.code === "23505") {
         return res.status(409).json({ message: "This email address is already in use by another account. Please use a different email." });
@@ -677,7 +681,7 @@ Welcome again, and thank you for choosing ClockField.
     try {
       const user = req.user as any;
       const target = await storage.getUser(req.params.id);
-      if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (!target || target.companyId !== user.companyId || target.role!=="employee") return res.status(404).json({ message: "Not found" });
 
       let empId = target.employeeId;
       if (!empId) {
@@ -699,6 +703,7 @@ Welcome again, and thank you for choosing ClockField.
 
       const updated = await storage.updateUser(req.params.id, {
         employeeId: empId,
+        isActive:true,
         password: hashedPin,
         tempPin: pin,
         loginEnabled: true,
@@ -722,7 +727,7 @@ Welcome again, and thank you for choosing ClockField.
     try {
       const user = req.user as any;
       const target = await storage.getUser(req.params.id);
-      if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (!target || target.companyId !== user.companyId || target.role!=="employee") return res.status(404).json({ message: "Not found" });
       if (!target.loginEnabled) return res.status(400).json({ message: "Login access not enabled for this employee" });
 
       const pin = generateTempPin();
@@ -746,7 +751,7 @@ Welcome again, and thank you for choosing ClockField.
     try {
       const user = req.user as any;
       const target = await storage.getUser(req.params.id);
-      if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (!target || target.companyId !== user.companyId || target.role!=="employee") return res.status(404).json({ message: "Not found" });
 
       const updated = await storage.updateUser(req.params.id, {
         loginEnabled: false,
@@ -766,7 +771,7 @@ Welcome again, and thank you for choosing ClockField.
     try {
       const user = req.user as any;
       const target = await storage.getUser(req.params.id);
-      if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
+      if (!target || target.companyId !== user.companyId || target.role!=="employee") return res.status(404).json({ message: "Not found" });
       const docs = await storage.listEmployeeDocuments(req.params.id, user.companyId);
       res.json(docs);
     } catch (err: any) {
@@ -790,6 +795,7 @@ Welcome again, and thank you for choosing ClockField.
       const size = Math.max(0, Math.floor(fileData.length * 3 / 4) - padding);
       // 30MB cap — base64 inflates ~33%, server body limit is 50MB.
       if (size > 30 * 1024 * 1024) return res.status(413).json({ message: "File is too large. Maximum size is 30MB." });
+      if(!validDocument(Buffer.from(fileData,"base64"),mimeType))return res.status(400).json({message:"Upload a valid PDF, image, Word document or text file"});
       const doc = await storage.createEmployeeDocument({
         companyId: user.companyId,
         employeeId: req.params.id,
@@ -859,14 +865,20 @@ Welcome again, and thank you for choosing ClockField.
   app.get("/api/admins", requireRole("admin"), async (req, res) => {
     const user = req.user as any;
     const admins = await storage.getAdminsByCompany(user.companyId);
-    const safe = admins.map(({ password: _, tempPin: __, ...a }) => a);
+    const safe = admins.map(a=>safePerson(a,true));
     res.json(safe);
   });
 
   app.post("/api/admins/invite", requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
-      const { firstName, lastName, email, phone, tempPin: customPin, managementRole, sendEmailInvite } = req.body;
+      const { firstName, lastName, phone, tempPin: customPin, managementRole, sendEmailInvite } = req.body;
+      const email=String(req.body.email||"").trim().toLowerCase();
+      if(!["admin","assistant","team"].includes(managementRole||"admin"))return res.status(400).json({message:"Select a valid management role"});
+      let permissions;try{permissions=validPermissions(req.body.adminPermissions||["employees","schedule","attendance","messages"]);}catch(error:any){return res.status(400).json({message:error.message});}
+      if(user.adminPermissions!=null&&!user.isSuperAdmin&&permissions.some(p=>!user.adminPermissions.includes(p)))return res.status(403).json({message:"You can only grant areas you can access"});
+
+      if(!/^\S+@\S+\.\S+$/.test(email))return res.status(400).json({message:"Enter a valid email address"});
       if (!email) return res.status(400).json({ message: "Email is required" });
       if (!firstName || !lastName) return res.status(400).json({ message: "Full name is required" });
 
@@ -888,12 +900,13 @@ Welcome again, and thank you for choosing ClockField.
         firstName,
         lastName,
         phone: phone || null,
-        loginEnabled: true,
+        loginEnabled: !sendEmailInvite,
         accountStatus: "pending_activation",
         mustChangePassword: true,
-        tempPin: pin,
+        tempPin: sendEmailInvite?null:pin,
         createdAt: new Date().toISOString(),
         managementRole: managementRole || "admin",
+        adminPermissions: permissions,
         inviteToken: inviteToken || null,
         inviteExpiresAt,
         inviteStatus: "not_sent",
@@ -909,7 +922,7 @@ Welcome again, and thank you for choosing ClockField.
           const { sendManagementInviteEmail } = await import("./mail");
           await sendManagementInviteEmail({
             to: admin.email,
-            firstName: admin.firstName,
+            inviterName: `${user.firstName} ${user.lastName}`,
             companyName: company?.name || "your company",
             role: managementRole || "admin",
             inviteUrl,
@@ -922,8 +935,8 @@ Welcome again, and thank you for choosing ClockField.
         }
       }
 
-      const { password: _, tempPin: __, ...safe } = admin;
-      res.json({ ...safe, tempPin: pin, inviteEmailStatus });
+      const safe=safePerson(admin,true);
+      res.json({ ...safe, tempPin: sendEmailInvite?null:pin, inviteEmailStatus });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
@@ -937,6 +950,9 @@ Welcome again, and thank you for choosing ClockField.
       if (!target || target.companyId !== user.companyId || target.role !== "admin") {
         return res.status(404).json({ message: "Not found" });
       }
+      if(!canManageStaff(user,target))return res.status(403).json({message:'You cannot change an account with broader access than yours'});
+      if(!target.isActive)return res.status(400).json({message:"Reactivate this member before resending an invitation"});
+      if(target.inviteAcceptedAt)return res.status(400).json({message:"This member already accepted their invitation"});
       if (!target.email) return res.status(400).json({ message: "No email on file" });
 
       const inviteToken = randomBytes(32).toString("hex");
@@ -950,7 +966,7 @@ Welcome again, and thank you for choosing ClockField.
         const { sendManagementInviteEmail } = await import("./mail");
         await sendManagementInviteEmail({
           to: target.email,
-          firstName: target.firstName,
+          inviterName: `${user.firstName} ${user.lastName}`,
           companyName: company?.name || "your company",
           role: (target as any).managementRole || "admin",
           inviteUrl,
@@ -972,6 +988,7 @@ Welcome again, and thank you for choosing ClockField.
       const result = await db.select().from(users).where(eq(users.inviteToken, token)).limit(1);
       const target = result?.[0];
       if (!target) return res.status(404).json({ message: "Invite not found or already used" });
+      if(!target.isActive||target.accountStatus==="disabled")return res.status(400).json({message:"This invitation is no longer active"});
       if (target.inviteAcceptedAt) return res.status(400).json({ message: "Invite already accepted" });
       if (target.inviteExpiresAt && new Date(target.inviteExpiresAt) < new Date()) {
         return res.status(400).json({ message: "Invite has expired" });
@@ -995,25 +1012,29 @@ Welcome again, and thank you for choosing ClockField.
     try {
       const { token } = req.params;
       const { password } = req.body;
-      if (!password || password.length < 6) return res.status(400).json({ message: "Password must be at least 6 characters" });
+      if (typeof password!=="string" || password.length < 6 || password.length>256) return res.status(400).json({ message: "Password must be at least 6 characters" });
 
       const result = await db.select().from(users).where(eq(users.inviteToken, token)).limit(1);
       const target = result?.[0];
       if (!target) return res.status(404).json({ message: "Invite not found" });
+      if(!target.isActive||target.accountStatus==="disabled")return res.status(400).json({message:"This invitation is no longer active"});
       if (target.inviteAcceptedAt) return res.status(400).json({ message: "Invite already accepted" });
       if (target.inviteExpiresAt && new Date(target.inviteExpiresAt) < new Date()) {
         return res.status(400).json({ message: "Invite has expired" });
       }
 
       const hashedPassword = await hashPassword(password);
-      await storage.updateUser(target.id, {
+      const [accepted]=await db.update(users).set({
         password: hashedPassword,
         mustChangePassword: false,
         accountStatus: "active",
         inviteToken: null,
+        tempPin:null,
+        loginEnabled:true,
         inviteAcceptedAt: new Date().toISOString(),
         inviteStatus: "accepted",
-      } as any);
+      } as any).where(and(eq(users.id,target.id),eq(users.inviteToken,String(token)),eq(users.isActive,true))).returning({id:users.id});
+      if(!accepted)return res.status(409).json({message:"This invitation has already been used or revoked"});
 
       res.json({ ok: true, email: target.email });
     } catch (err: any) {
@@ -1029,6 +1050,9 @@ Welcome again, and thank you for choosing ClockField.
         return res.status(404).json({ message: "Not found" });
       }
 
+      if(!canManageStaff(user,target))return res.status(403).json({message:'You cannot change an account with broader access than yours'});
+      if(!target.isActive)return res.status(400).json({message:"This member is disabled"});
+      if(target.inviteToken&&!target.loginEnabled)return res.status(400).json({message:"Resend their invitation so they can create their own password"});
       const pin = generateTempPin();
       const hashedPin = await hashPassword(pin);
 
@@ -1053,27 +1077,45 @@ Welcome again, and thank you for choosing ClockField.
         return res.status(404).json({ message: "Not found" });
       }
 
+      if(!canManageStaff(user,target))return res.status(403).json({message:'You cannot change an account with broader access than yours'});
       const { isActive } = req.body;
+      if(target.id===user.id&&(isActive===false||req.body.adminPermissions!==undefined))return res.status(400).json({message:"You cannot disable or restrict your own access"});
+      if(target.isSuperAdmin&&!user.isSuperAdmin)return res.status(403).json({message:"Owner access cannot be changed by another staff member"});
+      if(req.body.adminPermissions!==undefined&&user.adminPermissions!=null&&!user.isSuperAdmin)return res.status(403).json({message:"Only an unrestricted business admin can change staff permissions"});
+
       const updates: any = {};
+      if(req.body.adminPermissions!==undefined){try{updates.adminPermissions=validPermissions(req.body.adminPermissions);}catch(error:any){return res.status(400).json({message:error.message});}}
+      if(req.body.managementRole!==undefined){if(!["admin","assistant","team"].includes(req.body.managementRole))return res.status(400).json({message:"Invalid role"});updates.managementRole=req.body.managementRole;}
+      for(const key of ["firstName","lastName","phone"])if(typeof req.body[key]==="string")updates[key]=req.body[key].trim().slice(0,250);
+
       if (typeof isActive === "boolean") {
         updates.isActive = isActive;
         if (!isActive) {
           updates.accountStatus = "disabled";
           updates.loginEnabled = false;
         } else {
-          updates.loginEnabled = true;
+          updates.loginEnabled = target.inviteAcceptedAt ? true : target.loginEnabled;
           if (target.accountStatus === "disabled") {
             updates.accountStatus = "active";
           }
         }
       }
 
-      const updated = await storage.updateUser(req.params.id, updates);
+      const updated = await db.transaction(async tx=>{
+        await tx.select({id:companies.id}).from(companies).where(eq(companies.id,user.companyId)).for('update');
+        const [current]=await tx.select().from(users).where(and(eq(users.id,target.id),eq(users.companyId,user.companyId))).for('update');
+        if(!current)throw Object.assign(new Error('Member not found'),{status:404});
+        if(!canManageStaff(user,current))throw Object.assign(new Error('You cannot change an account with broader access than yours'),{status:403});
+        if((isActive===false||req.body.adminPermissions!==undefined)&&current.adminPermissions==null){
+          const admins=await tx.select({id:users.id,adminPermissions:users.adminPermissions,isSuperAdmin:users.isSuperAdmin}).from(users).where(and(eq(users.companyId,user.companyId),eq(users.role,'admin'),eq(users.isActive,true)));
+          if(!admins.some(a=>a.id!==target.id&&(a.adminPermissions==null||a.isSuperAdmin)))throw Object.assign(new Error('Keep at least one active unrestricted business admin'),{status:409});
+        }
+        const [member]=await tx.update(users).set(updates).where(and(eq(users.id,target.id),eq(users.companyId,user.companyId))).returning();return member;
+      });
       if (!updated) return res.status(404).json({ message: "Not found" });
-      const { password: _, tempPin: __, ...safe } = updated;
-      res.json(safe);
+      res.json(safePerson(updated));
     } catch (err: any) {
-      res.status(500).json({ message: err.message });
+      res.status(err.status||500).json({ message: err.message });
     }
   });
 
@@ -1086,6 +1128,7 @@ Welcome again, and thank you for choosing ClockField.
         return res.status(404).json({ message: "Client not found" });
       }
 
+      if(!client.isActive)return res.status(400).json({message:"Activate the client before enabling login"});
       if (!client.contactEmail) {
         return res.status(400).json({ message: "Client must have a contact email to enable login" });
       }
@@ -1196,6 +1239,7 @@ Welcome again, and thank you for choosing ClockField.
       const user = req.user as any;
       const company = await storage.getCompany(user.companyId);
       if (!company) return res.status(404).json({ message: "Company not found" });
+      if(user.adminPermissions!=null&&!user.isSuperAdmin&&!hasAccess(user,"settings")&&!hasAccess(user,"payroll")&&!hasAccess(user,"billing")){const {id,name,timezone,companyLogoUrl,brandColor,planCode,country,city,province}=company;return res.json({id,name,timezone,companyLogoUrl,brandColor,planCode,country,city,province});}
       res.json(company);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -1334,14 +1378,15 @@ Welcome again, and thank you for choosing ClockField.
         }
         return { ...client, loginEnabled: false, userAccountStatus: null };
       }));
-      res.json(enriched);
+      res.json(enriched.map(({avatarFilePath,avatarMimeType,...c})=>hasAccess(user,"clients")?c:{id:c.id,name:c.name,isActive:c.isActive,avatarUrl:c.avatarUrl}));
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
   app.post("/api/clients", requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
-      const { name, contactName, contactEmail, contactPhone } = req.body;
+      let input;try{input=clientInput(req.body,true);}catch(error:any){return res.status(400).json({message:error.message});}
+      const {name,contactName,contactEmail,contactPhone}=input;
       if (!name?.trim()) return res.status(400).json({ message: "Company name is required" });
 
       // Plan limit enforcement
@@ -1370,14 +1415,9 @@ Welcome again, and thank you for choosing ClockField.
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
-  app.patch("/api/clients/:id", requireRole("admin"), async (req, res) => {
-    try {
-      const user = req.user as any;
-      const target = await storage.getClient(req.params.id);
-      if (!target || target.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      const updated = await storage.updateClient(req.params.id, req.body);
-      res.json(updated);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  app.patch("/api/clients/:id",requireRole("admin"),async(req,res)=>{
+    try{const user=req.user as any,target=await storage.getClient(String(req.params.id));if(!target||target.companyId!==user.companyId)return res.status(404).json({message:"Client not found"});let input;try{input=clientInput(req.body);}catch(error:any){return res.status(400).json({message:error.message});}if(target.userId&&input.contactEmail!==undefined&&!input.contactEmail)return res.status(400).json({message:"A client with login access needs an email address"});
+    const updated=await db.transaction(async tx=>{if(target.userId){const linked=await storage.getUser(target.userId);if(!linked||linked.companyId!==user.companyId||linked.role!=="client")throw new Error("Client account is unavailable");const updates:any={};if(input.contactEmail!==undefined)updates.email=input.contactEmail;if(input.isActive===false)Object.assign(updates,{isActive:false,loginEnabled:false,accountStatus:"disabled"});if(Object.keys(updates).length)await tx.update(users).set(updates).where(and(eq(users.id,target.userId),eq(users.companyId,user.companyId)));}const [row]=await tx.update(clients).set(input).where(and(eq(clients.id,target.id),eq(clients.companyId,user.companyId))).returning();return row;});res.json({...updated,avatarFilePath:undefined,avatarMimeType:undefined});}catch(error:any){res.status(error.code==="23505"?409:400).json({message:error.code==="23505"?"That email is already used by another account":"Client could not be updated. Please check the contact details."});}
   });
 
   // ── Locations ─────────────────────────────────────────────────────────────
@@ -1442,7 +1482,8 @@ Welcome again, and thank you for choosing ClockField.
 
       if (user.role === "admin") {
         if (employeeId && typeof employeeId === "string") {
-          res.json(await storage.getShiftsByEmployee(employeeId));
+          const target=await storage.getUser(employeeId);if(!target||target.companyId!==user.companyId||target.role!=="employee")return res.status(404).json({message:"Employee not found"});
+          res.json((await storage.getShiftsByEmployee(employeeId)).filter(s=>s.companyId===user.companyId));
         } else {
           res.json(await storage.getShiftsByCompany(user.companyId));
         }
@@ -10280,6 +10321,8 @@ Return ONLY valid JSON:
     return tpl;
   };
 
+  registerTeamHiring(app,storage,requireRole,ensureHPTemplate);
+
   // GET /api/hiring-package/template — get or create default template
   app.get("/api/hiring-package/template", requireAuth, requireRole("admin"), async (req: any, res) => {
     try {
@@ -10295,7 +10338,8 @@ Return ONLY valid JSON:
       const { id } = req.params;
       const existing = await storage.getHPTemplate(id);
       if (!existing || existing.companyId !== req.user.companyId) return res.status(404).json({ message: "Not found" });
-      const updated = await storage.updateHPTemplate(id, { ...req.body, updatedAt: hpNow() });
+      if(req.body.policies!==undefined&&!policySchema.safeParse(req.body.policies).success)return res.status(400).json({message:"Each policy needs a unique ID, title and content"});
+      const data:any={updatedAt:hpNow()};for(const key of ["name","policies","bootReimbursementAmount","requireDateOfBirth"])if(req.body[key]!==undefined)data[key]=req.body[key];const updated = await storage.updateHPTemplate(id,data);
       res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -10340,7 +10384,7 @@ Return ONLY valid JSON:
       const pkg = await storage.getHPPackage(req.params.id);
       if (!pkg || pkg.companyId !== req.user.companyId) return res.status(404).json({ message: "Not found" });
       const company = await storage.getCompany(req.user.companyId);
-      const publicLink = `${req.protocol}://${req.get("host")}/public/hiring-package/${pkg.publicToken}`;
+      const publicLink = `${process.env.APP_URL||`${req.protocol}://${req.get("host")}`}/public/hiring-package/${pkg.publicToken}`;
       await sendHiringPackageEmail({
         to: pkg.employeeEmail,
         employeeName: pkg.employeeName,
@@ -10386,7 +10430,7 @@ Return ONLY valid JSON:
       if (!sub || sub.companyId !== req.user.companyId) return res.status(404).json({ message: "Not found" });
       const policyAcceptances = await storage.getHPPolicyAcceptances(sub.id);
       const documents = await storage.getHPDocuments(sub.id);
-      res.json({ submission: sub, policyAcceptances, documents });
+      res.json({ submission: sub, policyAcceptances, documents:documents.map(({fileData,...d})=>d) });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
@@ -10398,6 +10442,7 @@ Return ONLY valid JSON:
       const allowed = ["reviewStatus", "adminNotes", "missingDocsMessage", "requestedMissingDocs"];
       const data: any = { updatedAt: hpNow() };
       for (const k of allowed) { if (req.body[k] !== undefined) data[k] = req.body[k]; }
+      if(data.reviewStatus==="changes_requested"){data.status="started";data.currentStep=1;}
       const updated = await storage.updateHPSubmission(sub.id, data);
       res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -10412,8 +10457,12 @@ Return ONLY valid JSON:
       const tpl = await storage.getHPTemplate(pkg.templateId);
       const policyAcceptances = sub ? await storage.getHPPolicyAcceptances(sub.id) : [];
       const documents = sub ? await storage.getHPDocuments(sub.id) : [];
-      res.json({ package: pkg, submission: sub ?? null, template: tpl ?? null, policyAcceptances, documents });
+      res.json({ package: pkg, submission: sub ?? null, template: tpl ?? null, policyAcceptances, documents:documents.map(({fileData,...d})=>d) });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.use("/api/public/hiring-package/:token",async(req:any,res,next)=>{
+    try{res.set({"Cache-Control":"no-store","X-Robots-Tag":"noindex, nofollow","Referrer-Policy":"no-referrer"});const pkg=await storage.getHPPackageByToken(req.params.token);if(!pkg||["revoked","archived"].includes(pkg.status)||(pkg.expiresAt&&Date.parse(pkg.expiresAt)<Date.now()))return res.status(404).json({message:"This application link is unavailable or expired"});next();}catch{res.status(503).json({message:"Application temporarily unavailable"});}
   });
 
   // ── Public HP routes (no auth) ──────────────────────────────────────────────
@@ -10442,7 +10491,7 @@ Return ONLY valid JSON:
           await storage.updateHPPackage(pkg.id, { status: "sent", updatedAt: now });
         }
       }
-      const policyAcceptances = await storage.getHPPolicyAcceptances(sub.id);
+      const policyAcceptances = (await storage.getHPPolicyAcceptances(sub.id)).filter(acceptance=>(Array.isArray(tpl?.policies)?tpl.policies as any[]:[]).some(policy=>policy.id===acceptance.policyId&&policy.content===acceptance.policyContentSnapshot));
       const documents = await storage.getHPDocuments(sub.id);
       const company = await storage.getCompany(pkg.companyId);
       const safeDocuments = documents.map(d => ({
@@ -10450,12 +10499,14 @@ Return ONLY valid JSON:
         fileSize: d.fileSize, uploadedAt: d.uploadedAt,
       }));
       res.json({
-        package: { id: pkg.id, employeeName: pkg.employeeName, employeeEmail: pkg.employeeEmail, position: pkg.position, status: pkg.status, sentAt: pkg.sentAt },
-        submission: { id: sub.id, currentStep: sub.currentStep, status: sub.status, personalInfoJson: sub.personalInfoJson, emergencyContactsJson: sub.emergencyContactsJson, medicalInfoJson: sub.medicalInfoJson, finalAcknowledgement: sub.finalAcknowledgement, signatureData: sub.signatureData, submittedAt: sub.submittedAt, lastSavedAt: sub.lastSavedAt, requestedMissingDocs: sub.requestedMissingDocs },
+        package: { id: pkg.id, employeeName: pkg.employeeName, employeeEmail: pkg.employeeEmail, position: pkg.position, status: pkg.status, sentAt: pkg.sentAt, applicationKind: pkg.applicationKind },
+        submission: { id: sub.id, currentStep: sub.currentStep, status: sub.status, personalInfoJson: sub.status==="submitted"?{}:sub.personalInfoJson, emergencyContactsJson: sub.status==="submitted"?[]:sub.emergencyContactsJson, medicalInfoJson: sub.status==="submitted"?{}:sub.medicalInfoJson, finalAcknowledgement: sub.finalAcknowledgement, signatureData: sub.status==="submitted"?null:sub.signatureData, submittedAt: sub.submittedAt, lastSavedAt: sub.lastSavedAt, requestedMissingDocs: sub.requestedMissingDocs },
         template: tpl ? { id: tpl.id, name: tpl.name, policies: tpl.policies, bootReimbursementAmount: tpl.bootReimbursementAmount, requireDateOfBirth: tpl.requireDateOfBirth } : null,
         policyAcceptances,
         documents: safeDocuments,
         companyName: company?.name ?? "Your Employer",
+        companyLogoUrl: company?.companyLogoUrl||null,
+        brandColor: company?.brandColor||null,
       });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -10469,9 +10520,13 @@ Return ONLY valid JSON:
       if (!sub) return res.status(404).json({ message: "Submission not found" });
       if (sub.status === "submitted") return res.status(400).json({ message: "Already submitted" });
       const now = hpNow();
-      const updated = await storage.updateHPSubmission(sub.id, { personalInfoJson: req.body.personalInfoJson, currentStep: Math.max(sub.currentStep ?? 1, 2), lastSavedAt: now, updatedAt: now });
+      const updated = await storage.updateHPSubmission(sub.id, { personalInfoJson: {...personalInfoSchema.parse(req.body.personalInfoJson),profileDetails:(sub.personalInfoJson as any)?.profileDetails}, currentStep: Math.max(sub.currentStep ?? 1, 2), lastSavedAt: now, updatedAt: now });
       res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/public/hiring-package/:token/profile-details",async(req,res)=>{
+    try{const pkg=await storage.getHPPackageByToken(String(req.params.token)),sub=pkg?await storage.getHPSubmissionByPackage(pkg.id):null;if(!sub)return res.status(404).json({message:"Application not found"});if(sub.status==="submitted")return res.status(400).json({message:"Already submitted"});const parsed=profileSchema.safeParse(req.body.profileDetails);if(!parsed.success)return res.status(400).json({message:"Check your profile information and dates"});const details={...parsed.data,notes:"",hireDate:""};const updated=await storage.updateHPSubmission(sub.id,{personalInfoJson:{...(sub.personalInfoJson as any||{}),profileDetails:details},currentStep:Math.max(sub.currentStep||1,4),lastSavedAt:hpNow(),updatedAt:hpNow()});res.json(updated);}catch{res.status(500).json({message:"Could not save your employment details"});}
   });
 
   // PATCH /api/public/hiring-package/:token/emergency-contacts
@@ -10483,7 +10538,7 @@ Return ONLY valid JSON:
       if (!sub) return res.status(404).json({ message: "Submission not found" });
       if (sub.status === "submitted") return res.status(400).json({ message: "Already submitted" });
       const now = hpNow();
-      const updated = await storage.updateHPSubmission(sub.id, { emergencyContactsJson: req.body.emergencyContactsJson, currentStep: Math.max(sub.currentStep ?? 1, 3), lastSavedAt: now, updatedAt: now });
+      const updated = await storage.updateHPSubmission(sub.id, { emergencyContactsJson: profileSchema.shape.emergencyContacts.parse(req.body.emergencyContactsJson), currentStep: Math.max(sub.currentStep ?? 1, 3), lastSavedAt: now, updatedAt: now });
       res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -10497,7 +10552,7 @@ Return ONLY valid JSON:
       if (!sub) return res.status(404).json({ message: "Submission not found" });
       if (sub.status === "submitted") return res.status(400).json({ message: "Already submitted" });
       const now = hpNow();
-      const updated = await storage.updateHPSubmission(sub.id, { medicalInfoJson: req.body.medicalInfoJson, currentStep: Math.max(sub.currentStep ?? 1, 4), lastSavedAt: now, updatedAt: now });
+      const updated = await storage.updateHPSubmission(sub.id, { medicalInfoJson: medicalInfoSchema.parse(req.body.medicalInfoJson), currentStep: Math.max(sub.currentStep ?? 1, 4), lastSavedAt: now, updatedAt: now });
       res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -10510,7 +10565,9 @@ Return ONLY valid JSON:
       const sub = await storage.getHPSubmissionByPackage(pkg.id);
       if (!sub) return res.status(404).json({ message: "Submission not found" });
       if (sub.status === "submitted") return res.status(400).json({ message: "Already submitted" });
-      const { policyId, policyTitle, policyContentSnapshot } = req.body;
+      const { policyId } = req.body;
+      const template=await storage.getHPTemplate(pkg.templateId);const policies=Array.isArray(template?.policies)?template.policies as any[]:[];const policy=policies.find(p=>p.id===policyId);if(!policy)return res.status(400).json({message:"Policy not found"});const policyTitle=policy.title,policyContentSnapshot=policy.content;
+      const existingAcceptance=(await storage.getHPPolicyAcceptances(sub.id)).find(p=>p.policyId===policyId);if(existingAcceptance?.policyContentSnapshot===policyContentSnapshot)return res.json(existingAcceptance);
       const now = hpNow();
       const acceptance = await storage.createHPPolicyAcceptance({
         companyId: pkg.companyId,
@@ -10539,8 +10596,9 @@ Return ONLY valid JSON:
       if (sub.status === "submitted") return res.status(400).json({ message: "Already submitted" });
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
       const { documentType } = req.body;
-      if (!documentType) return res.status(400).json({ message: "documentType required" });
+      if (!["sin_card","void_cheque","government_id","resume","certification","other"].includes(documentType)) return res.status(400).json({ message: "Select a valid document type" });
       const now = hpNow();
+      if(!validDocument(req.file.buffer,req.file.mimetype))return res.status(400).json({message:"Upload a valid PDF, image, Word document or text file"});
       const fileData = req.file.buffer.toString("base64");
       const doc = await storage.upsertHPDocument(sub.id, documentType, {
         companyId: pkg.companyId,
@@ -10551,7 +10609,7 @@ Return ONLY valid JSON:
         mimeType: req.file.mimetype,
         fileSize: req.file.size,
         fileData,
-        required: true,
+        required: pkg.applicationKind!=="application",
         uploadedAt: now,
         createdAt: now,
       } as any);
@@ -10581,6 +10639,7 @@ Return ONLY valid JSON:
       const sub = await storage.getHPSubmissionByPackage(pkg.id);
       if (!sub) return res.status(404).json({ message: "Submission not found" });
       if (sub.status === "submitted") return res.status(400).json({ message: "Already submitted" });
+      if(req.body.finalAcknowledgement!==true||typeof req.body.signatureData!=="string"||!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(req.body.signatureData)||req.body.signatureData.length>700000||!validDocument(Buffer.from(req.body.signatureData.split(",")[1]||"","base64"),"image/png"))return res.status(400).json({message:"Your acknowledgement and a valid signature are required"});
       const now = hpNow();
       const updated = await storage.updateHPSubmission(sub.id, {
         signatureData: req.body.signatureData,
@@ -10602,6 +10661,8 @@ Return ONLY valid JSON:
       const sub = await storage.getHPSubmissionByPackage(pkg.id);
       if (!sub) return res.status(404).json({ message: "Submission not found" });
       if (sub.status === "submitted") return res.status(400).json({ message: "Already submitted" });
+      const [template,documents,acceptances]=await Promise.all([storage.getHPTemplate(pkg.templateId),storage.getHPDocuments(sub.id),storage.getHPPolicyAcceptances(sub.id)]);
+      const validation=hiringSubmissionError(pkg,sub,template,documents,acceptances);if(validation)return res.status(400).json({message:validation});
       const now = hpNow();
       const updated = await storage.updateHPSubmission(sub.id, {
         status: "submitted",

@@ -1,3 +1,6 @@
+import {ACCESS_MODULES,canManageStaff} from "@shared/people";
+import {Checkbox} from "@/components/ui/checkbox";
+import {useLocation} from "wouter";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -26,6 +29,7 @@ type ManagementMember = {
   loginEnabled?: boolean;
   createdAt?: string;
   managementRole?: string;
+  adminPermissions?:string[]|null;
   inviteStatus?: string;
   inviteSentAt?: string;
   inviteAcceptedAt?: string;
@@ -36,13 +40,13 @@ type InviteResult = ManagementMember & { tempPin: string; inviteEmailStatus?: st
 const ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
   assistant: "Assistant",
-  team: "Team",
+  team: "Manager",
 };
 
 const ROLE_DESCRIPTIONS: Record<string, string> = {
-  admin: "Full business management access",
-  assistant: "View most areas and help with office operations",
-  team: "View team activity, schedules, and employee status",
+  admin: "Business admin — access is selected below",
+  assistant: "Office support — access is selected below",
+  team: "Team manager — access is selected below",
 };
 
 const INVITE_STATUS_LABELS: Record<string, string> = {
@@ -56,7 +60,7 @@ const INVITE_STATUS_LABELS: Record<string, string> = {
 function roleBadge(role?: string) {
   if (!role || role === "admin") return <Badge className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-0">Admin</Badge>;
   if (role === "assistant") return <Badge className="text-xs bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 border-0">Assistant</Badge>;
-  return <Badge className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-0">Team</Badge>;
+  return <Badge className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-0">Manager</Badge>;
 }
 
 function statusBadge(member: ManagementMember) {
@@ -89,6 +93,10 @@ function formatDate(dateStr?: string) {
 
 export default function AdminManagement() {
   const { toast } = useToast();
+  const [teamPath]=useLocation();
+  const [accessTarget,setAccessTarget]=useState<ManagementMember|null>(null);
+  const [memberDetails,setMemberDetails]=useState({firstName:"",lastName:"",phone:""});
+  const [accessSelection,setAccessSelection]=useState<string[]>([]);
   const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -96,10 +104,10 @@ export default function AdminManagement() {
   const [deactivateTarget, setDeactivateTarget] = useState<ManagementMember | null>(null);
   const [formData, setFormData] = useState({
     firstName: "", lastName: "", email: "", phone: "", tempPin: "",
-    managementRole: "admin", sendEmailInvite: false,
+    managementRole: "team", sendEmailInvite: true,adminPermissions:["employees","schedule","attendance","messages"] as string[],
   });
 
-  const { data: members, isLoading } = useQuery<ManagementMember[]>({ queryKey: ["/api/admins"] });
+  const { data: members, isLoading,error:directoryError,refetch:reloadDirectory } = useQuery<ManagementMember[]>({ queryKey: ["/api/admins"] });
 
   const inviteMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -108,9 +116,9 @@ export default function AdminManagement() {
     },
     onSuccess: (data: InviteResult) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admins"] });
-      setCredDialog({ email: data.email!, tempPin: data.tempPin, inviteEmailStatus: data.inviteEmailStatus });
+      setCredDialog({ email: data.email!, tempPin: data.tempPin||"", inviteEmailStatus: data.inviteEmailStatus });
       setInviteOpen(false);
-      setFormData({ firstName: "", lastName: "", email: "", phone: "", tempPin: "", managementRole: "admin", sendEmailInvite: false });
+      setFormData({ firstName: "", lastName: "", email: "", phone: "", tempPin: "", managementRole: "team", sendEmailInvite: true,adminPermissions:["employees","schedule","attendance","messages"] });
     },
     onError: (err: any) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -162,9 +170,11 @@ export default function AdminManagement() {
   });
 
   const filtered = (members || []).filter(m =>
+    (teamPath!=="/admin/admins"||!m.managementRole||m.managementRole==="admin")&&
     `${m.firstName} ${m.lastName} ${m.email || ""}`.toLowerCase().includes(search.toLowerCase())
   );
 
+  const canManage=(member:ManagementMember)=>member.id!==user?.id&&canManageStaff(user,member);
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text).then(() => toast({ title: `${label} copied` }));
   };
@@ -173,14 +183,14 @@ export default function AdminManagement() {
     <div className="p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-management-title">Team</h1>
-          <p className="text-muted-foreground text-sm mt-1">{members?.length || 0} member{(members?.length || 0) !== 1 ? "s" : ""}</p>
+          <h1 className="text-2xl font-bold" data-testid="text-management-title">{teamPath==="/admin/admins"?"Business admins":"Managers & team access"}</h1>
+          <p className="text-muted-foreground text-sm mt-1">{filtered.length} member{(filtered.length) !== 1 ? "s" : ""}</p>
         </div>
-        <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <Dialog open={inviteOpen} onOpenChange={v=>{setInviteOpen(v);if(v)setFormData(p=>({...p,managementRole:teamPath==="/admin/admins"?"admin":p.managementRole,adminPermissions:p.adminPermissions.filter(key=>!(user as any)?.adminPermissions||(user as any).adminPermissions.includes(key))}));}}>
           <DialogTrigger asChild>
             <Button data-testid="button-add-management"><Plus className="w-4 h-4 mr-1.5" />Add Member</Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-xl max-h-[90dvh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Add Management Member</DialogTitle>
               <DialogDescription>Invite a new member to help manage your business on ClockField.</DialogDescription>
@@ -213,13 +223,14 @@ export default function AdminManagement() {
                   <SelectContent>
                     <SelectItem value="admin">Admin</SelectItem>
                     <SelectItem value="assistant">Assistant</SelectItem>
-                    <SelectItem value="team">Team</SelectItem>
+                    <SelectItem value="team">Manager</SelectItem>
                   </SelectContent>
                 </Select>
                 {formData.managementRole && (
                   <p className="text-xs text-muted-foreground">{ROLE_DESCRIPTIONS[formData.managementRole]}</p>
                 )}
               </div>
+              {!formData.sendEmailInvite&&<>
               <div className="space-y-2">
                 <Label>Temporary PIN <span className="text-muted-foreground font-normal">(optional — leave blank to auto-generate)</span></Label>
                 <Input
@@ -230,10 +241,11 @@ export default function AdminManagement() {
                   minLength={4}
                 />
               </div>
+              </>}
               <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/30">
                 <div className="space-y-0.5">
                   <Label className="text-sm font-medium">Send email invite</Label>
-                  <p className="text-xs text-muted-foreground">Send a secure invite link to their email address</p>
+                  <p className="text-xs text-muted-foreground">They receive a secure link and create their own password</p>
                 </div>
                 <Switch
                   data-testid="switch-send-invite"
@@ -241,6 +253,7 @@ export default function AdminManagement() {
                   onCheckedChange={v => setFormData(p => ({ ...p, sendEmailInvite: v }))}
                 />
               </div>
+              <fieldset className="rounded-lg border p-3 space-y-3"><legend className="text-sm font-medium px-1">Permitted areas</legend><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{ACCESS_MODULES.filter(([key])=>!(user as any)?.adminPermissions||(user as any).adminPermissions.includes(key)).map(([key,label])=><label key={key} className="flex items-start gap-2 text-sm"><Checkbox checked={formData.adminPermissions.includes(key)} onCheckedChange={checked=>setFormData(p=>({...p,adminPermissions:checked?[...p.adminPermissions,key]:p.adminPermissions.filter(v=>v!==key)}))}/><span>{label}</span></label>)}</div></fieldset>
               <Button type="submit" className="w-full" disabled={inviteMutation.isPending} data-testid="button-save-member">
                 {inviteMutation.isPending ? "Creating..." : "Create Member Account"}
               </Button>
@@ -254,7 +267,7 @@ export default function AdminManagement() {
         <Input data-testid="input-search-members" placeholder="Search members..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
       </div>
 
-      {isLoading ? (
+      {directoryError ? (<div role="alert" className="rounded-lg border p-4 text-sm">The directory could not be loaded. <Button type="button" size="sm" variant="outline" onClick={()=>reloadDirectory()}>Retry</Button></div>) : isLoading ? (
         <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full" />)}</div>
       ) : filtered.length === 0 ? (
         <Card>
@@ -265,40 +278,27 @@ export default function AdminManagement() {
         </Card>
       ) : (
         <div className="border rounded-lg overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Invite</TableHead>
-                <TableHead>Date Added</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          <div className="divide-y">
+
               {filtered.map((member) => {
                 const isCurrentUser = member.id === (user as any)?.id;
                 return (
-                  <TableRow key={member.id} data-testid={`row-member-${member.id}`}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
+                  <div key={member.id} data-testid={`row-member-${member.id}`} className="p-4 grid grid-cols-1 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,2fr)] items-center gap-3">
+                    <div className="min-w-0 font-medium">
+                      <div className="flex flex-wrap items-center gap-2">
                         {member.firstName} {member.lastName}
                         {isCurrentUser && <Badge variant="outline" className="text-xs">You</Badge>}
                       </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{member.email}</TableCell>
-                    <TableCell>{roleBadge(member.managementRole)}</TableCell>
-                    <TableCell>{statusBadge(member)}</TableCell>
-                    <TableCell>{inviteStatusBadge(member.inviteStatus)}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{formatDate(member.createdAt)}</TableCell>
-                    <TableCell className="text-right">
-                      {!isCurrentUser && (
-                        <div className="flex items-center justify-end gap-1 flex-wrap">
+                    </div>
+                    <p className="md:hidden text-xs break-all text-muted-foreground">{member.email}{member.phone?` · ${member.phone}`:""}</p>
+                    <div className="flex items-center flex-wrap gap-2">{roleBadge(member.managementRole)}{statusBadge(member)}{inviteStatusBadge(member.inviteStatus)}</div>
+                    <div className="min-w-0 space-y-2"><p className="hidden md:block text-xs break-all text-muted-foreground">{member.email}{member.phone?` · ${member.phone}`:""}</p>
+                      {canManage(member) && (
+                        <div className="flex items-center md:justify-end gap-2 flex-wrap">
+                          {!(user as any)?.adminPermissions&&<Button type="button" size="sm" variant="outline" className="text-xs h-7" onClick={()=>{setAccessTarget(member);setMemberDetails({firstName:member.firstName,lastName:member.lastName,phone:member.phone||""});setAccessSelection(member.adminPermissions||ACCESS_MODULES.map(([key])=>key));}}>Details & access</Button>}
                           <Button
                             size="sm" variant="outline" className="text-xs h-7 gap-1"
-                            disabled={resetPinMutation.isPending || !member.isActive}
+                            disabled={resetPinMutation.isPending || !member.isActive || member.loginEnabled===false}
                             onClick={() => resetPinMutation.mutate(member.id)}
                             data-testid={`button-reset-pin-${member.id}`}
                           >
@@ -307,7 +307,7 @@ export default function AdminManagement() {
                           {member.inviteStatus && member.inviteStatus !== "not_sent" && member.inviteStatus !== "accepted" && (
                             <Button
                               size="sm" variant="outline" className="text-xs h-7 gap-1"
-                              disabled={resendInviteMutation.isPending}
+                              disabled={resendInviteMutation.isPending||!member.isActive}
                               onClick={() => resendInviteMutation.mutate(member.id)}
                               data-testid={`button-resend-invite-${member.id}`}
                             >
@@ -334,12 +334,11 @@ export default function AdminManagement() {
                           )}
                         </div>
                       )}
-                    </TableCell>
-                  </TableRow>
+                    </div>
+                  </div>
                 );
               })}
-            </TableBody>
-          </Table>
+          </div>
         </div>
       )}
 
@@ -350,9 +349,9 @@ export default function AdminManagement() {
             <DialogTitle>Member Created</DialogTitle>
             <DialogDescription>
               {credDialog?.inviteEmailStatus === "sent"
-                ? "An invite email has been sent. Credentials are also available below as a backup."
+                ? "An invitation was sent. The recipient creates their own password using that link."
                 : credDialog?.inviteEmailStatus === "failed"
-                ? "Invite email failed to send. Please share credentials manually."
+                ? "The invitation could not be delivered. Use Resend in the member list; access remains pending."
                 : "Share these credentials with the new member. They'll be asked to set a password on first login."}
             </DialogDescription>
           </DialogHeader>
@@ -367,7 +366,7 @@ export default function AdminManagement() {
               {credDialog.inviteEmailStatus === "failed" && (
                 <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3">
                   <Mail className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
-                  <p className="text-sm text-red-700 dark:text-red-300">Invite email failed — share credentials manually</p>
+                  <p className="text-sm text-red-700 dark:text-red-300">Email failed — resend the invitation from the member list</p>
                 </div>
               )}
               <div className="space-y-2">
@@ -379,6 +378,7 @@ export default function AdminManagement() {
                   </Button>
                 </div>
               </div>
+              {!!credDialog.tempPin&&<>
               <div className="space-y-2">
                 <Label>Temporary PIN</Label>
                 <div className="flex items-center gap-2">
@@ -391,6 +391,7 @@ export default function AdminManagement() {
               <p className="text-xs text-muted-foreground">
                 The new member logs in using their email and this PIN. They'll be prompted to set a permanent password.
               </p>
+              </>}
             </div>
           )}
         </DialogContent>
@@ -418,6 +419,7 @@ export default function AdminManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <Dialog open={!!accessTarget} onOpenChange={v=>{if(!v)setAccessTarget(null);}}><DialogContent className="max-w-xl max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>Access for {accessTarget?.firstName} {accessTarget?.lastName}</DialogTitle></DialogHeader><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{([["firstName","First name"],["lastName","Last name"],["phone","Phone"]] as const).map(([key,label])=><label key={key} className="text-sm space-y-1">{label}<Input value={memberDetails[key]} onChange={e=>setMemberDetails(p=>({...p,[key]:e.target.value}))}/></label>)}</div><p className="text-sm text-muted-foreground">Only selected areas will be available. Restrictions also apply to direct API requests.</p><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{ACCESS_MODULES.filter(([key])=>!(user as any)?.adminPermissions||(user as any).adminPermissions.includes(key)).map(([key,label])=><label key={key} className="flex items-start gap-2 text-sm"><Checkbox checked={accessSelection.includes(key)} onCheckedChange={checked=>setAccessSelection(p=>checked?[...p,key]:p.filter(v=>v!==key))}/><span>{label}</span></label>)}</div><Button type="button" onClick={async()=>{try{await apiRequest("PATCH",`/api/admins/${accessTarget?.id}`,{adminPermissions:accessSelection,...memberDetails});queryClient.invalidateQueries({queryKey:["/api/admins"]});setAccessTarget(null);toast({title:"Staff access updated"});}catch(e:any){toast({title:"Access could not be updated",description:e.message,variant:"destructive"});}}}>Save access</Button></DialogContent></Dialog>
     </div>
   );
 }
