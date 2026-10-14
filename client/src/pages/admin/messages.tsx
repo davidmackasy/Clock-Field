@@ -258,7 +258,7 @@ export default function AdminMessages() {
       setNewTag("general_message");
       setSelectedId(data.id);
       setMobileView("thread");
-      toast({ title: "Message sent" });
+      toast({ title: "Message sent",description:data.emailNotification==="failed"?"Saved in the app, but the email notification failed.":data.emailNotification==="sent"?"Employee email notification sent.":"No notification email available for this recipient." });
     },
     onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
   });
@@ -453,7 +453,8 @@ export default function AdminMessages() {
                   </button>
                 </div>
               ) : (
-                <div className="relative">
+                <div className="relative space-y-2">
+                  <select aria-label="Select message recipient" className="w-full border rounded-md p-2 text-sm" value="" onChange={e=>{const options=newRecipType==="employee"?employees:clients;setNewRecipient(options.find((r:any)=>r.id===e.target.value)||null);setNewRecipSearch("");}}><option value="">Select {newRecipType==="employee"?"an employee":"a client"}…</option>{(newRecipType==="employee"?employees:clients).map((r:any)=><option key={r.id} value={r.id}>{newRecipType==="employee"?`${r.firstName} ${r.lastName} (${r.employeeId||"No employee ID"})`:r.name}</option>)}</select>
                   <input
                     type="text"
                     placeholder={newRecipType === "employee" ? "Search by name or email..." : "Search by company or contact..."}

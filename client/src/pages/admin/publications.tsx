@@ -103,6 +103,7 @@ function NewAgreementDialog({ open, onClose, proposalId }: { open: boolean; onCl
   const [clientPhone, setClientPhone] = useState("");
   const [serviceAddress, setServiceAddress] = useState("");
   const [witnessEnabled, setWitnessEnabled] = useState(false);
+  const [agreementKind,setAgreementKind]=useState("service");
   const [selectedTemplate, setSelectedTemplate] = useState<string>("blank");
 
   const { data: templates = [] } = useQuery<AgreementTemplate[]>({ queryKey: ["/api/admin/agreement-templates"] });
@@ -123,6 +124,7 @@ function NewAgreementDialog({ open, onClose, proposalId }: { open: boolean; onCl
     const now = new Date();
     const dateStr = now.toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" });
     let content = tmpl?.body || DEFAULT_BODY;
+    if(agreementKind==="contractor"&&!tmpl)content="SUBCONTRACTOR AGREEMENT\n\nBetween {company_name} and {client_company} ({client_full_name}).\n\nSCOPE OF WORK\n[Specify the work, site, schedule, quality standards and reporting responsibilities.]\n\nCOMPENSATION\n[Specify rates, invoicing, payment dates and approved expenses.]\n\nRESPONSIBILITIES\n[Specify equipment, safety requirements, insurance, confidentiality, subcontracting and incident reporting.]\n\nTERM AND TERMINATION\n[Specify start/end dates, cancellation and dispute procedures.]\n\n[Review and customize this draft before sending.]";
     content = content
       .replace(/{date_generated}/g, dateStr)
       .replace(/{client_full_name}/g, clientName || "{client_full_name}")
@@ -152,6 +154,7 @@ function NewAgreementDialog({ open, onClose, proposalId }: { open: boolean; onCl
             <Label className="text-xs mb-1 block">Agreement Title</Label>
             <Input data-testid="input-agreement-title" value={title} onChange={e => setTitle(e.target.value)} placeholder="Service Agreement" />
           </div>
+          <div><Label>Agreement type</Label><select className="border rounded-md p-2 w-full" value={agreementKind} onChange={e=>{setAgreementKind(e.target.value);setTitle(e.target.value==="contractor"?"Subcontractor Agreement":"Service Agreement");}}><option value="service">Client service agreement</option><option value="contractor">Business-to-business subcontractor agreement</option></select></div>
           {templates.length > 0 && (
             <div>
               <Label className="text-xs mb-1 block">Template (optional)</Label>
@@ -667,13 +670,14 @@ function PublicationsSubPage() {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function AdminPublications() {
   const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
-  const initialTab = searchParams.get("tab") || "publications";
+  const requestedTab=searchParams.get("tab");
+  const initialTab=requestedTab&&["publications","agreements","proposals","hiring-package"].includes(requestedTab)?requestedTab:"publications";
   const [activeTab, setActiveTab] = useState(initialTab);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
       <div className="max-w-5xl mx-auto w-full px-4 py-6 space-y-6">
-        <div className="flex gap-1 border-b pb-0 -mb-6 overflow-x-auto">
+        <div className="flex flex-wrap gap-1 border-b pb-0 -mb-6">
           <button
             onClick={() => setActiveTab("publications")}
             className={`flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === "publications" ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}

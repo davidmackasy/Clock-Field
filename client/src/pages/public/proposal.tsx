@@ -1,3 +1,4 @@
+import {proposalPricing} from "@shared/proposal-pricing";
 import { useState, useEffect } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -32,18 +33,7 @@ function fmtCurrency(n: number) {
   return new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" }).format(n);
 }
 
-function calcPricing(pricingConfig: PricingConfig) {
-  const items = pricingConfig.lineItems ?? [];
-  const lineSubtotal = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
-  const effectiveSubtotal = pricingConfig.subtotalOverride != null ? pricingConfig.subtotalOverride : lineSubtotal;
-  const taxableAmount = pricingConfig.subtotalOverride != null
-    ? effectiveSubtotal
-    : items.filter(i => i.taxable).reduce((s, i) => s + i.quantity * i.unitPrice, 0);
-  const taxRate = Number(pricingConfig.taxConfig?.rate ?? 0);
-  const taxAmount = taxableAmount * (taxRate / 100);
-  const total = effectiveSubtotal + taxAmount;
-  return { lineSubtotal, effectiveSubtotal, taxAmount, total };
-}
+const calcPricing=proposalPricing;
 
 const BILLING_TYPE_META: Record<string, { label: string; suffix: string }> = {
   per_visit:       { label: "Per Visit Total",  suffix: "/ visit" },

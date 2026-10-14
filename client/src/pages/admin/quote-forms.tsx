@@ -998,6 +998,7 @@ function SubmissionsTab({ onGoToEstimator, initialBookingId }: { onGoToEstimator
   const [respondSelectedPhotoIds, setRespondSelectedPhotoIds] = useState<string[]>([]);
   const [estimatorNotConfigured, setEstimatorNotConfigured] = useState(false);
   const [learnOpen, setLearnOpen] = useState(false);
+  const [submissionSearch,setSubmissionSearch]=useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | "submission" | "booking">(initialBookingId ? "booking" : "all");
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(initialBookingId || null);
 
@@ -1085,12 +1086,13 @@ function SubmissionsTab({ onGoToEstimator, initialBookingId }: { onGoToEstimator
   const bookingItems: UnifiedItem[] = bookingRequests.map(b => ({ id: b.id, _source: "booking", clientName: b.name, serviceType: b.serviceType, submittedAt: b.createdAt, pipelineStage: "", status: b.status, hasWalkthrough: false }));
   const allItems = [...submissionItems, ...bookingItems].sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
   const sourceItems = sourceFilter === "submission" ? submissionItems : sourceFilter === "booking" ? bookingItems : allItems;
-  const filtered = stageFilter === "all" ? sourceItems : sourceItems.filter(item => item._source === "submission" && item.pipelineStage === stageFilter);
+  const filtered = sourceItems.filter(item=>(stageFilter==="all"||(item._source==="submission"&&item.pipelineStage===stageFilter))&&`${item.clientName} ${item.serviceType} ${item.submittedAt} ${item.id}`.toLowerCase().includes(submissionSearch.toLowerCase()));
 
   return (
     <div className="flex flex-col lg:flex-row gap-4 min-h-0 h-full">
       {/* List */}
       <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-2">
+        <Input aria-label="Search requests" placeholder="Search name, date, service or request ID…" value={submissionSearch} onChange={e=>setSubmissionSearch(e.target.value)}/>
         {/* Source filter */}
         <div className="flex gap-1 rounded-lg bg-muted/40 p-0.5">
           {(["all", "submission", "booking"] as const).map(f => (
@@ -1688,6 +1690,7 @@ function SubmissionsTab({ onGoToEstimator, initialBookingId }: { onGoToEstimator
 
 // ── Pipeline Tab ──────────────────────────────────────────────────────────────
 function PipelineTab() {
+  const [search,setSearch]=useState("");
   const qc = useQueryClient();
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -1702,15 +1705,15 @@ function PipelineTab() {
 
   const byStage: Record<string, Submission[]> = {};
   PIPELINE_STAGES.forEach(s => { byStage[s.id] = []; });
-  submissions.filter(s => !s.archivedAt).forEach(s => { if (byStage[s.pipelineStage]) byStage[s.pipelineStage].push(s); });
+  submissions.filter(s => !s.archivedAt&&`${s.clientName} ${s.serviceType} ${s.submittedAt}`.toLowerCase().includes(search.toLowerCase())).forEach(s => { if (byStage[s.pipelineStage]) byStage[s.pipelineStage].push(s); });
 
   if (isError) return <RequestError retry={() => { void refetch(); }} />;
   if (isLoading) return <div className="flex gap-3 overflow-x-auto pb-2">{PIPELINE_STAGES.map(s => <Skeleton key={s.id} className="w-48 h-64 rounded-xl flex-shrink-0" />)}</div>;
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-4 min-h-[400px]">
+    <div className="space-y-4"><Input aria-label="Search pipeline" placeholder="Search client, service or date…" value={search} onChange={e=>setSearch(e.target.value)}/><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
       {PIPELINE_STAGES.map(stage => (
-        <div key={stage.id} className="w-52 flex-shrink-0 flex flex-col gap-2">
+        <div key={stage.id} className="min-w-0 flex flex-col gap-2">
           <div className="flex items-center gap-1.5">
             <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full border", stage.color)}>{stage.label}</span>
             <span className="text-[10px] text-muted-foreground ml-auto">{byStage[stage.id].length}</span>
@@ -1729,20 +1732,14 @@ function PipelineTab() {
                 {sub.serviceType && <p className="text-[11px] text-muted-foreground truncate">{sub.serviceType}</p>}
                 <p className="text-[11px] text-muted-foreground">{fmtDate(sub.submittedAt)}</p>
                 <div className="mt-2 pt-2 border-t flex gap-1 flex-wrap">
-                  {PIPELINE_STAGES.filter(s => s.id !== stage.id).slice(0,3).map(s => (
-                    <button key={s.id} data-testid={`button-move-stage-${sub.id}-${s.id}`}
-                      className="text-[9px] border rounded px-1 py-0.5 hover:bg-primary/5 text-muted-foreground transition-colors"
-                      onClick={e => { e.stopPropagation(); stageMutation.mutate({ id: sub.id, pipelineStage: s.id }); }}>
-                      → {s.label}
-                    </button>
-                  ))}
+                  <select aria-label={`Move ${sub.clientName||"request"} to stage`} className="w-full border rounded-md text-xs p-1 bg-background" value={stage.id} disabled={stageMutation.isPending} onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>{e.stopPropagation();stageMutation.mutate({id:sub.id,pipelineStage:e.target.value});}}>{PIPELINE_STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select>
                 </div>
               </div>
             ))}
           </div>
         </div>
       ))}
-    </div>
+    </div></div>
   );
 }
 
@@ -2142,8 +2139,8 @@ export default function AdminQuoteForms() {
 
       <div className="flex-1 overflow-hidden">
         <Tabs value={activeTab} onValueChange={changeTab} className="h-full flex flex-col">
-          <div className="border-b bg-background px-4 md:px-6 overflow-x-auto shrink-0">
-            <TabsList className="h-11 w-max bg-transparent border-0 p-0 gap-1">
+          <div className="border-b bg-background px-4 md:px-6 shrink-0">
+            <TabsList className="h-auto flex flex-wrap justify-start bg-transparent border-0 py-1 gap-1">
               {[
                 { value: "forms",     label: "Forms",             icon: FileText },
                 { value: "submissions",label: "Submissions",       icon: Inbox,   badge: newCount },

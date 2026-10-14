@@ -198,7 +198,7 @@ function LivePreview({ agr, sections, businessName }: { agr: Agreement; sections
       </div>
 
       {(provider.companyName || client.companyName) && (
-        <div className="grid grid-cols-2 gap-3 text-[10px]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[10px]">
           <div>
             <p className="font-bold uppercase text-[9px] text-gray-400 mb-1">Service Provider</p>
             <p className="font-semibold">{provider.companyName || "—"}</p>
@@ -309,6 +309,10 @@ function LivePreview({ agr, sections, businessName }: { agr: Agreement; sections
 
 // ── PDF Print ─────────────────────────────────────────────────────────────────
 function openPrintPreview(agr: Agreement, sections: SectionsData, businessName: string) {
+  const escape=(v:string)=>v.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]!));
+  const safe=(v:any):any=>typeof v==='string'?escape(v):Array.isArray(v)?v.map(safe):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).map(([k,value])=>[k,safe(value)])):v;
+  agr=safe(agr);sections=safe(sections);businessName=escape(businessName);
+
   const provider = sections.parties.provider;
   const client = sections.parties.client;
   const providerName = provider.companyName || businessName;
@@ -524,9 +528,9 @@ function PartiesSection({ sections, setSections, isSigned, form, setForm }: any)
     <div className="space-y-5">
       <div>
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Service Provider</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2"><Label className="text-xs mb-1 block">Company Name</Label><Input disabled={isSigned} value={p.companyName} onChange={e => setP("companyName", e.target.value)} data-testid="input-provider-company" /></div>
-          <div className="col-span-2"><Label className="text-xs mb-1 block">Street Address</Label><Input disabled={isSigned} value={p.address} onChange={e => setP("address", e.target.value)} /></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="sm:col-span-2"><Label className="text-xs mb-1 block">Company Name</Label><Input disabled={isSigned} value={p.companyName} onChange={e => setP("companyName", e.target.value)} data-testid="input-provider-company" /></div>
+          <div className="sm:col-span-2"><Label className="text-xs mb-1 block">Street Address</Label><Input disabled={isSigned} value={p.address} onChange={e => setP("address", e.target.value)} /></div>
           <div><Label className="text-xs mb-1 block">City</Label><Input disabled={isSigned} value={p.city} onChange={e => setP("city", e.target.value)} /></div>
           <div><Label className="text-xs mb-1 block">Province</Label><Input disabled={isSigned} value={p.province} onChange={e => setP("province", e.target.value)} /></div>
           <div><Label className="text-xs mb-1 block">Postal Code</Label><Input disabled={isSigned} value={p.postalCode} onChange={e => setP("postalCode", e.target.value)} /></div>
@@ -537,10 +541,10 @@ function PartiesSection({ sections, setSections, isSigned, form, setForm }: any)
 
       <div>
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Client</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2"><Label className="text-xs mb-1 block">Client Company Name</Label><Input disabled={isSigned} value={c.companyName} onChange={e => setC("companyName", e.target.value)} data-testid="input-client-company-name" /></div>
-          <div className="col-span-2"><Label className="text-xs mb-1 block">Contact Person</Label><Input disabled={isSigned} value={c.contactPerson} onChange={e => setC("contactPerson", e.target.value)} /></div>
-          <div className="col-span-2"><Label className="text-xs mb-1 block">Street Address</Label><Input disabled={isSigned} value={c.address} onChange={e => setC("address", e.target.value)} /></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="sm:col-span-2"><Label className="text-xs mb-1 block">Client Company Name</Label><Input disabled={isSigned} value={c.companyName} onChange={e => setC("companyName", e.target.value)} data-testid="input-client-company-name" /></div>
+          <div className="sm:col-span-2"><Label className="text-xs mb-1 block">Contact Person</Label><Input disabled={isSigned} value={c.contactPerson} onChange={e => setC("contactPerson", e.target.value)} /></div>
+          <div className="sm:col-span-2"><Label className="text-xs mb-1 block">Street Address</Label><Input disabled={isSigned} value={c.address} onChange={e => setC("address", e.target.value)} /></div>
           <div><Label className="text-xs mb-1 block">City</Label><Input disabled={isSigned} value={c.city} onChange={e => setC("city", e.target.value)} /></div>
           <div><Label className="text-xs mb-1 block">Province</Label><Input disabled={isSigned} value={c.province} onChange={e => setC("province", e.target.value)} /></div>
           <div><Label className="text-xs mb-1 block">Postal Code</Label><Input disabled={isSigned} value={c.postalCode} onChange={e => setC("postalCode", e.target.value)} /></div>
@@ -551,7 +555,7 @@ function PartiesSection({ sections, setSections, isSigned, form, setForm }: any)
 
       <div>
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Client Record Fields</p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><Label className="text-xs mb-1 block">Full Name</Label><Input disabled={isSigned} value={form.clientName || ""} onChange={e => setForm((p: any) => ({ ...p, clientName: e.target.value }))} data-testid="input-client-name" /></div>
           <div><Label className="text-xs mb-1 block">Email</Label><Input disabled={isSigned} type="email" value={form.clientEmail || ""} onChange={e => setForm((p: any) => ({ ...p, clientEmail: e.target.value }))} data-testid="input-client-email" /></div>
           <div><Label className="text-xs mb-1 block">Service Address</Label><Input disabled={isSigned} value={form.serviceAddress || ""} onChange={e => setForm((p: any) => ({ ...p, serviceAddress: e.target.value }))} /></div>
@@ -582,7 +586,7 @@ function ScheduleSection({ sections, setSections, isSigned }: any) {
   const set = (k: string, v: string) => setSections((sec: SectionsData) => ({ ...sec, schedule: { ...sec.schedule, [k]: v } }));
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div><Label className="text-xs mb-1 block">Frequency</Label>
           <Select disabled={isSigned} value={s.frequency} onValueChange={v => set("frequency", v)}>
             <SelectTrigger data-testid="select-frequency"><SelectValue /></SelectTrigger>
@@ -614,7 +618,7 @@ function PaymentSection({ sections, setSections, isSigned }: any) {
   const set = (k: string, v: string) => setSections((s: SectionsData) => ({ ...s, payment: { ...s.payment, [k]: v } }));
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div><Label className="text-xs mb-1 block">Monthly Amount ($)</Label><Input disabled={isSigned} value={p.monthlyAmount} onChange={e => set("monthlyAmount", e.target.value)} placeholder="0.00" data-testid="input-monthly-amount" /></div>
         <div><Label className="text-xs mb-1 block">Price Per Visit ($)</Label><Input disabled={isSigned} value={p.pricePerVisit} onChange={e => set("pricePerVisit", e.target.value)} placeholder="0.00" /></div>
         <div><Label className="text-xs mb-1 block">Billing Cycle</Label>
@@ -660,7 +664,7 @@ function ContractTermSection({ sections, setSections, isSigned }: any) {
   const set = (k: string, v: any) => setSections((s: SectionsData) => ({ ...s, contractTerm: { ...s.contractTerm, [k]: v } }));
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div><Label className="text-xs mb-1 block">Contract Type</Label>
           <Select disabled={isSigned} value={ct.contractType} onValueChange={v => set("contractType", v)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
@@ -744,6 +748,7 @@ export default function AdminAgreementBuilder() {
     queryFn: () => apiRequest("GET", `/api/admin/agreements/${params.id}/activity`).then(r => r.json()),
   });
 
+  const {data:company}=useQuery<any>({queryKey:["/api/company"]});
   const [form, setForm] = useState<Partial<Agreement>>({});
   const [sections, setSections] = useState<SectionsData>(DEFAULT_SECTIONS);
 
@@ -752,7 +757,7 @@ export default function AdminAgreementBuilder() {
       setForm({ ...agr });
       if (agr.sectionsData) {
         setSections({ ...DEFAULT_SECTIONS, ...(agr.sectionsData as Partial<SectionsData>) });
-      }
+      }else{setSections({...DEFAULT_SECTIONS,overview:agr.content||"",scopeOfWork:"",nonPayment:"",confidentiality:"",liability:"",acceptance:"",parties:{provider:{...DEFAULT_SECTIONS.parties.provider,companyName:agr.providerName||""},client:{...DEFAULT_SECTIONS.parties.client,companyName:agr.clientCompany||"",contactPerson:agr.clientName||"",email:agr.clientEmail||"",phone:agr.clientPhone||"",address:agr.serviceAddress||""}}});}
     }
   }, [agr]);
 
@@ -784,7 +789,7 @@ export default function AdminAgreementBuilder() {
   );
   if (!agr) return <div className="p-6 text-center text-muted-foreground">Agreement not found.</div>;
 
-  const businessName = document.title?.split(" – ")?.[0] || "Service Provider";
+  const businessName=company?.name||"Service Provider";
 
   return (
     <div className="flex flex-col h-full">
@@ -803,7 +808,7 @@ export default function AdminAgreementBuilder() {
           <p className="text-xs text-muted-foreground">{agr.clientName || "No client"} · {fmtDateShort(agr.createdAt)}</p>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap shrink-0">
-          <Button variant="outline" size="sm" className="gap-1.5 h-8 hidden sm:flex" onClick={copyLink} data-testid="button-copy-link">
+          <Button variant="outline" size="sm" className="gap-1.5 h-8 flex" onClick={copyLink} data-testid="button-copy-link">
             <Copy className="w-3.5 h-3.5" /> Copy Link
           </Button>
           <Button variant="outline" size="sm" className="gap-1.5 h-8" onClick={() => setShowActivity(!showActivity)} data-testid="button-view-activity">

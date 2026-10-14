@@ -1,3 +1,4 @@
+import {proposalPricing} from "@shared/proposal-pricing";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -683,13 +684,7 @@ export default function AdminProposalBuilder() {
   }
 
   // ── Pricing math ───────────────────────────────────────────────────────────
-  const lineSubtotal = pricingConfig.lineItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
-  const effectiveSubtotal = pricingConfig.subtotalOverride != null ? pricingConfig.subtotalOverride : lineSubtotal;
-  const taxableAmount = pricingConfig.subtotalOverride != null
-    ? effectiveSubtotal
-    : pricingConfig.lineItems.filter(i => i.taxable).reduce((s, i) => s + i.quantity * i.unitPrice, 0);
-  const taxAmount = taxableAmount * (pricingConfig.taxConfig.rate / 100);
-  const totalAmount = effectiveSubtotal + taxAmount;
+  const {lineSubtotal,effectiveSubtotal,taxableAmount,taxAmount,total:totalAmount}=proposalPricing(pricingConfig);
 
   const publicUrl = proposal ? `${window.location.origin}/public/proposals/${proposal.publicToken}` : "";
 

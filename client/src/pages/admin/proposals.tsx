@@ -1,3 +1,4 @@
+import {proposalPricing} from "@shared/proposal-pricing";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -44,23 +45,7 @@ function formatDate(d: string | null | undefined) {
   return new Date(d).toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" });
 }
 
-function calcTotal(pricingConfig: string): string {
-  try {
-    const pc = JSON.parse(pricingConfig);
-    const items = pc.lineItems ?? [];
-    const sub = pc.subtotalOverride != null
-      ? Number(pc.subtotalOverride)
-      : items.reduce((s: number, i: any) => s + (Number(i.quantity) * Number(i.unitPrice)), 0);
-    const taxRate = Number(pc.taxConfig?.rate ?? 0);
-    const taxableSubtotal = pc.subtotalOverride != null
-      ? sub
-      : items.filter((i: any) => i.taxable).reduce((s: number, i: any) => s + (Number(i.quantity) * Number(i.unitPrice)), 0);
-    const tax = taxableSubtotal * (taxRate / 100);
-    return `$${(sub + tax).toFixed(2)}`;
-  } catch {
-    return "—";
-  }
-}
+function calcTotal(config:string){try{return `$${proposalPricing(JSON.parse(config)).total.toFixed(2)}`;}catch{return "—";}}
 
 export default function AdminProposals() {
   const [, navigate] = useLocation();
@@ -69,6 +54,7 @@ export default function AdminProposals() {
   const [newTitle, setNewTitle] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [convertProposal, setConvertProposal] = useState<Proposal | null>(null);
+  const [search,setSearch]=useState("");
   const [clientSearch, setClientSearch] = useState("");
 
   const { data: proposals = [], isLoading } = useQuery<Proposal[]>({
@@ -128,6 +114,7 @@ export default function AdminProposals() {
   }
 
   const filtered = proposals.filter((p) => {
+    if(!`${p.title} ${p.proposalNumber} ${p.clientName} ${p.clientEmail}`.toLowerCase().includes(search.toLowerCase()))return false;
     if (activeTab === "all") return !p.isArchived;
     if (activeTab === "archived") return p.isArchived;
     return p.status === activeTab && !p.isArchived;
@@ -147,7 +134,7 @@ export default function AdminProposals() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b bg-background">
+      <div className="flex flex-wrap gap-3 items-center justify-between px-4 sm:px-6 py-4 border-b bg-background">
         <div>
           <h1 className="text-xl font-semibold">Proposals & Quotes</h1>
           <p className="text-sm text-muted-foreground">Create and manage professional proposals for your clients</p>
@@ -160,7 +147,7 @@ export default function AdminProposals() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Input aria-label="Search proposals" placeholder="Search proposal number, title or client…" value={search} onChange={e=>setSearch(e.target.value)} className="mb-4"/><Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-6 flex flex-wrap gap-1 h-auto bg-muted/40 p-1">
             {([
               ["all", "All"],
@@ -208,7 +195,7 @@ export default function AdminProposals() {
                   <div
                     key={p.id}
                     data-testid={`card-proposal-${p.id}`}
-                    className="flex items-center gap-4 bg-card border rounded-xl px-5 py-4 hover:border-primary/30 transition-colors"
+                    className="flex flex-wrap items-center gap-4 bg-card border rounded-xl px-5 py-4 hover:border-primary/30 transition-colors"
                   >
                     {/* Status icon */}
                     <div className="flex-shrink-0">
@@ -256,7 +243,7 @@ export default function AdminProposals() {
                         variant="outline" size="sm"
                         onClick={() => navigate(`/admin/proposals/${p.id}`)}
                         data-testid={`button-edit-proposal-${p.id}`}
-                        className="hidden sm:flex"
+                        className="flex"
                       >
                         <Pencil className="w-3.5 h-3.5 mr-1.5" />
                         Edit

@@ -310,10 +310,10 @@ View it here: ${opts.requestUrl}
 <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
 <tr><td style="background:#2563eb;padding:24px 32px;"><span style="color:#fff;font-size:20px;font-weight:700;">ClockField</span></td></tr>
 <tr><td style="padding:36px 32px 24px;">
-<p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">New ${opts.requestType} Request</p>
-<p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">Hi ${opts.adminName}, <strong>${opts.submitterName}</strong> has submitted a new request: <strong>${opts.requestTitle}</strong>.</p>
+<p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">New ${escapeEmailHtml(opts.requestType)} Request</p>
+<p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">Hi ${escapeEmailHtml(opts.adminName)}, <strong>${escapeEmailHtml(opts.submitterName)}</strong> has submitted a new request: <strong>${escapeEmailHtml(opts.requestTitle)}</strong>.</p>
 <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;"><tr><td style="background:#2563eb;border-radius:6px;">
-<a href="${opts.requestUrl}" style="display:inline-block;padding:13px 28px;color:#fff;font-size:15px;font-weight:600;text-decoration:none;">View Request</a>
+<a href="${escapeEmailHtml(opts.requestUrl)}" style="display:inline-block;padding:13px 28px;color:#fff;font-size:15px;font-weight:600;text-decoration:none;">View Request</a>
 </td></tr></table>
 </td></tr>
 <tr><td style="background:#f9fafb;padding:18px 32px;border-top:1px solid #e5e7eb;">
@@ -352,10 +352,10 @@ View full thread: ${opts.requestUrl}
 <tr><td style="background:#2563eb;padding:24px 32px;"><span style="color:#fff;font-size:20px;font-weight:700;">ClockField</span></td></tr>
 <tr><td style="padding:36px 32px 24px;">
 <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">New reply on your request</p>
-<p style="margin:0 0 16px;font-size:15px;color:#6b7280;line-height:1.6;">Hi ${opts.employeeName}, there is a new reply on <strong>${opts.requestTitle}</strong>.</p>
-<blockquote style="margin:0 0 24px;padding:12px 16px;background:#f3f4f6;border-left:3px solid #2563eb;border-radius:4px;font-size:14px;color:#374151;line-height:1.6;">"${opts.replyPreview}"</blockquote>
+<p style="margin:0 0 16px;font-size:15px;color:#6b7280;line-height:1.6;">Hi ${escapeEmailHtml(opts.employeeName)}, there is a new reply on <strong>${escapeEmailHtml(opts.requestTitle)}</strong>.</p>
+<blockquote style="margin:0 0 24px;padding:12px 16px;background:#f3f4f6;border-left:3px solid #2563eb;border-radius:4px;font-size:14px;color:#374151;line-height:1.6;">"${escapeEmailHtml(opts.replyPreview)}"</blockquote>
 <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;"><tr><td style="background:#2563eb;border-radius:6px;">
-<a href="${opts.requestUrl}" style="display:inline-block;padding:13px 28px;color:#fff;font-size:15px;font-weight:600;text-decoration:none;">View Thread</a>
+<a href="${escapeEmailHtml(opts.requestUrl)}" style="display:inline-block;padding:13px 28px;color:#fff;font-size:15px;font-weight:600;text-decoration:none;">View Thread</a>
 </td></tr></table>
 </td></tr>
 <tr><td style="background:#f9fafb;padding:18px 32px;border-top:1px solid #e5e7eb;">
@@ -394,10 +394,10 @@ View full thread: ${opts.requestUrl}
 <tr><td style="background:#2563eb;padding:24px 32px;"><span style="color:#fff;font-size:20px;font-weight:700;">ClockField</span></td></tr>
 <tr><td style="padding:36px 32px 24px;">
 <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">New reply on request</p>
-<p style="margin:0 0 16px;font-size:15px;color:#6b7280;line-height:1.6;">Hi ${opts.adminName}, there is a new reply on <strong>${opts.requestTitle}</strong>.</p>
-<blockquote style="margin:0 0 24px;padding:12px 16px;background:#f3f4f6;border-left:3px solid #2563eb;border-radius:4px;font-size:14px;color:#374151;line-height:1.6;">"${opts.replyPreview}"</blockquote>
+<p style="margin:0 0 16px;font-size:15px;color:#6b7280;line-height:1.6;">Hi ${escapeEmailHtml(opts.adminName)}, there is a new reply on <strong>${escapeEmailHtml(opts.requestTitle)}</strong>.</p>
+<blockquote style="margin:0 0 24px;padding:12px 16px;background:#f3f4f6;border-left:3px solid #2563eb;border-radius:4px;font-size:14px;color:#374151;line-height:1.6;">"${escapeEmailHtml(opts.replyPreview)}"</blockquote>
 <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;"><tr><td style="background:#2563eb;border-radius:6px;">
-<a href="${opts.requestUrl}" style="display:inline-block;padding:13px 28px;color:#fff;font-size:15px;font-weight:600;text-decoration:none;">View Thread</a>
+<a href="${escapeEmailHtml(opts.requestUrl)}" style="display:inline-block;padding:13px 28px;color:#fff;font-size:15px;font-weight:600;text-decoration:none;">View Thread</a>
 </td></tr></table>
 </td></tr>
 <tr><td style="background:#f9fafb;padding:18px 32px;border-top:1px solid #e5e7eb;">
@@ -948,9 +948,16 @@ export async function sendQuoteDeclinedAdminEmail(opts: {
   await client.messages.create(domain, { from, to: [opts.to], subject, text, html });
 }
 
-export async function sendFormConfirmationEmail(opts: { to: string; subject: string; body: string; companyName: string }) {
+export async function sendFormConfirmationEmail(opts: { to: string; subject: string; body: string; companyName: string; replyTo?:string }) {
   const { client, domain } = getClient();
   const escape = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  await client.messages.create(domain, { from: process.env.MAIL_FROM || "ClockField <noreply@mg.clockfield.com>", to: [opts.to], subject: opts.subject, text: opts.body,
+  await client.messages.create(domain, { from: process.env.MAIL_FROM || "ClockField <noreply@mg.clockfield.com>", to: [opts.to], subject: opts.subject, text: opts.body, ...(opts.replyTo?{"h:Reply-To":opts.replyTo}:{}),
     html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:24px"><h2>${escape(opts.companyName)}</h2><div style="white-space:pre-wrap">${escape(opts.body)}</div></div>` });
+}
+
+export async function sendAppMessageNotification(opts:{to:string;name:string;businessName:string;appUrl:string;photoCount:number}) {
+ const {client,domain}=getClient();const url=new URL('/employee/messages',opts.appUrl).href;
+ const subject=`New message from ${opts.businessName}`;
+ const text=`Hi ${opts.name},\n\nYou have a new message from ${opts.businessName}.${opts.photoCount?` It includes ${opts.photoCount} photo attachment(s).`:''}\n\nLog into ClockField to read the message and view attachments: ${url}`;
+ await client.messages.create(domain,{from:process.env.MAIL_FROM||'ClockField <noreply@clockfield.ca>',to:[opts.to],subject,text,html:`<p>Hi ${escapeEmailHtml(opts.name)},</p><p>You have a new message from ${escapeEmailHtml(opts.businessName)}.${opts.photoCount?` It includes ${opts.photoCount} photo attachment(s).`:''}</p><p><a href="${escapeEmailHtml(url)}">Log in to read your message</a></p>`});
 }

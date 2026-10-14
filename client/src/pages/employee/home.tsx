@@ -1,3 +1,4 @@
+import {readinessQuestion} from "@shared/fit-duty";
 import {clockInPosition,clockInError} from "@/lib/clock-in-position";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -95,7 +96,7 @@ export default function EmployeeHome() {
     return {...input,position};
   };
   const [fitShiftId, setFitShiftId] = useState<string | undefined>();
-  const [fitAnswers, setFitAnswers] = useState<(boolean | undefined)[]>([undefined, undefined, undefined, undefined, undefined]);
+  const [fitAnswers, setFitAnswers] = useState<(boolean | undefined)[]>([undefined]);
   const [fitConfirmed, setFitConfirmed] = useState(false);
   const [facePhotoData, setFacePhotoData] = useState<string | null>(null);
   const [facePhotoCapturedAt, setFacePhotoCapturedAt] = useState<string | null>(null);
@@ -191,7 +192,7 @@ export default function EmployeeHome() {
   });
 
   const openFit = (shiftId?: string) => {
-    setFitLocationId("");setFitVerificationId(null);setLocationError("");setFitShiftId(shiftId); setFitAnswers([undefined, undefined, undefined, undefined, undefined]); setFitConfirmed(false); setFacePhotoData(null); setFacePhotoCapturedAt(null); setFacePhotoAccepted(false); setCameraError(""); setFitOpen(true);
+    setFitLocationId("");setFitVerificationId(null);setLocationError("");setFitShiftId(shiftId); setFitAnswers([undefined]); setFitConfirmed(false); setFacePhotoData(null); setFacePhotoCapturedAt(null); setFacePhotoAccepted(false); setCameraError(""); setFitOpen(true);
   };
 
   const stopFaceCamera = () => {
@@ -385,21 +386,15 @@ export default function EmployeeHome() {
     <div className="p-4 pb-24 space-y-5">
       <Dialog open={fitOpen} onOpenChange={(open) => { if (!open) stopFaceCamera(); setFitOpen(open); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Fit for Duty Check</DialogTitle><DialogDescription>Complete each question and take a live photo before clocking in.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Fit for Duty Check</DialogTitle><DialogDescription>Answer the readiness question and take a live photo before clocking in.</DialogDescription></DialogHeader>
           {!fitShiftId && clockInSites.length>0 && <div className="space-y-2"><label htmlFor="clock-in-site" className="text-sm font-medium">Assigned work site</label><select id="clock-in-site" className="w-full border rounded-md p-2" value={fitLocationId} onChange={e=>{setFitLocationId(e.target.value);setLocationError("");}} disabled={!!fitVerificationId}><option value="">Select where you are working</option>{clockInSites.map(site=><option key={site.id} value={site.id}>{site.name}</option>)}</select></div>}
           <p className="text-sm text-muted-foreground">Work sites with a clock-in boundary require your current location. Allow precise location when prompted. Location is checked only when you clock in.</p>
           {locationError && <p role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{locationError}</p>}
 
-          <p className="text-sm text-muted-foreground">To help maintain a safe workplace for employees, clients, and the public, we require a quick fitness-for-duty check before starting your shift. Please answer the following questions honestly.</p>
+          <p className="text-sm text-muted-foreground">To help maintain a safe workplace for employees, clients, and the public, we require a quick fitness-for-duty check before starting your shift. Please answer the readiness question honestly.</p>
           <fieldset disabled={!!fitVerificationId}>
           <div className="space-y-5 mt-2">
-            {[
-              "Are you fit and able to safely perform your assigned duties today?",
-              "Are you currently affected by alcohol, cannabis, recreational drugs, or any other substance that could impair your ability to work safely?",
-              "Is anything currently affecting your judgment, coordination, concentration, reaction time, or ability to work safely?",
-              "Are you excessively tired, fatigued, or otherwise not alert enough to safely perform your duties?",
-              "Is there any other reason you believe you may not be able to safely perform your assigned duties today?",
-            ].map((question, i) => (
+            {[readinessQuestion].map((question, i) => (
               <div key={question} className="space-y-2">
                 <p className="text-sm font-medium">{i + 1}. {question}</p>
                 <div className="grid grid-cols-2 gap-2">

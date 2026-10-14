@@ -1,3 +1,6 @@
+import {messagePhotoError} from "./message-photos";
+import {pickFields,agreementEditableFields,agreementClientFields,proposalEditableFields,formEmailInput} from "../shared/workflow-input";
+import {fitDutyAnswers} from "../shared/fit-duty";
 import {personalizePolicy} from "../shared/policy-personalization";
 import {permissionAllowed,canManageStaff} from '../shared/people';
 import {hiringSubmissionError,validPolicySignature,validDocument,personalInfoSchema,medicalInfoSchema,policySchema} from "../shared/hiring-validation";
@@ -18,7 +21,7 @@ import { db, pool } from "./db";
 import { setupAuth, hashPassword, comparePasswords, requireAuth, requireRole } from "./auth";
 import OpenAI from "openai";
 import { generateCourseDraft, improveText, generateQuizFromCourse, generateModuleContent, isAIAvailable, detectCourseType, type ImproveAction, type ToneOption, type AIQuizQuestion } from "./training-ai";
-import { sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail, sendAdminRequestReplyEmail, sendTrialAccountEmail, sendProposalEmail, sendHiringPackageEmail, sendTrainingAssignmentEmail, sendTrainingReminderEmail, sendBookingQuoteEmail, sendQuoteAcceptedAdminEmail, sendQuoteDeclinedAdminEmail, sendFitForDutySubmissionEmail, sendIncidentSubmissionEmail, sendIncidentClientEmail } from "./mail";
+import { sendAppMessageNotification, sendPasswordResetEmail, sendReportEmail, sendPlatformMessageEmail, sendAttendanceLateClockInEmail, sendAttendanceMissedShiftEmail, sendAdminNewRequestEmail, sendEmployeeRequestReplyEmail, sendAdminRequestReplyEmail, sendTrialAccountEmail, sendProposalEmail, sendHiringPackageEmail, sendTrainingAssignmentEmail, sendTrainingReminderEmail, sendBookingQuoteEmail, sendQuoteAcceptedAdminEmail, sendQuoteDeclinedAdminEmail, sendFitForDutySubmissionEmail, sendIncidentSubmissionEmail, sendIncidentClientEmail } from "./mail";
 import { createHash } from "crypto";
 import passport from "passport";
 import { randomBytes } from "crypto";
@@ -1676,8 +1679,9 @@ Welcome again, and thank you for choosing ClockField.
     try {
       const user = req.user as any;
       const { answers, confirmationAccepted, shiftId, facePhotoData, facePhotoCapturedAt } = req.body || {};
-      if (!Array.isArray(answers) || answers.length !== 5 || answers.some((a: any) => typeof a !== "boolean")) {
-        return res.status(400).json({ message: "All five answers are required" });
+      const assessment=fitDutyAnswers(answers);
+      if (!assessment) {
+        return res.status(400).json({ message: "Answer the readiness question before continuing" });
       }
       if (confirmationAccepted !== true) return res.status(400).json({ message: "Confirmation is required" });
       if (typeof facePhotoData !== "string" || !facePhotoData.startsWith("data:image/jpeg;base64,")) {
@@ -1697,7 +1701,7 @@ Welcome again, and thank you for choosing ClockField.
         return res.status(403).json({ message: "Shift not available" });
       }
       const acceptedAt = new Date().toISOString();
-      const status = answers[0] === true && answers.slice(1).every((a: boolean) => a === false) ? "cleared" : "flagged";
+      const status=assessment.status;
       const photoFileName = `${user.companyId}-${user.id}-${Date.now()}-${randomBytes(12).toString("hex")}.jpg`;
       const photoFilePath = path.join(FIT_FOR_DUTY_PHOTOS_DIR, photoFileName);
       await writePersistentFile(photoFilePath, photoBuffer, "image/jpeg");
@@ -1713,9 +1717,9 @@ Welcome again, and thank you for choosing ClockField.
         row = await storage.createFitForDutyVerification({
           companyId: user.companyId, employeeId: user.id, shiftId: shift?.id || null,
           locationId: shift?.locationId || null, clockInId: null,
-          questionTextSnapshot: JSON.stringify(FIT_FOR_DUTY_QUESTIONS),
+          questionTextSnapshot: JSON.stringify(assessment.questions),
           answerSnapshot: JSON.stringify(answers), declarationTextSnapshot: FIT_FOR_DUTY_DECLARATION,
-          declarationVersion: "1", confirmationAccepted: true, acceptedAt,
+          declarationVersion: assessment.version, confirmationAccepted: true, acceptedAt,
           facePhotoPath: photoFileName, facePhotoCapturedAt: photoCapturedAt.toISOString(), status,
           originalSubmission: JSON.stringify(original),
         });
@@ -1840,7 +1844,7 @@ Welcome again, and thank you for choosing ClockField.
           const location = entry.locationId ? await storage.getLocation(entry.locationId) : null;
           const employeeName = `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.employeeId || "Employee";
           const submittedAnswers = JSON.parse(verification.answerSnapshot) as boolean[];
-          const answerDetails = FIT_FOR_DUTY_QUESTIONS
+          const answerDetails = (JSON.parse(verification.questionTextSnapshot) as string[])
             .map((question, index) => `${index + 1}. ${question}\nAnswer: ${submittedAnswers[index] ? "Yes" : "No"}`)
             .join("\n\n");
           await storage.createPlatformMessage({
@@ -2151,21 +2155,8 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
               storage.getCompany(user.companyId),
             ]);
             for (const admin of admins) {
-              if (!admin.email) continue;
-              await sendAdminNewRequestEmail({
-                adminEmail: admin.email,
-                adminName: `${admin.firstName || ""} ${admin.lastName || ""}`.trim() || "Admin",
-                requesterName,
-                requesterRole: user.role,
-                requestTitle: request.title,
-                requestType: request.requestType,
-                priority: request.priority,
-                businessName: company?.name || "Your business",
-                submittedAt: new Date().toLocaleString("en-CA"),
-                hasAttachments,
-                messagePreview: description?.trim() || null,
-                appUrl,
-              });
+              if (!admin.email||!admin.isActive) continue;
+              await sendAdminNewRequestEmail({to:admin.email,adminName:`${admin.firstName||""} ${admin.lastName||""}`.trim()||"Admin",submitterName:requesterName,requestTitle:request.title,requestType:request.requestType,companyName:company?.name||"Your business",requestUrl:`${appUrl}/admin/messages`});
             }
           } catch (emailErr) {
             console.error("[request-email] Failed to notify admin of new request:", emailErr);
@@ -2193,6 +2184,8 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       const { recipientType, recipientId, tag, title, body, photos } = req.body;
       if (!title?.trim()) return res.status(400).json({ message: "Title is required" });
       if (!body?.trim()) return res.status(400).json({ message: "Message body is required" });
+      if(!["employee","client"].includes(recipientType))return res.status(400).json({message:"Select an employee or client recipient"});
+      const photoError=messagePhotoError(photos);if(photoError)return res.status(400).json({message:photoError});
       const now = new Date().toISOString();
 
       let clientId: string | undefined;
@@ -2210,7 +2203,7 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       } else if (recipientType === "employee") {
         // recipientId is employee user id
         const emp = await storage.getUser(recipientId);
-        if (!emp || emp.companyId !== user.companyId) {
+        if (!emp || emp.companyId !== user.companyId || emp.role!=="employee") {
           return res.status(404).json({ message: "Employee not found" });
         }
         employeeId = emp.id;
@@ -2260,7 +2253,9 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
         }
       }
 
-      res.status(201).json(request);
+      let emailNotification="not_available";
+      if(employeeId||request.employeeId){const recipient=await storage.getUser(employeeId||request.employeeId!);if(recipient?.email&&recipient.companyId===user.companyId){try{const company=await storage.getCompany(user.companyId);await sendAppMessageNotification({to:recipient.email,name:`${recipient.firstName||""} ${recipient.lastName||""}`.trim(),businessName:company?.name||"Your employer",appUrl:process.env.APP_URL||`${req.protocol}://${req.get("host")}`,photoCount:Array.isArray(photos)?photos.length:0});emailNotification="sent";}catch(error){emailNotification="failed";console.error("[message-notification] Email delivery failed",error);}}}
+      res.status(201).json({...request,emailNotification});
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
@@ -2275,6 +2270,8 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       if (!assignedCleanerId) return res.status(400).json({ message: "Assigned cleaner is required" });
       if (!title?.trim()) return res.status(400).json({ message: "Title is required" });
 
+      const assigned=await storage.getUser(assignedCleanerId);if(!assigned||assigned.companyId!==user.companyId||assigned.role!=="employee")return res.status(404).json({message:"Employee not found"});
+      const photoError=messagePhotoError(photos);if(photoError)return res.status(400).json({message:photoError});
       const now = new Date().toISOString();
       const request = await storage.createClientRequest({
         companyId: user.companyId,
@@ -2320,7 +2317,9 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
           }
         }
       }
-      res.status(201).json(request);
+      let emailNotification="not_available";
+      if(assigned.email){try{const company=await storage.getCompany(user.companyId);await sendAppMessageNotification({to:assigned.email,name:`${assigned.firstName||""} ${assigned.lastName||""}`.trim(),businessName:company?.name||"Your employer",appUrl:process.env.APP_URL||`${req.protocol}://${req.get("host")}`,photoCount:Array.isArray(photos)?photos.length:0});emailNotification="sent";}catch(error){emailNotification="failed";console.error("[message-notification] Email delivery failed",error);}}
+      res.status(201).json({...request,emailNotification});
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
@@ -2598,34 +2597,14 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
       );
       res.status(201).json({ ...msg, attachments: attachmentsMeta });
 
-      // Fire-and-forget email to the request creator when admin replies
-      if (user.role === "admin" && !isStatusUpdate && target.createdByUserId && target.createdByRole !== "admin") {
-        const replyBody = body?.trim() || null;
-        const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
-        (async () => {
-          try {
-            const [requester, company] = await Promise.all([
-              storage.getUser(target.createdByUserId!),
-              storage.getCompany(user.companyId),
-            ]);
-            if (requester?.email) {
-              await sendEmployeeRequestReplyEmail({
-                to: requester.email,
-                recipientName: `${requester.firstName || ""} ${requester.lastName || ""}`.trim() || "there",
-                requestTitle: target.title,
-                replyPreview: replyBody,
-                businessName: company?.name || "Your admin",
-                repliedAt: new Date().toLocaleString("en-CA"),
-                appUrl,
-              });
-            }
-          } catch (emailErr) {
-            console.error("[request-email] Failed to notify requester of admin reply:", emailErr);
-          }
-        })();
-      } else if (user.role !== "admin" && !isStatusUpdate && body?.trim()) {
+      // Notify the employee who can see the admin reply, including admin-started threads.
+      if (user.role === "admin" && !isStatusUpdate && isVisibleToEmployee && target.employeeId) {
+        void (async()=>{try{const recipient=await storage.getUser(target.employeeId!);if(recipient?.email&&recipient.companyId===user.companyId){const company=await storage.getCompany(user.companyId);await sendAppMessageNotification({to:recipient.email,name:`${recipient.firstName||""} ${recipient.lastName||""}`.trim(),businessName:company?.name||"Your employer",appUrl:process.env.APP_URL||`${req.protocol}://${req.get("host")}`,photoCount:Array.isArray(photos)?photos.length:0});}}catch(error){console.error("[message-notification] Reply email failed",error);}})();
+      } else if(user.role==="admin"&&!isStatusUpdate&&isVisibleToClient&&target.createdByRole==="client"&&target.createdByUserId){
+        void (async()=>{try{const recipient=await storage.getUser(target.createdByUserId!);if(recipient?.email&&recipient.companyId===user.companyId)await sendEmployeeRequestReplyEmail({to:recipient.email,employeeName:`${recipient.firstName||""} ${recipient.lastName||""}`.trim(),requestTitle:target.title,replyPreview:body?.trim()||"Photo attachment",requestUrl:`${process.env.APP_URL||`${req.protocol}://${req.get("host")}`}/client/messages`});}catch(error){console.error("[request-email] Client reply email failed",error);}})();
+      } else if (user.role !== "admin" && !isStatusUpdate && (body?.trim()||photos?.length)) {
         // Fire-and-forget email to all company admins when employee/client replies
-        const replyBody = body.trim();
+        const replyBody = body?.trim()||"Photo attachments";
         const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
         (async () => {
           try {
@@ -2639,18 +2618,8 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
               : "Staff";
             const replierRole = user.role === "client" ? "client" : "employee";
             for (const admin of admins) {
-              if (!admin.email) continue;
-              await sendAdminRequestReplyEmail({
-                to: admin.email,
-                adminName: `${admin.firstName || ""} ${admin.lastName || ""}`.trim() || "Admin",
-                replierName,
-                replierRole,
-                requestTitle: target.title,
-                replyPreview: replyBody,
-                businessName: company?.name || "Your company",
-                repliedAt: new Date().toLocaleString("en-CA"),
-                appUrl,
-              });
+              if (!admin.email||!admin.isActive) continue;
+              await sendAdminRequestReplyEmail({to:admin.email,adminName:`${admin.firstName||""} ${admin.lastName||""}`.trim()||"Admin",requestTitle:target.title,replyPreview:`${replierName}: ${replyBody}`,requestUrl:`${appUrl}/admin/messages`});
             }
           } catch (emailErr) {
             console.error("[request-email] Failed to notify admin of employee/client reply:", emailErr);
@@ -8766,13 +8735,14 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
   app.put("/api/admin/form-email-settings", requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
-      const settings = await storage.upsertFormEmailSettings(user.companyId, req.body);
+      let input;try{input=formEmailInput(req.body);}catch(error:any){return res.status(400).json({message:error.message});}
+      const settings = await storage.upsertFormEmailSettings(user.companyId, input);
       res.json(settings);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
   // ── Proposals & Quotes (Admin) ───────────────────────────────────────────
-  app.get("/api/proposals", requireAuth, async (req, res) => {
+  app.get("/api/proposals", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
       const all = await storage.getProposalsByCompany(user.companyId);
@@ -8780,7 +8750,7 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.post("/api/proposals", requireAuth, async (req, res) => {
+  app.post("/api/proposals", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
       const company = await storage.getCompany(user.companyId);
@@ -8859,7 +8829,7 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.get("/api/proposals/:id", requireAuth, async (req, res) => {
+  app.get("/api/proposals/:id", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
       const p = await storage.getProposal(req.params.id);
@@ -8868,20 +8838,20 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.patch("/api/proposals/:id", requireAuth, async (req, res) => {
+  app.patch("/api/proposals/:id", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
       const p = await storage.getProposal(req.params.id);
       if (!p || p.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       const updated = await storage.updateProposal(req.params.id, {
-        ...req.body,
+        ...pickFields(req.body,proposalEditableFields),
         updatedAt: new Date().toISOString(),
       });
       res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.get("/api/proposals/:id/activity", requireAuth, async (req, res) => {
+  app.get("/api/proposals/:id/activity", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
       const p = await storage.getProposal(req.params.id);
@@ -8891,7 +8861,7 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.post("/api/proposals/:id/send-email", requireAuth, async (req, res) => {
+  app.post("/api/proposals/:id/send-email", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
       const p = await storage.getProposal(req.params.id);
@@ -8969,7 +8939,7 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
   });
 
   // Refresh business snapshot from current settings
-  app.post("/api/proposals/:id/refresh-branding", requireAuth, async (req, res) => {
+  app.post("/api/proposals/:id/refresh-branding", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
       const p = await storage.getProposal(req.params.id);
@@ -8994,7 +8964,7 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
   });
 
   // Grammar cleanup via OpenAI
-  app.post("/api/proposals/grammar-cleanup", requireAuth, async (req, res) => {
+  app.post("/api/proposals/grammar-cleanup", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const { rawText } = req.body;
       if (!rawText || typeof rawText !== "string") return res.status(400).json({ message: "rawText required" });
@@ -9014,7 +8984,7 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
     }
   });
 
-  app.post("/api/proposals/:id/duplicate", requireAuth, async (req, res) => {
+  app.post("/api/proposals/:id/duplicate", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
       const p = await storage.getProposal(req.params.id);
@@ -9060,7 +9030,7 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.post("/api/proposals/:id/archive", requireAuth, async (req, res) => {
+  app.post("/api/proposals/:id/archive", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
       const p = await storage.getProposal(req.params.id);
@@ -9244,7 +9214,7 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
           const subject = (emailSettings.confirmationSubject || "We received your request!")
             .replace(/{company_name}/g, companyName);
           const { sendFormConfirmationEmail } = await import("./mail");
-          await sendFormConfirmationEmail({ to: clientEmail, subject, body, companyName });
+          await sendFormConfirmationEmail({ to: clientEmail, subject, body:[body,emailSettings.signature].filter(Boolean).join("\n\n"), companyName, replyTo:emailSettings.replyTo||undefined });
           await storage.updateQuoteFormSubmission(submission.id, { confirmationEmailSentAt: new Date().toISOString() });
         }
       } catch (emailErr) {
@@ -9256,7 +9226,7 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
   });
 
   // ── Agreement Templates (Admin) ─────────────────────────────────────────
-  app.get("/api/admin/agreement-templates", requireAuth, async (req, res) => {
+  app.get("/api/admin/agreement-templates", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = (req as any).user;
       const templates = await storage.getAgreementTemplates(user.companyId);
@@ -9264,7 +9234,7 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.post("/api/admin/agreement-templates", requireAuth, async (req, res) => {
+  app.post("/api/admin/agreement-templates", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = (req as any).user;
       const now = new Date().toISOString();
@@ -9285,17 +9255,17 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.patch("/api/admin/agreement-templates/:id", requireAuth, async (req, res) => {
+  app.patch("/api/admin/agreement-templates/:id", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = (req as any).user;
       const template = await storage.getAgreementTemplate(req.params.id);
       if (!template || template.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
-      const updated = await storage.updateAgreementTemplate(req.params.id, { ...req.body, updatedAt: new Date().toISOString() });
+      const updated = await storage.updateAgreementTemplate(req.params.id, { ...pickFields(req.body,["name","title","body","termsText","paymentTerms","contractDuration","cancellationPolicy","witnessEnabled","isDefault"]), updatedAt: new Date().toISOString() });
       res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.delete("/api/admin/agreement-templates/:id", requireAuth, async (req, res) => {
+  app.delete("/api/admin/agreement-templates/:id", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = (req as any).user;
       const template = await storage.getAgreementTemplate(req.params.id);
@@ -9306,7 +9276,7 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
   });
 
   // ── Agreements (Admin) ──────────────────────────────────────────────────
-  app.get("/api/admin/agreements", requireAuth, async (req, res) => {
+  app.get("/api/admin/agreements", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = (req as any).user;
       const list = await storage.getAgreementsByCompany(user.companyId);
@@ -9314,7 +9284,7 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.get("/api/admin/agreements/:id", requireAuth, async (req, res) => {
+  app.get("/api/admin/agreements/:id", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = (req as any).user;
       const agr = await storage.getAgreement(req.params.id);
@@ -9323,7 +9293,7 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.get("/api/admin/agreements/:id/activity", requireAuth, async (req, res) => {
+  app.get("/api/admin/agreements/:id/activity", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = (req as any).user;
       const agr = await storage.getAgreement(req.params.id);
@@ -9333,11 +9303,12 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.post("/api/admin/agreements", requireAuth, async (req, res) => {
+  app.post("/api/admin/agreements", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = (req as any).user;
       const now = new Date().toISOString();
-      const token = `agr_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      const token = `agr_${randomBytes(24).toString("hex")}`;
+      const business=await storage.getCompany(user.companyId);
       // If proposalId given, pull client info from proposal
       let clientInfo: any = {};
       if (req.body.proposalId) {
@@ -9357,10 +9328,10 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
         proposalId: req.body.proposalId || null,
         templateId: req.body.templateId || null,
         title: req.body.title || "Service Agreement",
-        content: req.body.content || "",
+        content: String(req.body.content||"").replace(/{company_name}/g,business?.name||"Service Provider"),
         status: "draft",
         ...clientInfo,
-        ...req.body.clientInfo,
+        ...pickFields(req.body.clientInfo,agreementClientFields),
         publicToken: token,
         witnessEnabled: req.body.witnessEnabled ?? false,
         internalNotes: req.body.internalNotes || "",
@@ -9371,18 +9342,18 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.patch("/api/admin/agreements/:id", requireAuth, async (req, res) => {
+  app.patch("/api/admin/agreements/:id", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = (req as any).user;
       const agr = await storage.getAgreement(req.params.id);
       if (!agr || agr.companyId !== user.companyId) return res.status(404).json({ message: "Not found" });
       if (agr.status === "signed" || agr.status === "completed") return res.status(400).json({ message: "Cannot edit a signed agreement." });
-      const updated = await storage.updateAgreement(req.params.id, { ...req.body, updatedAt: new Date().toISOString() });
+      const updated = await storage.updateAgreement(req.params.id, { ...pickFields(req.body,agreementEditableFields), updatedAt: new Date().toISOString() });
       res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.post("/api/admin/agreements/:id/send-email", requireAuth, async (req, res) => {
+  app.post("/api/admin/agreements/:id/send-email", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const user = (req as any).user;
       const agr = await storage.getAgreement(req.params.id);
@@ -9420,7 +9391,7 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
   });
 
   // ── Agreement AI Text Improvement ──────────────────────────────────────
-  app.post("/api/admin/agreements/improve-text", requireAuth, async (req, res) => {
+  app.post("/api/admin/agreements/improve-text", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const { text, instruction } = req.body as { text: string; instruction: string };
       if (!text || !instruction) return res.status(400).json({ message: "text and instruction required" });
@@ -10314,7 +10285,7 @@ Return ONLY valid JSON:
         companyId,
         name: "Default Template",
         policies: [],
-        bootReimbursementAmount: "60.00",
+        bootReimbursementAmount: "0.00",
         requireDateOfBirth: false,
         isDefault: true,
         createdAt: hpNow(),

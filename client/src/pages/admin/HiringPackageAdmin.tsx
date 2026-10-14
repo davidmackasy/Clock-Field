@@ -108,6 +108,7 @@ export default function HiringPackageAdmin() {
   const [editingTemplate, setEditingTemplate] = useState<HiringTemplate | null>(null);
   const [newPolicyTitle, setNewPolicyTitle] = useState("");
   const [newPolicyContent, setNewPolicyContent] = useState("");
+  const [policyBeingEdited,setPolicyBeingEdited]=useState<string|null>(null);
   const [addingPolicy, setAddingPolicy] = useState(false);
 
   const { data: template, isLoading: templateLoading } = useQuery<HiringTemplate>({
@@ -201,7 +202,8 @@ export default function HiringPackageAdmin() {
 
   const addPolicy = () => {
     if (!newPolicyTitle.trim() || !newPolicyContent.trim()) return;
-    const policies = [...(currentTemplate?.policies ?? []), {
+    const updatedPolicy={id:policyBeingEdited||`p_${Date.now()}`,title:newPolicyTitle.trim(),content:newPolicyContent.trim()};
+    const policies=policyBeingEdited?(currentTemplate?.policies??[]).map(p=>p.id===policyBeingEdited?updatedPolicy:p):[...(currentTemplate?.policies ?? []), {
       id: `p_${Date.now()}`,
       title: newPolicyTitle.trim(),
       content: newPolicyContent.trim(),
@@ -213,7 +215,7 @@ export default function HiringPackageAdmin() {
     }
     setNewPolicyTitle("");
     setNewPolicyContent("");
-    setAddingPolicy(false);
+    setAddingPolicy(false);setPolicyBeingEdited(null);
   };
 
   const removePolicy = (policyId: string) => {
@@ -412,20 +414,21 @@ export default function HiringPackageAdmin() {
               <div className="border border-border rounded-lg p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold text-foreground">Company Policies</h4>
-                  <Button variant="outline" size="sm" onClick={() => setAddingPolicy(true)} data-testid="btn-add-policy">
+                  <Button variant="outline" size="sm" onClick={() => {setPolicyBeingEdited(null);setNewPolicyTitle("");setNewPolicyContent("");setAddingPolicy(true);}} data-testid="btn-add-policy">
                     <Plus className="w-3.5 h-3.5 mr-1" /> Add Policy
                   </Button>
                 </div>
                 {(currentTemplate?.policies ?? []).length === 0 && !addingPolicy && (
-                  <p className="text-sm text-muted-foreground text-center py-4">No policies added yet. Add your first company policy.</p>
+                  <p className="text-sm text-muted-foreground text-center py-4">No policies added yet. Add your own policy or start from a draft below.</p>
                 )}
+                <div className="flex flex-wrap gap-2">{["Code of conduct","Workplace safety","Attendance & reporting","Confidentiality"].map(title=><Button key={title} size="sm" variant="outline" onClick={()=>{setPolicyBeingEdited(null);setNewPolicyTitle(title);setNewPolicyContent(`Company: Your company\n\n${title}\n\n[Enter your company's requirements here before saving.]\n\nI, {{employee_name}}, acknowledge that I have read and understood this policy.\n\nSignature: __________________\nDate: __________________`);setAddingPolicy(true);}}>Start {title.toLowerCase()} draft</Button>)}</div>
                 {(currentTemplate?.policies ?? []).map(policy => (
                   <div key={policy.id} className="border border-border rounded-md overflow-hidden">
                     <div
                       className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/30"
                       onClick={() => setExpandedPolicy(expandedPolicy === policy.id ? null : policy.id)}>
                       <span className="text-sm font-medium text-foreground">{policy.title}</span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={e=>{e.stopPropagation();setPolicyBeingEdited(policy.id);setNewPolicyTitle(policy.title);setNewPolicyContent(policy.content);setAddingPolicy(true);}}>Edit</Button>
                         <Button
                           variant="ghost" size="sm"
                           className="text-destructive hover:text-destructive h-6 w-6 p-0"
@@ -460,7 +463,7 @@ export default function HiringPackageAdmin() {
                     />
                     <div className="flex gap-2 justify-end">
                       <Button variant="outline" size="sm" onClick={() => { setAddingPolicy(false); setNewPolicyTitle(""); setNewPolicyContent(""); }}>Cancel</Button>
-                      <Button size="sm" onClick={addPolicy} data-testid="btn-save-policy">Add Policy</Button>
+                      <Button size="sm" onClick={addPolicy} data-testid="btn-save-policy">{policyBeingEdited?"Apply edit":"Add Policy"}</Button>
                     </div>
                   </div>
                 )}
