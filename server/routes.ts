@@ -872,7 +872,9 @@ Welcome again, and thank you for choosing ClockField.
   app.post("/api/admins/invite", requireRole("admin"), async (req, res) => {
     try {
       const user = req.user as any;
-      const { firstName, lastName, phone, tempPin: customPin, managementRole, sendEmailInvite } = req.body;
+      const { phone, tempPin: customPin, managementRole, sendEmailInvite } = req.body;
+      const firstName=typeof req.body.firstName==="string"?req.body.firstName.trim():"",lastName=typeof req.body.lastName==="string"?req.body.lastName.trim():"";
+      if(!firstName||!lastName||firstName.length>100||lastName.length>100||(phone!=null&&(typeof phone!=="string"||phone.length>100))||(customPin!=null&&typeof customPin!=="string"))return res.status(400).json({message:"Enter valid names and contact details"});
       const email=String(req.body.email||"").trim().toLowerCase();
       if(!["admin","assistant","team"].includes(managementRole||"admin"))return res.status(400).json({message:"Select a valid management role"});
       let permissions;try{permissions=validPermissions(req.body.adminPermissions||["employees","schedule","attendance","messages"]);}catch(error:any){return res.status(400).json({message:error.message});}

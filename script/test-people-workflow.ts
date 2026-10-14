@@ -50,6 +50,7 @@ new Function('app','storage','requireRole','validPermissions','generateTempPin',
 let inviteReq:any={user:{id:'owner',companyId:'company',firstName:'Example',lastName:'Owner',adminPermissions:null},body:{firstName:'Example',lastName:'Manager',email:'manager@example.test',managementRole:'team',sendEmailInvite:true,adminPermissions:['attendance']},protocol:'https',get:()=> 'example.test'};
 res=response();await inviteHandler(inviteReq,res);assert.equal(res.code,200,JSON.stringify(res.body));assert.equal(created.loginEnabled,false);assert.equal(created.tempPin,null);assert.equal(res.body.tempPin,null);assert.equal(sentMail.inviterName,'Example Owner');assert.ok(sentMail.inviteUrl.includes('/accept-invite/'));
 created=null;res=response();await inviteHandler({...inviteReq,user:limited,body:{...inviteReq.body,adminPermissions:['payroll']}},res);assert.equal(res.code,403);assert.equal(created,null);
+created=null;res=response();await inviteHandler({...inviteReq,body:{...inviteReq.body,firstName:{invalid:'name'}}},res);assert.equal(res.code,400);assert.equal(created,null);
 console.log('PASS: real emailed manager invitations keep login pending, disclose no PIN, use the correct inviter name, and prevent permission escalation. Email delivery stubbed.');
 // Exercise application review/import, including retries, without a database.
 const teamSource=await fs.readFile('server/team-hiring.ts','utf8');const teamCode=(await transform(teamSource.slice(teamSource.indexOf('export function registerTeamHiring')),{loader:'ts',format:'cjs'})).code;
