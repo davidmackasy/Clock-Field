@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { useParams } from "wouter";
+import { useParams, useSearch } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -87,6 +87,7 @@ function YesNoSelect({ label, value, onChange, options }: { label: string; value
 
 export default function PublicBookingForm() {
   const { companyId } = useParams<{ companyId: string }>();
+  const isEmbed = new URLSearchParams(useSearch()).get("embed") === "true";
   const [submitted, setSubmitted] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -271,14 +272,14 @@ export default function PublicBookingForm() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-2xl mx-auto">
+    <div className={isEmbed ? "w-full bg-transparent py-4 px-2" : "min-h-screen bg-gray-50 py-8 px-4"}>
+      <div className={isEmbed ? "w-full" : "w-full max-w-6xl mx-auto"}>
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Booking Request</h1>
           <p className="text-gray-500 mt-2">Fill out the form below and we'll contact you with an estimate.</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8 space-y-10">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-8 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10 [&>section]:min-w-0">
 
           {/* ── Contact ── */}
           <section>
@@ -608,7 +609,7 @@ export default function PublicBookingForm() {
           </section>
 
           {/* ── Consent ── */}
-          <section>
+          <section className="lg:col-span-2">
             <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
               <label className="flex items-start gap-3 cursor-pointer">
                 <Checkbox data-testid="checkbox-consent" checked={consentGiven} onCheckedChange={v => setConsentGiven(!!v)} className="mt-0.5" />
@@ -621,13 +622,13 @@ export default function PublicBookingForm() {
           </section>
 
           {submit.isError && (
-            <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
+            <div className="lg:col-span-2 flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
               <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
               <p className="text-sm text-red-700">{(submit.error as Error)?.message || "Please fix the errors above."}</p>
             </div>
           )}
 
-          <Button data-testid="button-submit-booking" onClick={() => submit.mutate()} disabled={submit.isPending} className="w-full h-12 text-base font-semibold">
+          <Button data-testid="button-submit-booking" onClick={() => submit.mutate()} disabled={submit.isPending} className="lg:col-span-2 w-full h-12 text-base font-semibold">
             {submit.isPending ? "Submitting..." : "Submit Booking Request"}
           </Button>
         </div>

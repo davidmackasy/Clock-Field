@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO } from "date-fns";
@@ -29,6 +30,13 @@ import { ScheduleCleanerModal, type ScheduleBookingInfo } from "@/components/adm
 async function copyFormLink(value: string, toast: any, label = "Link") {
   try { if (!value) throw new Error("The link is not ready"); await navigator.clipboard.writeText(value); toast({ title: `${label} copied!` }); }
   catch { toast({ title: "Could not copy the link", description: "Open Preview and copy the address from your browser.", variant: "destructive" }); }
+}
+function SubmissionAnswer({ field, value }: { field: string; value: unknown }) {
+  const text = typeof value === "boolean" ? (value ? "Yes" : "No") : Array.isArray(value) ? value.map(v => typeof v === "object" ? JSON.stringify(v) : String(v)).join(", ") : typeof value === "object" ? JSON.stringify(value, null, 2) : String(value);
+  return <div className={cn("min-w-0 rounded-lg bg-muted/30 p-3", text.length > 120 && "sm:col-span-2")}>
+    <dt className="text-xs font-medium text-muted-foreground capitalize mb-1">{field.replace(/([A-Z])/g, " $1").replace(/_/g, " ")}</dt>
+    <dd className="text-sm whitespace-pre-wrap break-words leading-relaxed">{text.length > 350 ? <details><summary className="cursor-pointer text-primary font-medium">{text.slice(0, 100)}… Read full answer</summary><p className="mt-2">{text}</p></details> : text}</dd>
+  </div>;
 }
 function RequestError({ retry }: { retry: () => void }) { return <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">Unable to load this information. <Button variant="outline" size="sm" onClick={retry}>Retry</Button></div>; }
 
@@ -313,6 +321,7 @@ function FormsTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
+  const [formSearch, setFormSearch] = useState("");
   const [newName, setNewName] = useState("");
   const [smartMode, setSmartMode] = useState(false);
   const [bookingMode, setBookingMode] = useState(false);
@@ -354,28 +363,28 @@ function FormsTab() {
     <div className="flex flex-col gap-4">
       {formsError && <RequestError retry={() => { void retryForms(); }} />}
       <div className="flex flex-wrap gap-3 items-center justify-between">
-        <p className="text-sm text-muted-foreground">Shareable multi-step forms clients fill out to request a quote.</p>
+        <div><h2 className="text-xl font-semibold">Your forms</h2><p className="text-sm text-muted-foreground mt-1">Create, share and manage the forms your clients use to request a service.</p></div>
         <Button data-testid="button-new-quote-form" size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
           <Plus className="w-4 h-4" /> New Form
         </Button>
       </div>
 
       {/* Booking Form — always-on system card */}
-      <div className="rounded-xl border-2 border-indigo-200 bg-indigo-50/40 overflow-hidden">
+      <div className="rounded-xl border bg-card overflow-hidden">
         <div className="h-1 w-full bg-indigo-400" />
         <div className="p-4 flex flex-col gap-3">
           <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2">
+            <div className="flex items-start gap-3 min-w-0">
               <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
                 <CalendarCheck className="w-4 h-4 text-indigo-600" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <p className="font-semibold text-sm">Booking Request Form</p>
                   <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">System</span>
                   <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200">Active</span>
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5">Clients submit service requests, estimates are generated, quotes are sent</p>
+                <p className="text-sm text-muted-foreground mt-0.5">Collect contact details, service requirements and preferred dates.</p>
               </div>
             </div>
             {totalBookings > 0 && (
@@ -384,33 +393,28 @@ function FormsTab() {
               </span>
             )}
           </div>
-          {bookingFormUrl && (
-            <div className="flex items-center gap-1.5 bg-white/70 border border-indigo-200 rounded-lg px-3 py-1.5">
-              <code className="text-[10px] text-muted-foreground flex-1 truncate">{bookingFormUrl}</code>
-            </div>
-          )}
-          <div className="flex items-center gap-2 pt-1 border-t border-indigo-200/60">
+          <div className="flex flex-wrap items-center gap-4 pt-3 border-t">
             <button
               data-testid="button-copy-booking-link"
-              className="flex items-center gap-1.5 text-[11px] text-indigo-600 hover:text-indigo-800 transition-colors"
+              className="flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 transition-colors"
               onClick={() => { void copyFormLink(bookingFormUrl, toast); }}
             >
               <Copy className="w-3 h-3" /> Copy Link
             </button>
             <a href={bookingFormUrl} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-[11px] text-indigo-600 hover:text-indigo-800 transition-colors">
+              className="flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 transition-colors">
               <ExternalLink className="w-3 h-3" /> Preview
             </a>
             <div className="flex-1" />
             <button
               data-testid="button-manage-booking-form-card"
-              className="flex items-center gap-1.5 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+              className="flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
               onClick={() => setManagingBookingForm(true)}
             >
               <Settings2 className="w-3 h-3" /> Manage
             </button>
             <button
-              className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-primary transition-colors"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
               onClick={() => navigate("/admin/schedule?tab=bookings")}
             >
               <ArrowRight className="w-3 h-3" /> View all bookings
@@ -431,6 +435,7 @@ function FormsTab() {
         />
       )}
 
+      {!managingBookingForm && <Input aria-label="Search forms" placeholder="Search forms by name…" value={formSearch} onChange={e => setFormSearch(e.target.value)} className="max-w-xl" />}
       {!managingBookingForm && isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{[1,2,3].map(i => <Skeleton key={i} className="h-36 rounded-xl" />)}</div>
       ) : !managingBookingForm && forms.length === 0 ? (
@@ -441,13 +446,13 @@ function FormsTab() {
           <Button className="mt-5 gap-1.5" onClick={() => setCreateOpen(true)}><Plus className="w-4 h-4" /> Create First Form</Button>
         </div>
       ) : !managingBookingForm ? (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          {forms.map(form => {
+        <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
+          {forms.length > 0 && !forms.some(form => form.name.toLowerCase().includes(formSearch.toLowerCase())) && <p className="col-span-full py-10 text-center text-muted-foreground">No forms match your search.</p>}
+          {forms.filter(form => form.name.toLowerCase().includes(formSearch.toLowerCase())).map(form => {
             const publicUrl = `${window.location.origin}/form/${form.companyId}/${form.slug}`;
             return (
               <div key={form.id} data-testid={`card-quote-form-${form.id}`}
-                className="group rounded-xl border bg-card hover:shadow-md hover:border-primary/20 transition-all duration-150 flex flex-col overflow-hidden cursor-pointer"
-                onClick={() => navigate(`/admin/quote-forms/${form.id}`)}>
+                className="group rounded-xl border bg-card hover:shadow-md hover:border-primary/20 transition-all duration-150 flex flex-col overflow-hidden">
                 <div className={cn("h-1 w-full", form.isActive ? "bg-green-400" : "bg-gray-200")} />
                 <div className="p-4 flex flex-col gap-3 flex-1 relative">
                   <button aria-label={`Delete ${form.name}`} data-testid={`button-delete-form-${form.id}`}
@@ -470,7 +475,8 @@ function FormsTab() {
                     </Badge>
                   </div>
                   <p className="text-[11px] text-muted-foreground">Created {fmtDate(form.createdAt)}</p>
-                  <div className="flex items-center gap-2 mt-auto pt-2 border-t">
+                  <div className="flex flex-wrap items-center gap-3 mt-auto pt-3 border-t">
+                    <Button variant="outline" size="sm" onClick={() => navigate(`/admin/quote-forms/${form.id}`)}><Edit3 className="w-3.5 h-3.5 mr-1.5" /> Edit</Button>
                     <button className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-primary transition-colors"
                       onClick={e => { e.stopPropagation(); void copyFormLink(publicUrl, toast); }}>
                       <Copy className="w-3 h-3" /> Copy Link
@@ -494,19 +500,19 @@ function FormsTab() {
       ) : null}
 
       <Dialog open={createOpen} onOpenChange={v => { setCreateOpen(v); if (!v) { setNewName(""); setSmartMode(false); setBookingMode(false); } }}>
-        <DialogContent className="w-full max-w-md mx-auto overflow-hidden">
+        <DialogContent className="w-[calc(100%-2rem)] max-w-3xl mx-auto max-h-[90dvh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Settings2 className="w-4 h-4 text-primary" /> New Form</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-1 max-h-[70vh] overflow-y-auto pr-1">
+          <div className="space-y-6 py-2 min-h-0 overflow-y-auto pr-1">
             {/* Form type selector — vertical radio list, never overflows */}
             <div className="space-y-2">
               <Label className="text-xs font-medium block">Form Type</Label>
-              <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {/* Custom Builder */}
-                <button type="button"
-                  className={cn("flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full",
+                <button type="button" aria-pressed={!smartMode && !bookingMode}
+                  className={cn("flex flex-col items-start gap-3 p-4 rounded-xl border text-left transition-all w-full",
                     !smartMode && !bookingMode ? "border-primary bg-primary/5" : "border-muted bg-muted/20 hover:border-primary/40")}
                   onClick={() => { setSmartMode(false); setBookingMode(false); }}>
                   <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
@@ -514,15 +520,15 @@ function FormsTab() {
                     <FileText className={cn("w-4 h-4", !smartMode && !bookingMode ? "text-primary" : "text-muted-foreground")} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={cn("text-xs font-semibold", !smartMode && !bookingMode ? "text-primary" : "text-foreground")}>Custom Builder</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Build your own multi-step form with custom field groups</p>
+                    <p className={cn("text-sm font-semibold", !smartMode && !bookingMode ? "text-primary" : "text-foreground")}>Custom Builder</p>
+                    <p className="text-sm leading-relaxed text-muted-foreground mt-0.5">Build your own multi-step form with custom field groups</p>
                   </div>
                   {!smartMode && !bookingMode && <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />}
                 </button>
 
                 {/* Smart Cleaning Form */}
-                <button type="button" data-testid="button-select-smart-form"
-                  className={cn("flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full",
+                <button type="button" aria-pressed={smartMode} data-testid="button-select-smart-form"
+                  className={cn("flex flex-col items-start gap-3 p-4 rounded-xl border text-left transition-all w-full",
                     smartMode ? "border-purple-500 bg-purple-50" : "border-muted bg-muted/20 hover:border-purple-300")}
                   onClick={() => { setSmartMode(true); setBookingMode(false); }}>
                   <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
@@ -530,15 +536,15 @@ function FormsTab() {
                     <Sparkles className={cn("w-4 h-4", smartMode ? "text-purple-600" : "text-muted-foreground")} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={cn("text-xs font-semibold", smartMode ? "text-purple-700" : "text-foreground")}>Smart Cleaning Form</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Pre-built cleaning quote form with conditional residential/commercial steps</p>
+                    <p className={cn("text-sm font-semibold", smartMode ? "text-purple-700" : "text-foreground")}>Smart Cleaning Form</p>
+                    <p className="text-sm leading-relaxed text-muted-foreground mt-0.5">Pre-built cleaning quote form with conditional residential/commercial steps</p>
                   </div>
                   {smartMode && <div className="w-2 h-2 rounded-full bg-purple-500 flex-shrink-0" />}
                 </button>
 
                 {/* Booking Form */}
-                <button type="button" data-testid="button-select-booking-form"
-                  className={cn("flex items-center gap-3 p-3 rounded-xl border text-left transition-all w-full",
+                <button type="button" aria-pressed={bookingMode} data-testid="button-select-booking-form"
+                  className={cn("flex flex-col items-start gap-3 p-4 rounded-xl border text-left transition-all w-full",
                     bookingMode ? "border-indigo-500 bg-indigo-50" : "border-muted bg-muted/20 hover:border-indigo-300")}
                   onClick={() => { setBookingMode(true); setSmartMode(false); }}>
                   <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
@@ -546,8 +552,8 @@ function FormsTab() {
                     <CalendarCheck className={cn("w-4 h-4", bookingMode ? "text-indigo-600" : "text-muted-foreground")} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={cn("text-xs font-semibold", bookingMode ? "text-indigo-700" : "text-foreground")}>Booking Form</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">System booking request form — already live and collecting client bookings</p>
+                    <p className={cn("text-sm font-semibold", bookingMode ? "text-indigo-700" : "text-foreground")}>Booking Form</p>
+                    <p className="text-sm leading-relaxed text-muted-foreground mt-0.5">System booking request form — already live and collecting client bookings</p>
                   </div>
                   {bookingMode && <div className="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0" />}
                 </button>
@@ -583,13 +589,13 @@ function FormsTab() {
                 <Label className="text-xs font-medium mb-1.5 block">Form Name</Label>
                 <Input data-testid="input-new-form-name" placeholder="e.g. Cleaning Quote Request" value={newName}
                   onChange={e => setNewName(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter" && newName.trim()) createMutation.mutate({ name: newName.trim(), smart: smartMode }); }} />
+                  onKeyDown={e => { if (e.key === "Enter" && newName.trim() && !createMutation.isPending) createMutation.mutate({ name: newName.trim(), smart: smartMode }); }} />
                 <p className="text-[11px] text-muted-foreground mt-1">URL: /form/…/{newName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "form"}</p>
               </div>
             )}
           </div>
 
-          <div className="flex gap-2 pt-1">
+          <div className="flex gap-2 pt-4 border-t shrink-0">
             <Button variant="outline" className="flex-1" onClick={() => setCreateOpen(false)}>Cancel</Button>
             {bookingMode ? (
               <Button data-testid="button-manage-booking-form" className="flex-1 bg-indigo-600 hover:bg-indigo-700 gap-1.5"
@@ -1081,24 +1087,24 @@ function SubmissionsTab({ onGoToEstimator, initialBookingId }: { onGoToEstimator
   };
 
   // ── Unified list (form submissions + booking requests) ──────────────────────
-  type UnifiedItem = { id: string; _source: "submission" | "booking"; clientName: string; serviceType: string; submittedAt: string; pipelineStage: string; status: string; hasWalkthrough: boolean };
-  const submissionItems: UnifiedItem[] = submissions.map(s => ({ id: s.id, _source: "submission", clientName: s.clientName || "Unknown", serviceType: s.serviceType || s.formName, submittedAt: s.submittedAt, pipelineStage: s.pipelineStage, status: s.status, hasWalkthrough: s.hasWalkthrough || false }));
-  const bookingItems: UnifiedItem[] = bookingRequests.map(b => ({ id: b.id, _source: "booking", clientName: b.name, serviceType: b.serviceType, submittedAt: b.createdAt, pipelineStage: "", status: b.status, hasWalkthrough: false }));
+  type UnifiedItem = { id: string; _source: "submission" | "booking"; clientName: string; serviceType: string; submittedAt: string; pipelineStage: string; status: string; hasWalkthrough: boolean; address?: string; email?: string };
+  const submissionItems: UnifiedItem[] = submissions.map(s => ({ id: s.id, _source: "submission", clientName: s.clientName || "Unknown", serviceType: s.serviceType || s.formName, submittedAt: s.submittedAt, pipelineStage: s.pipelineStage, status: s.status, hasWalkthrough: s.hasWalkthrough || false, address: s.serviceAddress, email: s.clientEmail }));
+  const bookingItems: UnifiedItem[] = bookingRequests.map(b => ({ id: b.id, _source: "booking", clientName: b.name, serviceType: b.serviceType, submittedAt: b.createdAt, pipelineStage: "", status: b.status, hasWalkthrough: false, address: b.serviceAddress, email: b.email }));
   const allItems = [...submissionItems, ...bookingItems].sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
   const sourceItems = sourceFilter === "submission" ? submissionItems : sourceFilter === "booking" ? bookingItems : allItems;
-  const filtered = sourceItems.filter(item=>(stageFilter==="all"||(item._source==="submission"&&item.pipelineStage===stageFilter))&&`${item.clientName} ${item.serviceType} ${item.submittedAt} ${item.id}`.toLowerCase().includes(submissionSearch.toLowerCase()));
+  const filtered = sourceItems.filter(item=>(stageFilter==="all"||(item._source==="submission"&&item.pipelineStage===stageFilter))&&`${item.clientName} ${item.serviceType} ${item.address || ""} ${item.email || ""} ${item.submittedAt} ${fmtDate(item.submittedAt)} ${item.id}`.toLowerCase().includes(submissionSearch.toLowerCase()));
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 min-h-0 h-full">
+    <div className="flex flex-col gap-5 min-h-0">
       {/* List */}
-      <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-2">
-        <Input aria-label="Search requests" placeholder="Search name, date, service or request ID…" value={submissionSearch} onChange={e=>setSubmissionSearch(e.target.value)}/>
+      <div className="w-full flex flex-col gap-3">
+        <div className="flex flex-col xl:flex-row gap-3"><Input className="xl:flex-1" aria-label="Search requests" placeholder="Search name, date, service or request ID…" value={submissionSearch} onChange={e=>setSubmissionSearch(e.target.value)}/>
         {/* Source filter */}
-        <div className="flex gap-1 rounded-lg bg-muted/40 p-0.5">
+        <div className="flex gap-1 rounded-lg bg-muted/40 p-1 xl:w-64 shrink-0">
           {(["all", "submission", "booking"] as const).map(f => (
             <button key={f} data-testid={`button-source-filter-${f}`}
               onClick={() => { setSourceFilter(f); setStageFilter("all"); if (f === "booking") setSelectedId(null); if (f === "submission") setSelectedBookingId(null); }}
-              className={cn("flex-1 text-[11px] font-medium py-1 rounded-md transition-colors",
+              className={cn("flex-1 text-sm font-medium px-3 py-2 rounded-md transition-colors",
                 sourceFilter === f ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}>
               {f === "all" ? "All" : f === "submission" ? "Forms" : "Bookings"}
             </button>
@@ -1108,7 +1114,7 @@ function SubmissionsTab({ onGoToEstimator, initialBookingId }: { onGoToEstimator
         {/* Stage filter (only for submissions) */}
         {sourceFilter !== "booking" && (
           <Select value={stageFilter} onValueChange={setStageFilter}>
-            <SelectTrigger className="h-8 text-xs" data-testid="select-stage-filter">
+            <SelectTrigger className="h-10 text-sm xl:w-48" data-testid="select-stage-filter">
               <SelectValue placeholder="Filter by stage" />
             </SelectTrigger>
             <SelectContent>
@@ -1118,29 +1124,33 @@ function SubmissionsTab({ onGoToEstimator, initialBookingId }: { onGoToEstimator
           </Select>
         )}
 
-        <div className="max-h-72 lg:max-h-none lg:flex-1 overflow-y-auto space-y-2">
+        </div>
+        <p className="text-sm text-muted-foreground">{filtered.length} request{filtered.length === 1 ? "" : "s"} · Select a request to review its details.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
           {(submissionsError || bookingsError) ? <RequestError retry={() => { void retrySubmissions(); void retryBookings(); }} /> : (isLoading || bookingsLoading) ? [1,2,3].map(i => <Skeleton key={i} className="h-20 rounded-lg" />) :
-            filtered.length === 0 ? <p className="text-center text-sm text-muted-foreground py-12">No submissions yet.</p> :
+            filtered.length === 0 ? <p className="col-span-full text-center text-sm text-muted-foreground py-12 rounded-xl border border-dashed">No matching requests. Try another name, date or filter.</p> :
             filtered.map(item => (
               <button key={item.id} data-testid={`card-submission-${item.id}`}
-                className={cn("w-full text-left p-3 rounded-lg border bg-card hover:border-primary/30 transition-colors",
+                className={cn("w-full min-w-0 text-left p-5 rounded-xl border bg-card hover:border-primary/50 hover:shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-primary",
                   item._source === "submission" ? selectedId === item.id && "border-primary/40 bg-primary/5" : selectedBookingId === item.id && "border-primary/40 bg-primary/5")}
                 onClick={() => { if (item._source === "submission") { setSelectedId(item.id); setSelectedBookingId(null); } else { setSelectedBookingId(item.id); setSelectedId(null); } }}>
                 <div className="flex items-start justify-between gap-1">
-                  <span className="font-medium text-sm truncate">{item.clientName}</span>
+                  <span className="font-semibold text-base break-words">{item.clientName}</span>
                   {item._source === "submission" ? stageBadge(item.pipelineStage) : (
                     <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-indigo-100 text-indigo-700 border border-indigo-200 shrink-0">Booking</span>
                   )}
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{item.serviceType}</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <p className="text-[11px] text-muted-foreground">{fmtDate(item.submittedAt)}</p>
+                <p className="text-sm text-muted-foreground mt-2 break-words">{item.serviceType}</p>
+                {item.address && <p className="text-sm text-muted-foreground mt-2 flex items-start gap-1.5"><MapPin className="w-4 h-4 shrink-0 mt-0.5" /><span className="break-words">{item.address}</span></p>}
+                <div className="flex flex-wrap items-center gap-2 mt-4">
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />{fmtDate(item.submittedAt)} · {format(parseISO(item.submittedAt), "h:mm a")}</p>
                   {item.hasWalkthrough && (
                     <span className="flex items-center gap-0.5 text-[10px] font-medium text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded-full border border-violet-200">
                       <Camera className="w-2.5 h-2.5" /> Walkthrough
                     </span>
                   )}
                 </div>
+                <div className="mt-4 pt-3 border-t flex items-center justify-between text-xs"><span className="text-muted-foreground">{item._source === "booking" ? "Booking form" : "Quote form"}</span><span className="text-primary font-medium flex items-center gap-1">View request <ChevronRight className="w-3.5 h-3.5" /></span></div>
               </button>
             ))
           }
@@ -1148,7 +1158,10 @@ function SubmissionsTab({ onGoToEstimator, initialBookingId }: { onGoToEstimator
       </div>
 
       {/* Detail pane */}
-      <div className="min-w-0 flex-1 lg:overflow-y-auto">
+      <Sheet open={!!selectedId || !!selectedBookingId} onOpenChange={open => { if (!open) { setSelectedId(null); setSelectedBookingId(null); } }}>
+        <SheetContent className="w-full sm:max-w-4xl p-0 flex flex-col gap-0" aria-describedby="request-detail-description">
+          <SheetHeader className="px-5 py-4 border-b shrink-0 pr-12 text-left"><SheetTitle>Request details</SheetTitle><SheetDescription id="request-detail-description">Review the submission, estimate and next steps.</SheetDescription></SheetHeader>
+          <div className="min-w-0 min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
         {selectedBookingId ? (
           <BookingDetailPane bookingId={selectedBookingId} onGoToEstimator={onGoToEstimator} />
         ) : !selectedId ? (
@@ -1161,14 +1174,14 @@ function SubmissionsTab({ onGoToEstimator, initialBookingId }: { onGoToEstimator
         ) : (
           <div className="space-y-4 p-1">
             {/* Header */}
-            <div className="flex items-start gap-3">
+            <div className="flex flex-wrap items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                 {["Commercial","Industrial / Warehouse"].includes(detail.data?.propertyCategory) ? <Building2 className="w-5 h-5 text-primary" /> : <Home className="w-5 h-5 text-primary" />}
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-[180px]">
                 <h2 className="font-semibold text-base">{detail.clientName || "Unknown Client"}</h2>
                 <div className="flex items-center gap-3 flex-wrap mt-0.5">
-                  {detail.clientEmail && <span className="text-xs text-muted-foreground">{detail.clientEmail}</span>}
+                  {detail.clientEmail && <span className="text-sm break-all text-muted-foreground">{detail.clientEmail}</span>}
                   {detail.clientPhone && <span className="text-xs text-muted-foreground">{detail.clientPhone}</span>}
                 </div>
               </div>
@@ -1183,7 +1196,7 @@ function SubmissionsTab({ onGoToEstimator, initialBookingId }: { onGoToEstimator
             </div>
 
             {/* Info row */}
-            <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               {detail.serviceType && <div className="flex items-center gap-1.5 text-muted-foreground"><FileText className="w-3.5 h-3.5" /> {detail.serviceType}</div>}
               {detail.serviceAddress && <div className="flex items-center gap-1.5 text-muted-foreground"><MapPin className="w-3.5 h-3.5" /> {detail.serviceAddress}</div>}
               <div className="flex items-center gap-1.5 text-muted-foreground"><Calendar className="w-3.5 h-3.5" /> {fmtDate(detail.submittedAt)}</div>
@@ -1214,6 +1227,57 @@ function SubmissionsTab({ onGoToEstimator, initialBookingId }: { onGoToEstimator
                   Start Site Walk
                 </Button>
               </div>
+            </div>
+
+            <div className="rounded-xl border bg-card p-4">
+              <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5"><ClipboardList className="w-4 h-4 text-primary" /> Submission Details</h3>
+              {(() => {
+                const d = detail.data || {};
+                const isCommercial = ["Commercial","Industrial / Warehouse"].includes(d.propertyCategory);
+                const groups: { label: string; icon: any; color: string; keys: string[] }[] = [
+                  { label: "Property", icon: isCommercial ? Building2 : Home, color: isCommercial ? "text-blue-600" : "text-green-600",
+                    keys: ["propertyCategory","serviceAddress","city","province","postalCode"] },
+                  { label: "Service", icon: Sparkles, color: "text-purple-600",
+                    keys: ["serviceType","cleaningFrequency","preferredTime","preferredDate","availabilityNotes"] },
+                  { label: isCommercial ? "Commercial Details" : "Property Details", icon: isCommercial ? BarChart3 : Home, color: "text-orange-600",
+                    keys: isCommercial
+                      ? ["sqft","floorCount","employeeCount","weeklyVisits","operatingHours","businessType","wasteDisposal","cleaningAreas","lastCleaned"]
+                      : ["sqft","bedrooms","bathrooms","halfBaths","floors","pets","hasKids","unfurnished"] },
+                  { label: "Add-ons & Notes", icon: Plus, color: "text-pink-600",
+                    keys: ["addons","specialRequests","howHeard","referral"] },
+                ];
+                return (
+                  <div className="space-y-3">
+                    {groups.map(group => {
+                      const entries = group.keys.map(k => [k, d[k]]).filter(([,v]) => v !== "" && v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0));
+                      if (!entries.length) return null;
+                      const Icon = group.icon;
+                      return (
+                        <div key={group.label}>
+                          <div className={`flex items-center gap-1.5 text-xs font-semibold mb-1.5 ${group.color}`}><Icon className="w-3.5 h-3.5" /> {group.label}</div>
+                          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {entries.map(([k, v]) => <SubmissionAnswer key={String(k)} field={String(k)} value={v} />)}
+                          </dl>
+                        </div>
+                      );
+                    })}
+                    {/* Any ungrouped fields */}
+                    {(() => {
+                      const allGrouped = groups.flatMap(g => g.keys);
+                      const extra = Object.entries(d).filter(([k, v]) => !allGrouped.includes(k) && v !== "" && v !== null && v !== undefined && !["firstName","lastName","email","phone","companyName"].includes(k));
+                      if (!extra.length) return null;
+                      return (
+                        <div>
+                          <div className="flex items-center gap-1.5 text-xs font-semibold mb-1.5 text-muted-foreground"><FileText className="w-3.5 h-3.5" /> Other</div>
+                          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {extra.map(([k, v]) => <SubmissionAnswer key={k} field={k} value={v} />)}
+                          </dl>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* AI Estimate */}
@@ -1387,71 +1451,6 @@ function SubmissionsTab({ onGoToEstimator, initialBookingId }: { onGoToEstimator
             </div>
 
             {/* Form Answers — smart grouped display */}
-            <div className="rounded-xl border bg-card p-4">
-              <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5"><ClipboardList className="w-4 h-4 text-primary" /> Submission Details</h3>
-              {(() => {
-                const d = detail.data || {};
-                const isCommercial = ["Commercial","Industrial / Warehouse"].includes(d.propertyCategory);
-                const groups: { label: string; icon: any; color: string; keys: string[] }[] = [
-                  { label: "Property", icon: isCommercial ? Building2 : Home, color: isCommercial ? "text-blue-600" : "text-green-600",
-                    keys: ["propertyCategory","serviceAddress","city","province","postalCode"] },
-                  { label: "Service", icon: Sparkles, color: "text-purple-600",
-                    keys: ["serviceType","cleaningFrequency","preferredTime","preferredDate","availabilityNotes"] },
-                  { label: isCommercial ? "Commercial Details" : "Property Details", icon: isCommercial ? BarChart3 : Home, color: "text-orange-600",
-                    keys: isCommercial
-                      ? ["sqft","floorCount","employeeCount","weeklyVisits","operatingHours","businessType","wasteDisposal","cleaningAreas","lastCleaned"]
-                      : ["sqft","bedrooms","bathrooms","halfBaths","floors","pets","hasKids","unfurnished"] },
-                  { label: "Add-ons & Notes", icon: Plus, color: "text-pink-600",
-                    keys: ["addons","specialRequests","howHeard","referral"] },
-                ];
-                return (
-                  <div className="space-y-3">
-                    {groups.map(group => {
-                      const entries = group.keys.map(k => [k, d[k]]).filter(([,v]) => v !== "" && v !== null && v !== undefined && v !== false && !(Array.isArray(v) && v.length === 0));
-                      if (!entries.length) return null;
-                      const Icon = group.icon;
-                      return (
-                        <div key={group.label}>
-                          <div className={`flex items-center gap-1.5 text-xs font-semibold mb-1.5 ${group.color}`}><Icon className="w-3.5 h-3.5" /> {group.label}</div>
-                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 pl-5">
-                            {entries.map(([k, v]) => (
-                              <div key={String(k)} className="flex items-start gap-1.5 text-xs">
-                                <span className="text-muted-foreground capitalize flex-shrink-0" style={{minWidth:"80px"}}>
-                                  {String(k).replace(/([A-Z])/g, " $1").replace(/_/g, " ")}
-                                </span>
-                                <span className="text-foreground font-medium">
-                                  {Array.isArray(v) ? v.join(", ") : String(v)}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {/* Any ungrouped fields */}
-                    {(() => {
-                      const allGrouped = groups.flatMap(g => g.keys);
-                      const extra = Object.entries(d).filter(([k, v]) => !allGrouped.includes(k) && v !== "" && v !== null && v !== undefined && v !== false && !["firstName","lastName","email","phone","companyName"].includes(k));
-                      if (!extra.length) return null;
-                      return (
-                        <div>
-                          <div className="flex items-center gap-1.5 text-xs font-semibold mb-1.5 text-muted-foreground"><FileText className="w-3.5 h-3.5" /> Other</div>
-                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 pl-5">
-                            {extra.map(([k, v]) => (
-                              <div key={k} className="flex items-start gap-1.5 text-xs">
-                                <span className="text-muted-foreground capitalize flex-shrink-0" style={{minWidth:"80px"}}>{k.replace(/([A-Z])/g, " $1")}</span>
-                                <span className="text-foreground font-medium">{Array.isArray(v) ? v.join(", ") : String(v)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                );
-              })()}
-            </div>
-
             {/* Notes / Activity */}
             <div className="rounded-xl border bg-card p-4">
               <h3 className="text-sm font-semibold mb-3">Internal Notes</h3>
@@ -1620,7 +1619,9 @@ function SubmissionsTab({ onGoToEstimator, initialBookingId }: { onGoToEstimator
             )}
           </div>
         )}
-      </div>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Walkthrough Photo Preview Modal */}
       {previewPhoto && (
@@ -2056,7 +2057,7 @@ function EmbedTab() {
 
   const publicUrl = form ? `${window.location.origin}/form/${form.companyId}/${form.slug}` : "";
   const embedUrl = form ? `${publicUrl}?embed=true` : "";
-  const embedCode = form ? `<iframe src="${embedUrl}" width="100%" height="900" frameborder="0" style="border:none; width:100%; max-width:100%;"></iframe>` : "";
+  const embedCode = form ? `<iframe title="Service request form" src="${embedUrl}" width="100%" height="900" frameborder="0" style="border:none; width:100%; max-width:100%;"></iframe>` : "";
 
   const copy = (text: string, label: string) => { void copyFormLink(text, toast); };
 

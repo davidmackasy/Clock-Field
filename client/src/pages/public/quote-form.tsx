@@ -666,7 +666,7 @@ export default function PublicQuoteForm() {
       )}
 
       {/* Progress bar — totalSteps includes walkthrough */}
-      <div className={cn("px-4 max-w-lg mx-auto w-full", isEmbed ? "pt-4 pb-2" : "py-3")}>
+      <div className={cn("mx-auto w-full", isEmbed ? "px-2 pt-4 pb-2" : "px-4 max-w-5xl py-3")}>
         <div className="flex gap-1.5 mb-2">
           {Array.from({ length: totalSteps }).map((_, idx) => (
             <div key={idx} className="flex-1 h-1.5 rounded-full transition-all duration-500"
@@ -688,7 +688,7 @@ export default function PublicQuoteForm() {
 
       {/* Main form card */}
       <main className={cn("px-4", isEmbed ? "pb-4" : "flex-1 pb-6")}>
-        <div className="max-w-lg mx-auto w-full">
+        <div className={cn("mx-auto w-full", !isEmbed && "max-w-5xl")}>
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
 
             {/* Walkthrough step */}

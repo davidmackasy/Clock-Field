@@ -192,7 +192,7 @@ function FormPreview({ config, brandColor }: { config: FormConfig; brandColor?: 
         </div>
       )}
 
-      <div className="max-w-sm mx-auto">
+      <div className="w-full max-w-5xl mx-auto">
         <div className="text-center mb-4">
           <div className="w-10 h-10 rounded-xl mx-auto mb-2 flex items-center justify-center" style={{ background: color }}>
             <ClipboardList className="w-5 h-5 text-white" />
