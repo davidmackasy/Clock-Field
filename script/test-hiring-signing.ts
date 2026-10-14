@@ -27,3 +27,8 @@ res=response();await sign({params:{token:'fixture'},body:{policyId:'p',...signed
 const preview=await handler('get','/api/public/hiring-package/:token/documents/:id');res=response();await preview({params:{token:'fixture',id:'doc'}},res);assert.equal(res.code,404);
 doc={...doc,submissionId:'sub'};res=response();await preview({params:{token:'fixture',id:'doc'}},res);assert.equal(res.code,200);assert.equal(res.headers['X-Content-Type-Options'],'nosniff');assert.equal(res.body.toString(),'%PDF-1.4');
 console.log('PASS: per-policy signatures, dates, current versions, personalized server snapshots, independent final signature, availability and private document ownership. Isolated fixtures only.');
+
+assert.equal(personalizePolicy('I, __________________, acknowledge that I have read this policy.','Example Cleaner','2026-10-13'),'I, Example Cleaner, acknowledge that I have read this policy.');
+assert.equal(personalizePolicy('I __________________ understand the policy.','Example Cleaner','2026-10-13'),'I Example Cleaner understand the policy.');
+for(const type of ['government_id','passport','work_permit','provincial_id','permanent_residency','other_id'])assert.equal(hiringSubmissionError({applicationKind:'onboarding'},sub,{policies:[]},[{documentType:'sin_card'},{documentType:'void_cheque'},{documentType:type}],[]),null);
+console.log('PASS: in-sentence policy names and a single selected identification type, including permanent residency.');

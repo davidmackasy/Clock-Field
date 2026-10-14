@@ -10604,7 +10604,7 @@ Return ONLY valid JSON:
       const { documentType } = req.body;
       const description=String(req.body.description||"").trim();if(description.length>500)return res.status(400).json({message:"Document details must be 500 characters or less"});
       if(["other","other_id","supporting_2","supporting_3"].includes(documentType)&&!description)return res.status(400).json({message:"Describe this supporting document before uploading"});
-      if (!["sin_card","void_cheque","government_id","resume","certification","other","passport","work_permit","provincial_id","other_id","supporting_2","supporting_3"].includes(documentType)) return res.status(400).json({ message: "Select a valid document type" });
+      if (!["sin_card","void_cheque","government_id","resume","certification","other","passport","work_permit","provincial_id","other_id","permanent_residency","supporting_2","supporting_3"].includes(documentType)) return res.status(400).json({ message: "Select a valid document type" });
       const now = hpNow();
       if(!validDocument(req.file.buffer,req.file.mimetype))return res.status(400).json({message:"Upload a valid PDF, image, Word document or text file"});
       const fileData = req.file.buffer.toString("base64");

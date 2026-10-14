@@ -1,3 +1,4 @@
+import {identificationTypes} from './hiring-documents';
 import { z } from 'zod';
 export function hiringSubmissionError(pkg: any, sub: any, template: any, documents: any[], acceptances: any[]) {
     const info = sub?.personalInfoJson || {};
@@ -9,7 +10,7 @@ export function hiringSubmissionError(pkg: any, sub: any, template: any, documen
         const required = ['sin_card', 'void_cheque'];
         if (required.some(type => !documents.some(d => d.documentType === type)))
             return 'Upload all required onboarding documents';
-        if(!documents.some(d=>['government_id','passport','provincial_id','work_permit','other_id'].includes(d.documentType)))return 'Upload an identification or work authorization document';
+        if(!documents.some(d=>identificationTypes.includes(d.documentType)))return 'Upload an identification or work authorization document';
     }
     const policies = Array.isArray(template?.policies) ? template.policies : [];
     if (policies.some((p: any) => !acceptances.some(a => a.policyId === p.id && a.policyContentSnapshot === p.content && a.signerName === `${info.firstName} ${info.lastName}`.trim() && validPolicySignature(a))))

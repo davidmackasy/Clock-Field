@@ -1,3 +1,4 @@
+import {identificationOptions,identificationTypes} from "@shared/hiring-documents";
 import {HiringPolicyReader} from "@/components/hiring-policy-reader";
 import {EmployeeProfileFields} from "@/components/employee-profile-fields";
 import {emptyProfile} from "@shared/people";
@@ -104,6 +105,7 @@ export default function HiringPackagePage() {
     allergies: "", medications: "", conditions: "", otherNotes: "",
   });
   const [acceptedPolicies, setAcceptedPolicies] = useState<Set<string>>(new Set());
+  const [identificationType,setIdentificationType]=useState("");
   const [documentDescriptions,setDocumentDescriptions]=useState<Record<string,string>>({});
   const [finalAck, setFinalAck] = useState(false);
 
@@ -290,8 +292,9 @@ export default function HiringPackagePage() {
 
   const { package: pkg, submission, template, policyAcceptances, documents, companyName } = data;
   const application=pkg.applicationKind==="application";
-  const additionalDocs=[{type:"passport",label:"Passport",description:"Only if requested by your employer"},{type:"work_permit",label:"Work permit / work authorization",description:"Only if applicable and requested"},{type:"provincial_id",label:"Provincial / state ID",description:"An alternative government-issued ID"},{type:"other_id",label:"Other identification",description:"Describe the identification you are providing"},{type:"other",label:"Supporting document",description:"Describe this document before uploading"},{type:"supporting_2",label:"Additional supporting document",description:"Optional"},{type:"supporting_3",label:"Additional supporting document",description:"Optional"}];
-  const documentOptions=[...(application?[{type:"resume",label:"Resume / employment history",description:"Optional PDF, image or Word file"},{type:"government_id",label:"Driver’s licence / government ID",description:"Provide only when requested by your employer"}]:REQUIRED_DOCS),...additionalDocs,...(documents.some(d=>d.documentType==="certification")?[{type:"certification",label:"Previously uploaded certificate",description:"Retained from your earlier draft"}]:[])];
+  const supportingDocs=[{type:"other",label:"Supporting document",description:"Describe this document before uploading"},{type:"supporting_2",label:"Additional supporting document",description:"Optional"},{type:"supporting_3",label:"Additional supporting document",description:"Optional"}];
+  const selectedIdentification=identificationOptions.filter(option=>option.type===identificationType||documents.some(doc=>doc.documentType===option.type)).map(option=>({...option,description:option.type==="other_id"?"Describe the identification you are providing":"Your selected identification document"}));
+  const documentOptions=[...(application?[{type:"resume",label:"Resume / employment history",description:"Optional PDF, image or Word file"}]:REQUIRED_DOCS.filter(doc=>doc.type!=="government_id")),...selectedIdentification,...supportingDocs,...(documents.some(d=>d.documentType==="certification")?[{type:"certification",label:"Previously uploaded certificate",description:"Retained from your earlier draft"}]:[])];
   const visibleSteps=STEPS.map((step,index)=>application&&index===2?{...step,label:"Experience & references"}:step);
 
 
@@ -476,6 +479,14 @@ export default function HiringPackagePage() {
             <div className="space-y-4" data-testid="step-documents">
               <h2 className="text-lg font-semibold text-foreground">Document Uploads</h2>
               <p className="text-sm text-muted-foreground">{application?"Upload documents requested by your employer. Other documents are optional.":"Upload the required onboarding documents."} Accepted formats: PDF, JPG, PNG, WebP, Word or text (max 20MB each).</p>
+              <div className="rounded-lg border p-4 space-y-2">
+                <Label htmlFor="identification-type">Which identification document will you provide?</Label>
+                <select id="identification-type" className="w-full border rounded-md p-2 text-sm bg-background" value={identificationType} onChange={e=>setIdentificationType(e.target.value)} disabled={uploadDocMutation.isPending}>
+                  <option value="">Choose a document type</option>
+                  {identificationOptions.map(option=><option key={option.type} value={option.type}>{option.label}</option>)}
+                </select>
+                <p className="text-sm text-muted-foreground">Choose the document you have. You do not need to upload every type.{application?" Provide identification only when requested by your employer.":" One identification or work authorization document is sufficient."}</p>
+              </div>
               <div className="space-y-4">
                 {documentOptions.map(doc => {
                   const uploaded = documents.find(d => d.documentType === doc.type);
@@ -583,7 +594,7 @@ export default function HiringPackagePage() {
                   { label: "Emergency Contacts", complete: emergencyContacts.some(c => c.name.trim()), icon: Heart },
                   { label: "Medical Information", complete: true, icon: Shield },
                   { label: "Policy Acceptances", complete: allPoliciesAccepted || policies.length === 0, icon: FileText },
-                  { label: "Documents", complete: application || ["sin_card","void_cheque"].every(type=>documents.some(d=>d.documentType===type)) && documents.some(d=>["government_id","passport","provincial_id","work_permit","other_id"].includes(d.documentType)), icon: Upload },
+                  { label: "Documents", complete: application || ["sin_card","void_cheque"].every(type=>documents.some(d=>d.documentType===type)) && documents.some(d=>identificationTypes.includes(d.documentType)), icon: Upload },
                   { label: "Signature", complete: finalAck, icon: PenTool },
                 ].map(item => {
                   const Icon = item.icon;
