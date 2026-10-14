@@ -298,7 +298,7 @@ export default function AdminManagement() {
                           {!(user as any)?.adminPermissions&&<Button type="button" size="sm" variant="outline" className="text-xs h-7" onClick={()=>{setAccessTarget(member);setMemberDetails({firstName:member.firstName,lastName:member.lastName,phone:member.phone||""});setAccessSelection(member.adminPermissions||ACCESS_MODULES.map(([key])=>key));}}>Details & access</Button>}
                           <Button
                             size="sm" variant="outline" className="text-xs h-7 gap-1"
-                            disabled={resetPinMutation.isPending || !member.isActive || member.loginEnabled===false}
+                            disabled={resetPinMutation.isPending || !member.isActive || (member.loginEnabled===false&&["sent","failed","expired"].includes(member.inviteStatus||""))}
                             onClick={() => resetPinMutation.mutate(member.id)}
                             data-testid={`button-reset-pin-${member.id}`}
                           >
