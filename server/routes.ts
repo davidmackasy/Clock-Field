@@ -1,3 +1,4 @@
+import {resolveWorkSite} from "./location-geocoding";
 import {geofenceInput} from "../shared/geofence";
 import {clockInSite,verifyClockInLocation} from "./clock-in-location";
 import { completedChecklistSteps, scheduledAssignmentDue, openSupplyRequest } from "@shared/worklog-state";
@@ -1405,6 +1406,10 @@ Welcome again, and thank you for choosing ClockField.
       });
       res.status(201).json(location);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/locations/:id/coordinates",requireRole("admin"),async(req,res)=>{
+    try {const user=req.user as any,site=await storage.getLocation(String(req.params.id));if(!site||site.companyId!==user.companyId)return res.status(404).json({message:"Work site not found"});const company=await storage.getCompany(user.companyId);res.json(await resolveWorkSite(site,company));}catch(error:any){res.status(422).json({message:error.name==="TimeoutError"?"Address lookup took too long. Retry or enter the building’s map pin.":error.message});}
   });
 
   app.patch("/api/locations/:id", requireRole("admin"), async (req, res) => {
