@@ -961,3 +961,16 @@ export async function sendAppMessageNotification(opts:{to:string;name:string;bus
  const text=`Hi ${opts.name},\n\nYou have a new message from ${opts.businessName}.${opts.photoCount?` It includes ${opts.photoCount} photo attachment(s).`:''}\n\nLog into ClockField to read the message and view attachments: ${url}`;
  await client.messages.create(domain,{from:process.env.MAIL_FROM||'ClockField <noreply@clockfield.ca>',to:[opts.to],subject,text,html:`<p>Hi ${escapeEmailHtml(opts.name)},</p><p>You have a new message from ${escapeEmailHtml(opts.businessName)}.${opts.photoCount?` It includes ${opts.photoCount} photo attachment(s).`:''}</p><p><a href="${escapeEmailHtml(url)}">Log in to read your message</a></p>`});
 }
+
+export async function sendWebsiteRequestEmail(opts: {
+  to: string; companyName: string; formName: string; clientName: string;
+  serviceType: string; submittedAt: string; requestUrl: string;
+}) {
+  const { client, domain } = getClient(10000);
+  const text = `A new website request has arrived for ${opts.companyName}.\n\nForm: ${opts.formName}\nCustomer: ${opts.clientName}\nService: ${opts.serviceType}\nSubmitted: ${opts.submittedAt}\n\nClick here to view the request: ${opts.requestUrl}\n\nSign in to ClockField to view the full request.`;
+  await client.messages.create(domain, {
+    from: process.env.MAIL_FROM || "ClockField <noreply@mg.clockfield.com>", to: [opts.to],
+    subject: `New website request — ${opts.formName.replace(/[\r\n]/g, " ").slice(0, 120)}`, text,
+    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:24px;color:#172033"><h2>${escapeEmailHtml(opts.companyName)}</h2><h3>New website request</h3><p>A customer has submitted a request through your website form.</p><p><strong>Form:</strong> ${escapeEmailHtml(opts.formName)}<br><strong>Customer:</strong> ${escapeEmailHtml(opts.clientName)}<br><strong>Service:</strong> ${escapeEmailHtml(opts.serviceType)}<br><strong>Submitted:</strong> ${escapeEmailHtml(opts.submittedAt)}</p><p style="margin:24px 0"><a href="${escapeEmailHtml(opts.requestUrl)}" style="display:inline-block;padding:12px 20px;border-radius:6px;background:#006bbd;color:white;text-decoration:none">View request</a></p><p>Sign in to ClockField to view the full request.</p></div>`,
+  });
+}

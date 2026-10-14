@@ -34,7 +34,7 @@ async function handler(method:string,path:string){
  const code=(await transform(source.slice(start,end),{loader:'ts'})).code;
  let fn:any;
  const app:any={[method]:(_path:any,...args:any[])=>fn=args.at(-1)};
- new Function('app','storage','requireAuth','requireRole','validateForm','formName','validFormConfig','maybeUpgradeSmartConfig','sendBookingQuoteEmail',code)(app,storage,()=>{},()=>()=>{},validateForm,formName,validFormConfig,async(f:any)=>f.config,async()=>{throw Error('Simulated email outage');});
+ new Function('app','storage','requireAuth','requireRole','validateForm','formName','validFormConfig','maybeUpgradeSmartConfig','sendBookingQuoteEmail','notifyWebsiteRequest',code)(app,storage,()=>{},()=>()=>{},validateForm,formName,validFormConfig,async(f:any)=>f.config,async()=>{throw Error('Simulated email outage');},async()=>{});
  return fn;
 }
 function response(){return {code:200,body:null as any,status(n:number){this.code=n;return this;},json(body:any){this.body=body;return this;}};}

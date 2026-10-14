@@ -2022,6 +2022,10 @@ function EmailSettingsTab() {
         <Mail className="w-4 h-4 text-primary" />
         <span>Available variables: <code className="text-[11px] bg-muted px-1 rounded">{EMAIL_VARS}</code></span>
       </div>
+      <div className="rounded-xl border bg-primary/5 p-4 text-sm">
+        <h3 className="font-semibold mb-1">New website request alerts</h3>
+        <p className="text-muted-foreground">Quote and booking form submissions automatically email active company admins with Forms access. Each alert identifies the form and includes a link to view the request. These admin alerts are separate from customer confirmation emails.</p>
+      </div>
       {emailSection("Confirmation Email", "confirmationEnabled", "confirmationSubject", "confirmationBody",
         "Sent immediately when a form is submitted.")}
       {emailSection("Estimate Summary Email", "estimateEnabled", "estimateSubject", "estimateBody",

@@ -1,3 +1,4 @@
+import { notifyWebsiteRequest } from "./request-notifications";
 import {messagePhotoError} from "./message-photos";
 import {pickFields,agreementEditableFields,agreementClientFields,proposalEditableFields,formEmailInput} from "../shared/workflow-input";
 import {fitDutyAnswers} from "../shared/fit-duty";
@@ -9197,6 +9198,9 @@ ${contractMonths > 0 ? `- contract_total = monthly_total × ${contractMonths} mo
         createdAt: now,
       });
 
+      await notifyWebsiteRequest({ companyId: req.params.companyId, requestId: submission.id,
+        source: "submission", formName: form.name, clientName, serviceType, submittedAt: now });
+
       // Send confirmation email if enabled
       try {
         const emailSettings = await storage.getFormEmailSettings(req.params.companyId);
@@ -13635,6 +13639,9 @@ Return this exact JSON structure:
         createdAt: now,
         updatedAt: now,
       });
+      await notifyWebsiteRequest({ companyId: company.id, requestId: request.id,
+        source: "booking", formName: "Booking Request Form", clientName: request.name,
+        serviceType: request.serviceType, submittedAt: now });
       res.status(201).json({ success: true, id: request.id });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
