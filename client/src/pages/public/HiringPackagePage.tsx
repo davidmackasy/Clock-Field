@@ -249,6 +249,8 @@ export default function HiringPackagePage() {
     try {
       if(step===5){const signature=signatureDrawn&&canvasRef.current?canvasRef.current.toDataURL():savedSignature;if(!signature)throw new Error("Please draw your signature before continuing");if(!finalAck)throw new Error("Please confirm your acknowledgement");await saveMutation.mutateAsync({endpoint:`/api/public/hiring-package/${token}/signature`,payload:{signatureData:signature,finalAcknowledgement:finalAck}});setSavedSignature(signature);}
       if (step === 0) {
+        if(!personalInfo.firstName.trim()||!personalInfo.lastName.trim())throw new Error("Enter your first and last name before continuing");
+        if(data?.package.applicationKind==="application"&&!/^\S+@\S+\.\S+$/.test(personalInfo.email))throw new Error("Enter a valid email address");
         await saveMutation.mutateAsync({ endpoint: `/api/public/hiring-package/${token}/personal-info`, payload: { personalInfoJson: personalInfo } });
       } else if (step === 1) {
         await saveMutation.mutateAsync({ endpoint: `/api/public/hiring-package/${token}/emergency-contacts`, payload: { emergencyContactsJson: emergencyContacts } });

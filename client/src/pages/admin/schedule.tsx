@@ -1,3 +1,5 @@
+import {useAuth} from '@/lib/auth';
+import {hasAccess} from '@shared/people';
 import { useState, useMemo, useEffect, useRef } from "react";
 import JobsTab from "@/pages/admin/jobs-tab";
 import BookingRequestsTab from "@/pages/admin/booking-requests-tab";
@@ -28,6 +30,8 @@ type ViewMode = "day" | "week" | "month";
 
 export default function AdminSchedule() {
   const { toast } = useToast();
+  const {user}=useAuth();
+  const formsAllowed=hasAccess(user,"forms");
 
   const { data: tzData } = useQuery<{ timezone: string }>({
     queryKey: ["/api/settings/timezone"],
@@ -499,7 +503,7 @@ export default function AdminSchedule() {
       </div>
 
       <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg border w-fit">
-        {(["schedule", "jobs", "bookings"] as const).map((t, i) => {
+        {(["schedule", "jobs", "bookings"] as const).filter(tab=>tab==="schedule"||formsAllowed).map((t, i) => {
           const labels = ["Regular Schedule", "Jobs", "Booking Requests"];
           return (
             <button
@@ -640,8 +644,8 @@ export default function AdminSchedule() {
         )}
       </div>
       </>)}
-      {sectionTab === "jobs" && <JobsTab />}
-      {sectionTab === "bookings" && <BookingRequestsTab />}
+      {formsAllowed&&sectionTab === "jobs" && <JobsTab />}
+      {formsAllowed&&sectionTab === "bookings" && <BookingRequestsTab />}
     </div>
   );
 }

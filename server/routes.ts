@@ -1096,7 +1096,7 @@ Welcome again, and thank you for choosing ClockField.
         } else {
           updates.loginEnabled = target.inviteAcceptedAt ? true : target.loginEnabled;
           if (target.accountStatus === "disabled") {
-            updates.accountStatus = "active";
+            updates.accountStatus = target.inviteToken&&!target.inviteAcceptedAt?"pending_activation":"active";
           }
         }
       }
