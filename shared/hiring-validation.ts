@@ -22,7 +22,7 @@ export function validDocument(buffer: Buffer, mime: string) { if (!buffer.length
     return buffer.subarray(0, 5).toString() === '%PDF-'; if (mime === 'image/jpeg')
     return buffer.subarray(0, 3).toString('hex') === 'ffd8ff'; if (mime === 'image/png')
     return buffer.subarray(0, 8).toString('hex') === '89504e470d0a1a0a'; if (mime === 'image/webp')
-    return buffer.subarray(0, 4).toString() === 'RIFF' && buffer.subarray(8, 12).toString() === 'WEBP'; if (mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+    return buffer.subarray(0, 4).toString() === 'RIFF' && buffer.subarray(8, 12).toString() === 'WEBP'; if (mime === 'application/msword') return buffer.subarray(0,8).toString('hex') === 'd0cf11e0a1b11ae1'; if (mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
     return buffer.subarray(0, 2).toString() === 'PK'; if (mime === 'text/plain')
     return !buffer.includes(0); return false; }
 const value = z.string().trim().max(2000).default('');

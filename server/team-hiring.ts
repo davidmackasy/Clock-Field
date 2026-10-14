@@ -3,7 +3,7 @@ import { db, pool } from './db';
 import { users, companies, employeeHiringPackages } from '../shared/schema';
 import { eq, and } from 'drizzle-orm';
 import { hashPassword } from './auth';
-import { emptyProfile, profileSchema, safePerson, mergeSubmittedProfile } from '../shared/people';
+import { emptyProfile, profileSchema, safePerson, mergeSubmittedProfile, employeeInput } from '../shared/people';
 import { getPlan } from './plans';
 export function registerTeamHiring(app: any, storage: any, requireRole: any, ensureTemplate: any) {
     const now = () => new Date().toISOString();
@@ -115,7 +115,7 @@ export function registerTeamHiring(app: any, storage: any, requireRole: any, ens
                     const [fresh] = await tx.select().from(users).where(and(eq(users.id, target.id), eq(users.companyId, req.user.companyId))).for('update');
                     if (!fresh)
                         throw new Error('Employee no longer available');
-                    const [row] = await tx.update(users).set({ profileDetails: mergeSubmittedProfile(fresh.profileDetails, profile) }).where(and(eq(users.id, target.id), eq(users.companyId, req.user.companyId))).returning();
+                    const [row] = await tx.update(users).set({ ...employeeInput({firstName:info.firstName||fresh.firstName,lastName:info.lastName||fresh.lastName,phone:info.phone||undefined,position:pkg.position||undefined}), profileDetails: mergeSubmittedProfile(fresh.profileDetails, profile) }).where(and(eq(users.id, target.id), eq(users.companyId, req.user.companyId))).returning();
                     updated = row;
                 }
                 else {
