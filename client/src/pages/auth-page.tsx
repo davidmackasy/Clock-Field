@@ -298,11 +298,11 @@ export default function AuthPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[15px] font-semibold text-[#111827]">Business Owner / Admin</span>
+                    <span className="text-[15px] font-semibold text-[#111827]">Business / Admin / Contractor</span>
                     <ArrowRight className="w-4 h-4 text-[#9ca3af] group-hover:text-primary group-hover:translate-x-0.5 transition-all flex-shrink-0 ml-2" />
                   </div>
                   <p className="text-[13px] text-[#6b7280] leading-[1.55]">
-                    Manage your cleaning business, schedules, employees, reports, payroll, training, and client work from your dashboard.
+                    Sign in to your business dashboard or contractor workspace. Your account permissions determine which tools are available.
                   </p>
                 </div>
               </div>
@@ -356,7 +356,7 @@ export default function AuthPage() {
               <CFLogo />
               <div className="mt-7 mb-7">
                 <h1 className="text-[24px] font-bold text-[#111827] mb-1.5">Sign in to your business</h1>
-                <p className="text-[14px] text-[#6b7280]">Admin and manager accounts use email and password.</p>
+                <p className="text-[14px] text-[#6b7280]">Admins, managers and invited contractors use email and password.</p>
               </div>
 
               <form onSubmit={handleLogin} className="space-y-5">

@@ -1,3 +1,5 @@
+import { processContractorJobs } from "./contractor-jobs";
+import { sendAttendanceEventEmail } from "./mail";
 import {weeklyPayrollMinutes,earningAmounts} from "../shared/payroll-math";
 import {processAttendanceAlerts} from "./attendance-alerts";
 import { timesheetLocation } from "./timesheet-location";
@@ -99,7 +101,7 @@ export function registerPayrollTimesheetRoutes(app: Express) {
     if (!process.env.SESSION_SECRET || !/^\d+$/.test(timestamp) || Math.abs(Date.now() - Number(timestamp)) > 5 * 60000 || !/^[a-f0-9]{64}$/.test(signature)) return res.status(401).end();
     const expected = createHmac("sha256", process.env.SESSION_SECRET).update(`payroll-summary:${timestamp}`).digest();
     if (!timingSafeEqual(expected, Buffer.from(signature, "hex"))) return res.status(401).end();
-    try { await processAttendanceAlerts();res.json(await sendDuePayrollSummaries()); } catch { res.status(500).json({ message: "Summary processing failed" }); }
+    try { await processAttendanceAlerts();try{await processContractorJobs(pool,sendAttendanceEventEmail);}catch{console.error("[contractors] Scheduled contractor processing failed; payroll continues");}res.json(await sendDuePayrollSummaries()); } catch { res.status(500).json({ message: "Summary processing failed" }); }
   });
 }
 

@@ -1,3 +1,4 @@
+import { CONTRACTOR_MIGRATION } from "./contractor-migration";
 import { pool } from "./db";
 import { log } from "./index";
 
@@ -238,8 +239,10 @@ export async function runStartupMigrations() {
       ALTER TABLE pay_stubs ADD COLUMN IF NOT EXISTS regular_minutes_snapshot integer;
       ALTER TABLE pay_stubs ADD COLUMN IF NOT EXISTS overtime_minutes_snapshot integer;
       ALTER TABLE pay_stubs ADD COLUMN IF NOT EXISTS total_minutes_snapshot integer;`);
+    await client.query(CONTRACTOR_MIGRATION);
     log("Startup migrations complete.", "migrations");
   } catch (err: any) {
+    await client.query("ROLLBACK").catch(() => {});
     log(`Migration error (non-fatal): ${err.message}`, "migrations");
   } finally {
     client.release();

@@ -1,3 +1,5 @@
+import { registerContractors } from "./contractor-routes";
+import { contractorBoundary } from "./contractor-access";
 import { notifyWebsiteRequest } from "./request-notifications";
 import {messagePhotoError} from "./message-photos";
 import {pickFields,agreementEditableFields,agreementClientFields,proposalEditableFields,formEmailInput} from "../shared/workflow-input";
@@ -283,6 +285,8 @@ export async function registerRoutes(
 ): Promise<Server> {
   app.use(['/apply','/public/hiring-package'],(_req,res,next)=>{res.set({'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow','Referrer-Policy':'no-referrer'});next();});
   setupAuth(app);
+  app.use(contractorBoundary);
+  registerContractors(app,pool,requireAuth,hashPassword);
   // Enforce staff scopes even on handlers with their own authentication checks.
   app.use('/api', (req,res,next)=>{const user=req.user as any;const route=req.originalUrl.split('?')[0];if(user?.role==='admin'&&!/^\/api\/(public(?:\/|$)|invite(?:\/|$))/.test(route)&&!permissionAllowed(user,route,req.method))return res.status(403).json({message:'You do not have access to this area'});next();});
   registerPayrollTimesheetRoutes(app);

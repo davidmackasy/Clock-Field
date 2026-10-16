@@ -1,3 +1,4 @@
+import {createContractorTables} from './contractor-tables';
 import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, integer, boolean, timestamp, decimal, json } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
@@ -147,6 +148,7 @@ export const locations = pgTable("locations", {
   name: text("name").notNull(),
   address: text("address"),
   notes: text("notes"),
+  timezone: text("timezone"),
   geofenceEnabled: boolean("geofence_enabled").notNull().default(false),
   latitude: decimal("latitude", { precision: 10, scale: 7 }),
   longitude: decimal("longitude", { precision: 10, scale: 7 }),
@@ -2635,3 +2637,5 @@ export const bookingQuotes = pgTable("booking_quotes", {
 export const insertBookingQuoteSchema = createInsertSchema(bookingQuotes).omit({ id: true });
 export type BookingQuote = typeof bookingQuotes.$inferSelect;
 export type InsertBookingQuote = z.infer<typeof insertBookingQuoteSchema>;
+
+export const {contractorBusinesses,contractorMemberships,contractorInvitations,contractorAssignments,contractorInstructions,contractorAcknowledgements,contractorVisits,contractorSubmissions,contractorInspections,contractorIssues,contractorComments,contractorFiles,contractorAudit,contractorNotifications}=createContractorTables({companies,users,locations});

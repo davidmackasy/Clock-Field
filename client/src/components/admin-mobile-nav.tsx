@@ -25,6 +25,7 @@ const primaryTabs = [
 ];
 
 const navMoreItems = [
+  { label: "Contractors", href: "/admin/contractors", icon: Building2 },
   { label: "Timesheets", href: "/admin/attendance/timesheets", icon: ClipboardList },
   { label: "Payroll",      href: "/admin/payroll",      icon: DollarSign },
   { label: "Clients",      href: "/admin/clients",      icon: Building2 },

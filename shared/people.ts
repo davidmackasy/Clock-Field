@@ -48,7 +48,7 @@ export function employeeInput(body: any, create = false) {
     return result;
 }
 export function safePerson(user: any, directory = false) { const { password, tempPin, inviteToken, inviteExpiresAt, avatarFilePath, avatarMimeType, profileDetails, ...safe } = user; return directory ? safe : { ...safe, profileDetails }; }
-export const ACCESS_MODULES = [['dashboard', 'Dashboard'], ['employees', 'Employee profiles & hiring'], ['schedule', 'Schedules'], ['attendance', 'Attendance & fit for duty'], ['payroll', 'Payroll'], ['clients', 'Clients & work sites'], ['work-log', 'Work log & supplies'], ['forms', 'Forms & quote requests'], ['training', 'Training Hub'], ['documents', 'Documents & agreements'], ['messages', 'Messages'], ['settings', 'Company settings'], ['billing', 'Subscription & billing'], ['team', 'Manage staff access']] as const;
+export const ACCESS_MODULES = [['dashboard', 'Dashboard'], ['employees', 'Employee profiles & hiring'], ['schedule', 'Schedules'], ['attendance', 'Attendance & fit for duty'], ['payroll', 'Payroll'], ['clients', 'Clients & work sites'], ['contractors', 'Contractors'], ['work-log', 'Work log & supplies'], ['forms', 'Forms & quote requests'], ['training', 'Training Hub'], ['documents', 'Documents & agreements'], ['messages', 'Messages'], ['settings', 'Company settings'], ['billing', 'Subscription & billing'], ['team', 'Manage staff access']] as const;
 export function hasAccess(user: any, module: string) { return user?.role === 'admin' && (user.isSuperAdmin || user.adminPermissions == null || user.adminPermissions.includes(module)); }
 export function validPermissions(value: any) { if (!Array.isArray(value) || value.some(x => !ACCESS_MODULES.some(([id]) => id === x)))
     throw new Error('Select valid access areas'); return Array.from(new Set(value)) as string[]; }
@@ -60,6 +60,7 @@ export function pathModule(path: string) {
         return 'common';
     if (/^\/api\/super-admin/.test(path))
         return 'owner';
+    if (/^\/api\/contractors/.test(path)) return 'contractors';
     if (/^\/api\/(admins|management)/.test(path))
         return 'team';
     if (/^\/api\/(employees|hiring-package|hiring-applications)/.test(path))
@@ -113,7 +114,7 @@ export function permissionAllowed(user: any, path: string, method = 'GET') {
     return hasAccess(user, module);
 }
 export function pageModule(path: string) { if (path === '/admin')
-    return 'dashboard'; const part = path.split('/')[2]; return ({ employees: 'employees', management: 'team', admins: 'team', schedule: 'schedule', attendance: path.includes('timesheet') ? 'payroll' : 'attendance', 'fit-for-duty': 'attendance', payroll: 'payroll', timesheets: 'payroll', clients: 'clients', 'work-log': 'work-log', reports: 'work-log', 'field-notes': 'work-log', supplies: 'work-log', incidents: 'work-log', 'quote-forms': 'forms', publications: 'documents', proposals: 'documents', agreements: 'documents', training: 'training', messages: 'messages', 'platform-messages': 'messages', settings: 'settings', subscription: 'billing' } as any)[part] || 'dashboard'; }
+    return 'dashboard'; const part = path.split('/')[2]; return ({ contractors:'contractors', employees: 'employees', management: 'team', admins: 'team', schedule: 'schedule', attendance: path.includes('timesheet') ? 'payroll' : 'attendance', 'fit-for-duty': 'attendance', payroll: 'payroll', timesheets: 'payroll', clients: 'clients', 'work-log': 'work-log', reports: 'work-log', 'field-notes': 'work-log', supplies: 'work-log', incidents: 'work-log', 'quote-forms': 'forms', publications: 'documents', proposals: 'documents', agreements: 'documents', training: 'training', messages: 'messages', 'platform-messages': 'messages', settings: 'settings', subscription: 'billing' } as any)[part] || 'dashboard'; }
 export function clientInput(body: any, create = false) { const data: any = {}; for (const key of ['name', 'contactName', 'contactEmail', 'contactPhone'])
     if (body[key] !== undefined) {
         if (typeof body[key] !== 'string' || body[key].length > 250)
@@ -133,4 +134,4 @@ export function canManageStaff(actor: any, target: any) { if (actor.isSuperAdmin
 export function mergeSubmittedProfile(existing: any, incoming: any) { const result: any = { ...emptyProfile(), ...existing }; for (const [key, value] of Object.entries(incoming || {}))
     if (Array.isArray(value) ? value.length : typeof value === 'string' ? value.trim() : value != null)
         result[key] = value; return profileSchema.parse(result); }
-export function firstAccessiblePage(user: any) { const pages: any = { dashboard: '/admin', employees: '/admin/employees', schedule: '/admin/schedule', attendance: '/admin/attendance', payroll: '/admin/payroll', clients: '/admin/clients', 'work-log': '/admin/work-log', forms: '/admin/quote-forms', training: '/admin/training', documents: '/admin/publications', messages: '/admin/messages', settings: '/admin/settings', billing: '/admin/subscription', team: '/admin/management' }; return ACCESS_MODULES.find(([id]) => hasAccess(user, id))?.[0] ? pages[ACCESS_MODULES.find(([id]) => hasAccess(user, id))![0]] : null; }
+export function firstAccessiblePage(user: any) { const pages: any = { contractors:'/admin/contractors', dashboard: '/admin', employees: '/admin/employees', schedule: '/admin/schedule', attendance: '/admin/attendance', payroll: '/admin/payroll', clients: '/admin/clients', 'work-log': '/admin/work-log', forms: '/admin/quote-forms', training: '/admin/training', documents: '/admin/publications', messages: '/admin/messages', settings: '/admin/settings', billing: '/admin/subscription', team: '/admin/management' }; return ACCESS_MODULES.find(([id]) => hasAccess(user, id))?.[0] ? pages[ACCESS_MODULES.find(([id]) => hasAccess(user, id))![0]] : null; }

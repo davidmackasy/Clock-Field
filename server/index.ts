@@ -66,13 +66,13 @@ app.use((req, res, next) => {
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+      let logLine = `${req.method} ${path.replace(/(\/api\/public\/contractor-invites\/)[^/]+/i, "$1[redacted]")} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse && process.env.NODE_ENV !== "production") {
         // Redact endpoints whose responses contain large/sensitive payloads
         // (employee document file data, training module assets, etc.) to keep
         // PII out of server logs and prevent log bloat.
         const isDocumentDetail = /^\/api\/employees\/[^/]+\/documents\/[^/]+$/.test(path) && req.method === "GET";
-        if (isDocumentDetail) {
+        if (isDocumentDetail || path.toLowerCase().startsWith("/api/contractors/") || path.toLowerCase().startsWith("/api/public/contractor-invites/")) {
           logLine += ` :: [redacted]`;
         } else {
           logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;

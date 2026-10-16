@@ -14,7 +14,7 @@ function objectPath(filePath: string) {
   const relative = path.relative(dataDirectory, filePath);
   if (relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Invalid storage path");
   const parts = relative.split(path.sep);
-  if (!["uploads", "private_fit_for_duty_photos", "private_incident_evidence", "private_profile_photos"].includes(parts[0])) throw new Error("Invalid storage directory");
+  if (!["uploads", "private_fit_for_duty_photos", "private_incident_evidence", "private_profile_photos", "private_contractors"].includes(parts[0])) throw new Error("Invalid storage directory");
   return parts.map(encodeURIComponent).join("/");
 }
 

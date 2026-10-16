@@ -17,3 +17,5 @@ function prepareDirectory(name: string) {
 export const uploadsDirectory = prepareDirectory("uploads");
 export const fitForDutyPhotosDirectory = prepareDirectory("private_fit_for_duty_photos");
 export const incidentEvidenceDirectory = prepareDirectory("private_incident_evidence");
+
+export const contractorFilesDirectory = prepareDirectory("private_contractors");

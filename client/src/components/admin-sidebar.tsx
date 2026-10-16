@@ -36,6 +36,7 @@ const preTeamItems = [
 ];
 
 const postTeamItems = [
+  { title: "Contractors", url: "/admin/contractors", icon: Building2 },
   { title: "Schedule", url: "/admin/schedule", icon: Calendar },
   { title: "Attendance", url: "/admin/attendance", icon: ClipboardList },
   { title: "Fit for Duty", url: "/admin/fit-for-duty", icon: ShieldCheck },

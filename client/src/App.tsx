@@ -1,3 +1,5 @@
+import ContractorWorkspace from "@/pages/contractor/workspace";
+import ContractorInvitation from "@/pages/contractor/invitation";
 import EmployeeApplication from "@/pages/public/EmployeeApplication";
 import {hasAccess,pageModule,firstAccessiblePage} from "@shared/people";
 import { Switch, Route, useLocation, Redirect } from "wouter";
@@ -132,6 +134,7 @@ function AdminLayout() {
                 <FeatureGate feature="payroll"><AdminPayroll /></FeatureGate>
               </Route>
               <Route path="/admin/clients" component={AdminClients} />
+              <Route path="/admin/contractors" component={ContractorWorkspace} />
               <Route path="/admin/management" component={AdminManagement} />
               <Route path="/admin/admins" component={AdminManagement} />
               <Route path="/admin/timesheets">
@@ -338,6 +341,8 @@ function AppRouter() {
     );
   }
 
+  if(location.startsWith("/contractor-invite/")) return <Switch><Route path="/contractor-invite/:token" component={ContractorInvitation}/></Switch>;
+
   if (location.startsWith("/form/")) {
     return (
       <Switch>
@@ -474,6 +479,8 @@ function AppRouter() {
     if (location === "/" || location === "/login" || location.startsWith("/login?")) return <Redirect to="/admin" />;
     return <AdminLayout />;
   }
+
+  if(user.role === "contractor") return location.startsWith("/contractor") ? <ContractorWorkspace/> : <Redirect to="/contractor"/>;
 
   // ── Non-admin routing ─────────────────────────────────────────────────────
   if (location === "/" || location === "/login" || location.startsWith("/login?")) {
