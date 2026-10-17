@@ -1,5 +1,5 @@
 import {readinessQuestion} from "@shared/fit-duty";
-import {clockInPosition,clockInError} from "@/lib/clock-in-position";
+import {clockInPosition,clockInError,clockInErrorTitle} from "@/lib/clock-in-position";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -85,8 +85,12 @@ export default function EmployeeHome() {
   const [paLightbox, setPaLightbox] = useState<{ photoIds: string[]; idx: number } | null>(null);
   const [fitOpen, setFitOpen] = useState(false);
   const [fitLocationId,setFitLocationId]=useState("");
+  const [fitShiftId, setFitShiftId] = useState<string | undefined>();
   const [fitVerificationId,setFitVerificationId]=useState<string|null>(null);
   const [locationError,setLocationError]=useState("");
+  const [locationChecked,setLocationChecked]=useState(false);
+  const locationFeedbackRef=useRef<HTMLDivElement>(null);
+  useEffect(()=>{if(locationError)locationFeedbackRef.current?.scrollIntoView({block:"nearest",behavior:"smooth"});},[locationError]);
   const {data:clockInSites=[]}=useQuery<any[]>({queryKey:["/api/employee/clock-in-sites"]});
   const checkClockInSite=async(shiftId?:string)=>{
     const input={shiftId,locationId:shiftId?undefined:fitLocationId||undefined};
@@ -95,7 +99,12 @@ export default function EmployeeHome() {
     if(position)await apiRequest("POST","/api/time-entries/clock-in-location",{...input,position});
     return {...input,position};
   };
-  const [fitShiftId, setFitShiftId] = useState<string | undefined>();
+  const locationCheckMut=useMutation({
+    mutationFn:()=>checkClockInSite(fitShiftId),
+    onMutate:()=>{setLocationError("");setLocationChecked(false);},
+    onSuccess:()=>setLocationChecked(true),
+    onError:(err:any)=>setLocationError(clockInError(err)),
+  });
   const [fitAnswers, setFitAnswers] = useState<(boolean | undefined)[]>([undefined]);
   const [fitConfirmed, setFitConfirmed] = useState(false);
   const [facePhotoData, setFacePhotoData] = useState<string | null>(null);
@@ -173,7 +182,7 @@ export default function EmployeeHome() {
       queryClient.invalidateQueries({ queryKey: ["/api/shifts"] });
       toast({ title: "Clock-In Successful", description: "Your Fit for Duty Check has been submitted." });
     },
-    onError: (err: any) => {setLocationError(clockInError(err));toast({ title: "Unable to clock in", description: clockInError(err), variant: "destructive" });},
+    onError: (err: any) => {setLocationChecked(false);setLocationError(clockInError(err));},
   });
 
   const fitSubmitMut = useMutation({
@@ -188,11 +197,11 @@ export default function EmployeeHome() {
       setFitVerificationId(data.id);
       clockInMut.mutate({ shiftId: fitShiftId, verificationId: data.id });
     },
-    onError: (err: any) => {setLocationError(clockInError(err));toast({ title: "Unable to clock in", description: clockInError(err), variant: "destructive" });},
+    onError: (err: any) => {setLocationChecked(false);setLocationError(clockInError(err));},
   });
 
   const openFit = (shiftId?: string) => {
-    setFitLocationId("");setFitVerificationId(null);setLocationError("");setFitShiftId(shiftId); setFitAnswers([undefined]); setFitConfirmed(false); setFacePhotoData(null); setFacePhotoCapturedAt(null); setFacePhotoAccepted(false); setCameraError(""); setFitOpen(true);
+    setLocationChecked(false);setFitLocationId("");setFitVerificationId(null);setLocationError("");setFitShiftId(shiftId); setFitAnswers([undefined]); setFitConfirmed(false); setFacePhotoData(null); setFacePhotoCapturedAt(null); setFacePhotoAccepted(false); setCameraError(""); setFitOpen(true);
   };
 
   const stopFaceCamera = () => {
@@ -385,11 +394,17 @@ export default function EmployeeHome() {
   return (
     <div className="p-4 pb-24 space-y-5">
       <Dialog open={fitOpen} onOpenChange={(open) => { if (!open) stopFaceCamera(); setFitOpen(open); }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Fit for Duty Check</DialogTitle><DialogDescription>Answer the readiness question and take a live photo before clocking in.</DialogDescription></DialogHeader>
-          {!fitShiftId && clockInSites.length>0 && <div className="space-y-2"><label htmlFor="clock-in-site" className="text-sm font-medium">Assigned work site</label><select id="clock-in-site" className="w-full border rounded-md p-2" value={fitLocationId} onChange={e=>{setFitLocationId(e.target.value);setLocationError("");}} disabled={!!fitVerificationId}><option value="">Select where you are working</option>{clockInSites.map(site=><option key={site.id} value={site.id}>{site.name}</option>)}</select></div>}
-          <p className="text-sm text-muted-foreground">Work sites with a clock-in boundary require your current location. Allow precise location when prompted. Location is checked only when you clock in.</p>
-          {locationError && <p role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{locationError}</p>}
+        <DialogContent className="max-w-lg max-h-[calc(100dvh-2rem)] flex flex-col gap-0 overflow-hidden p-0 [&>button]:top-2 [&>button]:right-2 [&>button]:flex [&>button]:h-11 [&>button]:w-11 [&>button]:items-center [&>button]:justify-center">
+          <DialogHeader className="shrink-0 border-b p-5 pr-14 text-left"><DialogTitle>Fit for Duty Check</DialogTitle><DialogDescription>Answer the readiness question and take a live photo before clocking in.</DialogDescription></DialogHeader>
+          <div className="min-h-0 overflow-y-auto overscroll-contain p-5 space-y-4">
+          {!fitShiftId && clockInSites.length>0 && <div className="space-y-2"><label htmlFor="clock-in-site" className="text-sm font-medium">Assigned work site</label><select id="clock-in-site" className="w-full border rounded-md p-2" value={fitLocationId} onChange={e=>{setFitLocationId(e.target.value);setLocationError("");setLocationChecked(false);}} disabled={fitSubmitMut.isPending || clockInMut.isPending || locationCheckMut.isPending}><option value="">Select where you are working</option>{clockInSites.map(site=><option key={site.id} value={site.id}>{site.name}</option>)}</select></div>}
+          <p className="text-sm text-muted-foreground">Work sites with a clock-in boundary require your current location. Allow precise location when prompted. Your location is checked when you use Check location or clock in.</p>
+          {!fitShiftId && clockInSites.find(site=>site.id===fitLocationId)?.address && <p className="text-sm text-muted-foreground">{clockInSites.find(site=>site.id===fitLocationId)?.address}</p>}
+          <div ref={locationFeedbackRef} className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-2" aria-live="polite" aria-atomic="true">
+            <p className="text-sm font-semibold">{locationError ? clockInErrorTitle(locationError) : locationChecked ? "Location checked" : "Check your work site"}</p>
+            <p className="text-sm text-muted-foreground">{locationError || (locationChecked ? "Your selected work site is ready. We’ll check your current location again when you clock in." : "Select your assigned work site and check your location. If you are outside its boundary, wait until you arrive before clocking in.")}</p>
+            <Button type="button" variant="outline" className="w-full" disabled={locationCheckMut.isPending || fitSubmitMut.isPending || clockInMut.isPending || (!fitShiftId && clockInSites.length>0 && !fitLocationId)} onClick={()=>locationCheckMut.mutate()}>{locationCheckMut.isPending ? "Checking location…" : locationError ? "Try location again" : "Check location"}</Button>
+          </div>
 
           <p className="text-sm text-muted-foreground">To help maintain a safe workplace for employees, clients, and the public, we require a quick fitness-for-duty check before starting your shift. Please answer the readiness question honestly.</p>
           <fieldset disabled={!!fitVerificationId}>
@@ -417,7 +432,8 @@ export default function EmployeeHome() {
               <span>I confirm that the answers I provided are true and accurate and that I am fit to safely perform my assigned duties.</span>
             </label>}
           </fieldset>
-          <Button className="w-full h-12 text-base" disabled={(!fitVerificationId && (fitAnswers.some(a => a === undefined) || !facePhotoAccepted || !fitConfirmed)) || fitSubmitMut.isPending || clockInMut.isPending} onClick={() => fitSubmitMut.mutate()}>{fitSubmitMut.isPending || clockInMut.isPending ? "Checking location…" : fitVerificationId ? "Retry Clock In" : "Confirm & Clock In"}</Button>
+          <Button className="w-full h-12 text-base" disabled={(!fitVerificationId && (fitAnswers.some(a => a === undefined) || !facePhotoAccepted || !fitConfirmed)) || fitSubmitMut.isPending || clockInMut.isPending || locationCheckMut.isPending} onClick={() => fitSubmitMut.mutate()}>{fitSubmitMut.isPending || clockInMut.isPending ? "Checking location…" : fitVerificationId ? "Retry Clock In" : "Confirm & Clock In"}</Button>
+          </div>
         </DialogContent>
       </Dialog>
       {/* Clock-out blocker modal */}

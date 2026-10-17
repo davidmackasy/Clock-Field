@@ -31,5 +31,20 @@ for(const position of [undefined,{...fix,latitude:50.1},{...fix,timestamp:now-90
 const {clockInPosition}=await import('../client/src/lib/clock-in-position');let options:any;
 Object.defineProperty(globalThis,'navigator',{configurable:true,value:{geolocation:{getCurrentPosition(success:any,_error:any,input:any){options=input;success({coords:fix,timestamp:fix.timestamp});}}}});
 assert.deepEqual(await clockInPosition(),fix);assert.deepEqual(options,{enableHighAccuracy:true,maximumAge:0,timeout:20000});
-Object.defineProperty(globalThis,'navigator',{configurable:true,value:{geolocation:{getCurrentPosition(_success:any,error:any){error({code:1});}}}});await assert.rejects(clockInPosition(),/Allow precise location/);
+Object.defineProperty(globalThis,'navigator',{configurable:true,value:{geolocation:{getCurrentPosition(_success:any,error:any){error({code:1});}}}});await assert.rejects(clockInPosition(),/Location access is blocked/);
 console.log('PASS: 100m boundary, accuracy and freshness, invalid/missing coordinates, company and employee assignments, wrong-site bypass, unscheduled policy, actual clock-in denies before any attendance write, GPS permission failure. No production attendance changed.');
+
+const {clockInError,clockInErrorTitle}=await import('../client/src/lib/clock-in-position');
+assert.equal(clockInError(new Error('403: {"message":"You are 200 metres from Olympic. Clock in when you are within 100 metres of this work site."}')), 'You are 200 metres from Olympic. Clock in when you are within 100 metres of this work site.');
+assert.equal(clockInErrorTitle('Location access is blocked.'),'Allow location access');
+assert.equal(clockInErrorTitle('You are 200 metres from Olympic.'),'Arrive at your work site');
+assert.equal(clockInErrorTitle('Your location is not accurate enough.'),'Improve location accuracy');
+for(const [code,pattern] of [[2,/could not be found/],[3,/too long/]] as const){
+ Object.defineProperty(globalThis,'navigator',{configurable:true,value:{geolocation:{getCurrentPosition(_success:any,error:any){error({code});}}}});
+ await assert.rejects(clockInPosition(),pattern);
+}
+console.log('PASS: permission, unavailable GPS, timeout and outside-site guidance are distinct; API errors display without raw HTTP/JSON.');
+
+assert.equal((await verifyClockInLocation(storage,user,{locationId:'ash',position:{...fix,latitude:50.1,timestamp:Date.now()}})).site.id,'ash');
+await assert.rejects(verifyClockInLocation(storage,user,{locationId:'ash',position:{...fix,timestamp:Date.now()}}),/within 100 metres/);
+console.log('PASS: switching assigned sites validates against the newly selected site coordinates.');

@@ -279,23 +279,25 @@ export function AdminMobileNav() {
 
       {/* More sheet */}
       <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
-        <SheetContent side="bottom" className="md:hidden rounded-t-2xl pb-8" data-testid="mobile-more-sheet">
-          <SheetHeader className="text-left mb-3">
+        <SheetContent side="bottom" className="md:hidden flex max-h-[calc(100dvh-env(safe-area-inset-top)-1rem)] flex-col gap-0 overflow-hidden rounded-t-2xl p-0 [&>button]:top-2 [&>button]:right-3 [&>button]:flex [&>button]:h-11 [&>button]:w-11 [&>button]:items-center [&>button]:justify-center" data-testid="mobile-more-sheet">
+          <SheetHeader className="shrink-0 border-b px-6 py-4 pr-14 text-left">
             <SheetTitle>More</SheetTitle>
           </SheetHeader>
 
-          {/* Navigation section */}
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 mb-1">Navigation</p>
-          <div className="space-y-0.5 mb-3">
-            {navMoreItems.filter(item=>hasAccess(user,pageModule(item.href))).map(renderMoreRow)}
-          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] [-webkit-overflow-scrolling:touch]" data-testid="mobile-more-scroll">
+            {/* Navigation section */}
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 mb-1">Navigation</p>
+            <div className="space-y-0.5 mb-3">
+              {[...primaryTabs, ...navMoreItems].filter(item=>hasAccess(user,pageModule(item.href))).map(renderMoreRow)}
+            </div>
 
-          <Separator className="mb-3" />
+            <Separator className="mb-3" />
 
-          {/* Account section */}
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 mb-1">Account</p>
-          <div className="space-y-0.5">
-            {accountMoreItems.map(renderMoreRow)}
+            {/* Account section */}
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-4 mb-1">Account</p>
+            <div className="space-y-0.5">
+              {accountMoreItems.map(renderMoreRow)}
+            </div>
           </div>
         </SheetContent>
       </Sheet>
