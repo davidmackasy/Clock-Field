@@ -12,6 +12,7 @@ import { dateShift, payrollPeriod, validDate } from "../shared/payroll-cycle";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { sendPayrollHoursEmail } from "./mail";
 import { createTimesheetWorkbook } from "./timesheet-workbook";
+import { buildPayrollHoursEmail, type PayrollHoursEmail } from "./payroll-summary-email";
 
 export async function payrollSnapshot(companyId: string, start: string, employeeId = "all", end?: string) {
   const [company, employees, allEntries, adjustments, locations, shifts, schedules, clients] = await Promise.all([
@@ -119,13 +120,16 @@ export async function sendDuePayrollSummaries(now = new Date(), send = sendPayro
     const snapshot = await payrollSnapshot(company.id, start);
     const admins = (await storage.getAdminsByCompany(company.id)).filter(admin => admin.isActive && admin.email);
     const emails = new Set<string>();
+    let message: PayrollHoursEmail | undefined;
     for (const admin of admins) {
       const recipient = admin.email!.trim().toLowerCase();
       if (emails.has(recipient)) continue; emails.add(recipient);
       const claim = await pool.query(`INSERT INTO payroll_summary_deliveries(company_id,period_start,summary_date,recipient_id,status) VALUES($1,$2,$3,$4,'sending') ON CONFLICT(company_id,period_start,summary_date,recipient_id) DO UPDATE SET status='sending',claimed_at=now(),attempts=payroll_summary_deliveries.attempts+1 WHERE payroll_summary_deliveries.status='failed' OR (payroll_summary_deliveries.status='sending' AND payroll_summary_deliveries.claimed_at < now()-interval '30 minutes') RETURNING recipient_id`, [company.id, start, today, recipient]);
       if (!claim.rowCount) continue;
       try {
-        await send(admin.email!, snapshot, await createTimesheetWorkbook(snapshot));
+        // Build once from this snapshot so every recipient gets the same rows and totals.
+        message ||= await buildPayrollHoursEmail(snapshot);
+        await send(admin.email!, message);
         await pool.query("UPDATE payroll_summary_deliveries SET status='sent',sent_at=now(),last_error=NULL WHERE company_id=$1 AND period_start=$2 AND summary_date=$3 AND recipient_id=$4", [company.id,start,today,recipient]); sent++;
       } catch {
         await pool.query("UPDATE payroll_summary_deliveries SET status='failed',last_error='Email delivery failed' WHERE company_id=$1 AND period_start=$2 AND summary_date=$3 AND recipient_id=$4", [company.id,start,today,recipient]);
