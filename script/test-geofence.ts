@@ -49,3 +49,20 @@ console.log('PASS: permission, unavailable GPS, timeout and outside-site guidanc
 assert.equal((await verifyClockInLocation(storage,user,{locationId:'ash',position:{...fix,latitude:50.1,timestamp:Date.now()}})).site.id,'ash');
 await assert.rejects(verifyClockInLocation(storage,user,{locationId:'ash',position:{...fix,timestamp:Date.now()}}),/within 100 metres/);
 console.log('PASS: switching assigned sites validates against the newly selected site coordinates.');
+
+// The failing live configuration had Ash Grove switched off. Enabling its
+// 100m boundary must protect every assigned cleaner, including a new account.
+const ashSite={...site,id:'ash',name:'Ash Grove',latitude:'50.1560784',longitude:'-96.8649149'};
+const ashFix={latitude:50.1560784,longitude:-96.8649149,accuracy:10,timestamp:Date.now()};
+assert.equal(checkGeofence({...ashSite,geofenceEnabled:false},null),null,'Disabled boundaries cannot be reported as GPS verification');
+for(const employeeId of ['existing-cleaner','new-cleaner','another-cleaner']) {
+ const employee={...user,id:employeeId};
+ const employeeStorage={...storage,getLocationsByCompany:async()=>[ashSite],getRecurringSchedulesByEmployee:async()=>[{companyId:'company',employeeId,locationId:'ash',status:'active',startDate:'2026-01-01',repeatDays:['mon','tue','wed','thu','fri','sat','sun']}]};
+ const accepted=await verifyClockInLocation(employeeStorage,employee,{locationId:'ash',position:ashFix});
+ assert.equal(accepted.check.distanceMeters,0);
+ for(const position of [undefined,{...ashFix,latitude:50.158},{...ashFix,accuracy:90},{...ashFix,timestamp:Date.now()-90000}]) {
+  await assert.rejects(verifyClockInLocation(employeeStorage,employee,{locationId:'ash',geofenceEnabled:false,position}));
+ }
+}
+assert.throws(()=>checkGeofence(ashSite,{...ashFix,latitude:50.158}),/cannot clock in outside/);
+console.log('PASS: real Ash Grove pin, all existing/new employee fixtures, on-site acceptance, off-site/missing/stale/imprecise rejection, and forged client boundary flags cannot disable server enforcement.');

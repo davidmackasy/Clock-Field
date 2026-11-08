@@ -89,15 +89,19 @@ export default function EmployeeHome() {
   const [fitVerificationId,setFitVerificationId]=useState<string|null>(null);
   const [locationError,setLocationError]=useState("");
   const [locationChecked,setLocationChecked]=useState(false);
+  const [locationBoundaryRequired,setLocationBoundaryRequired]=useState(false);
   const locationFeedbackRef=useRef<HTMLDivElement>(null);
   useEffect(()=>{if(locationError)locationFeedbackRef.current?.scrollIntoView({block:"nearest",behavior:"smooth"});},[locationError]);
-  const {data:clockInSites=[]}=useQuery<any[]>({queryKey:["/api/employee/clock-in-sites"]});
+  const {data:clockInSites=[]}=useQuery<any[]>({queryKey:["/api/employee/clock-in-sites"],staleTime:0,refetchOnWindowFocus:true,refetchInterval:60000});
   useEffect(()=>{
-    if(fitOpen&&!fitShiftId&&!fitLocationId&&clockInSites.length===1)setFitLocationId(clockInSites[0].id);
+    if(fitOpen&&!fitShiftId&&!clockInSites.some(site=>site.id===fitLocationId)) {
+      setFitLocationId(clockInSites.length===1?clockInSites[0].id:"");setLocationChecked(false);
+    }
   },[fitOpen,fitShiftId,fitLocationId,clockInSites]);
   const checkClockInSite=async(shiftId?:string)=>{
     const input={shiftId,locationId:shiftId?undefined:fitLocationId||undefined};
     const site=await (await apiRequest("POST","/api/time-entries/clock-in-location",input)).json();
+    setLocationBoundaryRequired(site.required===true);
     const position=site.required?await clockInPosition():undefined;
     if(position)await apiRequest("POST","/api/time-entries/clock-in-location",{...input,position});
     return {...input,position};
@@ -204,6 +208,7 @@ export default function EmployeeHome() {
   });
 
   const openFit = (shiftId?: string) => {
+    queryClient.invalidateQueries({queryKey:["/api/employee/clock-in-sites"]});
     setLocationChecked(false);setFitLocationId("");setFitVerificationId(null);setLocationError("");setFitShiftId(shiftId); setFitAnswers([undefined]); setFitConfirmed(false); setFacePhotoData(null); setFacePhotoCapturedAt(null); setFacePhotoAccepted(false); setCameraError(""); setFitOpen(true);
   };
 
@@ -404,8 +409,8 @@ export default function EmployeeHome() {
           <p className="text-sm text-muted-foreground">Work sites with a clock-in boundary require your current location. Allow precise location when prompted. Your location is checked when you use Check location or clock in.</p>
           {!fitShiftId && clockInSites.find(site=>site.id===fitLocationId)?.address && <p className="text-sm text-muted-foreground">{clockInSites.find(site=>site.id===fitLocationId)?.address}</p>}
           <div ref={locationFeedbackRef} className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-2" aria-live="polite" aria-atomic="true">
-            <p className="text-sm font-semibold">{locationError ? clockInErrorTitle(locationError) : locationChecked ? "Location checked" : "Check your work site"}</p>
-            <p className="text-sm text-muted-foreground">{locationError || (locationChecked ? "Your selected work site is ready. We’ll check your current location again when you clock in." : "Select your assigned work site and check your location. If you are outside its boundary, wait until you arrive before clocking in.")}</p>
+            <p className="text-sm font-semibold">{locationError ? clockInErrorTitle(locationError) : locationChecked ? locationBoundaryRequired ? "Location checked" : "Boundary not enabled" : "Check your work site"}</p>
+            <p className="text-sm text-muted-foreground">{locationError || (locationChecked ? locationBoundaryRequired ? "You are within this work site’s boundary. We’ll check your current location again when you clock in." : "Your admin has not enabled a location boundary for this work site. Distance is not being checked. Contact your admin if this site should require location." : "Select your assigned work site and check your location. If you are outside its boundary, wait until you arrive before clocking in.")}</p>
             <Button type="button" variant="outline" className="w-full" disabled={locationCheckMut.isPending || fitSubmitMut.isPending || clockInMut.isPending || (!fitShiftId && clockInSites.length>0 && !fitLocationId)} onClick={()=>locationCheckMut.mutate()}>{locationCheckMut.isPending ? "Checking location…" : locationError ? "Try location again" : "Check location"}</Button>
           </div>
 

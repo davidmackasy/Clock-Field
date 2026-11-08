@@ -16,7 +16,7 @@ export function checkGeofence(site:any, fix:any, now=Date.now()) {
   if (fix.accuracy>Math.min(75,radius/2)) throw new Error('Your location is not accurate enough. Enable precise location, move near an entrance and retry.');
   const distance=distanceMeters({latitude,longitude},fix);
   // Never expand the configured boundary by the browser-reported accuracy.
-  if (distance>radius) throw new Error(`You are ${Math.round(distance)} metres from ${site.name}. Clock in when you are within ${radius} metres of this work site.`);
+  if (distance>radius) throw new Error(`You cannot clock in outside this work site’s boundary. You are ${Math.round(distance)} metres from ${site.name}. Arrive within ${radius} metres of this work site, then try again.`);
   return {distanceMeters:Math.round(distance),accuracyMeters:Math.round(fix.accuracy),radiusMeters:radius,checkedAt:new Date(now).toISOString()};
 }
 export function geofenceInput(body:any,current:any={}) {
