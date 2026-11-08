@@ -28,19 +28,26 @@ export async function createTimesheetWorkbook(snapshot: any): Promise<Buffer> {
   const parts = await templateParts(path.resolve(process.cwd(),"config/timesheet-template"));
   let template = parts.get("xl/worksheets/sheet1.xml")!.toString();
   const dayCount=Math.round((Date.parse(snapshot.period.end)-Date.parse(snapshot.period.start))/86400000)+1;
-  const extra=dayCount-14;
+  const displayedRows=(employee:any)=>Array.from({length:dayCount},(_,day)=>{
+    const date=dateShift(snapshot.period.start,day);
+    const visits=employee.rows.filter((row:any)=>row.date===date&&row.id)
+      .slice().sort((a:any,b:any)=>(a.clockInAt||a.startTime||'').localeCompare(b.clockInAt||b.startTime||''));
+    return visits.length?visits:[{date,id:null,rawMinutes:0,payableMinutes:0}];
+  }).flat();
+  const rowCount=Math.max(dayCount,...snapshot.employees.map((employee:any)=>displayedRows(employee).length));
+  const extra=rowCount-14;
   if(extra!==0){
     const rows=Array.from(template.matchAll(/<x:row\b[^>]*r="(\d+)"[^>]*>[\s\S]*?<\/x:row>/g));
     const shiftRow=(xml:string,from:number,to:number)=>xml.replace(new RegExp(`r="${from}"`),`r="${to}"`).replace(/r="([A-Z]+)(\d+)"/g,(_,col,num)=>`r="${col}${Number(num)+to-from}"`);
     const before=rows.filter(row=>Number(row[1])<7).map(row=>row[0]);
-    const days=Array.from({length:dayCount},(_,day)=>{const original=rows.find(row=>Number(row[1])===7+day%14)!;return shiftRow(original[0],Number(original[1]),7+day);});
+    const days=Array.from({length:rowCount},(_,day)=>{const original=rows.find(row=>Number(row[1])===7+day%14)!;return shiftRow(original[0],Number(original[1]),7+day);});
     const after=rows.filter(row=>Number(row[1])>20).map(row=>shiftRow(row[0],Number(row[1]),Number(row[1])+extra));
     template=template.replace(/<x:sheetData>[\s\S]*?<\/x:sheetData>/,`<x:sheetData>${[...before,...days,...after].join("")}</x:sheetData>`).replace(/(<x:mergeCell ref="[A-Z]+)(\d+):([A-Z]+)(\d+)("\s*\/>)/g,(all,a,b,c,d,e)=>Number(b)>20?`${a}${Number(b)+extra}:${c}${Number(d)+extra}${e}`:all);
   }
   const sourceTemplate = parts.get("xl/worksheets/sheet2.xml")!.toString();
   const drawingRelationships = parts.get("xl/worksheets/_rels/sheet1.xml.rels");
   const sourceHeader = sourceTemplate.match(/<x:row\b[^>]*r="1"[^>]*>[\s\S]*?<\/x:row>/)![0];
-  let sourceData = sourceHeader; let sourceRow = 2;
+  let sourceData = sourceHeader.replace("First clock-in (UTC)","Clock-in (UTC)").replace("Last clock-out (UTC)","Clock-out (UTC)").replace("Entry IDs","Attendance entry ID"); let sourceRow = 2;
   const names: string[] = [];
   for(const name of Array.from(parts.keys())) if(name.startsWith("xl/worksheets/"))parts.delete(name);
   const logo = snapshot.company.companyLogoUrl?.match(/^data:image\/png;base64,([\s\S]*)$/)?.[1];
@@ -52,26 +59,42 @@ export async function createTimesheetWorkbook(snapshot: any): Promise<Buffer> {
     names.push(name);let xml=template;
     xml=cell(xml,"B1",snapshot.company.name);xml=cell(xml,"C3",employee.name);xml=cell(xml,"C4",employee.employeeNumber);
     xml=cell(xml,"F3",excelDate(snapshot.period.start));xml=cell(xml,"F4",excelDate(snapshot.period.end));
-    for(let day=0;day<dayCount;day++) {
-      const date=dateShift(snapshot.period.start,day); const rows=employee.rows.filter((row:any)=>row.date===date&&row.id);
-      const first=rows[0]; const last=rows.at(-1); const raw=rows.reduce((sum:number,row:any)=>sum+row.rawMinutes,0);const payable=rows.reduce((sum:number,row:any)=>sum+row.payableMinutes,0);
-      const start=timeValue(first?.startTime||"");const end=timeValue(last?.endTime||"");
-      const dayOffset=last?.endDate ? Math.round((Date.parse(last.endDate+"T12:00:00Z")-Date.parse(date+"T12:00:00Z"))/86400000):0;
-      const values=[excelDate(date),employee.employeeNumber,first?.clockInAt ? (Date.parse(first.clockInAt)-Date.UTC(1899,11,30))/86400000:null,last?.clockOutAt ? (Date.parse(last.clockOutAt)-Date.UTC(1899,11,30))/86400000:null,raw,payable-raw,start??0,end===null?0:end+dayOffset,rows.map((row:any)=>row.id).join(", ")];
+    const visits=displayedRows(employee);
+    for(let day=0;day<rowCount;day++) {
+      const visit=visits[day];
+      const date=visit?.date;
+      const present=!!visit?.id;
+      const raw=present?visit.rawMinutes:0,payable=present?visit.payableMinutes:0;
+      const start=timeValue(present?visit.startTime||'':'');const end=timeValue(present?visit.endTime||'':'');
+      const dayOffset=visit?.endDate ? Math.round((Date.parse(visit.endDate+'T12:00:00Z')-Date.parse(date+'T12:00:00Z'))/86400000):0;
+      const values=[date?excelDate(date):'',employee.employeeNumber,visit?.clockInAt ? (Date.parse(visit.clockInAt)-Date.UTC(1899,11,30))/86400000:null,visit?.clockOutAt ? (Date.parse(visit.clockOutAt)-Date.UTC(1899,11,30))/86400000:null,raw,payable-raw,start??0,end===null?0:end+dayOffset,present?visit.id:''];
       const styles=Array.from({length:9},(_,column)=>Number(sourceTemplate.match(new RegExp(`<x:c\\b(?=[^>]*r="${String.fromCharCode(65+column)}2")[^>]*s="(\\d+)"`))?.[1] || 9));
       sourceData+=`<x:row r="${sourceRow}">${values.map((value:any,column:number)=>`<x:c r="${String.fromCharCode(65+column)}${sourceRow}" s="${styles[column]}" t="${typeof value==="number"?"n":"str"}"><x:v>${escape(value)}</x:v></x:c>`).join("")}</x:row>`;
       const row=day+7;
-      const weekday=new Intl.DateTimeFormat("en-US",{timeZone:"UTC",weekday:"long"}).format(new Date(date+"T12:00:00Z"));
+      const weekday=date?new Intl.DateTimeFormat("en-US",{timeZone:"UTC",weekday:"long"}).format(new Date(date+"T12:00:00Z")):"";
       const weekdayStyle=template.match(new RegExp(`<x:c\\b(?=[^>]*r="B${weekday==="Monday"?7:8}")[^>]*s="(\\d+)"`))?.[1];
       xml=cell(xml,`B${row}`,weekday,undefined,weekdayStyle);
-      xml=cell(xml,`A${row}`,excelDate(date));xml=cell(xml,`C${row}`,start ?? "");xml=cell(xml,`D${row}`,end ?? "");
-      const locations=Array.from(new Set(rows.map((value:any)=>value.location))).join("; ");
+      xml=cell(xml,`A${row}`,date?excelDate(date):"");xml=cell(xml,`C${row}`,start ?? "");xml=cell(xml,`D${row}`,end ?? "");
+      const locations=present?(visit.locationNeedsReview?visit.locationWarning:visit.location)||"":"";
       xml=cell(xml,`F${row}`,locations);
       if(locations.length>42)xml=xml.replace(new RegExp(`<x:row\\b(?=[^>]*r="${row}")[^>]*>`),tag=>tag.replace(/\bht="[^"]*"/,`ht="${Math.max(25,Math.ceil(locations.length/42)*18)}"`));
       const formula=`IF(OR(C${row}="",D${row}=""),"",ROUND(MAX(0,MAX(0,('Recorded'!E${sourceRow}+'Recorded'!F${sourceRow})/60)+24*((D${row}+IF('Recorded'!E${sourceRow}=0,IF(D${row}<C${row},1,0),INT('Recorded'!H${sourceRow}))-C${row})-('Recorded'!H${sourceRow}-'Recorded'!G${sourceRow}))),4))`;
-      xml=cell(xml,`E${row}`,rows.length?payable/60:"",formula);sourceRow++;
+      xml=cell(xml,`E${row}`,present?payable/60:"",formula);sourceRow++;
     }
-    xml=cell(xml,`E${22+extra}`,employee.payableMinutes/60,`SUM(E7:E${20+extra})`);
+    const worked=visits.reduce((sum:number,visit:any)=>sum+(visit.id?visit.rawMinutes:0),0);
+    const payableTotal=visits.reduce((sum:number,visit:any)=>sum+(visit.id?visit.payableMinutes:0),0);
+    const duration=(minutes:number)=>`${Math.floor(minutes/60)}h ${minutes%60}m`;
+    const reviews=visits.filter((visit:any)=>visit.id&&visit.locationNeedsReview).length;
+    xml=cell(xml,"A5",`Recorded: ${duration(worked)}. Payable: ${duration(payableTotal)}.${reviews?` ${reviews} visit(s) have work-site notes below.`:''}`,undefined,"13");
+    xml=xml.replace(/<x:mergeCells count="(\d+)">/,(_,count)=>`<x:mergeCells count="${Number(count)+1}">`).replace('</x:mergeCells>','<x:mergeCell ref="A5:F5"/></x:mergeCells>');
+    xml=cell(xml,"E6","Payable hours");xml=cell(xml,"F6","Assigned work site / notes");
+    xml=cell(xml,`D${22+extra}`,"Total payable:");
+    xml=cell(xml,`A${24+extra}`,"One row per clock-in / clock-out visit",undefined,"13");
+    xml=cell(xml,`C${24+extra}`,"Recorded hours:",undefined,"1");
+    xml=cell(xml,`D${24+extra}`,worked/60,undefined,"8");
+    xml=cell(xml,`C${25+extra}`,"Adjustment min:",undefined,"1");
+    xml=cell(xml,`D${25+extra}`,payableTotal-worked,undefined,"9");
+    xml=cell(xml,`E${22+extra}`,payableTotal/60,`SUM(E7:E${20+extra})`);
     xml=cell(xml,`F${24+extra}`,snapshot.period.payday ? `Payday: ${snapshot.period.payday}` : "");xml=cell(xml,`F${25+extra}`,`${snapshot.company.timezone}${employee.pendingEntries ? `; unfinished shifts: ${employee.pendingEntries}` : ""}`);
     if(!logo)xml=xml.replace(/<x:drawing\b[^>]*\/>/,"");
     parts.set(`xl/worksheets/sheet${index+1}.xml`,Buffer.from(xml));

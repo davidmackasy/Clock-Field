@@ -1,3 +1,4 @@
+import {clockInAssignedLocationIds} from '../shared/work-site-assignment';
 import { registerContractors } from "./contractor-routes";
 import { contractorBoundary } from "./contractor-access";
 import { notifyWebsiteRequest } from "./request-notifications";
@@ -1784,7 +1785,8 @@ Welcome again, and thank you for choosing ClockField.
     try {
       const user=req.user as any,company=await storage.getCompany(user.companyId),today=dateInZone(new Date(),company?.timezone||"UTC");
       const [sites,shifts,schedules]=await Promise.all([storage.getLocationsByCompany(user.companyId),storage.getShiftsByEmployee(user.id),storage.getRecurringSchedulesByEmployee(user.id)]);
-      const ids=new Set([...shifts.filter(s=>s.companyId===user.companyId&&s.employeeId===user.id&&s.shiftDate===today&&!['cancelled','completed'].includes(s.status)).map(s=>s.locationId),...schedules.filter(s=>s.companyId===user.companyId&&s.employeeId===user.id&&s.status==='active'&&s.startDate<=today&&(!s.endDate||s.endDate>=today)).map(s=>s.locationId)]);
+      const localTime=new Intl.DateTimeFormat('en-GB',{timeZone:company?.timezone||'UTC',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date());
+      const ids=clockInAssignedLocationIds(shifts,schedules,user,today,localTime);
       res.json(sites.filter(site=>ids.has(site.id)).map(site=>({id:site.id,name:site.name,address:site.address,geofenceEnabled:site.geofenceEnabled,geofenceRadiusMeters:site.geofenceRadiusMeters})));
     }catch{res.status(500).json({message:"Could not load assigned work sites"});}
   });

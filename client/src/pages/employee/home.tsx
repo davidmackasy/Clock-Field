@@ -92,6 +92,9 @@ export default function EmployeeHome() {
   const locationFeedbackRef=useRef<HTMLDivElement>(null);
   useEffect(()=>{if(locationError)locationFeedbackRef.current?.scrollIntoView({block:"nearest",behavior:"smooth"});},[locationError]);
   const {data:clockInSites=[]}=useQuery<any[]>({queryKey:["/api/employee/clock-in-sites"]});
+  useEffect(()=>{
+    if(fitOpen&&!fitShiftId&&!fitLocationId&&clockInSites.length===1)setFitLocationId(clockInSites[0].id);
+  },[fitOpen,fitShiftId,fitLocationId,clockInSites]);
   const checkClockInSite=async(shiftId?:string)=>{
     const input={shiftId,locationId:shiftId?undefined:fitLocationId||undefined};
     const site=await (await apiRequest("POST","/api/time-entries/clock-in-location",input)).json();

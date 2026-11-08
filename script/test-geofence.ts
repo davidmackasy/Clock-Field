@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {transform} from 'esbuild';
+import {dateInZone} from '../shared/time-report';
 import {checkGeofence,distanceMeters,geofenceInput} from '../shared/geofence';
 import {clockInSite,verifyClockInLocation} from '../server/clock-in-location';
 const now=Date.now(),site={id:'olympic',companyId:'company',name:'Olympic',latitude:'49.9',longitude:'-97.1',geofenceEnabled:true,geofenceRadiusMeters:100},fix={latitude:49.9,longitude:-97.1,accuracy:10,timestamp:now};
@@ -11,13 +12,13 @@ for(const bad of [null,{...fix,latitude:NaN},{...fix,longitude:181},{...fix,accu
 assert.throws(()=>geofenceInput({geofenceEnabled:true}),/coordinates/);assert.throws(()=>geofenceInput({latitude:91}),/valid/);assert.throws(()=>geofenceInput({geofenceRadiusMeters:49}),/Radius/);assert.throws(()=>geofenceInput({geofenceRadiusMeters:100.5}),/Radius/);assert.throws(()=>geofenceInput({geofenceEnabled:'true'}),/true or false/);
 assert.deepEqual(geofenceInput({latitude:0,longitude:0,geofenceEnabled:true,geofenceRadiusMeters:100}),{latitude:'0',longitude:'0',geofenceEnabled:true,geofenceRadiusMeters:100});
 assert.throws(()=>geofenceInput({latitude:null},site),/coordinates/);
-const user={id:'cleaner',companyId:'company',role:'employee'},shift={id:'shift',companyId:'company',employeeId:'cleaner',locationId:'olympic',status:'scheduled'};
+const user={id:'cleaner',companyId:'company',role:'employee'},shift={id:'shift',companyId:'company',employeeId:'cleaner',locationId:'olympic',status:'scheduled',shiftDate:dateInZone(new Date(),'America/Winnipeg')};
 let currentShift:any=shift,allow=true,writes=0;
-const storage:any={getCompany:async()=>({allowUnscheduledClockIns:allow,timezone:'America/Winnipeg'}),getLocationsByCompany:async()=>[site,{...site,id:'ash',name:'Ash Grove',latitude:'50.1'}],getShift:async()=>currentShift,getShiftsByEmployee:async()=>[],getRecurringSchedulesByEmployee:async()=>[{companyId:'company',employeeId:'cleaner',locationId:'ash',status:'active',startDate:'2026-01-01'}],getActiveTimeEntry:async()=>null,getFitForDutyVerification:async()=>({id:'verification',companyId:'company',employeeId:'cleaner',shiftId:'shift',status:'cleared'}),createTimeEntry:async()=>{writes++;throw new Error('Unexpected write');}};
+const storage:any={getCompany:async()=>({allowUnscheduledClockIns:allow,timezone:'America/Winnipeg'}),getLocationsByCompany:async()=>[site,{...site,id:'ash',name:'Ash Grove',latitude:'50.1'}],getShift:async()=>currentShift,getShiftsByEmployee:async()=>[],getRecurringSchedulesByEmployee:async()=>[{companyId:'company',employeeId:'cleaner',locationId:'ash',status:'active',startDate:'2026-01-01',repeatDays:['mon','tue','wed','thu','fri','sat','sun']}],getActiveTimeEntry:async()=>null,getFitForDutyVerification:async()=>({id:'verification',companyId:'company',employeeId:'cleaner',shiftId:'shift',status:'cleared'}),createTimeEntry:async()=>{writes++;throw new Error('Unexpected write');}};
 assert.equal((await verifyClockInLocation(storage,user,{shiftId:'shift',position:fix})).site.id,'olympic');
 await assert.rejects(verifyClockInLocation(storage,user,{shiftId:'shift',locationId:'ash',position:fix}),/assigned to this shift/);
 await assert.rejects(verifyClockInLocation(storage,user,{shiftId:'shift',position:{...fix,latitude:50.1}}),/within/);
-await assert.rejects(clockInSite(storage,user,{}),/assigned work site/);
+assert.equal((await clockInSite(storage,user,{})).site.id,'ash');
 await assert.rejects(clockInSite(storage,user,{locationId:'olympic'}),/assigned to you/);
 assert.equal((await clockInSite(storage,user,{locationId:'ash'})).site.id,'ash');
 allow=false;await assert.rejects(clockInSite(storage,user,{locationId:'ash'}),/scheduled shift/);allow=true;

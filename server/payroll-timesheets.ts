@@ -2,7 +2,7 @@ import { processContractorJobs } from "./contractor-jobs";
 import { sendAttendanceEventEmail } from "./mail";
 import {weeklyPayrollMinutes,earningAmounts} from "../shared/payroll-math";
 import {processAttendanceAlerts} from "./attendance-alerts";
-import { timesheetLocation } from "./timesheet-location";
+import { timesheetLocationDetails } from "./timesheet-location";
 import type { Express } from "express";
 import { storage } from "./storage";
 import { pool } from "./db";
@@ -46,7 +46,7 @@ export async function payrollSnapshot(companyId: string, start: string, employee
         if (!daily.length) rows.push({ date, day: dayName, id: null, startTime: "", endTime: "", rawMinutes: 0, payableMinutes: 0, location: "" });
         for (const entry of daily) {
           const minutes = entryMinutes(entry);
-          rows.push({ date, day: dayName, id: entry.id, clockInAt: entry.clockInAt, clockOutAt: entry.clockOutAt, endDate: dateInZone(entry.clockOutAt!,company.timezone), startTime: time(entry.clockInAt), endTime: time(entry.clockOutAt!), actualStartTime: time(entry.clockInAt), actualEndTime: time(entry.clockOutAt!), rawMinutes: minutes.raw, payableMinutes: minutes.payable, location: timesheetLocation(entry,date,time(entry.clockInAt),time(entry.clockOutAt!),locations,shifts,schedules,clients), adjustmentMinutes: minutes.adjustment });
+          rows.push({ date, day: dayName, id: entry.id, clockInAt: entry.clockInAt, clockOutAt: entry.clockOutAt, endDate: dateInZone(entry.clockOutAt!,company.timezone), startTime: time(entry.clockInAt), endTime: time(entry.clockOutAt!), actualStartTime: time(entry.clockInAt), actualEndTime: time(entry.clockOutAt!), rawMinutes: minutes.raw, payableMinutes: minutes.payable, ...timesheetLocationDetails(entry,date,time(entry.clockInAt),time(entry.clockOutAt!),locations,shifts,schedules,clients), adjustmentMinutes: minutes.adjustment });
         }
       }
       const pendingEntries=enriched.filter(entry=>entry.employeeId===employee.id && !entry.clockOutAt && dateInZone(entry.clockInAt,company.timezone)>=period.start && dateInZone(entry.clockInAt,company.timezone)<=period.end).length;

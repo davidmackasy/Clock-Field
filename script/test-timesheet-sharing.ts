@@ -5,14 +5,14 @@ const locations=[{id:'olympic',name:'Olympic'},{id:'celtic',name:'Celtic'}];
 const schedules=[{employeeId:'a',locationId:'olympic',startDate:'2026-09-01',status:'active',repeatDays:['mon'],scheduledStartTime:'17:00',scheduledEndTime:'22:00'},{employeeId:'a',locationId:'celtic',startDate:'2026-09-01',status:'active',repeatDays:['sat'],scheduledStartTime:'10:00',scheduledEndTime:'14:00'}];
 assert.equal(timesheetLocation({employeeId:'a'},'2026-09-21','17:01','22:10',locations,[],schedules,[]),'Olympic');
 assert.equal(timesheetLocation({employeeId:'a'},'2026-09-26','10:29','14:07',locations,[],schedules,[]),'Celtic');
-assert.equal(timesheetLocation({employeeId:'a',locationId:'celtic'},'2026-09-21','17:01','22:10',locations,[],schedules,[]),'Celtic');
+assert.equal(timesheetLocation({employeeId:'a',locationId:'celtic'},'2026-09-21','17:01','22:10',locations,[],schedules,[]),'Olympic');
 assert.equal(timesheetLocation({employeeId:'other'},'2026-09-21','17:01','22:10',locations,[],schedules,[]),'No assigned location');
 const snapshot={company:{name:'Company <safe>',timezone:'America/Winnipeg',contactEmail:'secret@example.com'},period:{start:'2026-09-21',end:'2026-10-04'},employees:[{name:'Employee <script>',employeeNumber:'private-id',hourlyRate:'22',payableMinutes:60,rows:[{id:'private-entry',date:'2026-09-21',day:'Monday',startTime:'17:59',endTime:'18:59',payableMinutes:60,location:'Olympic'}]},{name:'Other Employee'}]};
 const shared=publicTimesheetSnapshot(snapshot);const html=renderPublicTimesheet(shared);
 assert.ok(html.includes('17:59'));assert.ok(html.includes('Olympic'));assert.ok(html.includes('Employee &lt;script&gt;'));
 for(const secret of ['private-entry','secret@example.com','Other Employee','hourlyRate'])assert.ok(!JSON.stringify(shared).includes(secret));
 assert.equal(shared.rows.length,1);assert.equal(shared.start,'2026-09-21');assert.equal(shared.end,'2026-10-04');
-console.log('PASS: dated employee locations, recorded-location precedence, public employee/period scope, HTML escaping and private field exclusion.');
+console.log('PASS: dated employee locations, dated-assignment allocation with original selections retained, public employee/period scope, HTML escaping and private field exclusion.');
 
 const {registerPublicTimesheetRoutes}=await import('../server/public-timesheet');
 const {pool}=await import('../server/db');const {storage}=await import('../server/storage');
