@@ -1,5 +1,6 @@
 import {readinessQuestion} from "@shared/fit-duty";
 import {clockInPosition,clockInError,clockInErrorTitle} from "@/lib/clock-in-position";
+import {LocationPermissionHelp} from "@/components/location-permission-help";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -411,6 +412,7 @@ export default function EmployeeHome() {
           <div ref={locationFeedbackRef} className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-2" aria-live="polite" aria-atomic="true">
             <p className="text-sm font-semibold">{locationError ? clockInErrorTitle(locationError) : locationChecked ? locationBoundaryRequired ? "Location checked" : "Boundary not enabled" : "Check your work site"}</p>
             <p className="text-sm text-muted-foreground">{locationError || (locationChecked ? locationBoundaryRequired ? "You are within this work site’s boundary. We’ll check your current location again when you clock in." : "Your admin has not enabled a location boundary for this work site. Distance is not being checked. Contact your admin if this site should require location." : "Select your assigned work site and check your location. If you are outside its boundary, wait until you arrive before clocking in.")}</p>
+            {/location access is blocked/i.test(locationError)&&<LocationPermissionHelp/>}
             <Button type="button" variant="outline" className="w-full" disabled={locationCheckMut.isPending || fitSubmitMut.isPending || clockInMut.isPending || (!fitShiftId && clockInSites.length>0 && !fitLocationId)} onClick={()=>locationCheckMut.mutate()}>{locationCheckMut.isPending ? "Checking location…" : locationError ? "Try location again" : "Check location"}</Button>
           </div>
 

@@ -66,3 +66,15 @@ for(const employeeId of ['existing-cleaner','new-cleaner','another-cleaner']) {
 }
 assert.throws(()=>checkGeofence(ashSite,{...ashFix,latitude:50.158}),/cannot clock in outside/);
 console.log('PASS: real Ash Grove pin, all existing/new employee fixtures, on-site acceptance, off-site/missing/stale/imprecise rejection, and forged client boundary flags cannot disable server enforcement.');
+
+// Recovery after a permission denial must still pass a fresh site check.
+Object.defineProperty(globalThis,'navigator',{configurable:true,value:{geolocation:{getCurrentPosition(_success:any,error:any){error({code:1});}}}});
+await assert.rejects(clockInPosition(),/Location access is blocked/);
+for(const latitude of [50.158,50.1560784]) {
+ const recoveredFix={...ashFix,latitude,timestamp:Date.now()};
+ Object.defineProperty(globalThis,'navigator',{configurable:true,value:{geolocation:{getCurrentPosition(success:any){success({coords:recoveredFix,timestamp:recoveredFix.timestamp});}}}});
+ const recovered=await clockInPosition();
+ if(latitude===50.1560784)assert.equal(checkGeofence(ashSite,recovered)?.distanceMeters,0);
+ else assert.throws(()=>checkGeofence(ashSite,recovered),/cannot clock in outside/);
+}
+console.log('PASS: blocked permission can be retried after permission changes; recovered off-site readings are still rejected and fresh on-site readings pass.');
