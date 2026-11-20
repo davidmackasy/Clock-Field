@@ -7,7 +7,7 @@ export function distanceMeters(a: {latitude:number;longitude:number}, b: {latitu
 export function validCoordinates(lat: unknown, lon: unknown) {
   return typeof lat === 'number' && Number.isFinite(lat) && Math.abs(lat)<=90 && typeof lon === 'number' && Number.isFinite(lon) && Math.abs(lon)<=180;
 }
-export function checkGeofence(site:any, fix:any, now=Date.now()) {
+export function checkGeofence(site:any, fix:any, now=Date.now(), action: "clock in" | "clock out" = "clock in") {
   if (!site.geofenceEnabled) return null;
   const latitude=Number(site.latitude),longitude=Number(site.longitude),radius=site.geofenceRadiusMeters;
   if (site.latitude==null || site.longitude==null || !validCoordinates(latitude,longitude) || !Number.isInteger(radius) || radius<50 || radius>1000) throw new Error('This work site’s boundary needs to be configured by your admin.');
@@ -16,7 +16,11 @@ export function checkGeofence(site:any, fix:any, now=Date.now()) {
   if (fix.accuracy>Math.min(75,radius/2)) throw new Error('Your location is not accurate enough. Enable precise location, move near an entrance and retry.');
   const distance=distanceMeters({latitude,longitude},fix);
   // Never expand the configured boundary by the browser-reported accuracy.
-  if (distance>radius) throw new Error(`You cannot clock in outside this work site’s boundary. You are ${Math.round(distance)} metres from ${site.name}. Arrive within ${radius} metres of this work site, then try again.`);
+  if (distance > radius) {
+    throw new Error(action === "clock out"
+      ? `You must be at ${site.name} to clock out. Return to the designated area, or contact your admin if you already left.`
+      : `You cannot clock in outside this work site’s boundary. You are ${Math.round(distance)} metres from ${site.name}. Arrive within ${radius} metres of this work site, then try again.`);
+  }
   return {distanceMeters:Math.round(distance),accuracyMeters:Math.round(fix.accuracy),radiusMeters:radius,checkedAt:new Date(now).toISOString()};
 }
 export function geofenceInput(body:any,current:any={}) {

@@ -72,11 +72,20 @@ function isBlankCameraFrame(context: CanvasRenderingContext2D, width: number, he
   return average < 12 && max - min < 18;
 }
 
+type ClockOutSite = { name: string; address: string | null; mapQuery: string | null };
+
+type ClockOutNotice = {
+  site: ClockOutSite | null;
+  message: string;
+  permissionHelp?: boolean;
+};
+
 export default function EmployeeHome() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useWouterLocation();
   const [elapsed, setElapsed] = useState(0);
+  const [clockOutNotice, setClockOutNotice] = useState<ClockOutNotice | null>(null);
   const [blockClockOutOpen, setBlockClockOutOpen] = useState(false);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [blockSfnClockOutOpen, setBlockSfnClockOutOpen] = useState(false);
@@ -354,17 +363,53 @@ export default function EmployeeHome() {
   useEffect(() => () => stopFaceCamera(), []);
 
   const clockOutMut = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/time-entries/clock-out");
-      return res.json();
+    mutationFn: async (): Promise<ClockOutNotice | null> => {
+      const { entryId, required, locationMissing, site }: {
+        entryId: string;
+        required: boolean;
+        locationMissing: boolean;
+        site: ClockOutSite | null;
+      } = await (await apiRequest("GET", "/api/time-entries/clock-out-location")).json();
+
+      if (locationMissing) {
+        return { site, message: "Contact your admin to clock out. Your shift’s assigned worksite is unavailable." };
+      }
+
+      let position;
+      if (required) {
+        try {
+          position = await clockInPosition();
+        } catch (error) {
+          return {
+            site,
+            message: `To clock out, be at ${site?.name ?? "your assigned worksite"}, turn on precise location, and try again. If you already left, contact your admin.`,
+            permissionHelp: /location access is blocked/i.test(clockInError(error)),
+          };
+        }
+      }
+
+      try {
+        await apiRequest("POST", "/api/time-entries/clock-out", { entryId, position });
+      } catch (error) {
+        return { site, message: clockInError(error) };
+      }
+      return null;
     },
-    onSuccess: () => {
+    onMutate: () => setClockOutNotice(null),
+    onSuccess: (notice) => {
+      if (notice) {
+        setClockOutNotice(notice);
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/time-entries/active"] });
       queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
       queryClient.invalidateQueries({ queryKey: ["/api/shifts"] });
       toast({ title: "Clocked out!" });
     },
-    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: () => setClockOutNotice({
+      site: null,
+      message: "Try clocking out again or contact your admin for help.",
+    }),
   });
 
   useEffect(() => {
@@ -447,6 +492,32 @@ export default function EmployeeHome() {
         </DialogContent>
       </Dialog>
       {/* Clock-out blocker modal */}
+      <Dialog open={!!clockOutNotice} onOpenChange={(open) => { if (!open) setClockOutNotice(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{clockOutNotice?.site ? `Clock out at ${clockOutNotice.site.name}` : "Need help clocking out?"}</DialogTitle>
+            <DialogDescription>{clockOutNotice?.message}</DialogDescription>
+          </DialogHeader>
+          {clockOutNotice?.site?.address && <p className="text-sm">{clockOutNotice.site.address}</p>}
+          {clockOutNotice?.permissionHelp && <LocationPermissionHelp />}
+          <div className="grid gap-2">
+            {clockOutNotice?.site?.mapQuery && (
+              <Button asChild variant="outline">
+                <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clockOutNotice.site.mapQuery)}`} target="_blank" rel="noopener noreferrer">
+                  View worksite on map
+                </a>
+              </Button>
+            )}
+            <Button asChild variant="outline">
+              <Link href="/employee/messages?compose=general_message">Message admin</Link>
+            </Button>
+            <Button onClick={() => { setClockOutNotice(null); handleClockOutAttempt(); }} disabled={clockOutMut.isPending}>
+              Try clocking out again
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={blockClockOutOpen} onOpenChange={setBlockClockOutOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
