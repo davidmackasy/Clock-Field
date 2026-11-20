@@ -12,7 +12,7 @@ import {registerTeamHiring} from "./team-hiring";
 import {registerPeopleProfile} from "./people-profile";
 import {employeeInput,clientInput,safePerson,hasAccess,validPermissions,emptyProfile,profileSchema} from "../shared/people";
 import {resolveWorkSite} from "./location-geocoding";
-import {geofenceInput} from "../shared/geofence";
+import {checkGeofence, geofenceInput, validCoordinates} from "../shared/geofence";
 import {clockInSite,verifyClockInLocation} from "./clock-in-location";
 import { completedChecklistSteps, scheduledAssignmentDue, openSupplyRequest } from "@shared/worklog-state";
 import { registerWorkSubmissionAccess, registerReportAccess, registerFieldNoteAccess, registerScheduledNoteAccess } from "./worklog-access";
@@ -1940,11 +1940,65 @@ Open Fit for Duty in the admin dashboard to review this submission.`,
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  async function clockOutSite(entry: NonNullable<Awaited<ReturnType<typeof storage.getActiveTimeEntry>>>) {
+    const shift = !entry.locationId && entry.shiftId ? await storage.getShift(entry.shiftId) : undefined;
+    const locationId = entry.locationId || (shift?.companyId === entry.companyId ? shift.locationId : null);
+    const location = locationId ? await storage.getLocation(locationId) : undefined;
+    const site = location?.companyId === entry.companyId ? location : undefined;
+    const validPin = site?.latitude != null && site.longitude != null &&
+      validCoordinates(Number(site.latitude), Number(site.longitude));
+    return {
+      site,
+      locationMissing: !!locationId && !site,
+      details: site ? {
+        name: site.name,
+        address: site.address,
+        mapQuery: validPin ? `${site.latitude},${site.longitude}` : site.address,
+      } : null,
+    };
+  }
+
+  app.get("/api/time-entries/clock-out-location", requireRole("employee"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const entry = await storage.getActiveTimeEntry(user.id);
+      if (!entry || entry.companyId !== user.companyId) {
+        return res.status(400).json({ message: "You have no active shift to clock out of." });
+      }
+      const { site, details, locationMissing } = await clockOutSite(entry);
+      res.set("Cache-Control", "no-store").json({
+        entryId: entry.id,
+        required: site?.geofenceEnabled === true,
+        locationMissing,
+        site: details,
+      });
+    } catch (error) {
+      console.error("[clock-out-location]", error);
+      res.status(500).json({ message: "Try clocking out again or contact your admin for help." });
+    }
+  });
+
   app.post("/api/time-entries/clock-out", requireRole("employee"), async (req, res) => {
     try {
       const user = req.user as any;
       const entry = await storage.getActiveTimeEntry(user.id);
-      if (!entry) return res.status(400).json({ message: "Not clocked in" });
+      if (!entry || entry.companyId !== user.companyId) {
+        return res.status(400).json({ message: "You have no active shift to clock out of." });
+      }
+      if (req.body?.entryId !== entry.id) {
+        return res.status(409).json({ message: "Your active shift changed. Refresh and try again." });
+      }
+      const { site, locationMissing } = await clockOutSite(entry);
+      if (locationMissing) {
+        return res.status(403).json({ message: "Contact your admin to clock out. Your shift’s assigned worksite is unavailable." });
+      }
+      if (site?.geofenceEnabled) {
+        try {
+          checkGeofence(site, req.body?.position, Date.now(), "clock out");
+        } catch (error) {
+          return res.status(403).json({ message: error instanceof Error ? error.message : "Contact your admin for help clocking out." });
+        }
+      }
       const now = new Date().toISOString();
       const workedMinutes = Math.round((new Date(now).getTime() - new Date(entry.clockInAt).getTime()) / 60000);
       let flags = [...(entry.flags || [])];
